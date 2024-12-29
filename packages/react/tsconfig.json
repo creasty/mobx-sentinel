@@ -1,0 +1,11 @@
+{
+  "extends": "../../tsconfig.json",
+  "compilerOptions": {
+    "outDir": "dist",
+    "moduleResolution": "bundler",
+    "jsx": "react",
+    "types": ["vitest/globals"]
+  },
+  "include": ["src", "vitest.config.ts", "build.ts"],
+  "exclude": ["node_modules", "dist"]
+}

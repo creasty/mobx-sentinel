@@ -1,0 +1,36 @@
+{
+  "name": "@mobx-form/react",
+  "version": "0.0.1",
+  "main": "dist/index.cjs.js",
+  "module": "dist/index.esm.js",
+  "types": "dist/index.d.ts",
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "test": "vitest run",
+    "test:dev": "vitest",
+    "build": "run-p build:*",
+    "build:js": "tsx build.ts",
+    "build:types": "tsc -P tsconfig.build.json"
+  },
+  "dependencies": {
+    "mobx": "^6.12.3",
+    "mobx-react-lite": "^4.0.7",
+    "react": "^18.0.0",
+    "react-dom": "^18.0.0"
+  },
+  "devDependencies": {
+    "@mobx-form/core": "workspace:*",
+    "@testing-library/jest-dom": "^6.6.3",
+    "@testing-library/react": "^16.1.0",
+    "@types/node": "^22.10.2",
+    "@types/react": "^19.0.2",
+    "@types/react-dom": "^19.0.2",
+    "esbuild": "^0.24.2",
+    "jsdom": "^25.0.1",
+    "tsx": "^4.19.2",
+    "typescript": "^5.5.0",
+    "vitest": "^2.1.8"
+  }
+}
