@@ -19,6 +19,8 @@ export default [
         test: "readonly",
         expect: "readonly",
         React: "readonly",
+        crypto: "readonly",
+        global: "readonly",
       },
     },
     plugins: {
@@ -28,6 +30,9 @@ export default [
     rules: {
       ...tsPlugin.configs.recommended.rules,
       "prettier/prettier": "error",
+      "@typescript-eslint/no-namespace": "off",
+      "no-redeclare": "off",
+      "@typescript-eslint/no-explicit-any": "off",
     },
   },
   ...compat.config({
