@@ -26,6 +26,8 @@ export class Form<T> {
   @observable isValidating = false;
   /** Whether the form is dirty */
   @observable isDirty = false;
+  /** Whether the validity has been reported */
+  @observable isValidityReported = false;
 
   /** Extension fields for bindings */
   [k: `bind${Capitalize<string>}`]: unknown;
@@ -101,13 +103,6 @@ export class Form<T> {
     return !this.isSubmitting && !this.isValidating && this.isValid && this.isDirty;
   }
 
-  /** Reset the form's state */
-  @action
-  reset() {
-    this.isDirty = false;
-    this.fields.forEach((field) => field.reset());
-  }
-
   /**
    * Nested forms within the form.
    *
@@ -134,67 +129,42 @@ export class Form<T> {
   get invalidNestedFormCount() {
     let count = 0;
     for (const form of this.nestedForms) {
-      count += form.isValid ? 0 : 1;
+      count += form.isValid ? 0 : 1; // TODO: Should we take isValidityReported into account?
     }
     return count;
   }
 
-  /** Define a field by name */
-  private defineField(fieldName: FormFieldName<T>) {
-    let field = this.fields.get(fieldName);
-    if (!field) {
-      field = new FormField({
-        form: this,
-        fieldName: String(fieldName),
-      });
-      this.fields.set(fieldName, field);
+  /** Report validity on all fields and nested forms */
+  @action
+  reportValidity() {
+    this.isValidityReported = true;
+    for (const [, field] of this.fields) {
+      field.reportValidity();
     }
-    return field;
+    for (const form of this.nestedForms) {
+      form.reportValidity();
+    }
   }
 
-  /** Define a binding by key */
-  private defineBinding(bindingKey: string, create: () => FormBinding) {
-    let binding = this.bindings.get(bindingKey);
-    if (!binding) {
-      binding = create();
-      this.bindings.set(bindingKey, binding);
-    }
-    return binding;
+  /** Reset the form's state */
+  @action
+  reset() {
+    this.isDirty = false;
+    this.isValidityReported = false;
+    this.fields.forEach((field) => field.reset());
   }
 
-  /** Create a binding to a field */
-  private bindToField: FormBindingFunc.ForField<T> = (
-    fieldName: FormFieldName<T>,
-    binding: FormBindingConstructor.ForField,
-    config?: FormBindingFunc.Config
-  ) => {
-    const key = `${fieldName}@${binding.name}:${config?.cacheKey}`;
-    const instance = this.defineBinding(key, () => {
-      const field = this.defineField(fieldName);
-      return new binding(field, config);
-    });
-    instance.config = config; // Update on every call
-    return instance.props;
-  };
+  /** Get the error messages for a field */
+  getFieldError(fieldName: FormFieldName<T>) {
+    const messages = this.errors.get(fieldName);
+    if (!messages) return null;
 
-  /** Create a binding to the form */
-  private bindToForm: FormBindingFunc.ForForm<Form<T>> = (
-    binding: FormBindingConstructor.ForForm<Form<T>>,
-    config?: FormBindingFunc.Config
-  ) => {
-    const key = `${binding.name}:${config?.cacheKey}`;
-    const instance = this.defineBinding(key, () => new binding(this, config));
-    instance.config = config; // Update on every call
-    return instance.props;
-  };
+    const field = this.fields.get(fieldName);
+    if (!field) return null;
+    if (!field.isValidityReported) return null;
 
-  /** Bind to a field or the form */
-  bind: FormBindingFunc<Form<T>, T> = (...args: any[]) => {
-    if (typeof args[0] === "string") {
-      return this.bindToField(args[0], args[1], args[2]);
-    }
-    return this.bindToForm(args[0], args[1]);
-  };
+    return messages;
+  }
 
   /** Submit the form */
   async submit(args?: { force?: boolean }) {
@@ -265,26 +235,60 @@ export class Form<T> {
   }
   private validateAbortCtrl: AbortController | null = null;
 
-  /** Report validity on all fields and nested forms */
-  @action
-  reportValidity() {
-    for (const [, field] of this.fields) {
-      field.reportValidity();
+  /** Define a field by name */
+  private defineField(fieldName: FormFieldName<T>) {
+    let field = this.fields.get(fieldName);
+    if (!field) {
+      field = new FormField({
+        form: this,
+        fieldName: String(fieldName),
+      });
+      this.fields.set(fieldName, field);
     }
-    for (const form of this.nestedForms) {
-      form.reportValidity();
-    }
+    return field;
   }
 
-  /** Get the error messages for a field */
-  getFieldError(fieldName: FormFieldName<T>) {
-    const messages = this.errors.get(fieldName);
-    if (!messages) return null;
-
-    const field = this.fields.get(fieldName);
-    if (!field) return null;
-    if (!field.isValidityReportable) return null;
-
-    return messages;
+  /** Define a binding by key */
+  private defineBinding(bindingKey: string, create: () => FormBinding) {
+    let binding = this.bindings.get(bindingKey);
+    if (!binding) {
+      binding = create();
+      this.bindings.set(bindingKey, binding);
+    }
+    return binding;
   }
+
+  /** Create a binding to a field */
+  private bindToField: FormBindingFunc.ForField<T> = (
+    fieldName: FormFieldName<T>,
+    binding: FormBindingConstructor.ForField,
+    config?: FormBindingFunc.Config
+  ) => {
+    const key = `${fieldName}@${binding.name}:${config?.cacheKey}`;
+    const instance = this.defineBinding(key, () => {
+      const field = this.defineField(fieldName);
+      return new binding(field, config);
+    });
+    instance.config = config; // Update on every call
+    return instance.props;
+  };
+
+  /** Create a binding to the form */
+  private bindToForm: FormBindingFunc.ForForm<Form<T>> = (
+    binding: FormBindingConstructor.ForForm<Form<T>>,
+    config?: FormBindingFunc.Config
+  ) => {
+    const key = `${binding.name}:${config?.cacheKey}`;
+    const instance = this.defineBinding(key, () => new binding(this, config));
+    instance.config = config; // Update on every call
+    return instance.props;
+  };
+
+  /** Bind to a field or the form */
+  bind: FormBindingFunc<Form<T>, T> = (...args: any[]) => {
+    if (typeof args[0] === "string") {
+      return this.bindToField(args[0], args[1], args[2]);
+    }
+    return this.bindToForm(args[0], args[1]);
+  };
 }

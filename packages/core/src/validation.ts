@@ -2,7 +2,7 @@ type MaybeArray<T> = T | T[];
 type ErrorValue = MaybeArray<string | Error>;
 
 export type FormValidationResult<T> = {
-  [K in keyof T]?: ErrorValue;
+  [K in keyof T]?: ErrorValue | null;
 };
 
 function getMessages(target: ErrorValue): string[] {

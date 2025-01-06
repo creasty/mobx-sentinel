@@ -11,7 +11,7 @@ class SampleModel implements FormDelegate<SampleModel> {
 
   async [FormDelegate.validate]() {
     return {
-      string: this.string !== "hello" ? "error" : undefined,
+      string: this.string !== "hello" ? "error" : null,
     };
   }
 }

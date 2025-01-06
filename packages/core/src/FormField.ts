@@ -1,4 +1,4 @@
-import { action, computed, makeObservable, observable, runInAction } from "mobx";
+import { action, makeObservable, observable } from "mobx";
 import { v4 as uuidV4 } from "uuid";
 import type { Form } from "./Form";
 
@@ -16,6 +16,8 @@ export class FormField {
   @observable isChanged = false;
   /** Whether the field value is provisional */
   @observable isProvisional = false;
+  /** Whether the field validity has been reported */
+  @observable isValidityReported = false;
 
   constructor(args: { form: Form<any>; fieldName: string }) {
     makeObservable(this);
@@ -23,16 +25,12 @@ export class FormField {
     this.fieldName = args.fieldName;
   }
 
-  @computed
-  get isValidityReportable() {
-    return this.isChanged && !this.isProvisional;
-  }
-
   @action
   markAsChanged(type: "committed" | "provisional") {
     this.form.isDirty = true;
     this.isChanged = true;
     this.isProvisional = type === "provisional";
+    this.isValidityReported = this.isChanged && !this.isProvisional;
   }
 
   @action
@@ -42,8 +40,7 @@ export class FormField {
 
   @action
   reportValidity() {
-    this.isProvisional = false;
-    this.isChanged = true;
+    this.isValidityReported = true;
   }
 
   @action
@@ -51,6 +48,7 @@ export class FormField {
     this.isChanged = false;
     this.isTouched = false;
     this.isProvisional = false;
+    this.isValidityReported = false;
   }
 
   validate() {
@@ -62,9 +60,7 @@ export class FormField {
     this.cancelDelayedValidation();
     this.validationTimerId = setTimeout(() => {
       this.validate();
-      runInAction(() => {
-        this.isProvisional = false;
-      });
+      this.markAsChanged("committed");
     }, this.form.config.interimValidationDelayMs);
   }
 
