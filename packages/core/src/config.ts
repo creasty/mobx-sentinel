@@ -1,9 +1,13 @@
+/** Form configuration */
 export type FormConfig = {
+  /** Delay validation when a field is being edited (in milliseconds) */
   interimValidationDelayMs: number;
+  /** Whether to suppress provisional errors */
   suppressProvisionalErrors: boolean;
 };
 
-export const defaultConfig: FormConfig = {
+/** Default form configuration */
+export const defaultConfig: FormConfig = Object.freeze({
   interimValidationDelayMs: 3000,
   suppressProvisionalErrors: true,
-};
+});

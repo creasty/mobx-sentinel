@@ -1,15 +1,7 @@
 import { observable, makeObservable, computed, runInAction, action } from "mobx";
 import { FormField, FormFieldName } from "./FormField";
 import { FormValidationResult, toErrorMap } from "./validation";
-import {
-  FormBindingConstructorForField,
-  FormBindingFuncForField,
-  FormBindingFuncConfig,
-  FormBindingFuncForForm,
-  FormBindingConstructorForForm,
-  FormBinding,
-  FormBindingFunc,
-} from "./binding";
+import { FormBinding, FormBindingConstructor, FormBindingFunc } from "./binding";
 import { FormConfig, defaultConfig } from "./config";
 
 export interface FormDelegate<T = object> {
@@ -53,17 +45,20 @@ export class Form<T> {
     return this.errors.size;
   }
 
+  /** Whether the form can be submitted */
   @computed
   get canSubmit() {
     return !this.isSubmitting && !this.isValidating && this.isValid && this.isDirty;
   }
 
+  /** Reset the form's state */
   @action
   reset() {
     this.isDirty = false;
     this.fields.forEach((field) => field.reset());
   }
 
+  /** Define a field by name */
   private defineField(fieldName: FormFieldName<T>) {
     let field = this.fields.get(fieldName);
     if (!field) {
@@ -76,6 +71,7 @@ export class Form<T> {
     return field;
   }
 
+  /** Define a binding by key */
   private defineBinding(bindingKey: string, create: () => FormBinding) {
     let binding = this.bindings.get(bindingKey);
     if (!binding) {
@@ -85,10 +81,11 @@ export class Form<T> {
     return binding;
   }
 
-  private bindToField: FormBindingFuncForField<T> = (
+  /** Create a binding to a field */
+  private bindToField: FormBindingFunc.ForField<T> = (
     fieldName: FormFieldName<T>,
-    binding: FormBindingConstructorForField,
-    config?: FormBindingFuncConfig
+    binding: FormBindingConstructor.ForField,
+    config?: FormBindingFunc.Config
   ) => {
     const key = `${fieldName}@${binding.name}:${config?.cacheKey}`;
     const instance = this.defineBinding(key, () => {
@@ -99,9 +96,10 @@ export class Form<T> {
     return instance.props;
   };
 
-  private bindToForm: FormBindingFuncForForm<Form<T>> = (
-    binding: FormBindingConstructorForForm<Form<T>>,
-    config?: FormBindingFuncConfig
+  /** Create a binding to the form */
+  private bindToForm: FormBindingFunc.ForForm<Form<T>> = (
+    binding: FormBindingConstructor.ForForm<Form<T>>,
+    config?: FormBindingFunc.Config
   ) => {
     const key = `${binding.name}:${config?.cacheKey}`;
     const instance = this.defineBinding(key, () => new binding(this, config));
@@ -109,6 +107,7 @@ export class Form<T> {
     return instance.props;
   };
 
+  /** Bind to a field or the form */
   bind: FormBindingFunc<Form<T>, T> = (...args: any[]) => {
     if (typeof args[0] === "string") {
       return this.bindToField(args[0], args[1], args[2]);
@@ -116,11 +115,13 @@ export class Form<T> {
     return this.bindToForm(args[0], args[1]);
   };
 
+  /** Submit the form */
   async submit(args?: { force?: boolean }) {
-    if (!this.canSubmit) return;
-
     const submit = this.delegate?.submit;
     if (!submit) return;
+
+    // Check if the form can be submitted
+    if (!this.canSubmit) return;
 
     if (args?.force) {
       this.submitAbortCtrl?.abort();
@@ -129,13 +130,15 @@ export class Form<T> {
       return;
     }
 
-    const abortController = new AbortController();
-    this.submitAbortCtrl = abortController;
-    runInAction(() => (this.isSubmitting = true));
-
+    // Start submitting
+    runInAction(() => {
+      this.isSubmitting = true;
+    });
     let succeed = false;
     try {
-      succeed = await submit(abortController.signal);
+      const abortCtrl = new AbortController();
+      this.submitAbortCtrl = abortCtrl;
+      succeed = await submit(abortCtrl.signal);
     } finally {
       this.submitAbortCtrl = null;
       runInAction(() => {
@@ -148,6 +151,7 @@ export class Form<T> {
   }
   private submitAbortCtrl: AbortController | null = null;
 
+  /** Validate the form */
   async validate(args?: { force?: boolean }) {
     const validate = this.delegate?.validate;
     if (!validate) return;
@@ -159,18 +163,23 @@ export class Form<T> {
       return;
     }
 
-    runInAction(() => (this.isValidating = true));
-    const abortController = new AbortController();
-    this.validateAbortCtrl = abortController;
+    // Start validating
+    runInAction(() => {
+      this.isValidating = true;
+    });
+    let result: FormValidationResult<T> | undefined;
     try {
-      const result = await validate(abortController.signal);
-      runInAction(() => {
-        this.isValidating = false;
-        this.errors = toErrorMap(result);
-      });
+      const abortCtrl = new AbortController();
+      this.validateAbortCtrl = abortCtrl;
+      result = await validate(abortCtrl.signal);
     } finally {
       this.validateAbortCtrl = null;
-      runInAction(() => (this.isValidating = false));
+      runInAction(() => {
+        this.isValidating = false;
+        if (result) {
+          this.errors = toErrorMap(result);
+        }
+      });
     }
   }
   private validateAbortCtrl: AbortController | null = null;
@@ -182,6 +191,7 @@ export class Form<T> {
     }
   }
 
+  /** Get the error messages for a field */
   getFieldError(fieldName: FormFieldName<T>) {
     const messages = this.errors.get(fieldName);
     if (!messages) return null;
