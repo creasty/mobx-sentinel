@@ -3,6 +3,8 @@ import js from "@eslint/js";
 import tsParser from "@typescript-eslint/parser";
 import tsPlugin from "@typescript-eslint/eslint-plugin";
 import prettierPlugin from "eslint-plugin-prettier";
+import reactPlugin from "eslint-plugin-react";
+import reactHooksPlugin from "eslint-plugin-react-hooks";
 
 const compat = new FlatCompat();
 
@@ -14,12 +16,6 @@ export default [
       parser: tsParser,
       parserOptions: {
         project: "./packages/core/tsconfig.json",
-      },
-      globals: {
-        test: "readonly",
-        expect: "readonly",
-        React: "readonly",
-        global: "readonly",
       },
     },
     plugins: {
@@ -35,25 +31,28 @@ export default [
     },
   },
   {
-    files: ["./packages/react/**/*.ts"],
+    files: ["./packages/react/**/*.ts", "./packages/react/**/*.tsx"],
     languageOptions: {
       parser: tsParser,
       parserOptions: {
         project: "./packages/react/tsconfig.json",
       },
-      globals: {
-        test: "readonly",
-        expect: "readonly",
-        React: "readonly",
-        global: "readonly",
+    },
+    settings: {
+      react: {
+        version: "detect",
       },
     },
     plugins: {
       "@typescript-eslint": tsPlugin,
       prettier: prettierPlugin,
+      react: reactPlugin,
+      "react-hooks": reactHooksPlugin,
     },
     rules: {
       ...tsPlugin.configs.recommended.rules,
+      ...reactPlugin.configs.recommended.rules,
+      ...reactHooksPlugin.configs.recommended.rules,
       "prettier/prettier": "error",
       "@typescript-eslint/no-namespace": "off",
       "no-redeclare": "off",

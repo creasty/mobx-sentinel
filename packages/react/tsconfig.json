@@ -4,7 +4,7 @@
     "outDir": "dist",
     "moduleResolution": "bundler",
     "jsx": "react",
-    "types": ["vitest/globals"]
+    "types": ["vitest/globals", "react"]
   },
   "include": ["src", "vitest.config.ts", "build.ts"],
   "exclude": ["node_modules", "dist"]
