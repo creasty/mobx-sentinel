@@ -15,26 +15,26 @@ class SampleModel {
   @observable date: Date = new Date("2024-12-31");
   @observable dateOpt: Date | null = null;
 
-  readonly form = new Form<SampleModel>();
-
   constructor() {
     makeObservable(this);
   }
 }
 
 const SampleComponent: React.FC<{ model: SampleModel }> = observer(({ model }) => {
+  const form = Form.get(model);
+
   return (
     <>
       <input
         aria-label="string"
-        {...model.form.bindInput("string", {
+        {...form.bindInput("string", {
           getter: () => model.string,
           setter: (v) => (model.string = v),
         })}
       />
       <input
         aria-label="stringOpt"
-        {...model.form.bindInput("stringOpt", {
+        {...form.bindInput("stringOpt", {
           getter: () => model.stringOpt,
           setter: (v) => (model.stringOpt = v || null),
         })}
@@ -42,7 +42,7 @@ const SampleComponent: React.FC<{ model: SampleModel }> = observer(({ model }) =
 
       <input
         aria-label="number"
-        {...model.form.bindInput("number", {
+        {...form.bindInput("number", {
           valueAs: "number",
           getter: () => model.number,
           setter: (v) => (model.number = v ?? 0),
@@ -50,7 +50,7 @@ const SampleComponent: React.FC<{ model: SampleModel }> = observer(({ model }) =
       />
       <input
         aria-label="numberOpt"
-        {...model.form.bindInput("numberOpt", {
+        {...form.bindInput("numberOpt", {
           valueAs: "number",
           getter: () => model.numberOpt,
           setter: (v) => (model.numberOpt = v),
@@ -59,7 +59,7 @@ const SampleComponent: React.FC<{ model: SampleModel }> = observer(({ model }) =
 
       <input
         aria-label="date"
-        {...model.form.bindInput("date", {
+        {...form.bindInput("date", {
           valueAs: "date",
           getter: () => model.date.toISOString().split("T")[0],
           setter: (v) => (model.date = v ?? new Date(0)),
@@ -67,7 +67,7 @@ const SampleComponent: React.FC<{ model: SampleModel }> = observer(({ model }) =
       />
       <input
         aria-label="dateOpt"
-        {...model.form.bindInput("dateOpt", {
+        {...form.bindInput("dateOpt", {
           valueAs: "date",
           getter: () => model.dateOpt?.toISOString().split("T")[0] ?? null,
           setter: (v) => (model.dateOpt = v),

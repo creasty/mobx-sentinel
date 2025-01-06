@@ -1,11 +1,12 @@
 import { action, computed, makeObservable, observable, runInAction } from "mobx";
+import { v4 as uuidV4 } from "uuid";
 import type { Form } from "./Form";
 
 export type FormFieldNameStrict<T> = keyof T & string;
 export type FormFieldName<T> = FormFieldNameStrict<T> | (string & {});
 
 export class FormField {
-  readonly id = crypto.randomUUID();
+  readonly id = uuidV4();
   private readonly form: Form<unknown>;
   readonly fieldName: string;
 
@@ -16,7 +17,7 @@ export class FormField {
   /** Whether the field value is provisional */
   @observable isProvisional = false;
 
-  constructor(args: { form: Form<unknown>; fieldName: string }) {
+  constructor(args: { form: Form<any>; fieldName: string }) {
     makeObservable(this);
     this.form = args.form;
     this.fieldName = args.fieldName;
@@ -59,7 +60,7 @@ export class FormField {
 
   validateWithDelay() {
     this.cancelDelayedValidation();
-    this.validationTimerId = global.setTimeout(() => {
+    this.validationTimerId = setTimeout(() => {
       this.validate();
       runInAction(() => {
         this.isProvisional = false;
@@ -69,8 +70,8 @@ export class FormField {
 
   private cancelDelayedValidation() {
     if (!this.validationTimerId) return;
-    global.clearTimeout(this.validationTimerId as any);
+    clearTimeout(this.validationTimerId as any);
     this.validationTimerId = null;
   }
-  private validationTimerId: object | null = null;
+  private validationTimerId: number | null = null;
 }

@@ -17,19 +17,19 @@ class SampleModel {
   @observable enum: SampleEnum = SampleEnum.ALPHA;
   @observable enumOpt: SampleEnum | null = null;
 
-  readonly form = new Form<SampleModel>();
-
   constructor() {
     makeObservable(this);
   }
 }
 
 const SampleComponent: React.FC<{ model: SampleModel }> = observer(({ model }) => {
-  const bindRadioButton1 = model.form.bindRadioButtonFactory("enum", {
+  const form = Form.get(model);
+
+  const bindRadioButton1 = form.bindRadioButtonFactory("enum", {
     getter: () => model.enum,
     setter: (v) => (model.enum = v ? (v as SampleEnum) : SampleEnum.ZULU),
   });
-  const bindRadioButton2 = model.form.bindRadioButtonFactory("enumOpt", {
+  const bindRadioButton2 = form.bindRadioButtonFactory("enumOpt", {
     getter: () => model.enumOpt,
     setter: (v) => (model.enumOpt = v ? (v as SampleEnum) : null),
   });

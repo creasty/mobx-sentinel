@@ -1,18 +1,17 @@
-import { observable, makeObservable, computed, runInAction, action } from "mobx";
+import { action, computed, makeObservable, observable, runInAction } from "mobx";
+import { v4 as uuidV4 } from "uuid";
 import { FormField, FormFieldName } from "./FormField";
-import { FormValidationResult, toErrorMap } from "./validation";
 import { FormBinding, FormBindingConstructor, FormBindingFunc } from "./binding";
 import { FormConfig, defaultConfig } from "./config";
+import { FormValidationResult, toErrorMap } from "./validation";
 
-export interface FormDelegate<T = object> {
-  submit?(abortSignal: AbortSignal): Promise<boolean>;
-  validate?(abortSignal: AbortSignal): Promise<FormValidationResult<T>>;
-}
+const formInstanceMap = new WeakMap<object, Form<any>>();
+const privateConstructorToken = Symbol("Form.privateConstructor");
 
 export class Form<T> {
-  readonly id = crypto.randomUUID();
-  delegate?: FormDelegate<T>;
-  config: FormConfig;
+  readonly id = uuidV4();
+  delegate?: Form.Delegate<T>;
+  config: Form.Config;
   private readonly fields = new Map<string, FormField>();
   private readonly bindings = new Map<string, FormBinding>();
 
@@ -27,7 +26,29 @@ export class Form<T> {
   /** Extension fields for bindings */
   [k: `bind${Capitalize<string>}`]: unknown;
 
-  constructor(args?: { delegate?: FormDelegate<T>; config?: Partial<FormConfig> }) {
+  /**
+   * Get the form instance for a subject.
+   *
+   * Returns the existing form instance if the subject is already associated with one.
+   * Otherwise, creates a new form instance and associates it with the subject.
+   */
+  static get<T extends object>(subject: T): Form<T> {
+    let instance = formInstanceMap.get(subject);
+    if (!instance) {
+      const delegate = getDelegation(subject);
+      instance = new Form<T>(privateConstructorToken, {
+        delegate,
+        config: delegate?.[Form.config],
+      });
+      formInstanceMap.set(subject, instance);
+    }
+    return instance;
+  }
+
+  private constructor(token: Symbol, args?: { delegate?: Form.Delegate<T>; config?: Partial<Form.Config> }) {
+    if (token !== privateConstructorToken) {
+      throw new Error("Instantiate Form via Form.get() instead");
+    }
     makeObservable(this);
     this.delegate = args?.delegate;
     this.config = { ...defaultConfig, ...args?.config };
@@ -39,10 +60,14 @@ export class Form<T> {
     return this.invalidFieldCount === 0;
   }
 
-  /** The number of invalid fields */
+  /**
+   * The number of invalid fields
+   *
+   * Includes {@link invalidNestedFormCount}.
+   */
   @computed
   get invalidFieldCount() {
-    return this.errors.size;
+    return this.errors.size + this.invalidNestedFormCount;
   }
 
   /** Whether the form can be submitted */
@@ -56,6 +81,46 @@ export class Form<T> {
   reset() {
     this.isDirty = false;
     this.fields.forEach((field) => field.reset());
+  }
+
+  /**
+   * Nested forms within the form.
+   *
+   * Forms are collected from the nestedFields of the delegate.
+   */
+  @computed.struct
+  get nestedForms(): ReadonlySet<Form<unknown>> {
+    const forms = new Set<Form<unknown>>();
+
+    const getNestedFields = this.delegate?.[Form.getNestedFields]?.bind(this.delegate);
+    if (getNestedFields) {
+      for (const nestedField of getNestedFields()) {
+        if (!nestedField || typeof nestedField !== "object") {
+          continue;
+        }
+        if (Array.isArray(nestedField)) {
+          for (const field of nestedField) {
+            const form = Form.get(field);
+            forms.add(form);
+          }
+        } else {
+          const form = Form.get(nestedField);
+          forms.add(form);
+        }
+      }
+    }
+
+    return forms;
+  }
+
+  /** The number of invalid nested forms */
+  @computed
+  get invalidNestedFormCount() {
+    let count = 0;
+    for (const form of this.nestedForms) {
+      count += form.isValid ? 0 : 1;
+    }
+    return count;
   }
 
   /** Define a field by name */
@@ -117,7 +182,7 @@ export class Form<T> {
 
   /** Submit the form */
   async submit(args?: { force?: boolean }) {
-    const submit = this.delegate?.submit;
+    const submit = this.delegate?.[Form.submit]?.bind(this.delegate);
     if (!submit) return;
 
     // Check if the form can be submitted
@@ -153,7 +218,7 @@ export class Form<T> {
 
   /** Validate the form */
   async validate(args?: { force?: boolean }) {
-    const validate = this.delegate?.validate;
+    const validate = this.delegate?.[Form.validate]?.bind(this.delegate);
     if (!validate) return;
 
     if (args?.force) {
@@ -184,10 +249,14 @@ export class Form<T> {
   }
   private validateAbortCtrl: AbortController | null = null;
 
+  /** Report validity on all fields and nested forms */
   @action
-  reportValidityOnAllFields() {
+  reportValidity() {
     for (const [, field] of this.fields) {
       field.reportValidity();
+    }
+    for (const form of this.nestedForms) {
+      form.reportValidity();
     }
   }
 
@@ -201,5 +270,37 @@ export class Form<T> {
     if (!field.isValidityReportable) return null;
 
     return messages;
+  }
+}
+
+export namespace Form {
+  export const config = Symbol("Form.config");
+  export const submit = Symbol("Form.submit");
+  export const validate = Symbol("Form.validate");
+  export const delegate = Symbol("Form.delegate");
+  export const getNestedFields = Symbol("Form.getNestedFields");
+
+  export type Config = FormConfig;
+
+  export interface Delegated<T> {
+    readonly [delegate]: Delegate<T>;
+  }
+  export interface Delegate<T> {
+    readonly [config]?: Readonly<Partial<Form.Config>>;
+    [getNestedFields]?(): (object | null | undefined)[];
+    [submit]?(abortSignal: AbortSignal): Promise<boolean>;
+    [validate]?(abortSignal: AbortSignal): Promise<FormValidationResult<T>>;
+  }
+}
+
+function getDelegation<T extends object>(subject: T): Form.Delegate<T> | undefined {
+  if (typeof subject !== "object") return;
+  if (Form.delegate in subject) {
+    // subject implements Delegated<T>
+    return (subject as any)[Form.delegate];
+  }
+  if (Form.config in subject || Form.submit in subject || Form.validate in subject || Form.getNestedFields in subject) {
+    // subject implements Delegate<T>
+    return subject as any;
   }
 }

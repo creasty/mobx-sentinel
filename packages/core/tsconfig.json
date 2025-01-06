@@ -3,7 +3,8 @@
   "compilerOptions": {
     "outDir": "dist",
     "moduleResolution": "node",
-    "module": "commonjs"
+    "module": "commonjs",
+    "types": ["@types/jest"]
   },
   "include": ["src", "build.ts"],
   "exclude": ["node_modules", "dist"]

@@ -27,14 +27,14 @@ class SampleModel {
   @observable singleOpt: SampleOption | null = null;
   @observable multiple: SampleOption[] = [];
 
-  readonly form = new Form<SampleModel>();
-
   constructor() {
     makeObservable(this);
   }
 }
 
 const SampleComponent: React.FC<{ model: SampleModel }> = observer(({ model }) => {
+  const form = Form.get(model);
+
   const options = SAMPLE_OPTIONS.map((country) => (
     <option key={country.code} value={country.code}>
       {country.name}
@@ -45,7 +45,7 @@ const SampleComponent: React.FC<{ model: SampleModel }> = observer(({ model }) =
     <>
       <select
         aria-label="single"
-        {...model.form.bindSelectBox("single", {
+        {...form.bindSelectBox("single", {
           getter: () => model.single.code,
           setter: (v) => (model.single = findSampleOption(v) ?? SAMPLE_OPTIONS[2]),
         })}
@@ -55,7 +55,7 @@ const SampleComponent: React.FC<{ model: SampleModel }> = observer(({ model }) =
 
       <select
         aria-label="singleOpt"
-        {...model.form.bindSelectBox("singleOpt", {
+        {...form.bindSelectBox("singleOpt", {
           getter: () => model.singleOpt?.code ?? SAMPLE_OPTIONS[0].code,
           setter: (v) => (model.singleOpt = findSampleOption(v) ?? null),
         })}
@@ -65,7 +65,7 @@ const SampleComponent: React.FC<{ model: SampleModel }> = observer(({ model }) =
 
       <select
         aria-label="multiple"
-        {...model.form.bindSelectBox("multiple", {
+        {...form.bindSelectBox("multiple", {
           multiple: true,
           getter: () => model.multiple.map((c) => c.code),
           setter: (v) => (model.multiple = v.map((code) => findSampleOption(code)).flatMap((v) => (v ? [v] : []))),

@@ -14,7 +14,8 @@
     "build:types": "tsc -P tsconfig.build.json"
   },
   "dependencies": {
-    "mobx": "^6.12.3"
+    "mobx": "^6.12.3",
+    "uuid": "^11.0.4"
   },
   "devDependencies": {
     "@types/jest": "^29.5.14",

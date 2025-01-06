@@ -11,26 +11,26 @@ class SampleModel {
   @observable boolean: boolean = false;
   @observable booleanOpt: boolean | null = null;
 
-  readonly form = new Form<SampleModel>();
-
   constructor() {
     makeObservable(this);
   }
 }
 
 const SampleComponent: React.FC<{ model: SampleModel }> = observer(({ model }) => {
+  const form = Form.get(model);
+
   return (
     <>
       <input
         aria-label="boolean"
-        {...model.form.bindCheckBox("boolean", {
+        {...form.bindCheckBox("boolean", {
           getter: () => model.boolean,
           setter: (v) => (model.boolean = v),
         })}
       />
       <input
         aria-label="booleanOpt"
-        {...model.form.bindCheckBox("booleanOpt", {
+        {...form.bindCheckBox("booleanOpt", {
           getter: () => model.booleanOpt ?? false,
           setter: (v) => (model.booleanOpt = v),
         })}

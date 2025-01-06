@@ -49,6 +49,9 @@ importers:
       mobx:
         specifier: ^6.12.3
         version: 6.12.3
+      uuid:
+        specifier: ^11.0.4
+        version: 11.0.4
     devDependencies:
       '@types/jest':
         specifier: ^29.5.14
@@ -5984,6 +5987,11 @@ packages:
       react: ^16.8.0 || ^17.0.0 || ^18.0.0 || ^19.0.0
     dependencies:
       react: 18.0.0
+    dev: false
+
+  /uuid@11.0.4:
+    resolution: {integrity: sha512-IzL6VtTTYcAhA/oghbFJ1Dkmqev+FpQWnCBaKq/gUluLxliWvO8DPFWfIviRmYbtaavtSQe4WBL++rFjdcGWEg==}
+    hasBin: true
     dev: false
 
   /v8-to-istanbul@9.3.0:

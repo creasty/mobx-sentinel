@@ -9,17 +9,42 @@ const compat = new FlatCompat();
 export default [
   js.configs.recommended,
   {
-    files: ["**/*.ts"],
+    files: ["./packages/core/*.ts"],
     languageOptions: {
       parser: tsParser,
       parserOptions: {
-        project: "./tsconfig.json",
+        project: "./packages/core/tsconfig.json",
       },
       globals: {
         test: "readonly",
         expect: "readonly",
         React: "readonly",
-        crypto: "readonly",
+        global: "readonly",
+      },
+    },
+    plugins: {
+      "@typescript-eslint": tsPlugin,
+      prettier: prettierPlugin,
+    },
+    rules: {
+      ...tsPlugin.configs.recommended.rules,
+      "prettier/prettier": "error",
+      "@typescript-eslint/no-namespace": "off",
+      "no-redeclare": "off",
+      "@typescript-eslint/no-explicit-any": "off",
+    },
+  },
+  {
+    files: ["./packages/react/**/*.ts"],
+    languageOptions: {
+      parser: tsParser,
+      parserOptions: {
+        project: "./packages/react/tsconfig.json",
+      },
+      globals: {
+        test: "readonly",
+        expect: "readonly",
+        React: "readonly",
         global: "readonly",
       },
     },

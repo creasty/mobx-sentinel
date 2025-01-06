@@ -6,16 +6,13 @@ import { makeObservable, runInAction } from "mobx";
 import { Form } from "@mobx-form/core";
 import "./extension";
 import { observer } from "mobx-react-lite";
-import { FormDelegate } from "@mobx-form/core";
 
-class SampleModel implements FormDelegate<SampleModel> {
-  readonly form = new Form<SampleModel>({ delegate: this });
-
+class SampleModel implements Form.Delegate<SampleModel> {
   constructor() {
     makeObservable(this);
   }
 
-  submit: FormDelegate<SampleModel>["submit"] = async () => {
+  [Form.submit] = async () => {
     return this.submitDeferred.promise;
   };
 
@@ -34,9 +31,10 @@ class SampleModel implements FormDelegate<SampleModel> {
 }
 
 const SampleComponent: React.FC<{ model: SampleModel }> = observer(({ model }) => {
+  const form = Form.get(model);
   return (
     <>
-      <button aria-label="submit" {...model.form.bindSubmitButton()}>
+      <button aria-label="submit" {...form.bindSubmitButton()}>
         Submit
       </button>
     </>
@@ -51,6 +49,7 @@ function setupEnv() {
 
   return {
     model,
+    form: Form.get(model),
     button: button,
     async clickButton() {
       await userEvent.click(button);
@@ -62,28 +61,28 @@ describe("SubmitButtonBinding", () => {
   test("Activates and disables the button", async () => {
     const env = setupEnv();
 
-    expect(env.model.form.canSubmit).toBe(false);
+    expect(env.form.canSubmit).toBe(false);
     expect(env.button).toBeDisabled();
 
     act(() => {
       runInAction(() => {
-        env.model.form.isDirty = true;
+        env.form.isDirty = true;
       });
     });
-    expect(env.model.form.isSubmitting).toBe(false);
-    expect(env.model.form.canSubmit).toBe(true);
+    expect(env.form.isSubmitting).toBe(false);
+    expect(env.form.canSubmit).toBe(true);
     expect(env.button).not.toBeDisabled();
 
     await env.clickButton();
 
-    expect(env.model.form.isSubmitting).toBe(true);
-    expect(env.model.form.canSubmit).toBe(false);
+    expect(env.form.isSubmitting).toBe(true);
+    expect(env.form.canSubmit).toBe(false);
     expect(env.button).toBeDisabled();
 
     await env.model.completeSubmit();
 
-    expect(env.model.form.isSubmitting).toBe(false);
-    expect(env.model.form.canSubmit).toBe(false);
+    expect(env.form.isSubmitting).toBe(false);
+    expect(env.form.canSubmit).toBe(false);
     expect(env.button).toBeDisabled();
   });
 });
