@@ -3,18 +3,18 @@ import "@testing-library/jest-dom";
 import { act, render, screen } from "@testing-library/react";
 import { userEvent } from "@testing-library/user-event";
 import { makeObservable, runInAction } from "mobx";
-import { Form } from "@mobx-form/core";
+import { Form, FormDelegate } from "@mobx-form/core";
 import "./extension";
 import { observer } from "mobx-react-lite";
 
-class SampleModel implements Form.Delegate<SampleModel> {
+class SampleModel implements FormDelegate<SampleModel> {
   constructor() {
     makeObservable(this);
   }
 
-  [Form.submit] = async () => {
+  async [FormDelegate.submit]() {
     return this.submitDeferred.promise;
-  };
+  }
 
   private submitDeferred = (() => {
     let resolve = (): void => void 0;

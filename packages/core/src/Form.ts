@@ -4,6 +4,7 @@ import { FormField, FormFieldName } from "./FormField";
 import { FormBinding, FormBindingConstructor, FormBindingFunc } from "./binding";
 import { FormConfig, defaultConfig } from "./config";
 import { FormValidationResult, toErrorMap } from "./validation";
+import { FormDelegate, getDelegation, isEligibleForConnecting } from "./delegation";
 
 const registry = new WeakMap<object, Map<Symbol, Form<any>>>();
 const registryDefaultKey = Symbol("Form.registryDefaultKey");
@@ -13,8 +14,8 @@ const privateConstructorToken = Symbol("Form.privateConstructor");
 export class Form<T> {
   readonly id = uuidV4();
   private readonly registryKey?: symbol;
-  delegate?: Form.Delegate<T>;
-  config: Form.Config;
+  delegate?: FormDelegate<T>;
+  config: FormConfig;
   private readonly fields = new Map<string, FormField>();
   private readonly bindings = new Map<string, FormBinding>();
 
@@ -54,7 +55,7 @@ export class Form<T> {
       instance = new Form<T>(privateConstructorToken, {
         registryKey: key,
         delegate,
-        config: delegate?.[Form.config],
+        config: delegate?.[FormDelegate.config],
       });
       map.set(key, instance);
     }
@@ -65,8 +66,8 @@ export class Form<T> {
     token: symbol,
     args?: {
       registryKey: symbol;
-      delegate?: Form.Delegate<T>;
-      config?: Partial<Form.Config>;
+      delegate?: FormDelegate<T>;
+      config?: Partial<FormConfig>;
     }
   ) {
     if (token !== privateConstructorToken) {
@@ -110,27 +111,18 @@ export class Form<T> {
   /**
    * Nested forms within the form.
    *
-   * Forms are collected from the nestedFields of the delegate.
+   * Forms are collected from the {@link FormDelegate.connect}.
    */
   @computed.struct
   get nestedForms(): ReadonlySet<Form<unknown>> {
     const forms = new Set<Form<unknown>>();
 
-    const getNestedFields = this.delegate?.[Form.getNestedFields]?.bind(this.delegate);
-    if (getNestedFields) {
-      for (const nestedField of getNestedFields()) {
-        if (!nestedField || typeof nestedField !== "object") {
-          continue;
-        }
-        if (Array.isArray(nestedField)) {
-          for (const field of nestedField) {
-            const form = Form.get(field, this.registryKey);
-            forms.add(form);
-          }
-        } else {
-          const form = Form.get(nestedField, this.registryKey);
-          forms.add(form);
-        }
+    const connect = this.delegate?.[FormDelegate.connect]?.bind(this.delegate);
+    if (connect) {
+      for (const nestedField of connect()) {
+        if (!isEligibleForConnecting(nestedField)) continue;
+        const form = Form.get(nestedField, this.registryKey);
+        forms.add(form);
       }
     }
 
@@ -206,7 +198,7 @@ export class Form<T> {
 
   /** Submit the form */
   async submit(args?: { force?: boolean }) {
-    const submit = this.delegate?.[Form.submit]?.bind(this.delegate);
+    const submit = this.delegate?.[FormDelegate.submit]?.bind(this.delegate);
     if (!submit) return;
 
     // Check if the form can be submitted
@@ -242,7 +234,7 @@ export class Form<T> {
 
   /** Validate the form */
   async validate(args?: { force?: boolean }) {
-    const validate = this.delegate?.[Form.validate]?.bind(this.delegate);
+    const validate = this.delegate?.[FormDelegate.validate]?.bind(this.delegate);
     if (!validate) return;
 
     if (args?.force) {
@@ -294,37 +286,5 @@ export class Form<T> {
     if (!field.isValidityReportable) return null;
 
     return messages;
-  }
-}
-
-export namespace Form {
-  export const config = Symbol("Form.config");
-  export const submit = Symbol("Form.submit");
-  export const validate = Symbol("Form.validate");
-  export const delegate = Symbol("Form.delegate");
-  export const getNestedFields = Symbol("Form.getNestedFields");
-
-  export type Config = FormConfig;
-
-  export interface Delegated<T> {
-    readonly [delegate]: Delegate<T>;
-  }
-  export interface Delegate<T> {
-    readonly [config]?: Readonly<Partial<Form.Config>>;
-    [getNestedFields]?(): (object | null | undefined)[];
-    [submit]?(abortSignal: AbortSignal): Promise<boolean>;
-    [validate]?(abortSignal: AbortSignal): Promise<FormValidationResult<T>>;
-  }
-}
-
-function getDelegation<T extends object>(subject: T): Form.Delegate<T> | undefined {
-  if (typeof subject !== "object") return;
-  if (Form.delegate in subject) {
-    // subject implements Delegated<T>
-    return (subject as any)[Form.delegate];
-  }
-  if (Form.config in subject || Form.submit in subject || Form.validate in subject || Form.getNestedFields in subject) {
-    // subject implements Delegate<T>
-    return subject as any;
   }
 }

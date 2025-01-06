@@ -1,21 +1,22 @@
 import { autorun, makeObservable, observable, runInAction } from "mobx";
 import { Form } from "./Form";
+import { FormDelegate } from "./delegation";
 
-class SampleModel implements Form.Delegate<SampleModel> {
+class SampleModel implements FormDelegate<SampleModel> {
   @observable string: string = "hello";
 
   constructor() {
     makeObservable(this);
   }
 
-  async [Form.validate]() {
+  async [FormDelegate.validate]() {
     return {
       string: this.string !== "hello" ? "error" : undefined,
     };
   }
 }
 
-class NestedModel implements Form.Delegate<NestedModel> {
+class NestedModel implements FormDelegate<NestedModel> {
   @observable sample = new SampleModel();
   @observable array = [new SampleModel()];
 
@@ -23,8 +24,8 @@ class NestedModel implements Form.Delegate<NestedModel> {
     makeObservable(this);
   }
 
-  [Form.getNestedFields]() {
-    return [this.sample, this.array];
+  [FormDelegate.connect]() {
+    return [this.sample, ...this.array];
   }
 }
 
