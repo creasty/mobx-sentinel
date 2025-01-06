@@ -5,11 +5,14 @@ import { FormBinding, FormBindingConstructor, FormBindingFunc } from "./binding"
 import { FormConfig, defaultConfig } from "./config";
 import { FormValidationResult, toErrorMap } from "./validation";
 
-const formInstanceMap = new WeakMap<object, Form<any>>();
+const registry = new WeakMap<object, Map<Symbol, Form<any>>>();
+const registryDefaultKey = Symbol("Form.registryDefaultKey");
+
 const privateConstructorToken = Symbol("Form.privateConstructor");
 
 export class Form<T> {
   readonly id = uuidV4();
+  private readonly registryKey?: symbol;
   delegate?: Form.Delegate<T>;
   config: Form.Config;
   private readonly fields = new Map<string, FormField>();
@@ -31,25 +34,46 @@ export class Form<T> {
    *
    * Returns the existing form instance if the subject is already associated with one.
    * Otherwise, creates a new form instance and associates it with the subject.
+   *
+   * @param subject The subject to associate with the form
+   * @param key The key to associate with the form.
+   *   If you need to associate multiple forms with the same subject, use different keys.
    */
-  static get<T extends object>(subject: T): Form<T> {
-    let instance = formInstanceMap.get(subject);
+  static get<T extends object>(subject: T, key?: symbol): Form<T> {
+    let map = registry.get(subject);
+    if (!map) {
+      map = new Map();
+      registry.set(subject, map);
+    }
+    if (!key) {
+      key = registryDefaultKey;
+    }
+    let instance = map.get(key);
     if (!instance) {
       const delegate = getDelegation(subject);
       instance = new Form<T>(privateConstructorToken, {
+        registryKey: key,
         delegate,
         config: delegate?.[Form.config],
       });
-      formInstanceMap.set(subject, instance);
+      map.set(key, instance);
     }
     return instance;
   }
 
-  private constructor(token: Symbol, args?: { delegate?: Form.Delegate<T>; config?: Partial<Form.Config> }) {
+  private constructor(
+    token: symbol,
+    args?: {
+      registryKey: symbol;
+      delegate?: Form.Delegate<T>;
+      config?: Partial<Form.Config>;
+    }
+  ) {
     if (token !== privateConstructorToken) {
       throw new Error("Instantiate Form via Form.get() instead");
     }
     makeObservable(this);
+    this.registryKey = args?.registryKey;
     this.delegate = args?.delegate;
     this.config = { ...defaultConfig, ...args?.config };
   }
@@ -100,11 +124,11 @@ export class Form<T> {
         }
         if (Array.isArray(nestedField)) {
           for (const field of nestedField) {
-            const form = Form.get(field);
+            const form = Form.get(field, this.registryKey);
             forms.add(form);
           }
         } else {
-          const form = Form.get(nestedField);
+          const form = Form.get(nestedField, this.registryKey);
           forms.add(form);
         }
       }
