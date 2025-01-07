@@ -54,6 +54,9 @@ function setupEnv() {
     async clickButton() {
       await userEvent.click(button);
     },
+    async hoverButton() {
+      await userEvent.hover(button);
+    },
   };
 }
 
@@ -82,5 +85,17 @@ describe("SubmitButtonBinding", () => {
     expect(env.form.isSubmitting).toBe(false);
     expect(env.form.canSubmit).toBe(false);
     expect(env.button).toBeDisabled();
+  });
+
+  test("Hovering the button triggers form.reportValidity()", async () => {
+    const env = setupEnv();
+    const spy = vi.spyOn(env.form, "reportValidity");
+
+    act(() => {
+      env.form.markAsDirty();
+    });
+    await env.hoverButton();
+
+    expect(spy).toHaveBeenCalledTimes(1);
   });
 });
