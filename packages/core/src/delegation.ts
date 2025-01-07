@@ -4,15 +4,27 @@ import { FormValidationResult } from "./validation";
 /** Constrains a type to an object other than an array */
 type NonArrayObject = object & { length?: never };
 
-/** A indirect delegate for a form */
+/** Indirect delegate for the form */
 export interface FormDelegated<T> {
+  /** Delegate for the form */
   readonly [FormDelegate.delegate]: FormDelegate<T>;
 }
 
-/** A delegate for a form */
+/** Delegate for the form */
 export interface FormDelegate<T> {
   /** Form configuration */
-  readonly [FormDelegate.config]?: Readonly<Partial<FormConfig>>;
+  readonly [FormDelegate.config]?: FormDelegate.Config;
+  /** @see {@link FormDelegate.connect} */
+  [FormDelegate.connect]?: FormDelegate.Connect;
+  /** @see {@link FormDelegate.submit} */
+  [FormDelegate.submit]?: FormDelegate.Submit;
+  /** @see {@link FormDelegate.validate} */
+  [FormDelegate.validate]?: FormDelegate.Validate<T>;
+}
+
+export namespace FormDelegate {
+  /** Form configuration */
+  export type Config = Readonly<Partial<FormConfig>>;
   /**
    * Connect nested forms to the parent form.
    *
@@ -22,27 +34,50 @@ export interface FormDelegate<T> {
    *
    * Returns an array of objects (not Form instances) to connect.
    */
-  [FormDelegate.connect]?(): (NonArrayObject | null | undefined)[];
+  export type Connect = () => (NonArrayObject | null | undefined)[];
   /**
    * Submit the form.
    *
    * Returns true if the form was submitted successfully.
    */
-  [FormDelegate.submit]?(abortSignal: AbortSignal): Promise<boolean>;
+  export type Submit = (abortSignal: AbortSignal) => Promise<boolean>;
   /**
    * Validate the form.
    *
    * Returns a map of field names to error messages.
    */
-  [FormDelegate.validate]?(abortSignal: AbortSignal): Promise<FormValidationResult<T>>;
-}
+  export type Validate<T> = (abortSignal: AbortSignal) => Promise<FormValidationResult<T>>;
 
-export namespace FormDelegate {
-  export const config = Symbol("Form.config");
-  export const submit = Symbol("Form.submit");
-  export const validate = Symbol("Form.validate");
-  export const delegate = Symbol("Form.delegate");
-  export const connect = Symbol("Form.connect");
+  /**
+   * Symbol for implementing {@link Config}.
+   *
+   * Use with the interface {@link FormDelegate}
+   */
+  export const config = Symbol("FormDelegate.config");
+  /**
+   * Symbol for implementing {@link Connect}.
+   *
+   * Use with the interface {@link FormDelegate}
+   */
+  export const connect = Symbol("FormDelegate.connect");
+  /**
+   * Symbol for implementing {@link Submit}.
+   *
+   * Use with the interface {@link FormDelegate}
+   */
+  export const submit = Symbol("FormDelegate.submit");
+  /**
+   * Symbol for implementing {@link Validate}.
+   *
+   * Use with the interface {@link FormDelegate}
+   */
+  export const validate = Symbol("FormDelegate.validate");
+  /**
+   * Symbol for implementing {@link FormDelegate}.
+   *
+   * Use with the interface {@link FormDelegated}
+   */
+  export const delegate = Symbol("FormDelegated.delegate");
 }
 
 /**
@@ -54,17 +89,17 @@ export function getDelegation<T extends object>(subject: T | any): FormDelegate<
   if (!subject || typeof subject !== "object") {
     return;
   }
+  // subject implements Delegated<T>
   if (FormDelegate.delegate in subject) {
-    // subject implements Delegated<T>
     return (subject as any)[FormDelegate.delegate];
   }
+  // subject implements Delegate<T>
   if (
     FormDelegate.config in subject ||
     FormDelegate.submit in subject ||
     FormDelegate.validate in subject ||
     FormDelegate.connect in subject
   ) {
-    // subject implements Delegate<T>
     return subject as any;
   }
 }
@@ -79,12 +114,12 @@ export function isEligibleForConnecting(subject: any): subject is FormDelegate<a
   if (!subject || typeof subject !== "object") {
     return false;
   }
+  // subject implements Delegated<T>
   if (FormDelegate.delegate in subject) {
-    // subject implements Delegated<T>
     return isEligibleForConnecting((subject as any)[FormDelegate.delegate]);
   }
+  // subject implements Delegate<T>
   if (FormDelegate.validate in subject || FormDelegate.connect in subject) {
-    // subject implements Delegate<T>
     return true;
   }
   return false;
