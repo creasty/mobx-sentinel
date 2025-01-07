@@ -138,7 +138,7 @@ export class Form<T> {
   @action
   reportValidity() {
     this.isValidityReported = true;
-    for (const [, field] of this.fields) {
+    for (const field of this.fields.values()) {
       field.reportValidity();
     }
     for (const form of this.nestedForms) {
@@ -151,7 +151,12 @@ export class Form<T> {
   reset() {
     this.isDirty = false;
     this.isValidityReported = false;
-    this.fields.forEach((field) => field.reset());
+    for (const field of this.fields.values()) {
+      field.reset();
+    }
+    for (const form of this.nestedForms) {
+      form.reset();
+    }
   }
 
   /** Get the error messages for a field */
@@ -166,19 +171,24 @@ export class Form<T> {
     return messages;
   }
 
-  /** Submit the form */
+  /**
+   * Submit the form.
+   *
+   * Returns true if the submission is occurred,
+   * false if the submission is discarded/canceled (e.g. invalid form, already in progress).
+   * Note that the return value does not indicate whether the submission succeeded.
+   */
   async submit(args?: { force?: boolean }) {
     const submit = this.delegate?.[FormDelegate.submit]?.bind(this.delegate);
-    if (!submit) return;
-
-    // Check if the form can be submitted
-    if (!this.canSubmit) return;
+    if (!submit) return false;
 
     if (args?.force) {
       this.submitAbortCtrl?.abort();
       this.submitAbortCtrl = null;
     } else if (this.isSubmitting) {
-      return;
+      return false;
+    } else if (!this.canSubmit) {
+      return false;
     }
 
     // Start submitting
@@ -186,8 +196,8 @@ export class Form<T> {
       this.isSubmitting = true;
     });
     let succeed = false;
+    const abortCtrl = new AbortController();
     try {
-      const abortCtrl = new AbortController();
       this.submitAbortCtrl = abortCtrl;
       succeed = await submit(abortCtrl.signal);
     } finally {
@@ -199,19 +209,26 @@ export class Form<T> {
         }
       });
     }
+    return !abortCtrl.signal.aborted;
   }
   private submitAbortCtrl: AbortController | null = null;
 
-  /** Validate the form */
+  /**
+   * Validate the form.
+   *
+   * Returns true if the validation is occurred,
+   * false if the validation is discarded/canceled (e.g. already in progress).
+   * Note that the return value does not indicate the validation result.
+   */
   async validate(args?: { force?: boolean }) {
     const validate = this.delegate?.[FormDelegate.validate]?.bind(this.delegate);
-    if (!validate) return;
+    if (!validate) return false;
 
     if (args?.force) {
       this.validateAbortCtrl?.abort();
       this.validateAbortCtrl = null;
     } else if (this.isValidating) {
-      return;
+      return false;
     }
 
     // Start validating
@@ -219,8 +236,8 @@ export class Form<T> {
       this.isValidating = true;
     });
     let result: FormValidationResult<T> | undefined;
+    const abortCtrl = new AbortController();
     try {
-      const abortCtrl = new AbortController();
       this.validateAbortCtrl = abortCtrl;
       result = await validate(abortCtrl.signal);
     } finally {
@@ -232,6 +249,7 @@ export class Form<T> {
         }
       });
     }
+    return !abortCtrl.signal.aborted;
   }
   private validateAbortCtrl: AbortController | null = null;
 
