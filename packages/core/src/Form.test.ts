@@ -43,7 +43,7 @@ class NestedModel implements FormDelegate<NestedModel> {
 
 describe("Form", () => {
   describe(".get", () => {
-    it("returns the same instance for the same subject and key", () => {
+    it("returns the same instance for the same subject", () => {
       const model = new SampleModel();
       const form1 = Form.get(model);
       const form2 = Form.get(model);
@@ -63,6 +63,14 @@ describe("Form", () => {
       const form1 = Form.get(model);
       const form2 = Form.get(model, Symbol("key"));
       expect(form1).not.toBe(form2);
+    });
+
+    it("returns the same instance for the same subject with the same key", () => {
+      const model = new SampleModel();
+      const key = Symbol("key");
+      const form1 = Form.get(model, key);
+      const form2 = Form.get(model, key);
+      expect(form1).toBe(form2);
     });
 
     it("retrieves instances of nested forms", () => {
@@ -88,6 +96,25 @@ describe("Form", () => {
       expect(form.nestedForms.size).toBe(2);
       expect(form.nestedForms).toContain(sampleForm);
       expect(form.nestedForms).toContain(arrayForm);
+    });
+  });
+
+  describe(".dispose", () => {
+    it("disposes the form instance for a subject", () => {
+      const model = new SampleModel();
+      const form = Form.get(model);
+      Form.dispose(model);
+      expect(Form.get(model)).not.toBe(form); // New instance is created
+    });
+
+    it("disposes the form instance for a subject with a specific key", () => {
+      const model = new SampleModel();
+      const key = Symbol("custom-key");
+      const form = Form.get(model);
+      const formWithKey = Form.get(model, key);
+      Form.dispose(model, key);
+      expect(Form.get(model, key)).not.toBe(formWithKey); // New instance is created
+      expect(Form.get(model)).toBe(form); // Instances with different keys are not disposed
     });
   });
 
@@ -347,7 +374,7 @@ describe("Form", () => {
 });
 
 suite("Nested forms", () => {
-  it("the validity of the parent form is true if all nested forms are valid", async () => {
+  test("the validity of the parent form is true if all nested forms are valid", async () => {
     const model = new NestedModel();
     const form = Form.get(model);
     const sampleForm = Form.get(model.sample);

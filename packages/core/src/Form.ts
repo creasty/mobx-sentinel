@@ -30,33 +30,51 @@ export class Form<T> {
   /**
    * Get the form instance for a subject.
    *
-   * Returns the existing form instance if the subject is already associated with one.
-   * Otherwise, creates a new form instance and associates it with the subject.
+   * - Returns the existing form instance if the subject is already associated with one.\
+   *   Otherwise, creates a new form instance and associates it with the subject.
+   * - The form instance is cached in the internal registry,
+   *   and it will be garbage collected when the subject is no longer in use.\
+   *   In rare cases, you may need to manually dispose the form instance using {@link Form.dispose}.
    *
    * @param subject The subject to associate with the form
-   * @param key The key to associate with the form.
+   * @param formKey The key to associate with the form.
    *   If you need to associate multiple forms with the same subject, use different keys.
    */
-  static get<T extends object>(subject: T, key?: symbol): Form<T> {
+  static get<T extends object>(subject: T, formKey?: symbol): Form<T> {
     let map = registry.get(subject);
     if (!map) {
       map = new Map();
       registry.set(subject, map);
     }
-    if (!key) {
-      key = registryDefaultKey;
+    if (!formKey) {
+      formKey = registryDefaultKey;
     }
-    let instance = map.get(key);
+    let instance = map.get(formKey);
     if (!instance) {
       const delegate = getDelegation(subject);
       instance = new Form<T>(privateConstructorToken, {
-        registryKey: key,
+        registryKey: formKey,
         delegate,
         config: delegate?.[FormDelegate.config],
       });
-      map.set(key, instance);
+      map.set(formKey, instance);
     }
     return instance;
+  }
+
+  /**
+   * Manually dispose the form instance for a subject.
+   *
+   * @see {@link Form.get}
+   */
+  static dispose(subject: object, formKey?: symbol) {
+    const map = registry.get(subject);
+    if (!map) return;
+    if (formKey) {
+      map.delete(formKey);
+    } else {
+      map.clear();
+    }
   }
 
   private constructor(

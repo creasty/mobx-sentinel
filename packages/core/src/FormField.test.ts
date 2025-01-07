@@ -6,7 +6,7 @@ import { FormDelegate } from "./delegation";
 class SampleModel implements FormDelegate<SampleModel> {
   @observable test = "test";
 
-  [FormDelegate.config] = {
+  [FormDelegate.config]: FormDelegate.Config = {
     interimValidationDelayMs: 100,
   };
 
