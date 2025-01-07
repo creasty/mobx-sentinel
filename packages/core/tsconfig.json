@@ -4,7 +4,7 @@
     "outDir": "dist",
     "moduleResolution": "node",
     "module": "commonjs",
-    "types": ["@types/jest"]
+    "types": ["vitest/globals"]
   },
   "include": ["src", "build.ts"],
   "exclude": ["node_modules", "dist"]
