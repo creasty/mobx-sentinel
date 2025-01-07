@@ -65,6 +65,10 @@ export class Form<T> {
   /**
    * Manually dispose the form instance for a subject.
    *
+   * Use with caution.\
+   * You don't usually need to use this method at all.\
+   * It's only for advanced use cases, such as testing.
+   *
    * @see {@link Form.get}
    */
   static dispose(subject: object, formKey?: symbol) {

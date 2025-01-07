@@ -1,6 +1,12 @@
 import { autorun, makeObservable, observable, runInAction } from "mobx";
 import { Form } from "./Form";
 import { FormDelegate } from "./delegation";
+import {
+  SampleConfigurableFieldBinding,
+  SampleConfigurableFormBinding,
+  SampleFieldBinding,
+  SampleFormBinding,
+} from "./binding.test";
 
 class EmptyModel {}
 
@@ -48,6 +54,7 @@ describe("Form", () => {
       const form1 = Form.get(model);
       const form2 = Form.get(model);
       expect(form1).toBe(form2);
+      expect(form1.id).toBe(form2.id);
     });
 
     it("returns different instances for different subjects", () => {
@@ -56,6 +63,7 @@ describe("Form", () => {
       const form1 = Form.get(model1);
       const form2 = Form.get(model2);
       expect(form1).not.toBe(form2);
+      expect(form1.id).not.toBe(form2.id);
     });
 
     it("returns different instances for different keys", () => {
@@ -63,6 +71,7 @@ describe("Form", () => {
       const form1 = Form.get(model);
       const form2 = Form.get(model, Symbol("key"));
       expect(form1).not.toBe(form2);
+      expect(form1.id).not.toBe(form2.id);
     });
 
     it("returns the same instance for the same subject with the same key", () => {
@@ -71,6 +80,7 @@ describe("Form", () => {
       const form1 = Form.get(model, key);
       const form2 = Form.get(model, key);
       expect(form1).toBe(form2);
+      expect(form1.id).toBe(form2.id);
     });
 
     it("retrieves instances of nested forms", () => {
@@ -369,6 +379,95 @@ describe("Form", () => {
           "secondValidate",
         ]
       `);
+    });
+  });
+
+  describe("#bind", () => {
+    describe("Create a binding for the form", () => {
+      describe("Without a config", () => {
+        it("returns the binding properties", () => {
+          const model = new SampleModel();
+          const form = Form.get(model);
+
+          const binding = form.bind(SampleFormBinding);
+          expect(binding.formId).toBe(form.id);
+        });
+
+        it("returns the same binding instance when called multiple times", () => {
+          const model = new SampleModel();
+          const form = Form.get(model);
+
+          const binding1 = form.bind(SampleFormBinding);
+          const binding2 = form.bind(SampleFormBinding);
+          expect(binding1.bindingId).toBe(binding2.bindingId);
+        });
+      });
+
+      // FIXME
+      // describe("With a config", () => {
+      //   it("returns the binding properties", () => {
+      //     const model = new SampleModel();
+      //     const form = Form.get(model);
+
+      //     const binding = form.bind(SampleConfigurableFormBinding, { sample: true });
+      //     expect(binding.formId).toBe(form.id);
+      //     expect(binding.config).toEqual({ sample: true });
+      //   });
+
+      //   it("returns the same binding instance when called multiple times but updates the config", () => {
+      //     const model = new SampleModel();
+      //     const form = Form.get(model);
+
+      //     const binding1 = form.bind(SampleConfigurableFormBinding, { sample: true });
+      //     expect(binding1.config).toEqual({ sample: true });
+      //     const binding2 = form.bind(SampleConfigurableFormBinding, { sample: false });
+      //     expect(binding1.bindingId).toBe(binding2.bindingId);
+      //     expect(binding2.config).toEqual({ sample: false });
+      //   });
+      // });
+    });
+
+    describe("Create a binding for a field", () => {
+      describe("Without a config", () => {
+        it("returns the binding properties", () => {
+          const model = new SampleModel();
+          const form = Form.get(model);
+
+          const binding = form.bind("string", SampleFieldBinding);
+          expect(binding.fieldName).toBe("string");
+        });
+
+        it("returns the same binding instance when called multiple times", () => {
+          const model = new SampleModel();
+          const form = Form.get(model);
+
+          const binding1 = form.bind("string", SampleFieldBinding);
+          const binding2 = form.bind("string", SampleFieldBinding);
+          expect(binding1.bindingId).toBe(binding2.bindingId);
+        });
+      });
+    });
+
+    describe("With a config", () => {
+      it("returns the binding properties", () => {
+        const model = new SampleModel();
+        const form = Form.get(model);
+
+        const binding = form.bind("string", SampleConfigurableFieldBinding, { sample: true });
+        expect(binding.fieldName).toBe("string");
+        expect(binding.config).toEqual({ sample: true });
+      });
+
+      it("returns the same binding instance when called multiple times but updates the config", () => {
+        const model = new SampleModel();
+        const form = Form.get(model);
+
+        const binding1 = form.bind("string", SampleConfigurableFieldBinding, { sample: true });
+        expect(binding1.config).toEqual({ sample: true });
+        const binding2 = form.bind("string", SampleConfigurableFieldBinding, { sample: false });
+        expect(binding1.bindingId).toBe(binding2.bindingId);
+        expect(binding2.config).toEqual({ sample: false });
+      });
     });
   });
 });
