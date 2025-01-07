@@ -1,4 +1,4 @@
-import { action, computed, makeObservable, observable, runInAction } from "mobx";
+import { action, comparer, computed, makeObservable, observable, runInAction } from "mobx";
 import { v4 as uuidV4 } from "uuid";
 import { FormField, FormFieldName } from "./FormField";
 import { FormBinding, FormBindingConstructor, FormBindingFunc } from "./binding";
@@ -13,21 +13,16 @@ const privateConstructorToken = Symbol("Form.privateConstructor");
 
 export class Form<T> {
   readonly id = uuidV4();
-  private readonly registryKey?: symbol;
-  delegate?: FormDelegate<T>;
-  config: FormConfig;
-  private readonly fields = new Map<string, FormField>();
-  private readonly bindings = new Map<string, FormBinding>();
-
-  @observable.struct private errors = new Map<string, string[]>();
-  /** Whether the form is in submitting state */
-  @observable isSubmitting = false;
-  /** Whether the form is in validation state */
-  @observable isValidating = false;
-  /** Whether the form is dirty */
-  @observable isDirty = false;
-  /** Whether the validity has been reported */
-  @observable isValidityReported = false;
+  readonly delegate?: FormDelegate<T>;
+  readonly config: Readonly<FormConfig>;
+  readonly #registryKey?: symbol;
+  readonly #fields = new Map<string, FormField>();
+  readonly #bindings = new Map<string, FormBinding>();
+  readonly #isSubmitting = observable.box(false);
+  readonly #isValidating = observable.box(false);
+  readonly #isDirty = observable.box(false);
+  readonly #isValidityReported = observable.box(false);
+  readonly #errors = observable.map<string, string[]>([], { equals: comparer.structural });
 
   /** Extension fields for bindings */
   [k: `bind${Capitalize<string>}`]: unknown;
@@ -76,13 +71,29 @@ export class Form<T> {
       throw new Error("Instantiate Form via Form.get() instead");
     }
     makeObservable(this);
-    this.registryKey = args?.registryKey;
+    this.#registryKey = args?.registryKey;
     this.delegate = args?.delegate;
     this.config = { ...defaultConfig, ...args?.config };
   }
 
+  /** Whether the form is in submitting state */
+  get isSubmitting() {
+    return this.#isSubmitting.get();
+  }
+  /** Whether the form is in validation state */
+  get isValidating() {
+    return this.#isValidating.get();
+  }
+  /** Whether the form is dirty */
+  get isDirty() {
+    return this.#isDirty.get();
+  }
+  /** Whether the validity has been reported */
+  get isValidityReported() {
+    return this.#isValidityReported.get();
+  }
+
   /** Whether the form is valid */
-  @computed
   get isValid() {
     return this.invalidFieldCount === 0;
   }
@@ -94,7 +105,7 @@ export class Form<T> {
    */
   @computed
   get invalidFieldCount() {
-    return this.errors.size + this.invalidNestedFormCount;
+    return this.#errors.size + this.invalidNestedFormCount;
   }
 
   /** Whether the form can be submitted */
@@ -116,7 +127,7 @@ export class Form<T> {
     if (connect) {
       for (const nestedField of connect()) {
         if (!isEligibleForConnecting(nestedField)) continue;
-        const form = Form.get(nestedField, this.registryKey);
+        const form = Form.get(nestedField, this.#registryKey);
         forms.add(form);
       }
     }
@@ -137,8 +148,8 @@ export class Form<T> {
   /** Report validity on all fields and nested forms */
   @action
   reportValidity() {
-    this.isValidityReported = true;
-    for (const field of this.fields.values()) {
+    this.#isValidityReported.set(true);
+    for (const field of this.#fields.values()) {
       field.reportValidity();
     }
     for (const form of this.nestedForms) {
@@ -149,9 +160,9 @@ export class Form<T> {
   /** Reset the form's state */
   @action
   reset() {
-    this.isDirty = false;
-    this.isValidityReported = false;
-    for (const field of this.fields.values()) {
+    this.#isDirty.set(false);
+    this.#isValidityReported.set(false);
+    for (const field of this.#fields.values()) {
       field.reset();
     }
     for (const form of this.nestedForms) {
@@ -159,12 +170,18 @@ export class Form<T> {
     }
   }
 
+  /** Mark the form as dirty */
+  @action
+  markAsDirty() {
+    this.#isDirty.set(true);
+  }
+
   /** Get the error messages for a field */
   getFieldError(fieldName: FormFieldName<T>) {
-    const messages = this.errors.get(fieldName);
+    const messages = this.#errors.get(fieldName);
     if (!messages) return null;
 
-    const field = this.fields.get(fieldName);
+    const field = this.#fields.get(fieldName);
     if (!field) return null;
     if (!field.isValidityReported) return null;
 
@@ -183,8 +200,8 @@ export class Form<T> {
     if (!submit) return false;
 
     if (args?.force) {
-      this.submitAbortCtrl?.abort();
-      this.submitAbortCtrl = null;
+      this.#submitAbortCtrl?.abort();
+      this.#submitAbortCtrl = null;
     } else if (this.isSubmitting) {
       return false;
     } else if (!this.canSubmit) {
@@ -193,17 +210,17 @@ export class Form<T> {
 
     // Start submitting
     runInAction(() => {
-      this.isSubmitting = true;
+      this.#isSubmitting.set(true);
     });
     let succeed = false;
     const abortCtrl = new AbortController();
     try {
-      this.submitAbortCtrl = abortCtrl;
+      this.#submitAbortCtrl = abortCtrl;
       succeed = await submit(abortCtrl.signal);
     } finally {
-      this.submitAbortCtrl = null;
+      this.#submitAbortCtrl = null;
       runInAction(() => {
-        this.isSubmitting = false;
+        this.#isSubmitting.set(false);
         if (succeed) {
           this.reset();
         }
@@ -211,7 +228,7 @@ export class Form<T> {
     }
     return !abortCtrl.signal.aborted;
   }
-  private submitAbortCtrl: AbortController | null = null;
+  #submitAbortCtrl: AbortController | null = null;
 
   /**
    * Validate the form.
@@ -225,66 +242,66 @@ export class Form<T> {
     if (!validate) return false;
 
     if (args?.force) {
-      this.validateAbortCtrl?.abort();
-      this.validateAbortCtrl = null;
+      this.#validateAbortCtrl?.abort();
+      this.#validateAbortCtrl = null;
     } else if (this.isValidating) {
       return false;
     }
 
     // Start validating
     runInAction(() => {
-      this.isValidating = true;
+      this.#isValidating.set(true);
     });
     let result: FormValidationResult<T> | undefined;
     const abortCtrl = new AbortController();
     try {
-      this.validateAbortCtrl = abortCtrl;
+      this.#validateAbortCtrl = abortCtrl;
       result = await validate(abortCtrl.signal);
     } finally {
-      this.validateAbortCtrl = null;
+      this.#validateAbortCtrl = null;
       runInAction(() => {
-        this.isValidating = false;
+        this.#isValidating.set(false);
         if (result) {
-          this.errors = toErrorMap(result);
+          this.#errors.replace(toErrorMap(result));
         }
       });
     }
     return !abortCtrl.signal.aborted;
   }
-  private validateAbortCtrl: AbortController | null = null;
+  #validateAbortCtrl: AbortController | null = null;
 
   /** Define a field by name */
-  private defineField(fieldName: FormFieldName<T>) {
-    let field = this.fields.get(fieldName);
+  #defineField(fieldName: FormFieldName<T>) {
+    let field = this.#fields.get(fieldName);
     if (!field) {
       field = new FormField({
         form: this,
         fieldName: String(fieldName),
       });
-      this.fields.set(fieldName, field);
+      this.#fields.set(fieldName, field);
     }
     return field;
   }
 
   /** Define a binding by key */
-  private defineBinding(bindingKey: string, create: () => FormBinding) {
-    let binding = this.bindings.get(bindingKey);
+  #defineBinding(bindingKey: string, create: () => FormBinding) {
+    let binding = this.#bindings.get(bindingKey);
     if (!binding) {
       binding = create();
-      this.bindings.set(bindingKey, binding);
+      this.#bindings.set(bindingKey, binding);
     }
     return binding;
   }
 
   /** Create a binding to a field */
-  private bindToField: FormBindingFunc.ForField<T> = (
+  #bindToField: FormBindingFunc.ForField<T> = (
     fieldName: FormFieldName<T>,
     binding: FormBindingConstructor.ForField,
     config?: FormBindingFunc.Config
   ) => {
     const key = `${fieldName}@${binding.name}:${config?.cacheKey}`;
-    const instance = this.defineBinding(key, () => {
-      const field = this.defineField(fieldName);
+    const instance = this.#defineBinding(key, () => {
+      const field = this.#defineField(fieldName);
       return new binding(field, config);
     });
     instance.config = config; // Update on every call
@@ -292,12 +309,12 @@ export class Form<T> {
   };
 
   /** Create a binding to the form */
-  private bindToForm: FormBindingFunc.ForForm<Form<T>> = (
+  #bindToForm: FormBindingFunc.ForForm<Form<T>> = (
     binding: FormBindingConstructor.ForForm<Form<T>>,
     config?: FormBindingFunc.Config
   ) => {
     const key = `${binding.name}:${config?.cacheKey}`;
-    const instance = this.defineBinding(key, () => new binding(this, config));
+    const instance = this.#defineBinding(key, () => new binding(this, config));
     instance.config = config; // Update on every call
     return instance.props;
   };
@@ -305,8 +322,8 @@ export class Form<T> {
   /** Bind to a field or the form */
   bind: FormBindingFunc<Form<T>, T> = (...args: any[]) => {
     if (typeof args[0] === "string") {
-      return this.bindToField(args[0], args[1], args[2]);
+      return this.#bindToField(args[0], args[1], args[2]);
     }
-    return this.bindToForm(args[0], args[1]);
+    return this.#bindToForm(args[0], args[1]);
   };
 }

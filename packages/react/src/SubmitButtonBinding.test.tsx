@@ -2,7 +2,7 @@ import React from "react";
 import "@testing-library/jest-dom";
 import { act, render, screen } from "@testing-library/react";
 import { userEvent } from "@testing-library/user-event";
-import { makeObservable, runInAction } from "mobx";
+import { makeObservable } from "mobx";
 import { Form, FormDelegate } from "@mobx-form/core";
 import "./extension";
 import { observer } from "mobx-react-lite";
@@ -65,9 +65,7 @@ describe("SubmitButtonBinding", () => {
     expect(env.button).toBeDisabled();
 
     act(() => {
-      runInAction(() => {
-        env.form.isDirty = true;
-      });
+      env.form.markAsDirty();
     });
     expect(env.form.isSubmitting).toBe(false);
     expect(env.form.canSubmit).toBe(true);

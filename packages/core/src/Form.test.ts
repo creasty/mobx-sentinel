@@ -132,14 +132,10 @@ describe("Form", () => {
       const form = Form.get(model);
       expect(form.canSubmit).toBe(false);
 
-      runInAction(() => {
-        form.isDirty = true;
-      });
+      form.markAsDirty();
       expect(form.canSubmit).toBe(true);
 
-      runInAction(() => {
-        form.isDirty = false;
-      });
+      form.reset();
       expect(form.canSubmit).toBe(false);
     });
   });
@@ -149,9 +145,7 @@ describe("Form", () => {
       const model = new EmptyModel();
       const form = Form.get(model);
 
-      runInAction(() => {
-        form.isDirty = true;
-      });
+      form.markAsDirty();
       expect(form.canSubmit).toBe(true);
       expect(await form.submit()).toBe(false);
     });
@@ -160,9 +154,7 @@ describe("Form", () => {
       const model = new SampleModel();
       const form = Form.get(model);
 
-      runInAction(() => {
-        form.isDirty = true;
-      });
+      form.markAsDirty();
       expect(form.canSubmit).toBe(true);
       expect(await form.submit()).toBe(true);
     });
@@ -171,9 +163,7 @@ describe("Form", () => {
       const model = new SampleModel();
       const form = Form.get(model);
 
-      runInAction(() => {
-        form.isDirty = true;
-      });
+      form.markAsDirty();
       expect(form.canSubmit).toBe(true);
 
       const timeline: string[] = [];
@@ -204,9 +194,7 @@ describe("Form", () => {
         timeline.push(`isSubmitting: ${form.isSubmitting}`);
       });
 
-      runInAction(() => {
-        form.isDirty = true;
-      });
+      form.markAsDirty();
       expect(form.canSubmit).toBe(true);
 
       // Start first submission
@@ -238,9 +226,7 @@ describe("Form", () => {
         timeline.push(`isSubmitting: ${form.isSubmitting}`);
       });
 
-      runInAction(() => {
-        form.isDirty = true;
-      });
+      form.markAsDirty();
       expect(form.canSubmit).toBe(true);
 
       // Start first submission
