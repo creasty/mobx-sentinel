@@ -13,8 +13,8 @@ const privateConstructorToken = Symbol("Form.privateConstructor");
 
 export class Form<T> {
   readonly id = uuidV4();
-  readonly delegate?: FormDelegate<T>;
   readonly config: Readonly<FormConfig>;
+  readonly #delegate?: FormDelegate<T>;
   readonly #registryKey?: symbol;
   readonly #fields = new Map<string, FormField>();
   readonly #bindings = new Map<string, FormBinding>();
@@ -90,7 +90,7 @@ export class Form<T> {
     }
     makeObservable(this);
     this.#registryKey = args?.registryKey;
-    this.delegate = args?.delegate;
+    this.#delegate = args?.delegate;
     this.config = { ...defaultConfig, ...args?.config };
   }
 
@@ -133,6 +133,24 @@ export class Form<T> {
   }
 
   /**
+   * Get the delegate value by key.
+   *
+   * Returns an object, or a method that is bound to the delegate.
+   */
+  #getDelegateByKey<K extends symbol & keyof FormDelegate<T>>(key: K): FormDelegate<T>[K] | undefined {
+    const delegate = this.#delegate;
+    if (!delegate) return;
+
+    const value = delegate[key];
+    if (!value) return;
+
+    if (typeof value === "function") {
+      return value.bind(delegate) as any;
+    }
+    return value;
+  }
+
+  /**
    * Nested forms within the form.
    *
    * Forms are collected from the {@link FormDelegate.connect}.
@@ -141,7 +159,7 @@ export class Form<T> {
   get nestedForms(): ReadonlySet<Form<unknown>> {
     const forms = new Set<Form<unknown>>();
 
-    const connect = this.delegate?.[FormDelegate.connect]?.bind(this.delegate);
+    const connect = this.#getDelegateByKey(FormDelegate.connect);
     if (connect) {
       for (const nestedField of connect()) {
         if (!isEligibleForConnecting(nestedField)) continue;
@@ -214,7 +232,7 @@ export class Form<T> {
    * Note that the return value does not indicate whether the submission succeeded.
    */
   async submit(args?: { force?: boolean }) {
-    const submit = this.delegate?.[FormDelegate.submit]?.bind(this.delegate);
+    const submit = this.#getDelegateByKey(FormDelegate.submit);
     if (!submit) return false;
 
     if (args?.force) {
@@ -256,7 +274,7 @@ export class Form<T> {
    * Note that the return value does not indicate the validation result.
    */
   async validate(args?: { force?: boolean }) {
-    const validate = this.delegate?.[FormDelegate.validate]?.bind(this.delegate);
+    const validate = this.#getDelegateByKey(FormDelegate.validate);
     if (!validate) return false;
 
     if (args?.force) {
