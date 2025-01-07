@@ -10,8 +10,8 @@ export class FormField {
   readonly fieldName: string;
   readonly #form: Form<unknown>;
   readonly #isTouched = observable.box(false);
-  readonly #isChanged = observable.box(false);
   readonly #isProvisional = observable.box(false);
+  readonly #isChanged = observable.box(false);
   readonly #isValidityReported = observable.box(false);
 
   constructor(args: { form: Form<any>; fieldName: string }) {
@@ -24,17 +24,22 @@ export class FormField {
   get isTouched() {
     return this.#isTouched.get();
   }
-  /** Whether the field value is changed */
-  get isChanged() {
-    return this.#isChanged.get();
-  }
   /** Whether the field value is provisional */
   get isProvisional() {
     return this.#isProvisional.get();
   }
+  /** Whether the field value is changed */
+  get isChanged() {
+    return this.#isChanged.get();
+  }
   /** Whether the field validity has been reported */
   get isValidityReported() {
     return this.#isValidityReported.get();
+  }
+
+  @action
+  markAsTouched() {
+    this.#isTouched.set(true);
   }
 
   @action
@@ -43,11 +48,6 @@ export class FormField {
     this.#isChanged.set(true);
     this.#isProvisional.set(type === "provisional");
     this.#isValidityReported.set(this.isChanged && !this.isProvisional);
-  }
-
-  @action
-  markAsTouched() {
-    this.#isTouched.set(true);
   }
 
   @action
@@ -61,6 +61,7 @@ export class FormField {
     this.#isTouched.set(false);
     this.#isProvisional.set(false);
     this.#isValidityReported.set(false);
+    this.cancelDelayedValidation();
   }
 
   validate() {
