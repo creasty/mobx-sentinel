@@ -66,8 +66,8 @@ export class FormField {
 
   private cancelDelayedValidation() {
     if (!this.validationTimerId) return;
-    clearTimeout(this.validationTimerId as any);
+    clearTimeout(this.validationTimerId);
     this.validationTimerId = null;
   }
-  private validationTimerId: number | null = null;
+  private validationTimerId: any | null = null;
 }
