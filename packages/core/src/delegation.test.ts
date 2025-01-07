@@ -5,7 +5,7 @@ describe("getDelegation", () => {
     const delegate = {
       [FormDelegate.config]: {},
       [FormDelegate.submit]: async () => true,
-      [FormDelegate.validate]: async () => new Map(),
+      [FormDelegate.validate]: async () => ({}),
     };
 
     expect(getDelegation(delegate)).toBe(delegate);
@@ -15,7 +15,7 @@ describe("getDelegation", () => {
     const delegate = {
       [FormDelegate.config]: {},
       [FormDelegate.submit]: async () => true,
-      [FormDelegate.validate]: async () => new Map(),
+      [FormDelegate.validate]: async () => ({}),
     };
 
     const subject = {
@@ -34,6 +34,7 @@ describe("getDelegation", () => {
 
   it("returns undefined for objects without delegation", () => {
     expect(getDelegation({})).toBeUndefined();
+    expect(getDelegation([])).toBeUndefined();
     expect(getDelegation({ foo: "bar" })).toBeUndefined();
   });
 });
