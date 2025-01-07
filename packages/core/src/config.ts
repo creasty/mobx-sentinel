@@ -1,8 +1,16 @@
 /** Form configuration */
 export type FormConfig = {
-  /** Delay validation when a field is being edited (in milliseconds) */
+  /**
+   * Delay validation when a field is being edited (in milliseconds)
+   *
+   * @default 3000
+   */
   interimValidationDelayMs: number;
-  /** Whether to suppress provisional errors */
+  /**
+   * Whether to suppress provisional errors
+   *
+   * @default true
+   */
   suppressProvisionalErrors: boolean;
 };
 
