@@ -4,7 +4,7 @@ import { FormField } from "./FormField";
 import { FormBinding, FormBindingConstructor, FormBindingFunc } from "./binding";
 import { FormConfig, defaultConfig } from "./config";
 import { FormValidationResult, toErrorMap } from "./validation";
-import { FormDelegate, getDelegation, isEligibleForConnecting } from "./delegation";
+import { FormDelegate, getDelegation, isConnectableObject } from "./delegation";
 
 const registry = new WeakMap<object, Map<symbol, Form<unknown>>>();
 const defaultFormKey = Symbol("Form.registryDefaultKey");
@@ -179,7 +179,7 @@ export class Form<T> {
     const connect = this.#getDelegateByKey(FormDelegate.connect);
     if (connect) {
       for (const nestedField of connect()) {
-        if (!isEligibleForConnecting(nestedField)) continue;
+        if (!isConnectableObject(nestedField)) continue;
         const form = Form.get(nestedField, this.#registryKey);
         forms.add(form);
       }

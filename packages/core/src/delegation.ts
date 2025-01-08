@@ -1,9 +1,6 @@
 import { FormConfig } from "./config";
 import { FormValidationResult } from "./validation";
 
-/** Constrains a type to an object other than an array */
-type NonArrayObject = object & { length?: never };
-
 /** Indirect delegate for the form */
 export interface FormDelegated<T> {
   /** Delegate for the form */
@@ -22,6 +19,25 @@ export interface FormDelegate<T> {
   [FormDelegate.validate]?: FormDelegate.Validate<T>;
 }
 
+/**
+ * Object that can be connected to a form.
+ *
+ * This is a union of:
+ * - {@link FormDelegated}
+ * - {@link FormDelegate} that implements at least one of {@link FormDelegate.validate} or {@link FormDelegate.connect}.\
+ *   {@link FormDelegate.submit} is intentionally not checked, see the connect method for reasoning.
+ */
+type ConnectableObject =
+  | FormDelegated<any>
+  | {
+      /** Implements {@link FormDelegate.connect} via FormDelegate<T> */
+      [FormDelegate.connect]: FormDelegate.Connect;
+    }
+  | {
+      /** Implements {@link FormDelegate.validate} via FormDelegate<T> */
+      [FormDelegate.validate]: FormDelegate.Validate<any>;
+    };
+
 export namespace FormDelegate {
   /** Form configuration */
   export type Config = Readonly<Partial<FormConfig>>;
@@ -34,7 +50,7 @@ export namespace FormDelegate {
    *
    * Returns an array of objects (not Form instances) to connect.
    */
-  export type Connect = () => (NonArrayObject | null | undefined)[];
+  export type Connect = () => (ConnectableObject | null | undefined)[];
   /**
    * Submit the form.
    *
@@ -104,22 +120,19 @@ export function getDelegation<T extends object>(subject: T | any): FormDelegate<
   }
 }
 
-/**
- * Check if the subject is eligible to be connected to a form.
- *
- * Returns true if the subject implements {@link FormDelegate.validate}, or {@link FormDelegate.connect}.
- * {@link FormDelegate.submit} is intentionally not checked, see the connect method for reasoning.
- */
-export function isEligibleForConnecting(subject: any): subject is FormDelegate<any> | FormDelegated<any> {
-  if (!subject || typeof subject !== "object") {
+/** Check if the object is a {@link ConnectableObject} */
+export function isConnectableObject(
+  object: any
+): object is (FormDelegate<any> | FormDelegated<any>) & ConnectableObject {
+  if (!object || typeof object !== "object") {
     return false;
   }
-  // subject implements Delegated<T>
-  if (FormDelegate.delegate in subject) {
-    return isEligibleForConnecting((subject as any)[FormDelegate.delegate]);
+  // object implements Delegated<T>
+  if (FormDelegate.delegate in object) {
+    return isConnectableObject((object as any)[FormDelegate.delegate]);
   }
-  // subject implements Delegate<T>
-  if (FormDelegate.validate in subject || FormDelegate.connect in subject) {
+  // object implements Delegate<T>
+  if (FormDelegate.validate in object || FormDelegate.connect in object) {
     return true;
   }
   return false;
