@@ -1,4 +1,5 @@
 import { FormConfig } from "./config";
+import { MaybeArray } from "./util";
 import { FormValidationResult } from "./validation";
 
 /** Indirect delegate for the form */
@@ -50,7 +51,7 @@ export namespace FormDelegate {
    *
    * Returns an array of objects (not Form instances) to connect.
    */
-  export type Connect = () => (ConnectableObject | ConnectableObject[] | null | undefined)[];
+  export type Connect = () => (MaybeArray<ConnectableObject> | null | undefined)[];
   /**
    * Submit the form.
    *

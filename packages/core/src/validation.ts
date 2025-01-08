@@ -1,4 +1,5 @@
-type MaybeArray<T> = T | T[];
+import { MaybeArray } from "./util";
+
 type ErrorValue = MaybeArray<string | Error>;
 
 export type FormValidationResult<T> = {

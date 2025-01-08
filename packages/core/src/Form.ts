@@ -7,14 +7,14 @@ import { FormValidationResult, toErrorMap } from "./validation";
 import { FormDelegate, getDelegation, isConnectableObject } from "./delegation";
 
 const registry = new WeakMap<object, Map<symbol, Form<unknown>>>();
-const defaultFormKey = Symbol("Form.registryDefaultKey");
+const defaultFormKey = Symbol("Form.defaultFormKey");
 const privateConstructorToken = Symbol("Form.privateConstructor");
 
 export class Form<T> {
   readonly id = uuidV4();
   readonly config: Readonly<FormConfig>;
   readonly #delegate?: FormDelegate<T>;
-  readonly #registryKey?: symbol;
+  readonly #registryKey: symbol;
   readonly #fields = new Map<string, FormField>();
   readonly #bindings = new Map<string, FormBinding>();
   readonly #isSubmitting = observable.box(false);
@@ -82,7 +82,7 @@ export class Form<T> {
 
   private constructor(
     token: symbol,
-    args?: {
+    args: {
       registryKey: symbol;
       delegate?: FormDelegate<T>;
       config?: Partial<FormConfig>;
@@ -92,9 +92,9 @@ export class Form<T> {
       throw new Error("Instantiate Form via Form.get() instead");
     }
     makeObservable(this);
-    this.#registryKey = args?.registryKey;
-    this.#delegate = args?.delegate;
-    this.config = { ...defaultConfig, ...args?.config };
+    this.#registryKey = args.registryKey;
+    this.#delegate = args.delegate;
+    this.config = { ...defaultConfig, ...args.config };
   }
 
   /**
@@ -245,7 +245,6 @@ export class Form<T> {
       return false;
     }
 
-    // Start submitting
     runInAction(() => {
       this.#isSubmitting.set(true);
     });
@@ -287,7 +286,6 @@ export class Form<T> {
       return false;
     }
 
-    // Start validating
     runInAction(() => {
       this.#isValidating.set(true);
     });
