@@ -1,4 +1,4 @@
-import { Form, FormFieldNameStrict } from "@mobx-form/core";
+import { Form, FormField } from "@mobx-form/core";
 import { CheckBoxBinding } from "./CheckBoxBinding";
 import { InputBinding } from "./InputBinding";
 import { RadioButtonBinding } from "./RadioButtonBinding";
@@ -25,7 +25,7 @@ declare module "@mobx-form/core" {
      * />
      * ```
      */
-    bindInput(fieldName: FormFieldNameStrict<T>, config: InputBinding.Config): InputBinding["props"];
+    bindInput(fieldName: FormField.NameStrict<T>, config: InputBinding.Config): InputBinding["props"];
 
     /**
      * Bind the select box field to the form.
@@ -42,7 +42,7 @@ declare module "@mobx-form/core" {
      * </select>
      * ```
      */
-    bindSelectBox(fieldName: FormFieldNameStrict<T>, config: SelectBoxBinding.Config): SelectBoxBinding["props"];
+    bindSelectBox(fieldName: FormField.NameStrict<T>, config: SelectBoxBinding.Config): SelectBoxBinding["props"];
 
     /**
      * Bind the checkbox field to the form.
@@ -57,7 +57,7 @@ declare module "@mobx-form/core" {
      * />
      * ```
      */
-    bindCheckBox(fieldName: FormFieldNameStrict<T>, config: CheckBoxBinding.Config): CheckBoxBinding["props"];
+    bindCheckBox(fieldName: FormField.NameStrict<T>, config: CheckBoxBinding.Config): CheckBoxBinding["props"];
 
     /**
      * Bind the radio button field to the form.
@@ -76,7 +76,7 @@ declare module "@mobx-form/core" {
      * ```
      */
     bindRadioButtonFactory(
-      fieldName: FormFieldNameStrict<T>,
+      fieldName: FormField.NameStrict<T>,
       config: RadioButtonBinding.Config
     ): RadioButtonBinding["props"];
 

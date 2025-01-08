@@ -3,9 +3,6 @@ import { v4 as uuidV4 } from "uuid";
 import type { Form } from "./Form";
 import { ErrorMap } from "./validation";
 
-export type FormFieldNameStrict<T> = keyof T & string;
-export type FormFieldName<T> = FormFieldNameStrict<T> | (string & {});
-
 export class FormField {
   readonly id = uuidV4();
   readonly fieldName: string;
@@ -91,4 +88,9 @@ export class FormField {
     this.#validationTimerId = null;
   }
   #validationTimerId: any | null = null;
+}
+
+export namespace FormField {
+  export type NameStrict<T> = keyof T & string;
+  export type Name<T> = NameStrict<T> | (string & {});
 }
