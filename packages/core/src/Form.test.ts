@@ -43,7 +43,7 @@ class NestedModel implements FormDelegate<NestedModel> {
   }
 
   [FormDelegate.connect]() {
-    return [this.sample, ...this.array];
+    return [this.sample, this.array];
   }
 }
 

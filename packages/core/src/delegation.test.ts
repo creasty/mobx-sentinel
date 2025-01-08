@@ -39,7 +39,7 @@ describe("getDelegation", () => {
   });
 });
 
-describe("isEligibleForConnecting", () => {
+describe("isConnectableObject", () => {
   it("returns true for objects that implement FormDelegate.validate or FormDelegate.connect", () => {
     expect(isConnectableObject({ [FormDelegate.validate]: async () => ({}) })).toBe(true);
     expect(isConnectableObject({ [FormDelegate.connect]: async () => ({}) })).toBe(true);

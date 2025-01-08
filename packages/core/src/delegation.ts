@@ -50,7 +50,7 @@ export namespace FormDelegate {
    *
    * Returns an array of objects (not Form instances) to connect.
    */
-  export type Connect = () => (ConnectableObject | null | undefined)[];
+  export type Connect = () => (ConnectableObject | ConnectableObject[] | null | undefined)[];
   /**
    * Submit the form.
    *

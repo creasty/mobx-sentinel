@@ -178,10 +178,14 @@ export class Form<T> {
 
     const connect = this.#getDelegateByKey(FormDelegate.connect);
     if (connect) {
-      for (const nestedField of connect()) {
-        if (!isConnectableObject(nestedField)) continue;
-        const form = Form.get(nestedField, this.#registryKey);
-        forms.add(form);
+      for (const object of connect()) {
+        if (!object) continue;
+        const items = Array.isArray(object) ? object : [object];
+        for (const item of items) {
+          if (!isConnectableObject(item)) continue;
+          const form = Form.get(item, this.#registryKey);
+          forms.add(form);
+        }
       }
     }
 
