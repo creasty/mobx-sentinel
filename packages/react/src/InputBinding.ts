@@ -134,7 +134,7 @@ export class InputBinding implements FormBinding {
         this.config.setter(e.currentTarget.value);
         break;
     }
-    this.field.markAsChanged("provisional");
+    this.field.markAsChanged("intermediate");
     this.field.validateWithDelay();
   };
 

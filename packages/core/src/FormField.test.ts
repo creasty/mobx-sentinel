@@ -30,9 +30,9 @@ describe("FormField", () => {
     expect(field.fieldName).toBe("test");
 
     expect(field.isTouched).toBe(false);
-    expect(field.isProvisional).toBe(false);
+    expect(field.isIntermediate).toBe(false);
     expect(field.isChanged).toBe(false);
-    expect(field.isProvisional).toBe(false);
+    expect(field.isIntermediate).toBe(false);
     expect(field.isValidityReported).toBe(false);
   });
 
@@ -41,27 +41,27 @@ describe("FormField", () => {
       const { field } = setupEnv();
       field.markAsTouched();
       expect(field.isTouched).toBe(true);
-      expect(field.isProvisional).toBe(false);
+      expect(field.isIntermediate).toBe(false);
       expect(field.isChanged).toBe(false);
       expect(field.isValidityReported).toBe(false);
     });
   });
 
   describe("#markAsChanged", () => {
-    it("marks the field as changed (provisional)", () => {
+    it("marks the field as changed (intermediate)", () => {
       const { field } = setupEnv();
-      field.markAsChanged("provisional");
+      field.markAsChanged("intermediate");
       expect(field.isTouched).toBe(false);
-      expect(field.isProvisional).toBe(true);
+      expect(field.isIntermediate).toBe(true);
       expect(field.isChanged).toBe(true);
       expect(field.isValidityReported).toBe(false);
     });
 
-    it("marks the field as changed (committed)", () => {
+    it("marks the field as changed (final)", () => {
       const { field } = setupEnv();
-      field.markAsChanged("committed");
+      field.markAsChanged("final");
       expect(field.isTouched).toBe(false);
-      expect(field.isProvisional).toBe(false);
+      expect(field.isIntermediate).toBe(false);
       expect(field.isChanged).toBe(true);
       expect(field.isValidityReported).toBe(true);
     });
@@ -72,7 +72,7 @@ describe("FormField", () => {
       const { field } = setupEnv();
       field.reportValidity();
       expect(field.isTouched).toBe(false);
-      expect(field.isProvisional).toBe(false);
+      expect(field.isIntermediate).toBe(false);
       expect(field.isChanged).toBe(false);
       expect(field.isValidityReported).toBe(true);
     });
@@ -83,13 +83,13 @@ describe("FormField", () => {
       const { field } = setupEnv();
 
       field.markAsTouched();
-      field.markAsChanged("provisional");
-      field.markAsChanged("committed");
+      field.markAsChanged("intermediate");
+      field.markAsChanged("final");
       field.reportValidity();
 
       field.reset();
       expect(field.isTouched).toBe(false);
-      expect(field.isProvisional).toBe(false);
+      expect(field.isIntermediate).toBe(false);
       expect(field.isChanged).toBe(false);
       expect(field.isValidityReported).toBe(false);
     });
@@ -122,7 +122,7 @@ describe("FormField", () => {
 
       expect(spy).toHaveBeenCalledTimes(1);
       expect(field.isChanged).toBe(true);
-      expect(field.isProvisional).toBe(false);
+      expect(field.isIntermediate).toBe(false);
     });
 
     it("prolongs the delay when the validation is requested again before it is completed", async () => {

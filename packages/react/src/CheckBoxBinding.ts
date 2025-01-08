@@ -28,7 +28,7 @@ export class CheckBoxBinding implements FormBinding {
   @action
   onChange: CheckBoxBinding.Attrs["onChange"] = (e) => {
     this.config.setter(e.currentTarget.checked);
-    this.field.markAsChanged("committed");
+    this.field.markAsChanged();
     this.field.validate();
   };
 

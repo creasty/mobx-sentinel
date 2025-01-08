@@ -29,7 +29,7 @@ export class RadioButtonBinding implements FormBinding {
   onChange: RadioButtonBinding.Attrs["onChange"] = (e) => {
     if (!e.currentTarget.checked) return;
     this.config.setter(e.currentTarget.value);
-    this.field.markAsChanged("committed");
+    this.field.markAsChanged();
     this.field.validate();
   };
 

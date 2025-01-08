@@ -7,15 +7,15 @@ export type FormConfig = {
    */
   interimValidationDelayMs: number;
   /**
-   * Whether to suppress provisional errors
+   * Whether to suppress errors of intermediate (partial input) fields
    *
    * @default true
    */
-  suppressProvisionalErrors: boolean;
+  suppressIntermediateErrors: boolean;
 };
 
 /** Default form configuration */
 export const defaultConfig: FormConfig = Object.freeze({
   interimValidationDelayMs: 3000,
-  suppressProvisionalErrors: true,
+  suppressIntermediateErrors: true,
 });

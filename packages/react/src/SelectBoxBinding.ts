@@ -43,7 +43,7 @@ export class SelectBoxBinding implements FormBinding {
     } else {
       this.config.setter(e.currentTarget.value);
     }
-    this.field.markAsChanged("committed");
+    this.field.markAsChanged();
     this.field.validate();
   };
 
