@@ -6,7 +6,7 @@ import { FormConfig, defaultConfig } from "./config";
 import { FormValidationResult, toErrorMap } from "./validation";
 import { FormDelegate, getDelegation, isEligibleForConnecting } from "./delegation";
 
-const registry = new WeakMap<object, Map<Symbol, Form<any>>>();
+const registry = new WeakMap<object, Map<symbol, Form<unknown>>>();
 const registryDefaultKey = Symbol("Form.registryDefaultKey");
 
 const privateConstructorToken = Symbol("Form.privateConstructor");

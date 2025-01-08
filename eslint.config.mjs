@@ -1,39 +1,37 @@
+// @ts-check
+
 import { FlatCompat } from "@eslint/eslintrc";
 import js from "@eslint/js";
-import tsParser from "@typescript-eslint/parser";
-import tsPlugin from "@typescript-eslint/eslint-plugin";
-import prettierPlugin from "eslint-plugin-prettier";
+import ts from "typescript-eslint";
+import prettierConfig from "eslint-config-prettier";
 import reactPlugin from "eslint-plugin-react";
 import reactHooksPlugin from "eslint-plugin-react-hooks";
 
 const compat = new FlatCompat();
 
-export default [
+export default ts.config(
   js.configs.recommended,
+  ts.configs.recommended,
+  prettierConfig,
   {
-    files: ["./packages/core/*.ts"],
-    languageOptions: {
-      parser: tsParser,
-      parserOptions: {
-        project: "./packages/core/tsconfig.json",
-      },
-    },
-    plugins: {
-      "@typescript-eslint": tsPlugin,
-      prettier: prettierPlugin,
-    },
     rules: {
-      ...tsPlugin.configs.recommended.rules,
-      "prettier/prettier": "error",
-      "@typescript-eslint/no-namespace": "off",
       "no-redeclare": "off",
+      "@typescript-eslint/no-namespace": "off",
       "@typescript-eslint/no-explicit-any": "off",
     },
   },
   {
-    files: ["./packages/react/**/*.ts", "./packages/react/**/*.tsx"],
+    files: ["./packages/core/**/*.ts"],
     languageOptions: {
-      parser: tsParser,
+      parserOptions: {
+        project: "./packages/core/tsconfig.json",
+      },
+    },
+    rules: {},
+  },
+  {
+    files: ["./packages/react/**/*.{ts,tsx}"],
+    languageOptions: {
       parserOptions: {
         project: "./packages/react/tsconfig.json",
       },
@@ -44,22 +42,17 @@ export default [
       },
     },
     plugins: {
-      "@typescript-eslint": tsPlugin,
-      prettier: prettierPlugin,
       react: reactPlugin,
+      // @ts-expect-error reactHooksPlugin has broken type?
       "react-hooks": reactHooksPlugin,
     },
+    // @ts-expect-error reactHooksPlugin has broken type?
     rules: {
-      ...tsPlugin.configs.recommended.rules,
       ...reactPlugin.configs.recommended.rules,
       ...reactHooksPlugin.configs.recommended.rules,
-      "prettier/prettier": "error",
-      "@typescript-eslint/no-namespace": "off",
-      "no-redeclare": "off",
-      "@typescript-eslint/no-explicit-any": "off",
     },
   },
   ...compat.config({
     ignorePatterns: ["dist/", "coverage/"],
-  }),
-];
+  })
+);

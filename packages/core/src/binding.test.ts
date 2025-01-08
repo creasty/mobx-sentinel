@@ -78,7 +78,6 @@ class SampleModel {
 }
 
 describe("FormBindingConstructor", () => {
-  type TheForm = Form<SampleModel>;
   test("provides correct type definitions for form and field bindings", () => {
     // For form
     SampleFormBinding satisfies FormBindingConstructor.ForForm;
