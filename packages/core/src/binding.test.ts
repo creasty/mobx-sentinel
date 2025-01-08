@@ -101,6 +101,7 @@ describe("FormBindingFunc", () => {
     const bindForm: FormBindingFunc.ForForm<SampleModel> = () => ({}) as any;
     bindForm(SampleFormBinding);
     bindForm(SampleConfigurableFormBinding, { sample: true });
+
     // For field
     const bindField: FormBindingFunc.ForField<SampleModel> = () => ({}) as any;
     bindField("sample", SampleFieldBinding);

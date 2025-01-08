@@ -7,8 +7,7 @@ import { FormValidationResult, toErrorMap } from "./validation";
 import { FormDelegate, getDelegation, isEligibleForConnecting } from "./delegation";
 
 const registry = new WeakMap<object, Map<symbol, Form<unknown>>>();
-const registryDefaultKey = Symbol("Form.registryDefaultKey");
-
+const defaultFormKey = Symbol("Form.registryDefaultKey");
 const privateConstructorToken = Symbol("Form.privateConstructor");
 
 export class Form<T> {
@@ -47,7 +46,7 @@ export class Form<T> {
       registry.set(subject, map);
     }
     if (!formKey) {
-      formKey = registryDefaultKey;
+      formKey = defaultFormKey;
     }
     let instance = map.get(formKey);
     if (!instance) {
@@ -147,7 +146,7 @@ export class Form<T> {
   /**
    * The number of invalid fields
    *
-   * Note that this is not the number of invalid fields of nested forms.
+   * Note that this does not include the number of invalid fields of nested forms.
    */
   @computed
   get invalidFieldCount() {
@@ -157,7 +156,7 @@ export class Form<T> {
   /**
    * The number of invalid nested forms
    *
-   * Note that this is not the number of invalid fields of nested forms.
+   * Note that this is not the number of fields.
    */
   @computed
   get invalidNestedFormCount() {
@@ -306,8 +305,8 @@ export class Form<T> {
   }
   #validateAbortCtrl: AbortController | null = null;
 
-  /** Define a field by name */
-  #defineField(fieldName: FormField.Name<T>) {
+  /** Get a field by name */
+  #getField(fieldName: FormField.Name<T>) {
     let field = this.#fields.get(fieldName);
     if (!field) {
       field = new FormField({
@@ -338,7 +337,7 @@ export class Form<T> {
   ) => {
     const key = `${fieldName}@${binding.name}:${config?.cacheKey}`;
     const instance = this.#defineBinding(key, () => {
-      const field = this.#defineField(fieldName);
+      const field = this.#getField(fieldName);
       return new binding(field, config);
     });
     instance.config = config; // Update on every call
@@ -368,6 +367,6 @@ export class Form<T> {
   getError(fieldName: FormField.Name<T>) {
     // Reading errors from FormField#errors is computed,
     // so notifications only trigger when the error of the specific field changes
-    return this.#defineField(fieldName)?.errors ?? null;
+    return this.#getField(fieldName)?.errors ?? null;
   }
 }
