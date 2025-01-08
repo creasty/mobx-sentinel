@@ -81,42 +81,35 @@ describe("FormBindingConstructor", () => {
   type TheForm = Form<SampleModel>;
   test("provides correct type definitions for form and field bindings", () => {
     // For form
-    SampleFormBinding satisfies FormBindingConstructor.ForForm<TheForm>;
-    SampleConfigurableFormBinding satisfies FormBindingConstructor.ForForm<TheForm>;
+    SampleFormBinding satisfies FormBindingConstructor.ForForm;
+    SampleConfigurableFormBinding satisfies FormBindingConstructor.ForForm;
 
     // For field
     SampleFieldBinding satisfies FormBindingConstructor.ForField;
     SampleConfigurableFieldBinding satisfies FormBindingConstructor.ForField;
 
     // Union
-    // @ts-expect-error FIXME
-    SampleFormBinding satisfies FormBindingConstructor<TheForm>;
-    // @ts-expect-error FIXME
-    SampleConfigurableFormBinding satisfies FormBindingConstructor<TheForm>;
-    // @ts-expect-error FIXME
-    SampleFieldBinding satisfies FormBindingConstructor<TheForm>;
-    // @ts-expect-error FIXME
-    SampleConfigurableFieldBinding satisfies FormBindingConstructor<TheForm>;
+    SampleFormBinding satisfies FormBindingConstructor;
+    SampleConfigurableFormBinding satisfies FormBindingConstructor;
+    SampleFieldBinding satisfies FormBindingConstructor;
+    SampleConfigurableFieldBinding satisfies FormBindingConstructor;
   });
 });
 
 describe("FormBindingFunc", () => {
-  type TheForm = Form<SampleModel>;
   test("provides correct type definitions for form and field bindings", () => {
     // For form
-    const bindForm: FormBindingFunc.ForForm<TheForm> = () => ({}) as any;
+    const bindForm: FormBindingFunc.ForForm<SampleModel> = () => ({}) as any;
     bindForm(SampleFormBinding);
-    // @ts-expect-error FIXME
     bindForm(SampleConfigurableFormBinding, { sample: true });
     // For field
-    const bindField: FormBindingFunc.ForField<TheForm> = () => ({}) as any;
+    const bindField: FormBindingFunc.ForField<SampleModel> = () => ({}) as any;
     bindField("sample", SampleFieldBinding);
     bindField("sample", SampleConfigurableFieldBinding, { sample: true });
 
     // Union
-    const bind: FormBindingFunc<TheForm, SampleFormBinding> = () => ({}) as any;
+    const bind: FormBindingFunc<SampleModel> = () => ({}) as any;
     bind(SampleFormBinding);
-    // @ts-expect-error FIXME
     bind(SampleConfigurableFormBinding, { sample: true });
     bind("sample", SampleFieldBinding);
     bind("sample", SampleConfigurableFieldBinding, { sample: true });

@@ -403,28 +403,27 @@ describe("Form", () => {
         });
       });
 
-      // FIXME
-      // describe("With a config", () => {
-      //   it("returns the binding properties", () => {
-      //     const model = new SampleModel();
-      //     const form = Form.get(model);
+      describe("With a config", () => {
+        it("returns the binding properties", () => {
+          const model = new SampleModel();
+          const form = Form.get(model);
 
-      //     const binding = form.bind(SampleConfigurableFormBinding, { sample: true });
-      //     expect(binding.formId).toBe(form.id);
-      //     expect(binding.config).toEqual({ sample: true });
-      //   });
+          const binding = form.bind(SampleConfigurableFormBinding, { sample: true });
+          expect(binding.formId).toBe(form.id);
+          expect(binding.config).toEqual({ sample: true });
+        });
 
-      //   it("returns the same binding instance when called multiple times but updates the config", () => {
-      //     const model = new SampleModel();
-      //     const form = Form.get(model);
+        it("returns the same binding instance when called multiple times but updates the config", () => {
+          const model = new SampleModel();
+          const form = Form.get(model);
 
-      //     const binding1 = form.bind(SampleConfigurableFormBinding, { sample: true });
-      //     expect(binding1.config).toEqual({ sample: true });
-      //     const binding2 = form.bind(SampleConfigurableFormBinding, { sample: false });
-      //     expect(binding1.bindingId).toBe(binding2.bindingId);
-      //     expect(binding2.config).toEqual({ sample: false });
-      //   });
-      // });
+          const binding1 = form.bind(SampleConfigurableFormBinding, { sample: true });
+          expect(binding1.config).toEqual({ sample: true });
+          const binding2 = form.bind(SampleConfigurableFormBinding, { sample: false });
+          expect(binding1.bindingId).toBe(binding2.bindingId);
+          expect(binding2.config).toEqual({ sample: false });
+        });
+      });
     });
 
     describe("Create a binding for a field", () => {

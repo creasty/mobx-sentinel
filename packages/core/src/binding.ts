@@ -1,6 +1,11 @@
+import type { Form } from "./Form";
 import type { FormField, FormFieldName } from "./FormField";
 
-type ConfigOf<T> = T extends new (field: FormField, config: infer Config) => FormBinding ? Config : never;
+type ConfigOf<T> = T extends new (form: Form<any>, config: infer Config) => FormBinding
+  ? Config
+  : T extends new (field: FormField, config: infer Config) => FormBinding
+    ? Config
+    : never;
 
 /** Interface for form binding classes */
 export interface FormBinding {
@@ -11,18 +16,16 @@ export interface FormBinding {
 }
 
 /** Polymorphic constructor of binding classes */
-export interface FormBindingConstructor<Form>
-  extends FormBindingConstructor.ForField,
-    FormBindingConstructor.ForForm<Form> {}
+export type FormBindingConstructor = FormBindingConstructor.ForField | FormBindingConstructor.ForForm;
 export namespace FormBindingConstructor {
   /** Constructor for field binding classes */
   export type ForField = new (field: FormField, config?: any) => FormBinding;
   /** Constructor for form binding classes */
-  export type ForForm<Form> = new (form: Form, config?: any) => FormBinding;
+  export type ForForm = new (form: Form<any>, config?: any) => FormBinding;
 }
 
 /** Polymorphic function of Form#bind */
-export interface FormBindingFunc<Form, T> extends FormBindingFunc.ForField<T>, FormBindingFunc.ForForm<Form> {}
+export interface FormBindingFunc<T> extends FormBindingFunc.ForField<T>, FormBindingFunc.ForForm<T> {}
 export namespace FormBindingFunc {
   /** Bind configuration */
   export type Config = {
@@ -47,12 +50,12 @@ export namespace FormBindingFunc {
   }
 
   /** Bind to the form */
-  export interface ForForm<Form> {
+  export interface ForForm<T> {
     /** Create a binding for the form */
-    <Binding extends new (form: Form) => FormBinding>(binding: Binding): InstanceType<Binding>["props"];
+    <Binding extends new (form: Form<T>) => FormBinding>(binding: Binding): InstanceType<Binding>["props"];
 
     /** Create a binding for the form with the config */
-    <Binding extends new (form: Form, config: any) => FormBinding>(
+    <Binding extends new (form: Form<T>, config: any) => FormBinding>(
       binding: Binding,
       config: NoInfer<ConfigOf<Binding>> & Config
     ): InstanceType<Binding>["props"];

@@ -349,8 +349,8 @@ export class Form<T> {
   };
 
   /** Create a binding to the form */
-  #bindToForm: FormBindingFunc.ForForm<Form<T>> = (
-    binding: FormBindingConstructor.ForForm<Form<T>>,
+  #bindToForm: FormBindingFunc.ForForm<T> = (
+    binding: FormBindingConstructor.ForForm,
     config?: FormBindingFunc.Config
   ) => {
     const key = `${binding.name}:${config?.cacheKey}`;
@@ -360,7 +360,7 @@ export class Form<T> {
   };
 
   /** Bind to a field or the form */
-  bind: FormBindingFunc<Form<T>, T> = (...args: any[]) => {
+  bind: FormBindingFunc<T> = (...args: any[]) => {
     if (typeof args[0] === "string") {
       return this.#bindToField(args[0], args[1], args[2]);
     }
