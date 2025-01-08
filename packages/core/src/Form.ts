@@ -1,6 +1,6 @@
 import { action, comparer, computed, makeObservable, observable, runInAction } from "mobx";
 import { v4 as uuidV4 } from "uuid";
-import { FormField, FormFieldName } from "./FormField";
+import { FormField } from "./FormField";
 import { FormBinding, FormBindingConstructor, FormBindingFunc } from "./binding";
 import { FormConfig, defaultConfig } from "./config";
 import { FormValidationResult, toErrorMap } from "./validation";
@@ -307,7 +307,7 @@ export class Form<T> {
   #validateAbortCtrl: AbortController | null = null;
 
   /** Define a field by name */
-  #defineField(fieldName: FormFieldName<T>) {
+  #defineField(fieldName: FormField.Name<T>) {
     let field = this.#fields.get(fieldName);
     if (!field) {
       field = new FormField({
@@ -332,7 +332,7 @@ export class Form<T> {
 
   /** Create a binding to a field */
   #bindToField: FormBindingFunc.ForField<T> = (
-    fieldName: FormFieldName<T>,
+    fieldName: FormField.Name<T>,
     binding: FormBindingConstructor.ForField,
     config?: FormBindingFunc.Config
   ) => {
@@ -365,7 +365,7 @@ export class Form<T> {
   };
 
   /** Get the error messages for a field */
-  getError(fieldName: FormFieldName<T>) {
+  getError(fieldName: FormField.Name<T>) {
     // Reading errors from FormField#errors is computed,
     // so notifications only trigger when the error of the specific field changes
     return this.#defineField(fieldName)?.errors ?? null;

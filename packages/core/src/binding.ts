@@ -1,5 +1,5 @@
 import type { Form } from "./Form";
-import type { FormField, FormFieldName } from "./FormField";
+import type { FormField } from "./FormField";
 
 type ConfigOf<T> = T extends new (form: Form<any>, config: infer Config) => FormBinding
   ? Config
@@ -37,13 +37,13 @@ export namespace FormBindingFunc {
   export interface ForField<T> {
     /** Create a binding for the field */
     <Binding extends new (field: FormField) => FormBinding>(
-      fieldName: FormFieldName<T>,
+      fieldName: FormField.Name<T>,
       binding: Binding
     ): InstanceType<Binding>["props"];
 
     /** Create a binding for the field with the config */
     <Binding extends new (field: FormField, config: any) => FormBinding>(
-      fieldName: FormFieldName<T>,
+      fieldName: FormField.Name<T>,
       binding: Binding,
       config: NoInfer<ConfigOf<Binding>> & Config
     ): InstanceType<Binding>["props"];
