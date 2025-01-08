@@ -2,6 +2,7 @@ import { makeObservable, observable } from "mobx";
 import { Form } from "./Form";
 import { FormField } from "./FormField";
 import { FormDelegate } from "./delegation";
+import { ErrorMap } from "./validation";
 
 class SampleModel implements FormDelegate<SampleModel> {
   @observable test = "test";
@@ -18,7 +19,8 @@ class SampleModel implements FormDelegate<SampleModel> {
 function setupEnv() {
   const model = new SampleModel();
   const form = Form.get(model);
-  const field = new FormField({ form, fieldName: "test" });
+  const formErrors: ErrorMap = observable.map();
+  const field = new FormField({ form, formErrors, fieldName: "test" });
   return { model, form, field };
 }
 

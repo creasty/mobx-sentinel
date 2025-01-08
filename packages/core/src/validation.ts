@@ -15,8 +15,10 @@ function getMessages(target: ErrorValue): string[] {
   return target.flatMap((v) => getMessages(v));
 }
 
-export function toErrorMap(result: FormValidationResult<any>): Map<string, string[]> {
-  const map = new Map<string, string[]>();
+export type ErrorMap = Map<string, string[]>;
+
+export function toErrorMap(result: FormValidationResult<any>): ErrorMap {
+  const map: ErrorMap = new Map();
   for (const [key, value] of Object.entries(result)) {
     if (!value) continue;
     const messages = getMessages(value);

@@ -1,6 +1,7 @@
-import { action, makeObservable, observable } from "mobx";
+import { action, computed, makeObservable, observable } from "mobx";
 import { v4 as uuidV4 } from "uuid";
 import type { Form } from "./Form";
+import { ErrorMap } from "./validation";
 
 export type FormFieldNameStrict<T> = keyof T & string;
 export type FormFieldName<T> = FormFieldNameStrict<T> | (string & {});
@@ -9,14 +10,16 @@ export class FormField {
   readonly id = uuidV4();
   readonly fieldName: string;
   readonly #form: Form<unknown>;
+  readonly #formErrors: ErrorMap;
   readonly #isTouched = observable.box(false);
   readonly #isProvisional = observable.box(false);
   readonly #isChanged = observable.box(false);
   readonly #isValidityReported = observable.box(false);
 
-  constructor(args: { form: Form<any>; fieldName: string }) {
+  constructor(args: { form: Form<any>; formErrors: ErrorMap; fieldName: string }) {
     makeObservable(this);
     this.#form = args.form;
+    this.#formErrors = args.formErrors;
     this.fieldName = args.fieldName;
   }
 
@@ -35,6 +38,11 @@ export class FormField {
   /** Whether the field validity has been reported */
   get isValidityReported() {
     return this.#isValidityReported.get();
+  }
+
+  @computed.struct
+  get errors() {
+    return this.#formErrors.get(this.fieldName) ?? null;
   }
 
   @action

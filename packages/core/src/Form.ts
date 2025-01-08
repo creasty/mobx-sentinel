@@ -98,6 +98,24 @@ export class Form<T> {
     this.config = { ...defaultConfig, ...args?.config };
   }
 
+  /**
+   * Get the delegate value by key.
+   *
+   * Returns an object, or a method that is bound to the delegate.
+   */
+  #getDelegateByKey<K extends symbol & keyof FormDelegate<T>>(key: K): FormDelegate<T>[K] | undefined {
+    const delegate = this.#delegate;
+    if (!delegate) return;
+
+    const value = delegate[key];
+    if (!value) return;
+
+    if (typeof value === "function") {
+      return value.bind(delegate) as any;
+    }
+    return value;
+  }
+
   /** Whether the form is in submitting state */
   get isSubmitting() {
     return this.#isSubmitting.get();
@@ -115,43 +133,39 @@ export class Form<T> {
     return this.#isValidityReported.get();
   }
 
-  /** Whether the form is valid */
-  get isValid() {
-    return this.invalidFieldCount === 0;
-  }
-
-  /**
-   * The number of invalid fields
-   *
-   * Includes {@link invalidNestedFormCount}.
-   */
-  @computed
-  get invalidFieldCount() {
-    return this.#errors.size + this.invalidNestedFormCount;
-  }
-
   /** Whether the form can be submitted */
   @computed
   get canSubmit() {
     return !this.isSubmitting && !this.isValidating && this.isValid && this.isDirty;
   }
 
+  /** Whether the form is valid */
+  get isValid() {
+    return this.invalidFieldCount === 0 && this.invalidNestedFormCount === 0;
+  }
+
   /**
-   * Get the delegate value by key.
+   * The number of invalid fields
    *
-   * Returns an object, or a method that is bound to the delegate.
+   * Note that this is not the number of invalid fields of nested forms.
    */
-  #getDelegateByKey<K extends symbol & keyof FormDelegate<T>>(key: K): FormDelegate<T>[K] | undefined {
-    const delegate = this.#delegate;
-    if (!delegate) return;
+  @computed
+  get invalidFieldCount() {
+    return this.#errors.size;
+  }
 
-    const value = delegate[key];
-    if (!value) return;
-
-    if (typeof value === "function") {
-      return value.bind(delegate) as any;
+  /**
+   * The number of invalid nested forms
+   *
+   * Note that this is not the number of invalid fields of nested forms.
+   */
+  @computed
+  get invalidNestedFormCount() {
+    let count = 0;
+    for (const form of this.nestedForms) {
+      count += form.isValid ? 0 : 1;
     }
-    return value;
+    return count;
   }
 
   /**
@@ -173,16 +187,6 @@ export class Form<T> {
     }
 
     return forms;
-  }
-
-  /** The number of invalid nested forms */
-  @computed
-  get invalidNestedFormCount() {
-    let count = 0;
-    for (const form of this.nestedForms) {
-      count += form.isValid ? 0 : 1; // TODO: Should we take isValidityReported into account?
-    }
-    return count;
   }
 
   /** Report validity on all fields and nested forms */
@@ -216,24 +220,14 @@ export class Form<T> {
     this.#isDirty.set(true);
   }
 
-  /** Get the error messages for a field */
-  getFieldError(fieldName: FormFieldName<T>) {
-    const messages = this.#errors.get(fieldName);
-    if (!messages) return null;
-
-    const field = this.#fields.get(fieldName);
-    if (!field) return null;
-    if (!field.isValidityReported) return null;
-
-    return messages;
-  }
-
   /**
    * Submit the form.
    *
    * Returns true if the submission is occurred,
    * false if the submission is discarded/canceled (e.g. invalid form, already in progress).
    * Note that the return value does not indicate whether the submission succeeded.
+   *
+   * The process is delegated to the {@link FormDelegate.submit}.
    */
   async submit(args?: { force?: boolean }) {
     const submit = this.#getDelegateByKey(FormDelegate.submit);
@@ -276,6 +270,8 @@ export class Form<T> {
    * Returns true if the validation is occurred,
    * false if the validation is discarded/canceled (e.g. already in progress).
    * Note that the return value does not indicate the validation result.
+   *
+   * The process is delegated to the {@link FormDelegate.validate}.
    */
   async validate(args?: { force?: boolean }) {
     const validate = this.#getDelegateByKey(FormDelegate.validate);
@@ -316,6 +312,7 @@ export class Form<T> {
     if (!field) {
       field = new FormField({
         form: this,
+        formErrors: this.#errors,
         fieldName: String(fieldName),
       });
       this.#fields.set(fieldName, field);
@@ -366,4 +363,11 @@ export class Form<T> {
     }
     return this.#bindToForm(args[0], args[1]);
   };
+
+  /** Get the error messages for a field */
+  getError(fieldName: FormFieldName<T>) {
+    // Reading errors from FormField#errors is computed,
+    // so notifications only trigger when the error of the specific field changes
+    return this.#defineField(fieldName)?.errors ?? null;
+  }
 }
