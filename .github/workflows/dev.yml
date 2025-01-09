@@ -29,25 +29,26 @@ jobs:
       - uses: pnpm/action-setup@v4
       - run: pnpm install --frozen-lockfile
 
-      - run: |
-          mv package{,.back}.json
-          jq '.version = "\(.version)-${{ github.sha }}"' package.back.json > package.json
+      - name: Update version info
+        run: |
+          for dir in ./packages/*; do
+            if [ -d "$dir" ] && [ -f "$dir/package.json" ]; then
+              preid="dev-${GITHUB_SHA:0:8}"
+
+              tmp="$(mktemp)"
+              cat "$dir/package.json" > "$tmp"
+              jq ".version = \"\(.version)-$preid\"" \
+                "$tmp" > "$dir/package.json"
+              rm "$tmp"
+            fi
+          done
+
       - run: pnpm build
       - run: pnpm test
 
-      - uses: actions/setup-node@v3
-        with:
-          node-version: latest
-          # registry-url: 'https://npm.pkg.github.com'
-
-      #- run: pnpm publish
-      #  env:
-      #    NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-
-      #- uses: JS-DevTools/npm-publish@v2
-      #  id: publish
-      #  with:
-      #    token: ${{ secrets.NPM_TOKEN }}
-      #- run: |
-      #    echo "Version changed: ${{ steps.publish.outputs.old-version }} => ${{ steps.publish.outputs.version }}"
-      #  if: steps.publish.outputs.type != 'none'
+      - name: Set publishing config
+        run: pnpm config set '//registry.npmjs.org/:_authToken' "$NODE_AUTH_TOKEN"
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+      - name: Publish packages
+        run: pnpm publish --tag dev --recursive --access public --no-git-checks
