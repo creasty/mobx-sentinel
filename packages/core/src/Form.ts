@@ -355,10 +355,7 @@ export class Form<T> {
    *
    * @internal
    */
-  _getInternal(token: symbol) {
-    if (token !== internalToken) {
-      throw new Error("Internal access only");
-    }
+  [internalToken]() {
     return {
       getField: this.#getField.bind(this),
       fields: this.#fields,
@@ -370,5 +367,5 @@ export class Form<T> {
 
 /** @internal */
 export function getInternal<T>(form: Form<T>) {
-  return form._getInternal(internalToken);
+  return form[internalToken]();
 }
