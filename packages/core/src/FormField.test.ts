@@ -8,7 +8,7 @@ class SampleModel implements FormDelegate<SampleModel> {
   @observable test = "test";
 
   [FormDelegate.config]: FormDelegate.Config = {
-    interimValidationDelayMs: 100,
+    intermediateValidationDelayMs: 100,
   };
 
   constructor() {
@@ -107,7 +107,7 @@ describe("FormField", () => {
 
   describe("#validateWithDelay", () => {
     const waitForDelay = (form: Form<unknown>, shift = 10) =>
-      new Promise((resolve) => setTimeout(resolve, form.config.interimValidationDelayMs + shift));
+      new Promise((resolve) => setTimeout(resolve, form.config.intermediateValidationDelayMs + shift));
 
     it("calls the validate on the form after the delay and marks the field as changed", async () => {
       const { field, form } = setupEnv();

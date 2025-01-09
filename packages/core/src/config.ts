@@ -19,21 +19,14 @@ export type FormConfig = {
    *
    * @default 3000
    */
-  interimValidationDelayMs: number;
-  /**
-   * Whether to suppress errors of intermediate (partial input) fields
-   *
-   * @default true
-   */
-  suppressIntermediateErrors: boolean;
+  intermediateValidationDelayMs: number;
 };
 
 /** Default configuration */
 export const defaultConfig: Readonly<FormConfig> = Object.freeze({
   validationDelayMs: 100,
   subsequentValidationDelayMs: 300,
-  interimValidationDelayMs: 3000,
-  suppressIntermediateErrors: true,
+  intermediateValidationDelayMs: 3000,
 });
 
 /** Global configuration */

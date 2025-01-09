@@ -81,7 +81,7 @@ export class FormField {
     this.#validationTimerId = setTimeout(() => {
       this.validate();
       this.markAsChanged("final");
-    }, this.#form.config.interimValidationDelayMs);
+    }, this.#form.config.intermediateValidationDelayMs);
   }
 
   cancelDelayedValidation() {
