@@ -87,9 +87,9 @@ describe("SubmitButtonBinding", () => {
     expect(env.button).toBeDisabled();
   });
 
-  test("Hovering the button triggers form.reportValidity()", async () => {
+  test("Hovering the button triggers form.reportError()", async () => {
     const env = setupEnv();
-    const spy = vi.spyOn(env.form, "reportValidity");
+    const spy = vi.spyOn(env.form, "reportError");
 
     act(() => {
       env.form.markAsDirty();

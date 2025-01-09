@@ -7,47 +7,50 @@ import {
   SampleFieldBinding,
   SampleFormBinding,
 } from "./binding.test";
-
-class EmptyModel {}
-
-class SampleModel implements FormDelegate<SampleModel> {
-  @observable string: string = "hello";
-
-  constructor() {
-    makeObservable(this);
-  }
-
-  async [FormDelegate.validate]() {
-    return {
-      string: this.string !== "hello" ? "error" : null,
-    };
-  }
-
-  async [FormDelegate.submit](signal: AbortSignal) {
-    return new Promise<boolean>((resolve) => {
-      const timerId = setTimeout(() => resolve(true), 100);
-      signal.addEventListener("abort", () => {
-        clearTimeout(timerId);
-        resolve(false);
-      });
-    });
-  }
-}
-
-class NestedModel implements FormDelegate<NestedModel> {
-  @observable sample = new SampleModel();
-  @observable array = [new SampleModel()];
-
-  constructor() {
-    makeObservable(this);
-  }
-
-  [FormDelegate.connect]() {
-    return [this.sample, this.array];
-  }
-}
+import { defaultConfig } from "./config";
+import { FormField } from "./FormField";
 
 describe("Form", () => {
+  class EmptyModel {}
+
+  class SampleModel implements FormDelegate<SampleModel> {
+    @observable field = true;
+
+    constructor() {
+      makeObservable(this);
+    }
+
+    async [FormDelegate.validate]() {
+      return {
+        field: this.field ? null : "invalid",
+      };
+    }
+
+    async [FormDelegate.submit](signal: AbortSignal) {
+      return new Promise<boolean>((resolve) => {
+        const timerId = setTimeout(() => resolve(true), 100);
+        signal.addEventListener("abort", () => {
+          clearTimeout(timerId);
+          resolve(false);
+        });
+      });
+    }
+  }
+
+  class NestedModel implements FormDelegate<NestedModel> {
+    @observable field = true;
+    @observable sample = new SampleModel();
+    @observable array = [new SampleModel()];
+
+    constructor() {
+      makeObservable(this);
+    }
+
+    [FormDelegate.connect]() {
+      return [this.sample, this.array];
+    }
+  }
+
   describe(".get", () => {
     it("returns the same instance for the same subject", () => {
       const model = new SampleModel();
@@ -174,6 +177,67 @@ describe("Form", () => {
 
       form.reset();
       expect(form.canSubmit).toBe(false);
+    });
+  });
+
+  describe("#markAsDirty", () => {
+    it("marks the form as dirty", () => {
+      const model = new SampleModel();
+      const form = Form.get(model);
+      expect(form.isDirty).toBe(false);
+      form.markAsDirty();
+      expect(form.isDirty).toBe(true);
+    });
+  });
+
+  describe("#reset", () => {
+    it("resets the form", () => {
+      const model = new SampleModel();
+      const form = Form.get(model);
+
+      form.markAsDirty();
+      expect(form.isDirty).toBe(true);
+      form.reset();
+      expect(form.isDirty).toBe(false);
+    });
+
+    it("resets nested forms", () => {
+      const model = new NestedModel();
+      const form = Form.get(model);
+
+      const spy1 = vi.spyOn(Form.get(model.sample), "reset");
+      const spy2 = vi.spyOn(Form.get(model.array[0]), "reset");
+
+      form.reset();
+      expect(spy1).toHaveBeenCalled();
+      expect(spy2).toHaveBeenCalled();
+    });
+  });
+
+  describe("#reportError", () => {
+    it("triggers reportError on all fields", () => {
+      const model = new SampleModel();
+      const form = Form.get(model);
+      const internal = getInternal(form);
+
+      const field = internal.getField("field");
+
+      const spy = vi.spyOn(field, "reportError");
+      form.reportError();
+      expect(spy).toHaveBeenCalled();
+    });
+
+    it("recursively triggers reportError on nested forms", () => {
+      const model = new NestedModel();
+      const form = Form.get(model);
+      const sampleForm = Form.get(model.sample);
+      const arrayForm0 = Form.get(model.array[0]);
+
+      const spy1 = vi.spyOn(sampleForm, "reportError");
+      const spy2 = vi.spyOn(arrayForm0, "reportError");
+      form.reportError();
+      expect(spy1).toHaveBeenCalled();
+      expect(spy2).toHaveBeenCalled();
     });
   });
 
@@ -354,16 +418,16 @@ describe("Form", () => {
           const model = new SampleModel();
           const form = Form.get(model);
 
-          const binding = form.bind("string", SampleFieldBinding);
-          expect(binding.fieldName).toBe("string");
+          const binding = form.bind("field", SampleFieldBinding);
+          expect(binding.fieldName).toBe("field");
         });
 
         it("returns the same binding instance when called multiple times", () => {
           const model = new SampleModel();
           const form = Form.get(model);
 
-          const binding1 = form.bind("string", SampleFieldBinding);
-          const binding2 = form.bind("string", SampleFieldBinding);
+          const binding1 = form.bind("field", SampleFieldBinding);
+          const binding2 = form.bind("field", SampleFieldBinding);
           expect(binding1.bindingId).toBe(binding2.bindingId);
         });
       });
@@ -374,8 +438,8 @@ describe("Form", () => {
         const model = new SampleModel();
         const form = Form.get(model);
 
-        const binding = form.bind("string", SampleConfigurableFieldBinding, { sample: true });
-        expect(binding.fieldName).toBe("string");
+        const binding = form.bind("field", SampleConfigurableFieldBinding, { sample: true });
+        expect(binding.fieldName).toBe("field");
         expect(binding.config).toEqual({ sample: true });
       });
 
@@ -383,9 +447,9 @@ describe("Form", () => {
         const model = new SampleModel();
         const form = Form.get(model);
 
-        const binding1 = form.bind("string", SampleConfigurableFieldBinding, { sample: true });
+        const binding1 = form.bind("field", SampleConfigurableFieldBinding, { sample: true });
         expect(binding1.config).toEqual({ sample: true });
-        const binding2 = form.bind("string", SampleConfigurableFieldBinding, { sample: false });
+        const binding2 = form.bind("field", SampleConfigurableFieldBinding, { sample: false });
         expect(binding1.bindingId).toBe(binding2.bindingId);
         expect(binding2.config).toEqual({ sample: false });
       });
@@ -394,21 +458,144 @@ describe("Form", () => {
 });
 
 suite("Nested forms", () => {
-  test("the validity of the parent form is true if all nested forms are valid", async () => {
+  class SampleModel implements FormDelegate<SampleModel> {
+    @observable field = true;
+
+    constructor() {
+      makeObservable(this);
+    }
+
+    async [FormDelegate.validate]() {
+      return {
+        field: this.field ? null : "invalid",
+      };
+    }
+  }
+
+  class NestedModel implements FormDelegate<NestedModel> {
+    @observable field = true;
+    @observable sample = new SampleModel();
+    @observable array = [new SampleModel()];
+
+    constructor() {
+      makeObservable(this);
+    }
+
+    async [FormDelegate.validate]() {
+      return {
+        field: this.field ? null : "invalid",
+      };
+    }
+
+    [FormDelegate.connect]() {
+      return [this.sample, this.array];
+    }
+  }
+
+  const setupEnv = () => {
     const model = new NestedModel();
     const form = Form.get(model);
     const sampleForm = Form.get(model.sample);
+    const arrayForm0 = Form.get(model.array[0]);
 
-    expect(sampleForm.isValid).toBe(true);
-    expect(form.isValid).toBe(true);
+    return {
+      model,
+      form,
+      sampleForm,
+      arrayForm0,
+      getField<T>(form: Form<T>, fieldName: FormField.Name<T>) {
+        return getInternal(form).getField(fieldName);
+      },
+      async waitForValidation() {
+        await new Promise((resolve) => setTimeout(resolve, defaultConfig.validationDelayMs + 10));
+      },
+    };
+  };
 
-    runInAction(() => {
-      model.sample.string = "invalid";
+  suite("Validation", () => {
+    test("when a nested form becomes invalid, the parent form also becomes invalid", async () => {
+      const { model, form, sampleForm, waitForValidation } = setupEnv();
+
+      expect(sampleForm.isValid).toBe(true);
+      expect(form.isValid).toBe(true);
+
+      runInAction(() => {
+        model.sample.field = false;
+      });
+      sampleForm.validate();
+      await waitForValidation();
+
+      expect(sampleForm.isValid).toBe(false);
+      expect(form.isValid).toBe(false);
     });
-    sampleForm.validate();
-    await new Promise((resolve) => setTimeout(resolve, sampleForm.config.validationDelayMs + 10));
 
-    expect(sampleForm.isValid).toBe(false);
-    expect(form.isValid).toBe(false);
+    test("when a parent form becomes invalid, nested forms remain unaffected", async () => {
+      const { model, form, sampleForm, waitForValidation } = setupEnv();
+
+      expect(sampleForm.isValid).toBe(true);
+      expect(form.isValid).toBe(true);
+
+      runInAction(() => {
+        model.field = false;
+      });
+      form.validate();
+      await waitForValidation();
+
+      expect(form.isValid).toBe(false);
+      expect(sampleForm.isValid).toBe(true);
+    });
+  });
+
+  suite("Reporting errors", () => {
+    test("when a new field is added after reportError is called, the error on the new field is not reported", async () => {
+      const { form, getField } = setupEnv();
+
+      const field1 = getField(form, "field");
+      expect(field1.isErrorReported).toEqual(false);
+      form.reportError();
+      expect(field1.isErrorReported).toEqual(true);
+
+      const field2 = getField(form, "sample");
+      expect(field2.isErrorReported).toEqual(false);
+    });
+
+    test("reporting errors on nested forms does not affect the parent form", async () => {
+      const { form, sampleForm, arrayForm0, getField } = setupEnv();
+
+      // Touch fields to initialize them
+      const field1 = getField(form, "field");
+      const field2 = getField(sampleForm, "field");
+      const field3 = getField(arrayForm0, "field");
+
+      // Report errors on nested forms
+      sampleForm.reportError();
+      arrayForm0.reportError();
+
+      expect(field1.isErrorReported).toEqual(false);
+      expect(field2.isErrorReported).toEqual(true);
+      expect(field3.isErrorReported).toEqual(true);
+    });
+
+    test("when a new nested form is added after reportError is called, the error on the new form is not reported", async () => {
+      const { model, form, arrayForm0, getField } = setupEnv();
+
+      // Touch fields to initialize them
+      const field1 = getField(form, "field");
+      const field2 = getField(arrayForm0, "field");
+
+      // Report errors on the parent form
+      form.reportError();
+
+      // Add a new nested form
+      runInAction(() => {
+        model.array.push(new SampleModel());
+      });
+      const arrayForm1 = Form.get(model.array[1]);
+      const field3 = getField(arrayForm1, "field");
+
+      expect(field1.isErrorReported).toEqual(true);
+      expect(field2.isErrorReported).toEqual(true);
+      expect(field3.isErrorReported).toEqual(false);
+    });
   });
 });

@@ -10,7 +10,7 @@ export class FormField {
   readonly #formErrors: ErrorMap;
   readonly #isTouched = observable.box(false);
   readonly #changeType = observable.box<FormField.ChangeType | null>(null);
-  readonly #isValidityReported = observable.box(false);
+  readonly #isErrorReported = observable.box(false);
 
   constructor(args: { form: Form<any>; formErrors: ErrorMap; fieldName: string }) {
     makeObservable(this);
@@ -36,9 +36,9 @@ export class FormField {
   get isChanged() {
     return !!this.#changeType.get();
   }
-  /** Whether the field validity has been reported */
-  get isValidityReported() {
-    return this.#isValidityReported.get();
+  /** Whether the error states has been reported */
+  get isErrorReported() {
+    return this.#isErrorReported.get();
   }
 
   @computed.struct
@@ -55,19 +55,19 @@ export class FormField {
   markAsChanged(type: FormField.ChangeType = "final") {
     this.#form.markAsDirty();
     this.#changeType.set(type);
-    this.#isValidityReported.set(this.isChanged && !this.isIntermediate);
+    this.#isErrorReported.set(this.isChanged && !this.isIntermediate);
   }
 
   @action
-  reportValidity() {
-    this.#isValidityReported.set(true);
+  reportError() {
+    this.#isErrorReported.set(true);
   }
 
   @action
   reset() {
     this.#changeType.set(null);
     this.#isTouched.set(false);
-    this.#isValidityReported.set(false);
+    this.#isErrorReported.set(false);
     this.cancelDelayedValidation();
   }
 

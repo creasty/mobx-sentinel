@@ -33,7 +33,7 @@ describe("FormField", () => {
     expect(field.isIntermediate).toBe(false);
     expect(field.isChanged).toBe(false);
     expect(field.isIntermediate).toBe(false);
-    expect(field.isValidityReported).toBe(false);
+    expect(field.isErrorReported).toBe(false);
   });
 
   describe("#markAsTouched", () => {
@@ -43,7 +43,7 @@ describe("FormField", () => {
       expect(field.isTouched).toBe(true);
       expect(field.isIntermediate).toBe(false);
       expect(field.isChanged).toBe(false);
-      expect(field.isValidityReported).toBe(false);
+      expect(field.isErrorReported).toBe(false);
     });
   });
 
@@ -54,7 +54,7 @@ describe("FormField", () => {
       expect(field.isTouched).toBe(false);
       expect(field.isIntermediate).toBe(true);
       expect(field.isChanged).toBe(true);
-      expect(field.isValidityReported).toBe(false);
+      expect(field.isErrorReported).toBe(false);
     });
 
     it("marks the field as changed (final)", () => {
@@ -63,18 +63,18 @@ describe("FormField", () => {
       expect(field.isTouched).toBe(false);
       expect(field.isIntermediate).toBe(false);
       expect(field.isChanged).toBe(true);
-      expect(field.isValidityReported).toBe(true);
+      expect(field.isErrorReported).toBe(true);
     });
   });
 
-  describe("#reportValidity", () => {
-    it("marks the field as validity reported", () => {
+  describe("#reportError", () => {
+    it("marks the field as reported", () => {
       const { field } = setupEnv();
-      field.reportValidity();
+      field.reportError();
       expect(field.isTouched).toBe(false);
       expect(field.isIntermediate).toBe(false);
       expect(field.isChanged).toBe(false);
-      expect(field.isValidityReported).toBe(true);
+      expect(field.isErrorReported).toBe(true);
     });
   });
 
@@ -85,13 +85,13 @@ describe("FormField", () => {
       field.markAsTouched();
       field.markAsChanged("intermediate");
       field.markAsChanged("final");
-      field.reportValidity();
+      field.reportError();
 
       field.reset();
       expect(field.isTouched).toBe(false);
       expect(field.isIntermediate).toBe(false);
       expect(field.isChanged).toBe(false);
-      expect(field.isValidityReported).toBe(false);
+      expect(field.isErrorReported).toBe(false);
     });
   });
 

@@ -19,7 +19,6 @@ export class Form<T> {
   readonly #bindings = new Map<string, FormBinding>();
   readonly #isSubmitting = observable.box(false);
   readonly #isDirty = observable.box(false);
-  readonly #isValidityReported = observable.box(false);
 
   /** Extension fields for bindings */
   [k: `bind${Capitalize<string>}`]: unknown;
@@ -132,10 +131,6 @@ export class Form<T> {
   get isDirty() {
     return this.#isDirty.get();
   }
-  /** Whether the validity has been reported */
-  get isValidityReported() {
-    return this.#isValidityReported.get();
-  }
 
   /** Whether the form can be submitted */
   @computed
@@ -197,15 +192,14 @@ export class Form<T> {
     return forms;
   }
 
-  /** Report validity on all fields and nested forms */
+  /** Report error states on all fields and nested forms */
   @action
-  reportValidity() {
-    this.#isValidityReported.set(true);
+  reportError() {
     for (const field of this.#fields.values()) {
-      field.reportValidity();
+      field.reportError();
     }
     for (const form of this.nestedForms) {
-      form.reportValidity();
+      form.reportError();
     }
   }
 
@@ -213,7 +207,6 @@ export class Form<T> {
   @action
   reset() {
     this.#isDirty.set(false);
-    this.#isValidityReported.set(false);
     for (const field of this.#fields.values()) {
       field.reset();
     }
@@ -343,10 +336,16 @@ export class Form<T> {
   };
 
   /** Get the error messages for a field */
-  getError(fieldName: FormField.Name<T>) {
+  getError(fieldName: FormField.Name<T>, includePreReported = false) {
+    const field = this.#getField(fieldName);
+
+    if (!includePreReported && !field.isErrorReported) {
+      return null;
+    }
+
     // Reading errors from FormField#errors is computed,
     // so notifications only trigger when the error of the specific field changes
-    return this.#getField(fieldName)?.errors ?? null;
+    return field.errors;
   }
 
   /**
@@ -361,6 +360,9 @@ export class Form<T> {
       throw new Error("Internal access only");
     }
     return {
+      getField: this.#getField.bind(this),
+      fields: this.#fields,
+      bindings: this.#bindings,
       validation: this.#validation,
     };
   }

@@ -15,7 +15,7 @@ export class SubmitButtonBinding implements FormBinding {
   };
 
   onMouseEnter: SubmitButtonBinding.Attrs["onMouseEnter"] = () => {
-    this.form.reportValidity();
+    this.form.reportError();
   };
 
   get props() {
