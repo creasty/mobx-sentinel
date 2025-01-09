@@ -25,7 +25,7 @@ declare module "@mobx-form/core" {
      * />
      * ```
      */
-    bindInput(fieldName: FormField.NameStrict<T>, config: InputBinding.Config): InputBinding["props"];
+    bindInput(fieldName: FormField.Name<T>, config: InputBinding.Config): InputBinding["props"];
 
     /**
      * Bind the select box field to the form.
@@ -42,7 +42,7 @@ declare module "@mobx-form/core" {
      * </select>
      * ```
      */
-    bindSelectBox(fieldName: FormField.NameStrict<T>, config: SelectBoxBinding.Config): SelectBoxBinding["props"];
+    bindSelectBox(fieldName: FormField.Name<T>, config: SelectBoxBinding.Config): SelectBoxBinding["props"];
 
     /**
      * Bind the checkbox field to the form.
@@ -57,7 +57,7 @@ declare module "@mobx-form/core" {
      * />
      * ```
      */
-    bindCheckBox(fieldName: FormField.NameStrict<T>, config: CheckBoxBinding.Config): CheckBoxBinding["props"];
+    bindCheckBox(fieldName: FormField.Name<T>, config: CheckBoxBinding.Config): CheckBoxBinding["props"];
 
     /**
      * Bind the radio button field to the form.
@@ -76,7 +76,7 @@ declare module "@mobx-form/core" {
      * ```
      */
     bindRadioButtonFactory(
-      fieldName: FormField.NameStrict<T>,
+      fieldName: FormField.Name<T>,
       config: RadioButtonBinding.Config
     ): RadioButtonBinding["props"];
 

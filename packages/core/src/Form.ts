@@ -6,7 +6,7 @@ import { FormConfig, globalConfig } from "./config";
 import { Validation } from "./validation";
 import { FormDelegate, getDelegation, isConnectableObject } from "./delegation";
 
-const registry = new WeakMap<object, Map<symbol, Form<unknown>>>();
+const registry = new WeakMap<object, Map<symbol, Form<any>>>();
 const defaultFormKey = Symbol("Form.defaultFormKey");
 const internalToken = Symbol("Form.internalToken");
 
@@ -337,7 +337,7 @@ export class Form<T> {
   /** Bind to a field or the form */
   bind: FormBindingFunc<T> = (...args: any[]) => {
     if (typeof args[0] === "string") {
-      return this.#bindToField(args[0], args[1], args[2]);
+      return this.#bindToField(args[0] as any, args[1], args[2]);
     }
     return this.#bindToForm(args[0], args[1]);
   };

@@ -94,7 +94,8 @@ export class FormField {
 
 export namespace FormField {
   export type NameStrict<T> = keyof T & string;
-  export type Name<T> = NameStrict<T> | (string & {});
+  export type NameAugmented<T> = `${NameStrict<T>}:${string}`;
+  export type Name<T> = NameStrict<T> | NameAugmented<T>;
 
   /**
    * The type of change that has occurred in the field.
