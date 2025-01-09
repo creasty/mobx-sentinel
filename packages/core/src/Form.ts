@@ -2,7 +2,7 @@ import { action, computed, makeObservable, observable, runInAction } from "mobx"
 import { v4 as uuidV4 } from "uuid";
 import { FormField } from "./FormField";
 import { FormBinding, FormBindingConstructor, FormBindingFunc } from "./binding";
-import { FormConfig, defaultConfig } from "./config";
+import { FormConfig, globalConfig } from "./config";
 import { Validation } from "./validation";
 import { FormDelegate, getDelegation, isConnectableObject } from "./delegation";
 
@@ -12,9 +12,8 @@ const internalToken = Symbol("Form.internalToken");
 
 export class Form<T> {
   readonly id = uuidV4();
-  readonly config: Readonly<FormConfig>;
   readonly #delegate?: FormDelegate<T>;
-  readonly #registryKey: symbol;
+  readonly #formKey: symbol;
   readonly #validation: Validation;
   readonly #fields = new Map<string, FormField>();
   readonly #bindings = new Map<string, FormBinding>();
@@ -50,11 +49,7 @@ export class Form<T> {
     let instance = map.get(formKey);
     if (!instance) {
       const delegate = getDelegation(subject);
-      instance = new Form<T>(internalToken, {
-        registryKey: formKey,
-        delegate,
-        config: delegate?.[FormDelegate.config],
-      });
+      instance = new Form<T>(internalToken, { formKey, delegate });
       map.set(formKey, instance);
     }
     return instance;
@@ -82,18 +77,17 @@ export class Form<T> {
   private constructor(
     token: symbol,
     args: {
-      registryKey: symbol;
+      formKey: symbol;
       delegate?: FormDelegate<T>;
-      config?: Partial<FormConfig>;
     }
   ) {
     if (token !== internalToken) {
       throw new Error("Instantiate Form via Form.get() instead");
     }
     makeObservable(this);
-    this.#registryKey = args.registryKey;
+    this.#formKey = args.formKey;
     this.#delegate = args.delegate;
-    this.config = { ...defaultConfig, ...args.config };
+
     this.#validation = new Validation({
       requestDelayMs: this.config.validationDelayMs,
       scheduleDelayMs: this.config.subsequentValidationDelayMs,
@@ -116,6 +110,14 @@ export class Form<T> {
       return value.bind(delegate) as any;
     }
     return value;
+  }
+
+  @computed
+  get config(): Readonly<FormConfig> {
+    return {
+      ...globalConfig,
+      ...this.#getDelegateByKey(FormDelegate.config),
+    };
   }
 
   /** Whether the form is in submitting state */
@@ -186,7 +188,7 @@ export class Form<T> {
         const items = Array.isArray(object) ? object : [object];
         for (const item of items) {
           if (!isConnectableObject(item)) continue;
-          const form = Form.get(item, this.#registryKey);
+          const form = Form.get(item, this.#formKey);
           forms.add(form);
         }
       }
