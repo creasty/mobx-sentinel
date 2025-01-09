@@ -1,6 +1,16 @@
 {
   "name": "@mobx-form/core",
   "version": "0.0.1",
+  "author": "creasty <yuki@creasty.com>",
+  "license": "MIT",
+  "homepage": "https://github.com/creasty/mobx-form",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/creasty/mobx-form.git"
+  },
+  "bugs": {
+    "url": "https://github.com/creasty/mobx-form/issues"
+  },
   "main": "dist/index.cjs.js",
   "module": "dist/index.esm.js",
   "types": "dist/index.d.ts",
