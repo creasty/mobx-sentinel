@@ -37,14 +37,14 @@ export class Form<T> {
    *   If you need to associate multiple forms with the same subject, use different keys.
    */
   static get<T extends object>(subject: T, formKey?: symbol): Form<T> {
+    formKey ??= defaultFormKey;
+
     let map = registry.get(subject);
     if (!map) {
       map = new Map();
       registry.set(subject, map);
     }
-    if (!formKey) {
-      formKey = defaultFormKey;
-    }
+
     let instance = map.get(formKey);
     if (!instance) {
       const delegate = getDelegation(subject);

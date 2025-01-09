@@ -104,14 +104,14 @@ describe("FormBindingFunc", () => {
 
     // For field
     const bindField: FormBindingFunc.ForField<SampleModel> = () => ({}) as any;
-    bindField("sample", SampleFieldBinding);
-    bindField("sample", SampleConfigurableFieldBinding, { sample: true });
+    bindField("string", SampleFieldBinding);
+    bindField("string", SampleConfigurableFieldBinding, { sample: true });
 
     // Union
     const bind: FormBindingFunc<SampleModel> = () => ({}) as any;
     bind(SampleFormBinding);
     bind(SampleConfigurableFormBinding, { sample: true });
-    bind("sample", SampleFieldBinding);
-    bind("sample", SampleConfigurableFieldBinding, { sample: true });
+    bind("string", SampleFieldBinding);
+    bind("string", SampleConfigurableFieldBinding, { sample: true });
   });
 });

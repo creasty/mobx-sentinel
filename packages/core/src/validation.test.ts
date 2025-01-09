@@ -1,5 +1,5 @@
 import { autorun } from "mobx";
-import { Validation } from "./validation";
+import { toErrorMap, Validation } from "./validation";
 
 function setupEnv() {
   const lag = {
@@ -186,5 +186,32 @@ describe("Validation", () => {
         ]
       `);
     });
+  });
+});
+
+describe("toErrorMap", () => {
+  it("converts a validation result to an error map", () => {
+    const result = {
+      null: null,
+      undefined: undefined,
+      string: "string",
+      error: new Error("error"),
+      array: ["string", new Error("error")],
+    };
+    const map = toErrorMap(result);
+    expect(map).toMatchInlineSnapshot(`
+      Map {
+        "string" => [
+          "string",
+        ],
+        "error" => [
+          "error",
+        ],
+        "array" => [
+          "string",
+          "error",
+        ],
+      }
+    `);
   });
 });
