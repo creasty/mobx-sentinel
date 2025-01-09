@@ -1,7 +1,19 @@
 /** Form configuration */
 export type FormConfig = {
   /**
-   * Delay validation when a field is being edited (in milliseconds)
+   * Delay validation. [milliseconds]
+   *
+   * @default 100
+   */
+  validationDelayMs: number;
+  /**
+   * Delay subsequent validation. [milliseconds]
+   *
+   * @default 300
+   */
+  subsequentValidationDelayMs: number;
+  /**
+   * Delay validation when a field value is intermediate (partial input). [in milliseconds]
    *
    * @default 3000
    */
@@ -16,6 +28,8 @@ export type FormConfig = {
 
 /** Default form configuration */
 export const defaultConfig: FormConfig = Object.freeze({
+  validationDelayMs: 100,
+  subsequentValidationDelayMs: 300,
   interimValidationDelayMs: 3000,
   suppressIntermediateErrors: true,
 });

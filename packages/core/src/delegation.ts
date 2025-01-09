@@ -1,6 +1,6 @@
-import { FormConfig } from "./config";
-import { MaybeArray } from "./util";
-import { FormValidationResult } from "./validation";
+import type { FormConfig } from "./config";
+import type { MaybeArray } from "./util";
+import type { Validation } from "./validation";
 
 /** Indirect delegate for the form */
 export interface FormDelegated<T> {
@@ -63,7 +63,7 @@ export namespace FormDelegate {
    *
    * Returns a map of field names to error messages.
    */
-  export type Validate<T> = (abortSignal: AbortSignal) => Promise<FormValidationResult<T>>;
+  export type Validate<T> = Validation.Executor<T>;
 
   /**
    * Symbol for implementing {@link Config}.

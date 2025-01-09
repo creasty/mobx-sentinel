@@ -73,7 +73,7 @@ export class FormField {
 
   validate() {
     this.cancelDelayedValidation();
-    this.#form.validate().catch((e) => void e);
+    this.#form.validate();
   }
 
   validateWithDelay() {
@@ -89,7 +89,7 @@ export class FormField {
     clearTimeout(this.#validationTimerId);
     this.#validationTimerId = null;
   }
-  #validationTimerId: any | null = null;
+  #validationTimerId: ReturnType<typeof setTimeout> | null = null;
 }
 
 export namespace FormField {

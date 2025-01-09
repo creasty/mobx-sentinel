@@ -1,27 +1,26 @@
-import { action, comparer, computed, makeObservable, observable, runInAction } from "mobx";
+import { action, computed, makeObservable, observable, runInAction } from "mobx";
 import { v4 as uuidV4 } from "uuid";
 import { FormField } from "./FormField";
 import { FormBinding, FormBindingConstructor, FormBindingFunc } from "./binding";
 import { FormConfig, defaultConfig } from "./config";
-import { FormValidationResult, toErrorMap } from "./validation";
+import { Validation } from "./validation";
 import { FormDelegate, getDelegation, isConnectableObject } from "./delegation";
 
 const registry = new WeakMap<object, Map<symbol, Form<unknown>>>();
 const defaultFormKey = Symbol("Form.defaultFormKey");
-const privateConstructorToken = Symbol("Form.privateConstructor");
+const internalToken = Symbol("Form.internalToken");
 
 export class Form<T> {
   readonly id = uuidV4();
   readonly config: Readonly<FormConfig>;
   readonly #delegate?: FormDelegate<T>;
   readonly #registryKey: symbol;
+  readonly #validation: Validation;
   readonly #fields = new Map<string, FormField>();
   readonly #bindings = new Map<string, FormBinding>();
   readonly #isSubmitting = observable.box(false);
-  readonly #isValidating = observable.box(false);
   readonly #isDirty = observable.box(false);
   readonly #isValidityReported = observable.box(false);
-  readonly #errors = observable.map<string, string[]>([], { equals: comparer.structural });
 
   /** Extension fields for bindings */
   [k: `bind${Capitalize<string>}`]: unknown;
@@ -51,7 +50,7 @@ export class Form<T> {
     let instance = map.get(formKey);
     if (!instance) {
       const delegate = getDelegation(subject);
-      instance = new Form<T>(privateConstructorToken, {
+      instance = new Form<T>(internalToken, {
         registryKey: formKey,
         delegate,
         config: delegate?.[FormDelegate.config],
@@ -88,13 +87,17 @@ export class Form<T> {
       config?: Partial<FormConfig>;
     }
   ) {
-    if (token !== privateConstructorToken) {
+    if (token !== internalToken) {
       throw new Error("Instantiate Form via Form.get() instead");
     }
     makeObservable(this);
     this.#registryKey = args.registryKey;
     this.#delegate = args.delegate;
     this.config = { ...defaultConfig, ...args.config };
+    this.#validation = new Validation({
+      requestDelayMs: this.config.validationDelayMs,
+      scheduleDelayMs: this.config.subsequentValidationDelayMs,
+    });
   }
 
   /**
@@ -121,7 +124,7 @@ export class Form<T> {
   }
   /** Whether the form is in validation state */
   get isValidating() {
-    return this.#isValidating.get();
+    return this.#validation.isRunning;
   }
   /** Whether the form is dirty */
   get isDirty() {
@@ -150,7 +153,7 @@ export class Form<T> {
    */
   @computed
   get invalidFieldCount() {
-    return this.#errors.size;
+    return this.#validation.errors.size;
   }
 
   /**
@@ -269,43 +272,15 @@ export class Form<T> {
   /**
    * Validate the form.
    *
-   * Returns true if the validation is occurred,
-   * false if the validation is discarded/canceled (e.g. already in progress).
-   * Note that the return value does not indicate the validation result.
-   *
    * The process is delegated to the {@link FormDelegate.validate}.
+   *
+   * @returns The execution status, or null if no delegate is found.
    */
-  async validate(args?: { force?: boolean }) {
+  validate(args?: Validation.ExecutorOptions): Validation.Status | null {
     const validate = this.#getDelegateByKey(FormDelegate.validate);
-    if (!validate) return false;
-
-    if (args?.force) {
-      this.#validateAbortCtrl?.abort();
-      this.#validateAbortCtrl = null;
-    } else if (this.isValidating) {
-      return false;
-    }
-
-    runInAction(() => {
-      this.#isValidating.set(true);
-    });
-    let result: FormValidationResult<T> | undefined;
-    const abortCtrl = new AbortController();
-    try {
-      this.#validateAbortCtrl = abortCtrl;
-      result = await validate(abortCtrl.signal);
-    } finally {
-      this.#validateAbortCtrl = null;
-      runInAction(() => {
-        this.#isValidating.set(false);
-        if (result) {
-          this.#errors.replace(toErrorMap(result));
-        }
-      });
-    }
-    return !abortCtrl.signal.aborted;
+    if (!validate) return null;
+    return this.#validation.request(validate, args);
   }
-  #validateAbortCtrl: AbortController | null = null;
 
   /** Get a field by name */
   #getField(fieldName: FormField.Name<T>) {
@@ -313,7 +288,7 @@ export class Form<T> {
     if (!field) {
       field = new FormField({
         form: this,
-        formErrors: this.#errors,
+        formErrors: this.#validation.errors,
         fieldName: String(fieldName),
       });
       this.#fields.set(fieldName, field);
@@ -371,4 +346,24 @@ export class Form<T> {
     // so notifications only trigger when the error of the specific field changes
     return this.#getField(fieldName)?.errors ?? null;
   }
+
+  /**
+   * Get the internal properties of the form.
+   *
+   * For internal testing purposes only.
+   *
+   * @internal
+   */
+  _getInternal(token: symbol) {
+    if (token !== internalToken) {
+      throw new Error("Internal access only");
+    }
+    return {
+      validation: this.#validation,
+    };
+  }
+}
+
+export function getInternal<T>(form: Form<T>) {
+  return form._getInternal(internalToken);
 }

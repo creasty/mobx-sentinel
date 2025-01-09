@@ -3,6 +3,7 @@
   "compilerOptions": {
     "rootDir": "src",
     "emitDeclarationOnly": true,
+    "stripInternal": true,
     "types": ["react"]
   },
   "include": ["src"],

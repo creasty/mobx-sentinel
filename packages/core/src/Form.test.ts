@@ -1,5 +1,5 @@
 import { autorun, makeObservable, observable, runInAction } from "mobx";
-import { Form } from "./Form";
+import { Form, getInternal } from "./Form";
 import { FormDelegate } from "./delegation";
 import {
   SampleConfigurableFieldBinding,
@@ -288,97 +288,19 @@ describe("Form", () => {
   });
 
   describe("#validate", () => {
-    it("does nothing when FormDelegate.validate is not implemented", async () => {
+    it("returns null and does nothing when FormDelegate.validate is not implemented", async () => {
       const model = new EmptyModel();
       const form = Form.get(model);
-      expect(await form.validate()).toBe(false);
+      expect(form.validate()).toBe(null);
     });
 
-    it("returns true when validation occurred", async () => {
+    it("calls Validation#request and returns the status", async () => {
       const model = new SampleModel();
       const form = Form.get(model);
-      expect(await form.validate()).toBe(true);
-    });
-
-    it("sets isValidating flag while validating", async () => {
-      const model = new SampleModel();
-      const form = Form.get(model);
-
-      const timeline: string[] = [];
-      autorun(() => {
-        timeline.push(`isValidating: ${form.isValidating}`);
-      });
-
-      const validate = form.validate();
-      validate.then(() => timeline.push(`validate`));
-
-      expect(await validate).toBe(true);
-      expect(timeline).toMatchInlineSnapshot(`
-        [
-          "isValidating: false",
-          "isValidating: true",
-          "isValidating: false",
-          "validate",
-        ]
-      `);
-    });
-
-    it("discards subsequent validate requests while validating", async () => {
-      const model = new SampleModel();
-      const form = Form.get(model);
-
-      const timeline: string[] = [];
-      autorun(() => {
-        timeline.push(`isValidating: ${form.isValidating}`);
-      });
-
-      // Start first validation
-      const firstValidate = form.validate();
-      firstValidate.then(() => timeline.push(`firstValidate`));
-      // Try to validate again while first is still running
-      const secondValidate = form.validate();
-      secondValidate.then(() => timeline.push(`secondValidate`));
-
-      expect(await firstValidate).toBe(true); // First validate should be occurred
-      expect(await secondValidate).toBe(false); // Second validate should be discarded
-      expect(timeline).toMatchInlineSnapshot(`
-        [
-          "isValidating: false",
-          "isValidating: true",
-          "isValidating: false",
-          "secondValidate",
-          "firstValidate",
-        ]
-      `);
-    });
-
-    it("aborts ongoing validation when validating with force option", async () => {
-      const model = new SampleModel();
-      const form = Form.get(model);
-
-      const timeline: string[] = [];
-      autorun(() => {
-        timeline.push(`isValidating: ${form.isValidating}`);
-      });
-
-      // Start first validation
-      const firstValidate = form.validate();
-      firstValidate.then(() => timeline.push(`firstValidate`));
-      // Force second validation while first is still running
-      const secondValidate = form.validate({ force: true });
-      secondValidate.then(() => timeline.push(`secondValidate`));
-
-      expect(await firstValidate).toBe(false); // First validate should be aborted
-      expect(await secondValidate).toBe(true); // Second validate should be occurred
-      expect(timeline).toMatchInlineSnapshot(`
-        [
-          "isValidating: false",
-          "isValidating: true",
-          "isValidating: false",
-          "firstValidate",
-          "secondValidate",
-        ]
-      `);
+      const internal = getInternal(form);
+      const spy = vi.spyOn(internal.validation, "request");
+      expect(form.validate()).toBe("requested");
+      expect(spy).toBeCalled();
     });
   });
 
@@ -483,7 +405,8 @@ suite("Nested forms", () => {
     runInAction(() => {
       model.sample.string = "invalid";
     });
-    await sampleForm.validate();
+    sampleForm.validate();
+    await new Promise((resolve) => setTimeout(resolve, sampleForm.config.validationDelayMs + 10));
 
     expect(sampleForm.isValid).toBe(false);
     expect(form.isValid).toBe(false);
