@@ -1,5 +1,5 @@
 {
-  "name": "@mobx-form/react",
+  "name": "@form-model/react",
   "version": "0.0.1",
   "main": "dist/index.cjs.js",
   "module": "dist/index.esm.js",
@@ -21,7 +21,7 @@
     "react-dom": "^18.0.0"
   },
   "devDependencies": {
-    "@mobx-form/core": "workspace:*",
+    "@form-model/core": "workspace:*",
     "@testing-library/jest-dom": "^6.6.3",
     "@testing-library/react": "^16.1.0",
     "@testing-library/user-event": "^14.5.2",

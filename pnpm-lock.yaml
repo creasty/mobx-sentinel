@@ -81,7 +81,7 @@ importers:
         specifier: ^18.0.0
         version: 18.0.0(react@18.0.0)
     devDependencies:
-      '@mobx-form/core':
+      '@form-model/core':
         specifier: workspace:*
         version: link:../core
       '@testing-library/jest-dom':

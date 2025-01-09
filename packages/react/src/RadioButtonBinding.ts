@@ -1,4 +1,4 @@
-import { FormBinding, FormField } from "@mobx-form/core";
+import { FormBinding, FormField } from "@form-model/core";
 import { makeObservable, computed, action } from "mobx";
 
 export namespace RadioButtonBinding {

@@ -3,7 +3,7 @@ import "@testing-library/jest-dom";
 import { act, render, screen } from "@testing-library/react";
 import { userEvent } from "@testing-library/user-event";
 import { makeObservable } from "mobx";
-import { Form, FormDelegate } from "@mobx-form/core";
+import { Form, FormDelegate } from "@form-model/core";
 import "./extension";
 import { observer } from "mobx-react-lite";
 

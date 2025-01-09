@@ -1,6 +1,6 @@
 {
   "private": true,
-  "name": "mobx-form",
+  "name": "form-model",
   "version": "0.0.1",
   "packageManager": "pnpm@8.0.0",
   "type": "module",

@@ -1,4 +1,4 @@
-import { Form, FormBinding } from "@mobx-form/core";
+import { Form, FormBinding } from "@form-model/core";
 import { makeObservable } from "mobx";
 
 export namespace SubmitButtonBinding {
