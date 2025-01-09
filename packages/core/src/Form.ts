@@ -366,6 +366,7 @@ export class Form<T> {
   }
 }
 
+/** @internal */
 export function getInternal<T>(form: Form<T>) {
   return form._getInternal(internalToken);
 }
