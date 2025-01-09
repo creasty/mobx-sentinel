@@ -1,0 +1,35 @@
+name: test
+
+on:
+  push:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - run: pnpm install --frozen-lockfile
+
+      - run: |
+          mv package{,.back}.json
+          jq '.version = "\(.version)-${{ github.sha }}"' package.back.json > package.json
+      - run: pnpm build
+      - run: pnpm test
+
+      - uses: actions/setup-node@v3
+        with:
+          node-version: latest
+          # registry-url: 'https://npm.pkg.github.com'
+
+      #- run: pnpm publish
+      #  env:
+      #    NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+      #- uses: JS-DevTools/npm-publish@v2
+      #  id: publish
+      #  with:
+      #    token: ${{ secrets.NPM_TOKEN }}
+      #- run: |
+      #    echo "Version changed: ${{ steps.publish.outputs.old-version }} => ${{ steps.publish.outputs.version }}"
+      #  if: steps.publish.outputs.type != 'none'
