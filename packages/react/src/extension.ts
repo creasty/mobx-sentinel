@@ -1,4 +1,4 @@
-import { Form, FormField } from "@mobx-form/core";
+import { Form, FormField } from "@form-model/core";
 import { CheckBoxBinding } from "./CheckBoxBinding";
 import { InputBinding } from "./InputBinding";
 import { RadioButtonBinding } from "./RadioButtonBinding";
@@ -7,7 +7,7 @@ import { SubmitButtonBinding } from "./SubmitButtonBinding";
 
 export {};
 
-declare module "@mobx-form/core" {
+declare module "@form-model/core" {
   export interface Form<T> {
     /**
      * Bind the input field to the form.
