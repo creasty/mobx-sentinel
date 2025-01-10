@@ -23,8 +23,8 @@ A TypeScript form management library designed to work seamlessly with MobX domai
 
 ## Premises
 
-私が関わっているプロジェクトでは複雑なドメインを扱っており、フロントエンドでも MobX の class を用いてドメインモデルを作り込むことを推進している。<br>
-モデルがどのように表示・更新されるべきかというビジネスロジックが class 実装として存在する前提で、それをフォームでも使えるようにするソリューションを求めていた。
+私が関わっているプロジェクトでは複雑なドメインを扱っており、フロントエンドでも MobX を用いてドメインモデルを作り込むことを推進している。<br>
+データがどのように表示・更新されるべきかというビジネスロジックがクラス実装として存在する前提で、それをフォームでも使えるようにするソリューションを求めていた。
 
 すでに MobX を活用したフォーム構築のためのライブラリは多く存在しているが、どれもモデリングではなくデータシリアライズの観点で設計されており、
 モデルを使うことができないか、データとフォームの状態管理の分離が適切にできていないか、のいずれかの問題がある。<br>
@@ -43,51 +43,55 @@ A TypeScript form management library designed to work seamlessly with MobX domai
 何もしてないのに最初からエラーが表示されていたり、入力途中なのに即座にエラーと表示される UI にイライラしたことはないだろうか？<br>
 より適切なタイミングするためには、復数の UI イベント (change, focus, blur) や状態を組み合わせる必要があり、「フォーム自体の状態管理」と「インプット要素との接続」の両方が複雑になる要因となっている。
 
-ドメインモデルがある前提では、基本的にドメインモデル側にほとんどの責務を持たせることができ、そうするべきである。
+ドメインモデルがある前提では、基本的にドメインモデル側にほとんどの責務を持たせることができるし、そうするべきである。
 その上でフォーム独自の機能として必要な部分だけを提供するライブラリを実装した。
 
 ## Design principles
 
 - ドメインモデルファースト
   - ドメインモデルがあることを前提にする。
-  - 簡易にフォームを実装するとこ自体は目的ではない。
   - ドメインモデルの方の責務になるべく寄せ、フォームの責務を最小限にする。
+  - データドリブンで簡易にフォームを実装することは目的としない。
 - フォーム状態管理とドメインモデルの分離
   - フォームとドメインモデルがお互いに直接的な参照を持たない。
+  - ドメインモデルがフォームによって汚染されない。
   - フォームはデータを管理しない。
-  - ドメインモデルはフォームに依存しない、ドメインモデルがフォームによって汚染されない。
-- Multi-package 構成
-  - 特に、挙動モデルと UI を分離する。
-  - モジュラーな実装にし、テスタビリティ、拡張性、カスタマイズ性を高める。
+- 隠されていない入出力
+  - ドメインモデル ↔ インプット要素 の入出力を隠蔽しない。
+  - 自明かつ安全にコントロールできるようにする。
+- モジュラーな実装
+  - Multi-package 構成にし、とりわけ動作モデルと UI を明確に分離する。
+  - テスタビリティと拡張性を高める。
 - 賢い型情報
-  - 型によるエラー検出やコード補完による開発生産性を確保する。
+  - 型システムを最大限活用し、エラー検出やコード補完による開発生産性を確保する。
 
 ## Features
 
-- 非同期送信
-- 非同期バリデーション
-- 入れ子のフォーム
-- ダイナミックなフォーム (配列など)
-- [React](https://react.dev/) 拡張
-- [zod](https://zod.dev/) 拡張 (coming soon)
+- Asynchronous submission
+- Asynchronous validation
+- Nested forms
+- Dynamic forms - arrays, etc - work without special treatment
+- [React](https://react.dev/) integration
+- [zod](https://zod.dev/) extension *(coming soon)*
 
 --------------------------------------------------------------------------------
 
 ## Overview
 
 ```typescript
-// With @form-model/core
+import { observable, makeObservable } from "mobx";
+import { FormDelegate } from "@form-model/core";
 
 enum SampleEnum { ... }
 
 class Sample implements FormDelegate<Sample> {
-  @observable stringField: string = "hello";
-  @observable numberField: number | null = null;
-  @observable dateField: Date | null = null;
-  @observable boolField: boolean = false;
-  @observable enumField: SampleEnum | null = null;
-  @observable optionField: string = SAMPLE_OPTIONS[0].code;
-  @observable multiOptionField: string[] = [];
+  @observable string: string = "hello";
+  @observable number: number | null = null;
+  @observable date: Date | null = null;
+  @observable bool: boolean = false;
+  @observable enum: SampleEnum | null = null;
+  @observable option: string | null = null;
+  @observable multiOption: string[] = [];
 
   @observable nested = new Other();
   @observable array = [new Other()];
@@ -95,6 +99,9 @@ class Sample implements FormDelegate<Sample> {
   constructor() {
     makeObservable(this);
   }
+
+  // ↓ フォーム関連の処理は symbol による Protocol パターンで実装する。
+  //   例は自分自身を Delegate として実装しているパターン。もちろん別のクラスに移譲することも可能。
 
   [FormDelegate.connect]() {
     return [this.nested, this.array];
@@ -106,11 +113,12 @@ class Sample implements FormDelegate<Sample> {
 
   async [FormDelegate.submit](signal: AbortSignal) {
     ...
+    return true;
   }
 }
 
 class Other implements FormDelegate<Other> {
-  @observable otherField: string = "world";
+  @observable other: string = "world";
 
   constructor() {
     makeObservable(this);
@@ -123,7 +131,9 @@ class Other implements FormDelegate<Other> {
 ```
 
 ```tsx
-// With @form-model/react
+import { observer } from "mobx-react-lite";
+import "@form-model/react";
+import { Form } from "@form-model/core";
 
 const SampleForm: React.FC<{ model: Sample }> = observer(({ model }) => {
   const form = Form.get(model);
@@ -132,52 +142,53 @@ const SampleForm: React.FC<{ model: Sample }> = observer(({ model }) => {
     <form>
       {/* Text input */}
       <input
-        {...form.bindInput("stringField", {
-          getter: () => model.stringField,
-          setter: (v) => (model.stringField = v),
+        {...form.bindInput("string", {
+          getter: () => model.string,
+          setter: (v) => (model.string = v),
         })}
       />
       {/* Number input */}
       <input
-        {...form.bindInput("numberField", {
+        {...form.bindInput("number", {
           valueAs: "number",
-          getter: () => model.numberField,
-          setter: (v) => (model.numberField = v),
+          getter: () => model.number,
+          setter: (v) => (model.number = v),
         })}
       />
       {/* Date input */}
       <input
-        {...form.bindInput("dateField", {
+        {...form.bindInput("date", {
           valueAs: "date",
-          getter: () => model.dateField?.toISOString().split("T")[0] ?? null,
-          setter: (v) => (model.dateField = v),
+          getter: () => model.date?.toISOString().split("T")[0] ?? null,
+          setter: (v) => (model.date = v),
         })}
       />
 
       {/* Check box */}
       <input
-        {...form.bindCheckBox("boolField", {
-          getter: () => model.boolField,
-          setter: (v) => (model.boolField = v),
+        {...form.bindCheckBox("bool", {
+          getter: () => model.bool,
+          setter: (v) => (model.bool = v),
         })}
       />
 
       {/* Radio buttons */}
       {(() => {
-        const bindRadioButton = form.bindRadioButtonFactory("enumField", {
-          getter: () => model.enumField,
-          setter: (v) => (model.enumField = v ? (v as SampleEnum) : null),
+        const bindRadioButton = form.bindRadioButtonFactory("enum", {
+          getter: () => model.enum,
+          setter: (v) => (model.enum = v ? (v as SampleEnum) : null),
         });
         return Object.values(SampleEnum).map((value) => <input key={value} {...bindRadioButton(value)} />);
       })()}
 
       {/* Single select box */}
       <select
-        {...form.bindSelectBox("optionField", {
-          getter: () => model.optionField,
-          setter: (code) => (model.optionField = code),
+        {...form.bindSelectBox("option", {
+          getter: () => model.option,
+          setter: (code) => (model.option = code),
         })}
       >
+        {!model.option && <option value="" disabled>Select...</option>}
         {SAMPLE_OPTIONS.map((option) => (
           <option key={option.code} value={option.code}>
             {option.name}
@@ -187,10 +198,10 @@ const SampleForm: React.FC<{ model: Sample }> = observer(({ model }) => {
 
       {/* Multiple select box */}
       <select
-        {...form.bindSelectBox("multipleOptionField", {
+        {...form.bindSelectBox("multipleOption", {
           multiple: true,
-          getter: () => model.multipleOptionField,
-          setter: (codes) => (model.multipleOptionField = codes),
+          getter: () => model.multipleOption,
+          setter: (codes) => (model.multipleOption = codes),
         })}
       >
         ...
@@ -216,9 +227,9 @@ const OtherForm: React.FC<{ model: Other }> = observer(({ model }) => {
   return (
     <fieldset>
       <input
-        {...form.bindInput("otherField", {
-          getter: () => model.otherField,
-          setter: (v) => (model.otherField = v),
+        {...form.bindInput("other", {
+          getter: () => model.other,
+          setter: (v) => (model.other = v),
         })}
       />
     </fieldset>

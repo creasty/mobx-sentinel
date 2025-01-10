@@ -71,6 +71,9 @@ importers:
 
   packages/react:
     dependencies:
+      '@form-model/core':
+        specifier: workspace:*
+        version: link:../core
       mobx:
         specifier: ^6.12.3
         version: 6.12.3
@@ -84,9 +87,6 @@ importers:
         specifier: ^18.0.0
         version: 18.0.0(react@18.0.0)
     devDependencies:
-      '@form-model/core':
-        specifier: workspace:*
-        version: link:../core
       '@testing-library/jest-dom':
         specifier: ^6.6.3
         version: 6.6.3
