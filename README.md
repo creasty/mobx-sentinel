@@ -11,10 +11,10 @@ A TypeScript form management library designed to work seamlessly with MobX domai
 
 ## Packages
 
-[npm-core]: https://www.npmjs.com/package/@form-mode/core
-[npm-react]: https://www.npmjs.com/package/@form-mode/react
-[npm-core-badge]: https://badge.fury.io/js/@form-mode%2Fcore.svg
-[npm-react-badge]: https://badge.fury.io/js/@form-mode%2Freact.svg
+[npm-core]: https://www.npmjs.com/package/@form-model/core
+[npm-react]: https://www.npmjs.com/package/@form-model/react
+[npm-core-badge]: https://badge.fury.io/js/@form-model%2Fcore.svg
+[npm-react-badge]: https://badge.fury.io/js/@form-model%2Freact.svg
 
 | [![npm version][npm-core-badge]][npm-core] | [![npm version][npm-react-badge]][npm-react] |
 |---|---|
