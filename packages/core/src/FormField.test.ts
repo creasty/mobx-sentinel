@@ -19,9 +19,9 @@ class SampleModel implements FormDelegate<SampleModel> {
 function setupEnv() {
   const model = new SampleModel();
   const form = Form.get(model);
-  const formErrors: ErrorMap = observable.map();
+  const formErrors = observable.map<string, string[]>() satisfies ErrorMap;
   const field = new FormField({ form, formErrors, fieldName: "test" });
-  return { model, form, field };
+  return { model, formErrors, form, field };
 }
 
 describe("FormField", () => {
@@ -34,6 +34,60 @@ describe("FormField", () => {
     expect(field.isChanged).toBe(false);
     expect(field.isIntermediate).toBe(false);
     expect(field.isErrorReported).toBe(false);
+  });
+
+  describe("#errors", () => {
+    it("returns null if there are no errors at all", () => {
+      const { field } = setupEnv();
+      expect(field.errors).toBe(null);
+    });
+
+    it("returns null if there is no errors for the field", () => {
+      const { field, formErrors } = setupEnv();
+      formErrors.set("someOtherField", ["otherError"]);
+      expect(field.errors).toBe(null);
+    });
+
+    it("returns the errors if there are errors for the field", () => {
+      const { field, formErrors } = setupEnv();
+      formErrors.set("test", ["error"]);
+      expect(field.errors).toEqual(["error"]);
+      formErrors.set("someOtherField", ["otherError"]);
+      expect(field.errors).toEqual(["error"]);
+    });
+  });
+
+  describe("#hasErrors", () => {
+    it("returns false if there are no errors", () => {
+      const { field } = setupEnv();
+      expect(field.hasErrors).toBe(false);
+    });
+
+    it("returns true if there are errors", () => {
+      const { field, formErrors } = setupEnv();
+      formErrors.set("test", ["error"]);
+      expect(field.hasErrors).toBe(true);
+    });
+  });
+
+  describe("#hasReportedErrors", () => {
+    it("returns false if there are no errors", () => {
+      const { field } = setupEnv();
+      expect(field.hasReportedErrors).toBe(false);
+    });
+
+    it("returns false if there are errors but they are not reported", () => {
+      const { field, formErrors } = setupEnv();
+      formErrors.set("test", ["error"]);
+      expect(field.hasReportedErrors).toBe(false);
+    });
+
+    it("returns true if there are errors and they are reported", () => {
+      const { field, formErrors } = setupEnv();
+      formErrors.set("test", ["error"]);
+      field.reportError();
+      expect(field.hasReportedErrors).toBe(true);
+    });
   });
 
   describe("#markAsTouched", () => {
