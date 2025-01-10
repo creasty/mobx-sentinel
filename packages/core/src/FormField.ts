@@ -46,6 +46,16 @@ export class FormField {
     return this.#formErrors.get(this.fieldName) ?? null;
   }
 
+  @computed
+  get hasErrors() {
+    return !!this.errors;
+  }
+
+  @computed
+  get hasReportedErrors() {
+    return this.isErrorReported && this.hasErrors;
+  }
+
   @action
   markAsTouched() {
     this.#isTouched.set(true);
