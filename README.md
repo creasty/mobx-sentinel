@@ -1,5 +1,10 @@
 # form-model
 
+[![push](https://github.com/creasty/form-model/actions/workflows/push.yml/badge.svg)](https://github.com/creasty/form-model/actions/workflows/push.yml)
+[![codecov](https://codecov.io/gh/creasty/form-model/graph/badge.svg?token=K6D0I95Y91)](https://codecov.io/gh/creasty/form-model)
+[![npm version](https://badge.fury.io/js/ts-subset.svg)](https://www.npmjs.com/package/ts-subset)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+
 ```sh
 npm install --save @form-model/core
 npm install --save @form-model/react # Optional
@@ -24,6 +29,10 @@ class Sample implements FormDelegate<Sample> {
   @observable nested = new Other();
   @observable array = [new Other()];
 
+  constructor() {
+    makeObservable(this);
+  }
+
   [FormDelegate.connect]() {
     return [this.nested, this.array];
   }
@@ -39,6 +48,10 @@ class Sample implements FormDelegate<Sample> {
 
 class Other implements FormDelegate<Other> {
   @observable otherField: string = "world";
+
+  constructor() {
+    makeObservable(this);
+  }
 
   async [FormDelegate.validate]() {
     return { ... };

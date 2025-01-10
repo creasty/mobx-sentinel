@@ -1,0 +1,21 @@
+name: pr
+
+on:
+  pull_request:
+
+jobs:
+  reviewdog:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+      packages: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm format
+      - name: Run reviewdog
+        uses: reviewdog/action-suggester@v1
+        with:
+          tool_name: format
