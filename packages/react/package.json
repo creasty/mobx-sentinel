@@ -25,13 +25,13 @@
     "build:types": "tsc -P tsconfig.build.json"
   },
   "dependencies": {
+    "@form-model/core": "workspace:*",
     "mobx": "^6.12.3",
     "mobx-react-lite": "^4.0.7",
     "react": "^18.0.0",
     "react-dom": "^18.0.0"
   },
   "devDependencies": {
-    "@form-model/core": "workspace:*",
     "@testing-library/jest-dom": "^6.6.3",
     "@testing-library/react": "^16.1.0",
     "@testing-library/user-event": "^14.5.2",
