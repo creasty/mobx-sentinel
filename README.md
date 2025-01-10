@@ -106,6 +106,7 @@ class Sample implements FormDelegate<Sample> {
 
   async [FormDelegate.submit](signal: AbortSignal) {
     ...
+    return true;
   }
 }
 
