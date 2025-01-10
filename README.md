@@ -50,8 +50,8 @@ A TypeScript form management library designed to work seamlessly with MobX domai
 
 - ドメインモデルファースト
   - ドメインモデルがあることを前提にする。
-  - 簡易にフォームを実装するとこ自体は目的ではない。
   - ドメインモデルの方の責務になるべく寄せ、フォームの責務を最小限にする。
+  - データドリブンで簡易にフォームを実装することは目的としない。
 - フォーム状態管理とドメインモデルの分離
   - フォームとドメインモデルがお互いに直接的な参照を持たない。
   - フォームはデータを管理しない。
@@ -76,18 +76,19 @@ A TypeScript form management library designed to work seamlessly with MobX domai
 ## Overview
 
 ```typescript
-// With @form-model/core
+import { observable, makeObservable } from "mobx";
+import { FormDelegate } from "@form-model/core";
 
 enum SampleEnum { ... }
 
 class Sample implements FormDelegate<Sample> {
-  @observable stringField: string = "hello";
-  @observable numberField: number | null = null;
-  @observable dateField: Date | null = null;
-  @observable boolField: boolean = false;
-  @observable enumField: SampleEnum | null = null;
-  @observable optionField: string = SAMPLE_OPTIONS[0].code;
-  @observable multiOptionField: string[] = [];
+  @observable string: string = "hello";
+  @observable number: number | null = null;
+  @observable date: Date | null = null;
+  @observable bool: boolean = false;
+  @observable enum: SampleEnum | null = null;
+  @observable option: string | null = null;
+  @observable multiOption: string[] = [];
 
   @observable nested = new Other();
   @observable array = [new Other()];
@@ -111,7 +112,7 @@ class Sample implements FormDelegate<Sample> {
 }
 
 class Other implements FormDelegate<Other> {
-  @observable otherField: string = "world";
+  @observable other: string = "world";
 
   constructor() {
     makeObservable(this);
@@ -124,7 +125,9 @@ class Other implements FormDelegate<Other> {
 ```
 
 ```tsx
-// With @form-model/react
+import { observer } from "mobx-react-lite";
+import "@form-model/react";
+import { Form } from "@form-model/core";
 
 const SampleForm: React.FC<{ model: Sample }> = observer(({ model }) => {
   const form = Form.get(model);
@@ -133,52 +136,53 @@ const SampleForm: React.FC<{ model: Sample }> = observer(({ model }) => {
     <form>
       {/* Text input */}
       <input
-        {...form.bindInput("stringField", {
-          getter: () => model.stringField,
-          setter: (v) => (model.stringField = v),
+        {...form.bindInput("string", {
+          getter: () => model.string,
+          setter: (v) => (model.string = v),
         })}
       />
       {/* Number input */}
       <input
-        {...form.bindInput("numberField", {
+        {...form.bindInput("number", {
           valueAs: "number",
-          getter: () => model.numberField,
-          setter: (v) => (model.numberField = v),
+          getter: () => model.number,
+          setter: (v) => (model.number = v),
         })}
       />
       {/* Date input */}
       <input
-        {...form.bindInput("dateField", {
+        {...form.bindInput("date", {
           valueAs: "date",
-          getter: () => model.dateField?.toISOString().split("T")[0] ?? null,
-          setter: (v) => (model.dateField = v),
+          getter: () => model.date?.toISOString().split("T")[0] ?? null,
+          setter: (v) => (model.date = v),
         })}
       />
 
       {/* Check box */}
       <input
-        {...form.bindCheckBox("boolField", {
-          getter: () => model.boolField,
-          setter: (v) => (model.boolField = v),
+        {...form.bindCheckBox("bool", {
+          getter: () => model.bool,
+          setter: (v) => (model.bool = v),
         })}
       />
 
       {/* Radio buttons */}
       {(() => {
-        const bindRadioButton = form.bindRadioButtonFactory("enumField", {
-          getter: () => model.enumField,
-          setter: (v) => (model.enumField = v ? (v as SampleEnum) : null),
+        const bindRadioButton = form.bindRadioButtonFactory("enum", {
+          getter: () => model.enum,
+          setter: (v) => (model.enum = v ? (v as SampleEnum) : null),
         });
         return Object.values(SampleEnum).map((value) => <input key={value} {...bindRadioButton(value)} />);
       })()}
 
       {/* Single select box */}
       <select
-        {...form.bindSelectBox("optionField", {
-          getter: () => model.optionField,
-          setter: (code) => (model.optionField = code),
+        {...form.bindSelectBox("option", {
+          getter: () => model.option,
+          setter: (code) => (model.option = code),
         })}
       >
+        {!model.option && <option value="" disabled>Select...</option>}
         {SAMPLE_OPTIONS.map((option) => (
           <option key={option.code} value={option.code}>
             {option.name}
@@ -188,10 +192,10 @@ const SampleForm: React.FC<{ model: Sample }> = observer(({ model }) => {
 
       {/* Multiple select box */}
       <select
-        {...form.bindSelectBox("multipleOptionField", {
+        {...form.bindSelectBox("multipleOption", {
           multiple: true,
-          getter: () => model.multipleOptionField,
-          setter: (codes) => (model.multipleOptionField = codes),
+          getter: () => model.multipleOption,
+          setter: (codes) => (model.multipleOption = codes),
         })}
       >
         ...
@@ -217,9 +221,9 @@ const OtherForm: React.FC<{ model: Other }> = observer(({ model }) => {
   return (
     <fieldset>
       <input
-        {...form.bindInput("otherField", {
-          getter: () => model.otherField,
-          setter: (v) => (model.otherField = v),
+        {...form.bindInput("other", {
+          getter: () => model.other,
+          setter: (v) => (model.other = v),
         })}
       />
     </fieldset>
