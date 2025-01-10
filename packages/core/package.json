@@ -19,7 +19,7 @@
     "!./dist/**/*.d.ts.map"
   ],
   "scripts": {
-    "test": "vitest run",
+    "test": "vitest run --coverage",
     "test:dev": "vitest",
     "build": "run-p build:*",
     "build:js": "tsx build.ts",
@@ -31,6 +31,7 @@
   },
   "devDependencies": {
     "@types/node": "^22.10.2",
+    "@vitest/coverage-v8": "^2.1.8",
     "esbuild": "^0.24.2",
     "tsx": "^4.19.2",
     "typescript": "^5.5.0",
