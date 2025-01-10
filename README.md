@@ -23,8 +23,8 @@ A TypeScript form management library designed to work seamlessly with MobX domai
 
 ## Premises
 
-私が関わっているプロジェクトでは複雑なドメインを扱っており、フロントエンドでも MobX の class を用いてドメインモデルを作り込むことを推進している。<br>
-モデルがどのように表示・更新されるべきかというビジネスロジックが class 実装として存在する前提で、それをフォームでも使えるようにするソリューションを求めていた。
+私が関わっているプロジェクトでは複雑なドメインを扱っており、フロントエンドでも MobX を用いてドメインモデルを作り込むことを推進している。<br>
+データがどのように表示・更新されるべきかというビジネスロジックがクラス実装として存在する前提で、それをフォームでも使えるようにするソリューションを求めていた。
 
 すでに MobX を活用したフォーム構築のためのライブラリは多く存在しているが、どれもモデリングではなくデータシリアライズの観点で設計されており、
 モデルを使うことができないか、データとフォームの状態管理の分離が適切にできていないか、のいずれかの問題がある。<br>
@@ -43,7 +43,7 @@ A TypeScript form management library designed to work seamlessly with MobX domai
 何もしてないのに最初からエラーが表示されていたり、入力途中なのに即座にエラーと表示される UI にイライラしたことはないだろうか？<br>
 より適切なタイミングするためには、復数の UI イベント (change, focus, blur) や状態を組み合わせる必要があり、「フォーム自体の状態管理」と「インプット要素との接続」の両方が複雑になる要因となっている。
 
-ドメインモデルがある前提では、基本的にドメインモデル側にほとんどの責務を持たせることができ、そうするべきである。
+ドメインモデルがある前提では、基本的にドメインモデル側にほとんどの責務を持たせることができるし、そうするべきである。
 その上でフォーム独自の機能として必要な部分だけを提供するライブラリを実装した。
 
 ## Design principles
@@ -54,22 +54,25 @@ A TypeScript form management library designed to work seamlessly with MobX domai
   - データドリブンで簡易にフォームを実装することは目的としない。
 - フォーム状態管理とドメインモデルの分離
   - フォームとドメインモデルがお互いに直接的な参照を持たない。
+  - ドメインモデルがフォームによって汚染されない。
   - フォームはデータを管理しない。
-  - ドメインモデルはフォームに依存しない、ドメインモデルがフォームによって汚染されない。
-- Multi-package 構成
-  - 特に、挙動モデルと UI を分離する。
-  - モジュラーな実装にし、テスタビリティ、拡張性、カスタマイズ性を高める。
+- 隠されていない入出力
+  - ドメインモデル ↔ インプット要素 の入出力を隠蔽しない。
+  - 自明かつ安全にコントロールできるようにする。
+- モジュラーな実装
+  - Multi-package 構成にし、とりわけ動作モデルと UI を明確に分離する。
+  - テスタビリティと拡張性を高める。
 - 賢い型情報
-  - 型によるエラー検出やコード補完による開発生産性を確保する。
+  - 型システムを最大限活用し、エラー検出やコード補完による開発生産性を確保する。
 
 ## Features
 
-- 非同期送信
-- 非同期バリデーション
-- 入れ子のフォーム
-- ダイナミックなフォーム (配列など)
-- [React](https://react.dev/) 拡張
-- [zod](https://zod.dev/) 拡張 (coming soon)
+- Asynchronous submission
+- Asynchronous validation
+- Nested forms
+- Dynamic forms - arrays, etc - work without special treatment
+- [React](https://react.dev/) integration
+- [zod](https://zod.dev/) extension *(coming soon)*
 
 --------------------------------------------------------------------------------
 
@@ -96,6 +99,9 @@ class Sample implements FormDelegate<Sample> {
   constructor() {
     makeObservable(this);
   }
+
+  // ↓ フォーム関連の処理は symbol による Protocol パターンで実装する。
+  //   例は自分自身を Delegate として実装しているパターン。もちろん別のクラスに移譲することも可能。
 
   [FormDelegate.connect]() {
     return [this.nested, this.array];
