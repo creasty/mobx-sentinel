@@ -3,9 +3,10 @@ import "@testing-library/jest-dom";
 import { fireEvent, render, screen } from "@testing-library/react";
 import { userEvent } from "@testing-library/user-event";
 import { makeObservable, observable } from "mobx";
-import { Form } from "@form-model/core";
+import { Form, FormField } from "@form-model/core";
 import "./extension";
 import { observer } from "mobx-react-lite";
+import { InputBinding } from "./InputBinding";
 
 class SampleModel {
   @observable string: string = "hello";
@@ -77,30 +78,133 @@ const SampleComponent: React.FC<{ model: SampleModel }> = observer(({ model }) =
   );
 });
 
-function setupEnv(inputLabel: string) {
-  const model = new SampleModel();
-
-  render(<SampleComponent model={model} />);
-  const input = screen.getByLabelText(inputLabel) as HTMLInputElement;
-
-  return {
-    model,
-    input,
-    async changeInput(value: any, type = true) {
-      await userEvent.clear(input);
-      if (type && value) {
-        await userEvent.type(input, value);
-      }
-      if (!type) {
-        fireEvent.focus(input);
-        fireEvent.change(input, { target: { value } });
-        fireEvent.blur(input);
-      }
-    },
-  };
-}
-
 describe("InputBinding", () => {
+  const setupEnv = () => {
+    const model = new SampleModel();
+    const form = Form.get(model);
+    const field = new FormField({
+      form,
+      formErrors: new Map(),
+      fieldName: "test",
+    });
+    const binding = new InputBinding(field, {
+      getter: () => "",
+      setter: () => {},
+    });
+    const element = document.createElement("input");
+    const fakeEvent = () => {
+      return { currentTarget: element } as any;
+    };
+
+    return {
+      model,
+      form,
+      field,
+      binding,
+      fakeEvent,
+    };
+  };
+
+  describe("props.id", () => {
+    it("uses the field id by default", () => {
+      const env = setupEnv();
+      expect(env.binding.props.id).toBe(env.field.id);
+    });
+
+    it("uses the provided id", () => {
+      const env = setupEnv();
+      env.binding.config.id = "somethingElse";
+      expect(env.binding.props.id).toBe("somethingElse");
+    });
+  });
+
+  describe("#type", () => {
+    it("uses the type deduced from the valueAs", () => {
+      const env = setupEnv();
+      expect(env.binding.type).toBe("text");
+      env.binding.config.valueAs = "number";
+      expect(env.binding.type).toBe("number");
+      env.binding.config.valueAs = "date";
+      expect(env.binding.type).toBe("date");
+    });
+
+    it("uses the provided type", () => {
+      const env = setupEnv();
+      env.binding.config.type = "password";
+      expect(env.binding.type).toBe("password");
+    });
+  });
+
+  describe("#onChange", () => {
+    it("works without a callback", () => {
+      const env = setupEnv();
+      env.binding.onChange(env.fakeEvent());
+    });
+
+    it("calls the callback if provided", () => {
+      const env = setupEnv();
+      const callback = vi.fn();
+      env.binding.config.onChange = callback;
+      env.binding.onChange(env.fakeEvent());
+      expect(callback).toHaveBeenCalledWith(env.fakeEvent());
+    });
+  });
+
+  describe("#onFocus", () => {
+    it("works without a callback", () => {
+      const env = setupEnv();
+      env.binding.onFocus(env.fakeEvent());
+    });
+
+    it("calls the callback if provided", () => {
+      const env = setupEnv();
+      const callback = vi.fn();
+      env.binding.config.onFocus = callback;
+      env.binding.onFocus(env.fakeEvent());
+      expect(callback).toHaveBeenCalledWith(env.fakeEvent());
+    });
+  });
+
+  describe("#onBlur", () => {
+    it("works without a callback", () => {
+      const env = setupEnv();
+      env.binding.onBlur(env.fakeEvent());
+    });
+
+    it("calls the callback if provided", () => {
+      const env = setupEnv();
+      const callback = vi.fn();
+      env.binding.config.onBlur = callback;
+      env.binding.onBlur(env.fakeEvent());
+      expect(callback).toHaveBeenCalledWith(env.fakeEvent());
+    });
+  });
+});
+
+suite("bindInput", () => {
+  const setupEnv = (inputLabel: string) => {
+    const model = new SampleModel();
+
+    render(<SampleComponent model={model} />);
+    const input = screen.getByLabelText(inputLabel) as HTMLInputElement;
+
+    return {
+      model,
+      input,
+      async changeInput(value: any, type = true) {
+        await userEvent.clear(input);
+        if (type && value) {
+          await userEvent.type(input, value);
+        }
+        if (!type) {
+          fireEvent.focus(input);
+          fireEvent.change(input, { target: { value } });
+          fireEvent.blur(input);
+        }
+      },
+    };
+  };
+
   describe("valueAs=string", () => {
     test("works with a required field", async () => {
       const env = setupEnv("string");
