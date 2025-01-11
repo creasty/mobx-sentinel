@@ -55,6 +55,8 @@ export class RadioButtonBinding implements FormBinding {
       checked: this.value === value,
       onChange: this.onChange,
       onFocus: this.onFocus,
+      "aria-invalid": this.field.hasReportedErrors,
+      "aria-errormessage": this.field.hasReportedErrors ? this.field.errors?.join(", ") : undefined,
     } satisfies RadioButtonBinding.Attrs;
   };
 }

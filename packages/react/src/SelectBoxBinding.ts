@@ -68,6 +68,8 @@ export class SelectBoxBinding implements FormBinding {
       value: this.value,
       onChange: this.onChange,
       onFocus: this.onFocus,
+      "aria-invalid": this.field.hasReportedErrors,
+      "aria-errormessage": this.field.hasReportedErrors ? this.field.errors?.join(", ") : undefined,
     } satisfies SelectBoxBinding.Attrs;
   }
 }

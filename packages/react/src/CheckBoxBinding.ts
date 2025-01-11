@@ -53,6 +53,8 @@ export class CheckBoxBinding implements FormBinding {
       checked: this.checked,
       onChange: this.onChange,
       onFocus: this.onFocus,
+      "aria-invalid": this.field.hasReportedErrors,
+      "aria-errormessage": this.field.hasReportedErrors ? this.field.errors?.join(", ") : undefined,
     } satisfies CheckBoxBinding.Attrs;
   }
 }

@@ -168,6 +168,8 @@ export class InputBinding implements FormBinding {
       onChange: this.onChange,
       onFocus: this.onFocus,
       onBlur: this.onBlur,
+      "aria-invalid": this.field.hasReportedErrors,
+      "aria-errormessage": this.field.hasReportedErrors ? this.field.errors?.join(", ") : undefined,
     } satisfies InputBinding.Attrs;
   }
 }
