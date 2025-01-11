@@ -9,9 +9,10 @@ import { useEffect } from "react";
  *
  * @inheritdoc {@link Form.get}
  */
-export function useForm<T extends object>(subject: T, formKey?: symbol): Form<T> {
-  const form = Form.get(subject, formKey);
+export function useForm<T extends object>(subject: T, opt?: { formKey?: symbol; noReset?: boolean }): Form<T> {
+  const form = Form.get(subject, opt?.formKey);
   useEffect(() => {
+    if (opt?.noReset) return;
     form.reset();
     return () => form.reset();
   }, [form]);
