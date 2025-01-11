@@ -88,7 +88,7 @@ declare module "@form-model/core" {
      * <button {...model.form.bindSubmitButton()}>Submit</button>
      * ```
      */
-    bindSubmitButton(): SubmitButtonBinding["props"];
+    bindSubmitButton(config?: SubmitButtonBinding.Config): SubmitButtonBinding["props"];
   }
 }
 
@@ -111,6 +111,6 @@ Form.prototype.bindRadioButtonFactory = function (fieldName, config) {
   return this.bind(fieldName, RadioButtonBinding, config);
 };
 
-Form.prototype.bindSubmitButton = function () {
-  return this.bind(SubmitButtonBinding);
+Form.prototype.bindSubmitButton = function (config) {
+  return this.bind(SubmitButtonBinding, config ?? {});
 };

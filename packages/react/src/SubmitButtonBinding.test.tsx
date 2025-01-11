@@ -6,6 +6,7 @@ import { makeObservable } from "mobx";
 import { Form, FormDelegate } from "@form-model/core";
 import "./extension";
 import { observer } from "mobx-react-lite";
+import { SubmitButtonBinding } from "./SubmitButtonBinding";
 
 class SampleModel implements FormDelegate<SampleModel> {
   constructor() {
@@ -41,26 +42,75 @@ const SampleComponent: React.FC<{ model: SampleModel }> = observer(({ model }) =
   );
 });
 
-function setupEnv() {
-  const model = new SampleModel();
-
-  render(<SampleComponent model={model} />);
-  const button = screen.getByLabelText("submit") as HTMLButtonElement;
-
-  return {
-    model,
-    form: Form.get(model),
-    button: button,
-    async clickButton() {
-      await userEvent.click(button);
-    },
-    async hoverButton() {
-      await userEvent.hover(button);
-    },
-  };
-}
-
 describe("SubmitButtonBinding", () => {
+  const setupEnv = () => {
+    const model = new SampleModel();
+    const form = Form.get(model);
+    const binding = new SubmitButtonBinding(form, {});
+    const element = document.createElement("button");
+    const fakeEvent = () => {
+      return { currentTarget: element } as any;
+    };
+
+    return {
+      model,
+      form,
+      binding,
+      fakeEvent,
+    };
+  };
+
+  describe("#onClick", () => {
+    it("works without a callback", () => {
+      const env = setupEnv();
+      env.binding.onClick(env.fakeEvent());
+    });
+
+    it("calls the callback if provided", () => {
+      const env = setupEnv();
+      const callback = vi.fn();
+      env.binding.config.onClick = callback;
+      env.binding.onClick(env.fakeEvent());
+      expect(callback).toHaveBeenCalledWith(env.fakeEvent());
+    });
+  });
+
+  describe("#onMouseEnter", () => {
+    it("works without a callback", () => {
+      const env = setupEnv();
+      env.binding.onMouseEnter(env.fakeEvent());
+    });
+
+    it("calls the callback if provided", () => {
+      const env = setupEnv();
+      const callback = vi.fn();
+      env.binding.config.onMouseEnter = callback;
+      env.binding.onMouseEnter(env.fakeEvent());
+      expect(callback).toHaveBeenCalledWith(env.fakeEvent());
+    });
+  });
+});
+
+suite("bindSubmitButton", () => {
+  const setupEnv = () => {
+    const model = new SampleModel();
+
+    render(<SampleComponent model={model} />);
+    const button = screen.getByLabelText("submit") as HTMLButtonElement;
+
+    return {
+      model,
+      form: Form.get(model),
+      button: button,
+      async clickButton() {
+        await userEvent.click(button);
+      },
+      async hoverButton() {
+        await userEvent.hover(button);
+      },
+    };
+  };
+
   test("Activates and disables the button", async () => {
     const env = setupEnv();
 
