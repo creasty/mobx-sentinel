@@ -3,21 +3,24 @@
 import { FlatCompat } from "@eslint/eslintrc";
 import js from "@eslint/js";
 import ts from "typescript-eslint";
-import prettierConfig from "eslint-config-prettier";
-import reactPlugin from "eslint-plugin-react";
-import reactHooksPlugin from "eslint-plugin-react-hooks";
+import configPrettier from "eslint-config-prettier";
+import pluginReact from "eslint-plugin-react";
+import pluginReactHooks from "eslint-plugin-react-hooks";
+import pluginMobx from "eslint-plugin-mobx";
 
 const compat = new FlatCompat();
 
 export default ts.config(
   js.configs.recommended,
   ts.configs.recommended,
-  prettierConfig,
+  configPrettier,
+  pluginMobx.flatConfigs.recommended,
   {
     rules: {
       "no-redeclare": "off",
       "@typescript-eslint/no-namespace": "off",
       "@typescript-eslint/no-explicit-any": "off",
+      "mobx/exhaustive-make-observable": "off",
     },
   },
   {
@@ -42,14 +45,14 @@ export default ts.config(
       },
     },
     plugins: {
-      react: reactPlugin,
+      react: pluginReact,
       // @ts-expect-error reactHooksPlugin has broken type?
-      "react-hooks": reactHooksPlugin,
+      "react-hooks": pluginReactHooks,
     },
     // @ts-expect-error reactHooksPlugin has broken type?
     rules: {
-      ...reactPlugin.configs.recommended.rules,
-      ...reactHooksPlugin.configs.recommended.rules,
+      ...pluginReact.configs.recommended.rules,
+      ...pluginReactHooks.configs.recommended.rules,
     },
   },
   ...compat.config({
