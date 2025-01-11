@@ -3,9 +3,10 @@ import "@testing-library/jest-dom";
 import { render, screen } from "@testing-library/react";
 import { userEvent } from "@testing-library/user-event";
 import { makeObservable, observable } from "mobx";
-import { Form } from "@form-model/core";
+import { Form, FormField } from "@form-model/core";
 import "./extension";
 import { observer } from "mobx-react-lite";
+import { CheckBoxBinding } from "./CheckBoxBinding";
 
 class SampleModel {
   @observable boolean: boolean = false;
@@ -39,22 +40,93 @@ const SampleComponent: React.FC<{ model: SampleModel }> = observer(({ model }) =
   );
 });
 
-function setupEnv(inputLabel: string) {
-  const model = new SampleModel();
-
-  render(<SampleComponent model={model} />);
-  const input = screen.getByLabelText(inputLabel) as HTMLInputElement;
-
-  return {
-    model,
-    input,
-    async clickInput() {
-      await userEvent.click(input);
-    },
-  };
-}
-
 describe("CheckBoxBinding", () => {
+  const setupEnv = () => {
+    const model = new SampleModel();
+    const form = Form.get(model);
+    const field = new FormField({
+      form,
+      formErrors: new Map(),
+      fieldName: "test",
+    });
+    const binding = new CheckBoxBinding(field, {
+      getter: () => false,
+      setter: () => {},
+    });
+    const element = document.createElement("input");
+    const fakeEvent = () => {
+      return { currentTarget: element } as any;
+    };
+
+    return {
+      model,
+      form,
+      field,
+      binding,
+      fakeEvent,
+    };
+  };
+
+  describe("props.id", () => {
+    it("uses the field id by default", () => {
+      const env = setupEnv();
+      expect(env.binding.props.id).toBe(env.field.id);
+    });
+
+    it("uses the provided id", () => {
+      const env = setupEnv();
+      env.binding.config.id = "somethingElse";
+      expect(env.binding.props.id).toBe("somethingElse");
+    });
+  });
+
+  describe("#onChange", () => {
+    it("works without a callback", () => {
+      const env = setupEnv();
+      env.binding.onChange(env.fakeEvent());
+    });
+
+    it("calls the callback if provided", () => {
+      const env = setupEnv();
+      const callback = vi.fn();
+      env.binding.config.onChange = callback;
+      env.binding.onChange(env.fakeEvent());
+      expect(callback).toHaveBeenCalledWith(env.fakeEvent());
+    });
+  });
+
+  describe("#onFocus", () => {
+    it("works without a callback", () => {
+      const env = setupEnv();
+      env.binding.onFocus(env.fakeEvent());
+    });
+
+    it("calls the callback if provided", () => {
+      const env = setupEnv();
+      const callback = vi.fn();
+      env.binding.config.onFocus = callback;
+      env.binding.onFocus(env.fakeEvent());
+      expect(callback).toHaveBeenCalledWith(env.fakeEvent());
+    });
+  });
+});
+
+suite("bindCheckBox", () => {
+  const setupEnv = (inputLabel: string) => {
+    const model = new SampleModel();
+
+    render(<SampleComponent model={model} />);
+    const input = screen.getByLabelText(inputLabel) as HTMLInputElement;
+
+    return {
+      model,
+      input,
+      async clickInput() {
+        await userEvent.click(input);
+      },
+    };
+  };
+
   test("works with a required field", async () => {
     const env = setupEnv("boolean");
 
