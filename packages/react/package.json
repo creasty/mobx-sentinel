@@ -1,5 +1,6 @@
 {
   "name": "@form-model/react",
+  "description": "MobX + Model x Form",
   "version": "0.0.1",
   "author": "creasty <yuki@creasty.com>",
   "license": "MIT",
@@ -11,6 +12,12 @@
   "bugs": {
     "url": "https://github.com/creasty/form-model/issues"
   },
+  "keywords": [
+    "mobx",
+    "model",
+    "form",
+    "react"
+  ],
   "main": "dist/index.js",
   "module": "dist/index.mjs",
   "types": "dist/index.d.ts",
