@@ -374,6 +374,7 @@ export class Form<T> {
    * For internal testing purposes only.
    *
    * @internal
+   * @ignore
    */
   [internalToken]() {
     return {
