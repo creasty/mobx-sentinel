@@ -301,6 +301,17 @@ export class Form<T> {
     return binding;
   }
 
+  /** Create a binding to the form */
+  #bindToForm: FormBindingFunc.ForForm<T> = (
+    binding: FormBindingConstructor.ForForm,
+    config?: FormBindingFunc.Config
+  ) => {
+    const key = `${binding.name}:${config?.cacheKey}`;
+    const instance = this.#defineBinding(key, () => new binding(this, config));
+    instance.config = config; // Update on every call
+    return instance.props;
+  };
+
   /** Create a binding to a field */
   #bindToField: FormBindingFunc.ForField<T> = (
     fieldName: FormField.Name<T>,
@@ -316,13 +327,17 @@ export class Form<T> {
     return instance.props;
   };
 
-  /** Create a binding to the form */
-  #bindToForm: FormBindingFunc.ForForm<T> = (
-    binding: FormBindingConstructor.ForForm,
+  /** Create a binding to multiple fields */
+  #bindToMultiField: FormBindingFunc.ForMultiField<T> = (
+    fieldNames: FormField.Name<T>[],
+    binding: FormBindingConstructor.ForMultiField,
     config?: FormBindingFunc.Config
   ) => {
-    const key = `${binding.name}:${config?.cacheKey}`;
-    const instance = this.#defineBinding(key, () => new binding(this, config));
+    const key = `${fieldNames.join(",")}@${binding.name}:${config?.cacheKey}`;
+    const instance = this.#defineBinding(key, () => {
+      const fields = fieldNames.map((name) => this.#getField(name));
+      return new binding(fields, config);
+    });
     instance.config = config; // Update on every call
     return instance.props;
   };
@@ -331,6 +346,9 @@ export class Form<T> {
   bind: FormBindingFunc<T> = (...args: any[]) => {
     if (typeof args[0] === "string") {
       return this.#bindToField(args[0] as any, args[1], args[2]);
+    }
+    if (Array.isArray(args[0])) {
+      return this.#bindToMultiField(args[0], args[1], args[2]);
     }
     return this.#bindToForm(args[0], args[1]);
   };
