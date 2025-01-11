@@ -28,8 +28,8 @@ A TypeScript form management library designed to work seamlessly with MobX domai
 
 すでに MobX を活用したフォーム構築のためのライブラリは多く存在しているが、どれもモデリングではなくデータシリアライズの観点で設計されており、
 モデルを使うことができないか、データとフォームの状態管理の分離が適切にできていないか、のいずれかの問題がある。<br>
-例えば、データ(サーバとの通信)とドメインモデルのマッピングはフォームの仕組みの中ではなく適切な変換層で定義されるべきである。
-また、バリデーションも本来的にドメインモデルが持つべき責務であり、フォームに特化した定義が必要なものではない。
+例えば、データとモデルのマッピングはフォームの仕組みの中ではなく適切な変換層で定義されるべきである。
+また、バリデーションも本来的にモデルが持つべき責務であり、フォームに特化した定義が必要なものではない。
 
 ここまでの話を踏まえて、フォームを実装する上での本質的な課題は以下の2点であると考える。
 
@@ -43,21 +43,21 @@ A TypeScript form management library designed to work seamlessly with MobX domai
 何もしてないのに最初からエラーが表示されていたり、入力途中なのに即座にエラーと表示される UI にイライラしたことはないだろうか？<br>
 より適切なタイミングするためには、復数の UI イベント (change, focus, blur) や状態を組み合わせる必要があり、「フォーム自体の状態管理」と「インプット要素との接続」の両方が複雑になる要因となっている。
 
-ドメインモデルがある前提では、基本的にドメインモデル側にほとんどの責務を持たせることができるし、そうするべきである。
+モデルがある前提では、基本的にモデル側にほとんどの責務を持たせることができるし、そうするべきである。
 その上でフォーム独自の機能として必要な部分だけを提供するライブラリを実装した。
 
 ## Design principles
 
-- ドメインモデルファースト
-  - ドメインモデルがあることを前提にする。
-  - ドメインモデルの方の責務になるべく寄せ、フォームの責務を最小限にする。
-  - データドリブンで簡易にフォームを実装することは目的としない。
-- フォーム状態管理とドメインモデルの分離
-  - フォームとドメインモデルがお互いに直接的な参照を持たない。
-  - ドメインモデルがフォームによって汚染されない。
+- モデルファースト
+  - モデルがあることを前提にする。
+  - モデルの方の責務になるべく寄せ、フォームの責務を最小限にする。
+  - データファーストで簡易にフォームを実装することは目的としない。
+- フォーム状態管理とモデルの分離
+  - フォームとモデルがお互いに直接的な参照を持たない。
+  - モデルがフォームによって汚染されない。
   - フォームはデータを管理しない。
 - 隠されていない入出力
-  - ドメインモデル ↔ インプット要素 の入出力を隠蔽しない。
+  - モデル ↔ インプット要素 の入出力を隠蔽しない。
   - 自明かつ安全にコントロールできるようにする。
 - モジュラーな実装
   - Multi-package 構成にし、とりわけ動作モデルと UI を明確に分離する。
@@ -69,8 +69,9 @@ A TypeScript form management library designed to work seamlessly with MobX domai
 
 - Asynchronous submission
 - Asynchronous validation
+- Smart error reporting
 - Nested forms
-- Dynamic forms - arrays, etc - work without special treatment
+- Dynamic forms - arrays, etc - just work without special treatment
 - [React](https://react.dev/) integration
 - [zod](https://zod.dev/) extension *(coming soon)*
 
@@ -81,8 +82,6 @@ A TypeScript form management library designed to work seamlessly with MobX domai
 ```typescript
 import { observable, makeObservable } from "mobx";
 import { FormDelegate } from "@form-model/core";
-
-enum SampleEnum { ... }
 
 class Sample implements FormDelegate<Sample> {
   @observable string: string = "hello";
@@ -107,7 +106,7 @@ class Sample implements FormDelegate<Sample> {
     return [this.nested, this.array];
   }
 
-  async [FormDelegate.validate]() {
+  async [FormDelegate.validate](signal: AbortSignal) {
     return { ... };
   }
 
@@ -124,7 +123,7 @@ class Other implements FormDelegate<Other> {
     makeObservable(this);
   }
 
-  async [FormDelegate.validate]() {
+  async [FormDelegate.validate](signal: AbortSignal) {
     return { ... };
   }
 }
@@ -132,14 +131,17 @@ class Other implements FormDelegate<Other> {
 
 ```tsx
 import { observer } from "mobx-react-lite";
-import { Form } from "@form-model/core";
+import { useForm } from "@form-model/react";
 import "@form-model/react/dist/extension"; // Makes .bindTextInput() and other bind methods available
 
 const SampleForm: React.FC<{ model: Sample }> = observer(({ model }) => {
-  const form = Form.get(model);
+  const form = useForm(model);
 
   return (
     <form>
+      {/* Label */}
+      <label {...form.bindLabel(["string"])}>Label</label>
+
       {/* Text input */}
       <input
         {...form.bindInput("string", {
@@ -150,17 +152,9 @@ const SampleForm: React.FC<{ model: Sample }> = observer(({ model }) => {
       {/* Number input */}
       <input
         {...form.bindInput("number", {
-          valueAs: "number",
+          valueAs: "number", // also supports "date"
           getter: () => model.number,
           setter: (v) => (model.number = v),
-        })}
-      />
-      {/* Date input */}
-      <input
-        {...form.bindInput("date", {
-          valueAs: "date",
-          getter: () => model.date?.toISOString().split("T")[0] ?? null,
-          setter: (v) => (model.date = v),
         })}
       />
 
@@ -174,7 +168,7 @@ const SampleForm: React.FC<{ model: Sample }> = observer(({ model }) => {
 
       {/* Radio buttons */}
       {(() => {
-        const bindRadioButton = form.bindRadioButtonFactory("enum", {
+        const bindRadioButton = form.bindRadioButton("enum", {
           getter: () => model.enum,
           setter: (v) => (model.enum = v ? (v as SampleEnum) : null),
         });
@@ -222,7 +216,7 @@ const SampleForm: React.FC<{ model: Sample }> = observer(({ model }) => {
 });
 
 const OtherForm: React.FC<{ model: Other }> = observer(({ model }) => {
-  const form = Form.get(model);
+  const form = useForm(model);
 
   return (
     <fieldset>
