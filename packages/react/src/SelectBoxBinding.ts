@@ -3,8 +3,15 @@ import { makeObservable, computed, action } from "mobx";
 
 export namespace SelectBoxBinding {
   export type Attrs = React.SelectHTMLAttributes<HTMLSelectElement>;
-
-  export type Config =
+  export type AttrsRequired = Required<Attrs>;
+  export type Config = {
+    /** [Override] ID of the input element */
+    id?: Attrs["id"];
+    /** [Callback] Change handler */
+    onChange?: Attrs["onChange"];
+    /** [Callback] Focus handler */
+    onFocus?: Attrs["onFocus"];
+  } & (
     | {
         /** Whether multiple options can be selected in the list */
         multiple?: false;
@@ -20,7 +27,8 @@ export namespace SelectBoxBinding {
         getter: () => string[];
         /** Set the value to the model */
         setter: (value: string[]) => void;
-      };
+      }
+  );
 }
 
 export class SelectBoxBinding implements FormBinding {
@@ -32,12 +40,12 @@ export class SelectBoxBinding implements FormBinding {
   }
 
   @computed
-  get value(): SelectBoxBinding.Attrs["value"] {
+  get value(): SelectBoxBinding.AttrsRequired["value"] {
     return this.config.getter() ?? "";
   }
 
   @action
-  onChange: SelectBoxBinding.Attrs["onChange"] = (e) => {
+  onChange: SelectBoxBinding.AttrsRequired["onChange"] = (e) => {
     if (this.config.multiple) {
       this.config.setter(Array.from(e.currentTarget.selectedOptions, (o) => o.value));
     } else {
@@ -45,14 +53,17 @@ export class SelectBoxBinding implements FormBinding {
     }
     this.field.markAsChanged();
     this.field.validate();
+    this.config.onChange?.(e);
   };
 
-  onFocus: SelectBoxBinding.Attrs["onFocus"] = () => {
+  onFocus: SelectBoxBinding.AttrsRequired["onFocus"] = (e) => {
     this.field.markAsTouched();
+    this.config.onFocus?.(e);
   };
 
   get props() {
     return {
+      id: this.config.id ?? this.field.id,
       multiple: this.config.multiple,
       value: this.value,
       onChange: this.onChange,
