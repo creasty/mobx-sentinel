@@ -11,8 +11,8 @@
   "bugs": {
     "url": "https://github.com/creasty/form-model/issues"
   },
-  "main": "dist/index.cjs.js",
-  "module": "dist/index.esm.js",
+  "main": "dist/index.js",
+  "module": "dist/index.mjs",
   "types": "dist/index.d.ts",
   "files": [
     "./dist",
@@ -21,9 +21,7 @@
   "scripts": {
     "test": "vitest run --coverage",
     "test:dev": "vitest",
-    "build": "run-p build:*",
-    "build:js": "tsx build.ts",
-    "build:types": "tsc -P tsconfig.build.json"
+    "build": "tsup"
   },
   "dependencies": {
     "mobx": "^6.12.3",
@@ -32,8 +30,7 @@
   "devDependencies": {
     "@types/node": "^22.10.2",
     "@vitest/coverage-v8": "^2.1.8",
-    "esbuild": "^0.24.2",
-    "tsx": "^4.19.2",
+    "tsup": "^8.3.5",
     "typescript": "^5.5.0",
     "vitest": "^2.1.8"
   }
