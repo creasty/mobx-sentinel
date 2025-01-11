@@ -13,6 +13,16 @@ jobs:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
       - run: pnpm install --frozen-lockfile
+
+      - name: Prepare
+        run: |
+          for dir in ./packages/*; do
+            if [ -d "$dir" ] && [ -f "$dir/package.json" ]; then
+              # Copy README
+              cat ./README.md > "$dir/README.md"
+            fi
+          done
+
       - run: pnpm build
 
       - uses: actions/setup-node@v4
@@ -20,7 +30,7 @@ jobs:
           node-version: '20.x'
           registry-url: 'https://registry.npmjs.org'
       - name: Publish packages
-        run: pnpm publish --tag latest --recursive --access public
+        run: pnpm publish --tag latest --recursive --access public --no-git-checks
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-          NPM_CONFIG_PROVENANCE: true # Enable after making the repo public
+          NPM_CONFIG_PROVENANCE: true
