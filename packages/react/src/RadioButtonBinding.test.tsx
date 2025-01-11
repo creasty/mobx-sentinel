@@ -102,15 +102,19 @@ describe("RadioButtonBinding", () => {
   };
 
   describe("props.id", () => {
-    it("uses the field id by default", () => {
+    it("is undefined by default", () => {
       const env = setupEnv();
-      expect(env.binding.props("value1").id).toBe(env.field.id);
+      expect(env.binding.props("value1").id).toBeUndefined();
+    });
+
+    it("uses the field id if true", () => {
+      const env = setupEnv();
+      expect(env.binding.props("value1", { id: true }).id).toBe(env.field.id);
     });
 
     it("uses the provided id", () => {
       const env = setupEnv();
-      env.binding.config.id = "somethingElse";
-      expect(env.binding.props("value1").id).toBe("somethingElse");
+      expect(env.binding.props("value1", { id: "somethingElse" }).id).toBe("somethingElse");
     });
   });
 

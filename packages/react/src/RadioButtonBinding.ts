@@ -10,8 +10,6 @@ export namespace RadioButtonBinding {
     /** Set the value to the model */
     setter: (value: string) => void;
 
-    /** [Override] ID of the input element */
-    id?: Attrs["id"];
     /** [Callback] Change handler */
     onChange?: Attrs["onChange"];
     /** [Callback] Focus handler */
@@ -46,12 +44,26 @@ export class RadioButtonBinding implements FormBinding {
     this.config.onFocus?.(e);
   };
 
-  props = (value: string | null, name?: string) => {
+  props = (
+    /** Value of the radio button */
+    value: string | null,
+    opt?: {
+      /**
+       * [Override] ID of the input element.
+       *
+       * - `true`: Use the field ID as the ID.
+       * - `string`: Use the given string as the ID.
+       */
+      id?: string | true;
+      /** [Override] Name attribute of the input element */
+      name?: string;
+    }
+  ) => {
     return {
       type: "radio",
-      id: this.config.id ?? this.field.id,
+      id: opt?.id === true ? this.field.id : opt?.id,
       value: value ?? "",
-      name: name ?? this.field.id,
+      name: opt?.name ?? this.field.id,
       checked: this.value === value,
       onChange: this.onChange,
       onFocus: this.onFocus,
