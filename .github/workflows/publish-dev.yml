@@ -11,32 +11,33 @@ jobs:
       id-token: write
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20.x'
+          registry-url: 'https://registry.npmjs.org'
       - uses: pnpm/action-setup@v4
       - run: pnpm install --frozen-lockfile
 
-      - name: Update version info
+      - name: Prepare
         run: |
           for dir in ./packages/*; do
             if [ -d "$dir" ] && [ -f "$dir/package.json" ]; then
+              # Update version info
               preid="dev-${GITHUB_SHA:0:8}"
-
               tmp="$(mktemp)"
               cat "$dir/package.json" > "$tmp"
               jq ".version = \"\(.version)-$preid\"" \
                 "$tmp" > "$dir/package.json"
               rm "$tmp"
+
+              # Copy README
+              cat ./README.md > "$dir/README.md"
             fi
           done
 
       - run: pnpm build
-      #- run: pnpm test
-
-      - uses: actions/setup-node@v4
-        with:
-          node-version: '20.x'
-          registry-url: 'https://registry.npmjs.org'
       - name: Publish packages
         run: pnpm publish --tag dev --recursive --access public --no-git-checks
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-          # NPM_CONFIG_PROVENANCE: true # Enable after making the repo public
+          NPM_CONFIG_PROVENANCE: true
