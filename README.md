@@ -11,15 +11,28 @@ A TypeScript form management library designed to work seamlessly with MobX domai
 
 ## Packages
 
-[npm-core]: https://www.npmjs.com/package/@form-model/core
-[npm-react]: https://www.npmjs.com/package/@form-model/react
-[npm-core-badge]: https://badge.fury.io/js/@form-model%2Fcore.svg
-[npm-react-badge]: https://badge.fury.io/js/@form-model%2Freact.svg
+[core-npm]: https://www.npmjs.com/package/@form-model/core
+[core-npm-badge]: https://badge.fury.io/js/@form-model%2Fcore.svg
+[core-size]: https://bundlephobia.com/package/@form-model/core
+[core-size-badge]: https://badgen.net/bundlephobia/min/@form-model/core
+[react-npm]: https://www.npmjs.com/package/@form-model/react
+[react-npm-badge]: https://badge.fury.io/js/@form-model%2Freact.svg
+[react-size]: https://bundlephobia.com/package/@form-model/react
+[react-size-badge]: https://badgen.net/bundlephobia/min/@form-model/react
 
-| [![npm version][npm-core-badge]][npm-core] | [![npm version][npm-react-badge]][npm-react] |
-|---|---|
-| <code>npm install --save <b>@form-model/core</b></code> | <code>npm install --save <b>@form-model/react</b></code> |
-| Use with <code>mobx</code> | Use with <code>mobx-react-lite</code> |
+<pre><code>npm install --save <b>@form-model/core</b></code></pre>
+
+[![npm version][core-npm-badge]][core-npm]
+[![npm size][core-size-badge]][core-size]
+
+Use with `mobx`.
+
+<pre><code>npm install --save <b>@form-model/react</b></code></pre>
+
+[![npm version][react-npm-badge]][react-npm]
+[![npm size][react-size-badge]][react-size]
+
+Use with `mobx-react-lite`.
 
 ## Premises
 
