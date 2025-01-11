@@ -5,7 +5,7 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
 > [!CAUTION]
-> This plugin is currently in the early stage of development. User interface is subject to change without notice.
+> This library is currently in the early stage of development. User interface is subject to change without notice.
 
 A TypeScript form management library designed to work seamlessly with MobX domain models, providing a clean separation between form state management and domain logic while offering type-safe form bindings for React applications.
 
@@ -23,6 +23,41 @@ A TypeScript form management library designed to work seamlessly with MobX domai
 
 ## Premises
 
+TL;DR: Three core issues in form management:
+
+1. Model integration: Existing form libraries focus on data serialization, making them incompatible with rich domain models.
+2. Mixed responsibilities: Form state management and data/model management are often entangled, creating maintenance challenges.
+3. Poor validation UX: Complex coordination of UI events leads to poor validation timing and suboptimal user experiences.
+
+<details><summary>Read more (English)</summary>
+
+In the projects I'm involved with, we deal with complex domains and promote building domain models using MobX on the frontend.<br>
+We needed a solution that could leverage existing business logic implemented in classes that define how data should be displayed and updated, and make it usable in forms.
+
+While there are many existing libraries for building forms with MobX, they are all designed from a data serialization perspective rather than a modeling one,
+and either cannot use models or do not properly separate data and form state management.<br>
+For example, mapping between data and models should be defined in an appropriate transformation layer, not within the form mechanism.
+Additionally, validation is inherently a model responsibility and doesn't require form-specific definitions.
+
+Based on these considerations, I believe there are two fundamental challenges in implementing forms:
+
+- Form-specific state management: When considering data separately, this only involves submission and validation processing. For example:
+  - Disabling the submit button when submitting or when errors exist
+  - Running validation in response to form updates
+  - Displaying errors at appropriate times
+- Input element binding: Processing UI events appropriately and updating data/models
+
+The timing control of displaying validation errors to users is particularly important for UX.<br>
+(Haven't you been frustrated by UIs that show errors right from the start without any user action, or display errors immediately while you're still typing?)<br>
+To handle this in a more appropriate way, multiple UI events (change, focus, blur) and states need to be combined, which complicates both "form state management" and "input element binding".
+
+When working with models, most responsibilities should and can be assigned to the model side.<br>
+This library was implemented to provide only the essential form-specific functionality on top of that foundation.
+
+</details>
+
+<details><summary>Read more (Japanese)</summary>
+
 私が関わっているプロジェクトでは複雑なドメインを扱っており、フロントエンドでも MobX を用いてドメインモデルを作り込むことを推進している。<br>
 データがどのように表示・更新されるべきかというビジネスロジックがクラス実装として存在する前提で、それをフォームでも使えるようにするソリューションを求めていた。
 
@@ -39,14 +74,36 @@ A TypeScript form management library designed to work seamlessly with MobX domai
   - エラーを適切なタイミングで表示する。
 - インプット要素との接続: UI イベントを適切に処理し、データ・モデルの更新を行う。
 
-特にバリデーションエラーをユーザに表示するタイミング制御が UX 上重要である。<br>
-何もしてないのに最初からエラーが表示されていたり、入力途中なのに即座にエラーと表示される UI にイライラしたことはないだろうか？<br>
+特にバリデーションエラーをユーザに表示するタイミングの制御は良い UX を実現する上で重要である。<br>
+(何もしてないのに最初からエラーが表示されていたり、入力途中なのに即座にエラーと表示される UI にイライラしたことはないだろうか？)<br>
 より適切なタイミングするためには、復数の UI イベント (change, focus, blur) や状態を組み合わせる必要があり、「フォーム自体の状態管理」と「インプット要素との接続」の両方が複雑になる要因となっている。
 
-モデルがある前提では、基本的にモデル側にほとんどの責務を持たせることができるし、そうするべきである。
+モデルがある前提では、基本的にモデル側にほとんどの責務を持たせることができるし、そうするべきである。<br>
 その上でフォーム独自の機能として必要な部分だけを提供するライブラリを実装した。
 
+</details>
+
 ## Design principles
+
+- Model first
+  - Assumes the existence of domain models
+  - Pushes responsibilities towards the model side, minimizing form responsibilities
+  - Not intended for simple data-first form implementations
+- Separation of form state and model
+  - No direct references between forms and models
+  - Models remain uncontaminated by form logic
+  - Forms don't manage data directly
+- Transparent I/O
+  - No hidden magic between model ↔ input element interactions
+  - Makes control obvious and safe
+- Modular implementation
+  - Multi-package architecture with clear separation between behavior model and UI
+  - Enhances testability and extensibility
+- Well-typed
+  - Maximizes use of TypeScript's type system for error detection and code completion
+  - Improves development productivity
+
+<details><summary>Japanese</summary>
 
 - モデルファースト
   - モデルがあることを前提にする。
@@ -65,6 +122,8 @@ A TypeScript form management library designed to work seamlessly with MobX domai
 - 賢い型情報
   - 型システムを最大限活用し、エラー検出やコード補完による開発生産性を確保する。
 
+</details>
+
 ## Features
 
 - Asynchronous submission
@@ -77,7 +136,7 @@ A TypeScript form management library designed to work seamlessly with MobX domai
 
 --------------------------------------------------------------------------------
 
-## Overview
+## Overview — Model
 
 ```typescript
 import { observable, makeObservable } from "mobx";
@@ -128,6 +187,8 @@ class Other implements FormDelegate<Other> {
   }
 }
 ```
+
+## Overview — React
 
 ```tsx
 import { observer } from "mobx-react-lite";
