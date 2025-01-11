@@ -26,7 +26,7 @@ export namespace FormBindingConstructor {
   /** Constructor for field binding classes */
   export type ForField = new (field: FormField, config?: any) => FormBinding;
   /** Constructor for multi-field binding classes */
-  export type ForMultiField = new (field: FormField[], config?: any) => FormBinding;
+  export type ForMultiField = new (fields: FormField[], config?: any) => FormBinding;
   /** Constructor for form binding classes */
   export type ForForm = new (form: Form<any>, config?: any) => FormBinding;
 }
@@ -61,13 +61,13 @@ export namespace FormBindingFunc {
 
   /** Bind to multiple fields */
   export interface ForMultiField<T> {
-    /** Create a binding for the fields */
+    /** Create a binding for the multiple fields */
     <Binding extends new (fields: FormField[]) => FormBinding>(
       fieldNames: FormField.Name<T>[],
       binding: Binding
     ): InstanceType<Binding>["props"];
 
-    /** Create a binding for the field with the config */
+    /** Create a binding for the multiple fields with the config */
     <Binding extends new (fields: FormField[], config: any) => FormBinding>(
       fieldNames: FormField.Name<T>[],
       binding: Binding,
