@@ -1,4 +1,4 @@
-import { action, comparer, computed, observable, runInAction } from "mobx";
+import { action, comparer, computed, makeObservable, observable, runInAction } from "mobx";
 import { MaybeArray } from "./util";
 
 type ErrorValue = MaybeArray<string | Error>;
@@ -18,6 +18,7 @@ export class Validation {
   #abortCtrl: AbortController | null = null;
 
   constructor(args: { requestDelayMs: number; scheduleDelayMs: number }) {
+    makeObservable(this);
     this.#requestDelayMs = args.requestDelayMs;
     this.#scheduleDelayMs = args.scheduleDelayMs;
   }
