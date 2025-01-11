@@ -3,3 +3,4 @@ export { InputBinding } from "./InputBinding";
 export { RadioButtonBinding } from "./RadioButtonBinding";
 export { SelectBoxBinding } from "./SelectBoxBinding";
 export { SubmitButtonBinding } from "./SubmitButtonBinding";
+export { useForm } from "./hooks";
