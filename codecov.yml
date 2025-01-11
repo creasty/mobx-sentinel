@@ -1,0 +1,4 @@
+ignore:
+  - 'packages/*/build.ts'
+  - '**/*.mts'
+  - '**/*.mjs'
