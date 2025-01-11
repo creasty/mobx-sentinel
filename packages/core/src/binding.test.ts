@@ -3,46 +3,10 @@ import { FormBinding, FormBindingConstructor, FormBindingFunc } from "./binding"
 import { Form } from "./Form";
 import { FormField } from "./FormField";
 
-export class SampleFieldBinding implements FormBinding {
-  readonly id = uuidV4();
-  readonly field: FormField;
-
-  constructor(field: FormField) {
-    this.field = field;
-  }
-
-  get props() {
-    return {
-      bindingId: this.id,
-      fieldName: this.field.fieldName,
-    };
-  }
-}
-
-export class SampleConfigurableFieldBinding implements FormBinding {
-  readonly id = uuidV4();
-  readonly field: FormField;
-  config: { sample: boolean };
-
-  constructor(field: FormField, config: SampleConfigurableFieldBinding["config"]) {
-    this.field = field;
-    this.config = config;
-  }
-
-  get props() {
-    return {
-      bindingId: this.id,
-      config: this.config,
-      fieldName: this.field.fieldName,
-    };
-  }
-}
-
 export class SampleFormBinding implements FormBinding {
   readonly id = uuidV4();
-  readonly form: Form<unknown>;
 
-  constructor(form: Form<unknown>) {
+  constructor(private form: Form<unknown>) {
     this.form = form;
   }
 
@@ -56,19 +20,77 @@ export class SampleFormBinding implements FormBinding {
 
 export class SampleConfigurableFormBinding implements FormBinding {
   readonly id = uuidV4();
-  readonly form: Form<unknown>;
-  config: { sample: boolean };
 
-  constructor(form: Form<unknown>, config: SampleConfigurableFormBinding["config"]) {
-    this.form = form;
-    this.config = config;
-  }
+  constructor(
+    private form: Form<unknown>,
+    public config: { sample: boolean }
+  ) {}
 
   get props() {
     return {
       bindingId: this.id,
       formId: this.form.id,
       config: this.config,
+    };
+  }
+}
+
+export class SampleFieldBinding implements FormBinding {
+  readonly id = uuidV4();
+
+  constructor(private field: FormField) {}
+
+  get props() {
+    return {
+      bindingId: this.id,
+      fieldName: this.field.fieldName,
+    };
+  }
+}
+
+export class SampleConfigurableFieldBinding implements FormBinding {
+  readonly id = uuidV4();
+
+  constructor(
+    private field: FormField,
+    public config: { sample: boolean }
+  ) {}
+
+  get props() {
+    return {
+      bindingId: this.id,
+      config: this.config,
+      fieldName: this.field.fieldName,
+    };
+  }
+}
+
+export class SampleMultiFieldBinding implements FormBinding {
+  readonly id = uuidV4();
+
+  constructor(private fields: FormField[]) {}
+
+  get props() {
+    return {
+      bindingId: this.id,
+      fieldNames: this.fields.map((field) => field.fieldName),
+    };
+  }
+}
+
+export class SampleConfigurableMultiFieldBinding implements FormBinding {
+  readonly id = uuidV4();
+
+  constructor(
+    private fields: FormField[],
+    public config: { sample: boolean }
+  ) {}
+
+  get props() {
+    return {
+      bindingId: this.id,
+      config: this.config,
+      fieldNames: this.fields.map((field) => field.fieldName),
     };
   }
 }
@@ -87,11 +109,17 @@ describe("FormBindingConstructor", () => {
     SampleFieldBinding satisfies FormBindingConstructor.ForField;
     SampleConfigurableFieldBinding satisfies FormBindingConstructor.ForField;
 
+    // For multi-field
+    SampleMultiFieldBinding satisfies FormBindingConstructor.ForMultiField;
+    SampleConfigurableMultiFieldBinding satisfies FormBindingConstructor.ForMultiField;
+
     // Union
     SampleFormBinding satisfies FormBindingConstructor;
     SampleConfigurableFormBinding satisfies FormBindingConstructor;
     SampleFieldBinding satisfies FormBindingConstructor;
     SampleConfigurableFieldBinding satisfies FormBindingConstructor;
+    SampleMultiFieldBinding satisfies FormBindingConstructor;
+    SampleConfigurableMultiFieldBinding satisfies FormBindingConstructor;
   });
 });
 
@@ -107,11 +135,18 @@ describe("FormBindingFunc", () => {
     bindField("string", SampleFieldBinding);
     bindField("string", SampleConfigurableFieldBinding, { sample: true });
 
+    // For multi-field
+    const bindMultiField: FormBindingFunc.ForMultiField<SampleModel> = () => ({}) as any;
+    bindMultiField(["string"], SampleMultiFieldBinding);
+    bindMultiField(["string"], SampleConfigurableMultiFieldBinding, { sample: true });
+
     // Union
     const bind: FormBindingFunc<SampleModel> = () => ({}) as any;
     bind(SampleFormBinding);
     bind(SampleConfigurableFormBinding, { sample: true });
     bind("string", SampleFieldBinding);
     bind("string", SampleConfigurableFieldBinding, { sample: true });
+    bind(["string"], SampleMultiFieldBinding);
+    bind(["string"], SampleConfigurableMultiFieldBinding, { sample: true });
   });
 });

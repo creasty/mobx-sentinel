@@ -4,8 +4,10 @@ import { FormDelegate } from "./delegation";
 import {
   SampleConfigurableFieldBinding,
   SampleConfigurableFormBinding,
+  SampleConfigurableMultiFieldBinding,
   SampleFieldBinding,
   SampleFormBinding,
+  SampleMultiFieldBinding,
 } from "./binding.test";
 import { defaultConfig } from "./config";
 import { FormField } from "./FormField";
@@ -15,6 +17,7 @@ describe("Form", () => {
 
   class SampleModel implements FormDelegate<SampleModel> {
     @observable field = true;
+    @observable otherField = true;
 
     constructor() {
       makeObservable(this);
@@ -431,27 +434,76 @@ describe("Form", () => {
           expect(binding1.bindingId).toBe(binding2.bindingId);
         });
       });
+
+      describe("With a config", () => {
+        it("returns the binding properties", () => {
+          const model = new SampleModel();
+          const form = Form.get(model);
+
+          const binding = form.bind("field", SampleConfigurableFieldBinding, { sample: true });
+          expect(binding.fieldName).toBe("field");
+          expect(binding.config).toEqual({ sample: true });
+        });
+
+        it("returns the same binding instance when called multiple times but updates the config", () => {
+          const model = new SampleModel();
+          const form = Form.get(model);
+
+          const binding1 = form.bind("field", SampleConfigurableFieldBinding, { sample: true });
+          expect(binding1.config).toEqual({ sample: true });
+          const binding2 = form.bind("field", SampleConfigurableFieldBinding, { sample: false });
+          expect(binding1.bindingId).toBe(binding2.bindingId);
+          expect(binding2.config).toEqual({ sample: false });
+        });
+      });
     });
 
-    describe("With a config", () => {
-      it("returns the binding properties", () => {
-        const model = new SampleModel();
-        const form = Form.get(model);
+    describe("Create a binding for multiple fields", () => {
+      describe("Without a config", () => {
+        it("returns the binding properties", () => {
+          const model = new SampleModel();
+          const form = Form.get(model);
 
-        const binding = form.bind("field", SampleConfigurableFieldBinding, { sample: true });
-        expect(binding.fieldName).toBe("field");
-        expect(binding.config).toEqual({ sample: true });
+          const binding = form.bind(["field", "otherField"], SampleMultiFieldBinding);
+          expect(binding.fieldNames).toEqual(["field", "otherField"]);
+        });
+
+        it("returns the same binding instance when called multiple times", () => {
+          const model = new SampleModel();
+          const form = Form.get(model);
+
+          const binding1 = form.bind(["field", "otherField"], SampleMultiFieldBinding);
+          const binding2 = form.bind(["field", "otherField"], SampleMultiFieldBinding);
+          expect(binding1.bindingId).toBe(binding2.bindingId);
+        });
       });
 
-      it("returns the same binding instance when called multiple times but updates the config", () => {
-        const model = new SampleModel();
-        const form = Form.get(model);
+      describe("With a config", () => {
+        it("returns the binding properties", () => {
+          const model = new SampleModel();
+          const form = Form.get(model);
 
-        const binding1 = form.bind("field", SampleConfigurableFieldBinding, { sample: true });
-        expect(binding1.config).toEqual({ sample: true });
-        const binding2 = form.bind("field", SampleConfigurableFieldBinding, { sample: false });
-        expect(binding1.bindingId).toBe(binding2.bindingId);
-        expect(binding2.config).toEqual({ sample: false });
+          const binding = form.bind(["field", "otherField"], SampleConfigurableMultiFieldBinding, {
+            sample: true,
+          });
+          expect(binding.fieldNames).toEqual(["field", "otherField"]);
+          expect(binding.config).toEqual({ sample: true });
+        });
+
+        it("returns the same binding instance when called multiple times but updates the config", () => {
+          const model = new SampleModel();
+          const form = Form.get(model);
+
+          const binding1 = form.bind(["field", "otherField"], SampleConfigurableMultiFieldBinding, {
+            sample: true,
+          });
+          expect(binding1.config).toEqual({ sample: true });
+          const binding2 = form.bind(["field", "otherField"], SampleConfigurableMultiFieldBinding, {
+            sample: false,
+          });
+          expect(binding1.bindingId).toBe(binding2.bindingId);
+          expect(binding2.config).toEqual({ sample: false });
+        });
       });
     });
   });
