@@ -11,10 +11,6 @@ jobs:
       id-token: write
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: '20.x'
-          registry-url: 'https://registry.npmjs.org'
       - uses: pnpm/action-setup@v4
       - run: pnpm install --frozen-lockfile
 
@@ -36,6 +32,11 @@ jobs:
           done
 
       - run: pnpm build
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20.x'
+          registry-url: 'https://registry.npmjs.org'
       - name: Publish packages
         run: pnpm publish --tag dev --recursive --access public --no-git-checks
         env:
