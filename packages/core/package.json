@@ -15,8 +15,7 @@
   "module": "dist/index.mjs",
   "types": "dist/index.d.ts",
   "files": [
-    "./dist",
-    "!./dist/**/*.d.ts.map"
+    "dist"
   ],
   "scripts": {
     "test": "vitest run --coverage",
