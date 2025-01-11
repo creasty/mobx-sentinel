@@ -6,6 +6,6 @@
     "module": "commonjs",
     "types": ["vitest/globals"]
   },
-  "include": ["src", "build.ts"],
+  "include": ["src", "*.{ts,mts}"],
   "exclude": ["node_modules", "dist"]
 }

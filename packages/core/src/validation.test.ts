@@ -15,7 +15,7 @@ function setupEnv() {
 
   const timeline: string[] = [];
   autorun(() => {
-    timeline.push(`isRunning: ${validation.isRunning}`);
+    timeline.push(`isRunning: ${validation.isRunning}, isScheduled: ${validation.isScheduled}`);
   });
 
   let counter = 0;
@@ -54,11 +54,12 @@ describe("Validation", () => {
 
       expect(env.timeline).toMatchInlineSnapshot(`
         [
-          "isRunning: false",
-          "isRunning: true",
+          "isRunning: false, isScheduled: false",
+          "isRunning: false, isScheduled: true",
           "exec: start 1",
+          "isRunning: true, isScheduled: false",
           "exec: end 1",
-          "isRunning: false",
+          "isRunning: false, isScheduled: false",
         ]
       `);
     });
@@ -80,11 +81,14 @@ describe("Validation", () => {
 
       expect(env.timeline).toMatchInlineSnapshot(`
         [
-          "isRunning: false",
-          "isRunning: true",
+          "isRunning: false, isScheduled: false",
+          "isRunning: false, isScheduled: true",
+          "isRunning: false, isScheduled: false",
+          "isRunning: false, isScheduled: true",
           "exec: start 1",
+          "isRunning: true, isScheduled: false",
           "exec: end 1",
-          "isRunning: false",
+          "isRunning: false, isScheduled: false",
         ]
       `);
     });
@@ -108,15 +112,17 @@ describe("Validation", () => {
 
       expect(env.timeline).toMatchInlineSnapshot(`
         [
-          "isRunning: false",
-          "isRunning: true",
+          "isRunning: false, isScheduled: false",
+          "isRunning: false, isScheduled: true",
           "exec: start 1",
+          "isRunning: true, isScheduled: false",
           "exec: end 1",
-          "isRunning: false",
-          "isRunning: true",
+          "isRunning: false, isScheduled: false",
+          "isRunning: false, isScheduled: true",
           "exec: start 2",
+          "isRunning: true, isScheduled: false",
           "exec: end 2",
-          "isRunning: false",
+          "isRunning: false, isScheduled: false",
         ]
       `);
     });
@@ -144,15 +150,17 @@ describe("Validation", () => {
 
       expect(env.timeline).toMatchInlineSnapshot(`
         [
-          "isRunning: false",
-          "isRunning: true",
+          "isRunning: false, isScheduled: false",
+          "isRunning: false, isScheduled: true",
           "exec: start 1",
+          "isRunning: true, isScheduled: false",
           "exec: end 1",
-          "isRunning: false",
-          "isRunning: true",
+          "isRunning: false, isScheduled: false",
+          "isRunning: false, isScheduled: true",
           "exec: start 2",
+          "isRunning: true, isScheduled: false",
           "exec: end 2",
-          "isRunning: false",
+          "isRunning: false, isScheduled: false",
         ]
       `);
     });
@@ -176,13 +184,43 @@ describe("Validation", () => {
 
       expect(env.timeline).toMatchInlineSnapshot(`
         [
-          "isRunning: false",
-          "isRunning: true",
+          "isRunning: false, isScheduled: false",
+          "isRunning: false, isScheduled: true",
           "exec: start 1",
+          "isRunning: true, isScheduled: false",
           "exec: start 2",
           "exec: end 1",
-          "isRunning: false",
+          "isRunning: false, isScheduled: false",
           "exec: end 2",
+        ]
+      `);
+    });
+  });
+
+  describe("#reset", () => {
+    it("resets the validation", async () => {
+      const env = setupEnv();
+      env.request();
+      await env.waitFor("requestDelay");
+      await env.waitFor("runTime");
+      expect(env.validation.errors.size).toBe(1);
+      env.validation.reset();
+      expect(env.validation.isRunning).toBe(false);
+      expect(env.validation.isScheduled).toBe(false);
+      expect(env.validation.errors.size).toBe(0);
+    });
+
+    it("cancels the scheduled validation", async () => {
+      const env = setupEnv();
+      env.request();
+      env.validation.reset();
+      await env.waitFor("requestDelay");
+      await env.waitFor("runTime");
+      expect(env.timeline).toMatchInlineSnapshot(`
+        [
+          "isRunning: false, isScheduled: false",
+          "isRunning: false, isScheduled: true",
+          "isRunning: false, isScheduled: false",
         ]
       `);
     });

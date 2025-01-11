@@ -11,6 +11,9 @@ export type FormConfig = {
   /**
    * Delay subsequent validation. [milliseconds]
    *
+   * When requesting a new validation while the previous validation is running,
+   * this delay is applied to the new validation.
+   *
    * @default 300
    */
   subsequentValidationDelayMs: number;

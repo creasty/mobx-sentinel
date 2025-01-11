@@ -181,6 +181,17 @@ describe("Form", () => {
       form.reset();
       expect(form.canSubmit).toBe(false);
     });
+
+    it("returns false when the validation is scheduled", () => {
+      const model = new SampleModel();
+      const form = Form.get(model);
+
+      form.markAsDirty();
+      expect(form.canSubmit).toBe(true);
+
+      form.validate();
+      expect(form.canSubmit).toBe(false);
+    });
   });
 
   describe("#markAsDirty", () => {

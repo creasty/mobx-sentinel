@@ -26,11 +26,11 @@ class SampleModel {
 const SampleComponent: React.FC<{ model: SampleModel }> = observer(({ model }) => {
   const form = Form.get(model);
 
-  const bindRadioButton1 = form.bindRadioButtonFactory("enum", {
+  const bindRadioButton1 = form.bindRadioButton("enum", {
     getter: () => model.enum,
     setter: (v) => (model.enum = v ? (v as SampleEnum) : SampleEnum.ZULU),
   });
-  const bindRadioButton2 = form.bindRadioButtonFactory("enumOpt", {
+  const bindRadioButton2 = form.bindRadioButton("enumOpt", {
     getter: () => model.enumOpt,
     setter: (v) => (model.enumOpt = v ? (v as SampleEnum) : null),
   });
@@ -102,15 +102,19 @@ describe("RadioButtonBinding", () => {
   };
 
   describe("props.id", () => {
-    it("uses the field id by default", () => {
+    it("is undefined by default", () => {
       const env = setupEnv();
-      expect(env.binding.props("value1").id).toBe(env.field.id);
+      expect(env.binding.props("value1").id).toBeUndefined();
+    });
+
+    it("uses the field id if true", () => {
+      const env = setupEnv();
+      expect(env.binding.props("value1", { id: true }).id).toBe(env.field.id);
     });
 
     it("uses the provided id", () => {
       const env = setupEnv();
-      env.binding.config.id = "somethingElse";
-      expect(env.binding.props("value1").id).toBe("somethingElse");
+      expect(env.binding.props("value1", { id: "somethingElse" }).id).toBe("somethingElse");
     });
   });
 

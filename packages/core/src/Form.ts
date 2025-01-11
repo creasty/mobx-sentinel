@@ -124,8 +124,9 @@ export class Form<T> {
     return this.#isSubmitting.get();
   }
   /** Whether the form is in validation state */
+  @computed
   get isValidating() {
-    return this.#validation.isRunning;
+    return this.#validation.isRunning || this.#validation.isScheduled;
   }
   /** Whether the form is dirty */
   get isDirty() {
@@ -207,6 +208,7 @@ export class Form<T> {
   @action
   reset() {
     this.#isDirty.set(false);
+    this.#validation.reset();
     for (const field of this.#fields.values()) {
       field.reset();
     }

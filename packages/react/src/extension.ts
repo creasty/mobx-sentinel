@@ -14,7 +14,7 @@ declare module "@form-model/core" {
      * Bind the input field to the form.
      *
      * <input> except the following types: button, submit, reset, hidden, image, file, checkbox, and radio.
-     * For checkbox and radio, use bindCheckBox and bindRadioButtonFactory respectively.
+     * For checkbox and radio, use bindCheckBox and bindRadioButton respectively.
      *
      * @example
      * ```typescript-react
@@ -65,7 +65,7 @@ declare module "@form-model/core" {
      *
      * @example
      * ```typescript
-     * const bindRadioButton = model.form.bindRadioButtonFactory("enum", {
+     * const bindRadioButton = model.form.bindRadioButton("enum", {
      *   getter: () => model.enum,
      *   setter: (v) => (model.enum = v ? (v as SampleEnum) : SampleEnum.ZULU),
      * });
@@ -76,10 +76,7 @@ declare module "@form-model/core" {
      * ))
      * ```
      */
-    bindRadioButtonFactory(
-      fieldName: FormField.Name<T>,
-      config: RadioButtonBinding.Config
-    ): RadioButtonBinding["props"];
+    bindRadioButton(fieldName: FormField.Name<T>, config: RadioButtonBinding.Config): RadioButtonBinding["props"];
 
     /**
      * Bind the submit button to the form.
@@ -118,7 +115,7 @@ Form.prototype.bindCheckBox = function (fieldName, config) {
   return this.bind(fieldName, CheckBoxBinding, config);
 };
 
-Form.prototype.bindRadioButtonFactory = function (fieldName, config) {
+Form.prototype.bindRadioButton = function (fieldName, config) {
   return this.bind(fieldName, RadioButtonBinding, config);
 };
 

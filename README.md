@@ -5,7 +5,7 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
 > [!CAUTION]
-> This plugin is currently in the early stage of development. User interface is subject to change without notice.
+> This library is currently in the early stage of development. User interface is subject to change without notice.
 
 A TypeScript form management library designed to work seamlessly with MobX domain models, providing a clean separation between form state management and domain logic while offering type-safe form bindings for React applications.
 
@@ -23,13 +23,48 @@ A TypeScript form management library designed to work seamlessly with MobX domai
 
 ## Premises
 
+TL;DR: Three core issues in form management:
+
+1. Model integration: Existing form libraries focus on data serialization, making them incompatible with rich domain models.
+2. Mixed responsibilities: Form state management and data/model management are often entangled, creating maintenance challenges.
+3. Poor validation UX: Complex coordination of UI events leads to poor validation timing and suboptimal user experiences.
+
+<details><summary>Read more (English)</summary>
+
+In the projects I'm involved with, we deal with complex domains and promote building domain models using MobX on the frontend.<br>
+We needed a solution that could leverage existing business logic implemented in classes that define how data should be displayed and updated, and make it usable in forms.
+
+While there are many existing libraries for building forms with MobX, they are all designed from a data serialization perspective rather than a modeling one,
+and either cannot use models or do not properly separate data and form state management.<br>
+For example, mapping between data and models should be defined in an appropriate transformation layer, not within the form mechanism.
+Additionally, validation is inherently a model responsibility and doesn't require form-specific definitions.
+
+Based on these considerations, I believe there are two fundamental challenges in implementing forms:
+
+- Form-specific state management: When considering data separately, this only involves submission and validation processing. For example:
+  - Disabling the submit button when submitting or when errors exist
+  - Running validation in response to form updates
+  - Displaying errors at appropriate times
+- Input element binding: Processing UI events appropriately and updating data/models
+
+The timing control of displaying validation errors to users is particularly important for UX.<br>
+(Haven't you been frustrated by UIs that show errors right from the start without any user action, or display errors immediately while you're still typing?)<br>
+To handle this in a more appropriate way, multiple UI events (change, focus, blur) and states need to be combined, which complicates both "form state management" and "input element binding".
+
+When working with models, most responsibilities should and can be assigned to the model side.<br>
+This library was implemented to provide only the essential form-specific functionality on top of that foundation.
+
+</details>
+
+<details><summary>Read more (Japanese)</summary>
+
 私が関わっているプロジェクトでは複雑なドメインを扱っており、フロントエンドでも MobX を用いてドメインモデルを作り込むことを推進している。<br>
 データがどのように表示・更新されるべきかというビジネスロジックがクラス実装として存在する前提で、それをフォームでも使えるようにするソリューションを求めていた。
 
 すでに MobX を活用したフォーム構築のためのライブラリは多く存在しているが、どれもモデリングではなくデータシリアライズの観点で設計されており、
 モデルを使うことができないか、データとフォームの状態管理の分離が適切にできていないか、のいずれかの問題がある。<br>
-例えば、データ(サーバとの通信)とドメインモデルのマッピングはフォームの仕組みの中ではなく適切な変換層で定義されるべきである。
-また、バリデーションも本来的にドメインモデルが持つべき責務であり、フォームに特化した定義が必要なものではない。
+例えば、データとモデルのマッピングはフォームの仕組みの中ではなく適切な変換層で定義されるべきである。
+また、バリデーションも本来的にモデルが持つべき責務であり、フォームに特化した定義が必要なものではない。
 
 ここまでの話を踏まえて、フォームを実装する上での本質的な課題は以下の2点であると考える。
 
@@ -39,25 +74,47 @@ A TypeScript form management library designed to work seamlessly with MobX domai
   - エラーを適切なタイミングで表示する。
 - インプット要素との接続: UI イベントを適切に処理し、データ・モデルの更新を行う。
 
-特にバリデーションエラーをユーザに表示するタイミング制御が UX 上重要である。<br>
-何もしてないのに最初からエラーが表示されていたり、入力途中なのに即座にエラーと表示される UI にイライラしたことはないだろうか？<br>
+特にバリデーションエラーをユーザに表示するタイミングの制御は良い UX を実現する上で重要である。<br>
+(何もしてないのに最初からエラーが表示されていたり、入力途中なのに即座にエラーと表示される UI にイライラしたことはないだろうか？)<br>
 より適切なタイミングするためには、復数の UI イベント (change, focus, blur) や状態を組み合わせる必要があり、「フォーム自体の状態管理」と「インプット要素との接続」の両方が複雑になる要因となっている。
 
-ドメインモデルがある前提では、基本的にドメインモデル側にほとんどの責務を持たせることができるし、そうするべきである。
+モデルがある前提では、基本的にモデル側にほとんどの責務を持たせることができるし、そうするべきである。<br>
 その上でフォーム独自の機能として必要な部分だけを提供するライブラリを実装した。
+
+</details>
 
 ## Design principles
 
-- ドメインモデルファースト
-  - ドメインモデルがあることを前提にする。
-  - ドメインモデルの方の責務になるべく寄せ、フォームの責務を最小限にする。
-  - データドリブンで簡易にフォームを実装することは目的としない。
-- フォーム状態管理とドメインモデルの分離
-  - フォームとドメインモデルがお互いに直接的な参照を持たない。
-  - ドメインモデルがフォームによって汚染されない。
+- Model first
+  - Assumes the existence of domain models
+  - Pushes responsibilities towards the model side, minimizing form responsibilities
+  - Not intended for simple data-first form implementations
+- Separation of form state and model
+  - No direct references between forms and models
+  - Models remain uncontaminated by form logic
+  - Forms don't manage data directly
+- Transparent I/O
+  - No hidden magic between model ↔ input element interactions
+  - Makes control obvious and safe
+- Modular implementation
+  - Multi-package architecture with clear separation between behavior model and UI
+  - Enhances testability and extensibility
+- Well-typed
+  - Maximizes use of TypeScript's type system for error detection and code completion
+  - Improves development productivity
+
+<details><summary>Japanese</summary>
+
+- モデルファースト
+  - モデルがあることを前提にする。
+  - モデルの方の責務になるべく寄せ、フォームの責務を最小限にする。
+  - データファーストで簡易にフォームを実装することは目的としない。
+- フォーム状態管理とモデルの分離
+  - フォームとモデルがお互いに直接的な参照を持たない。
+  - モデルがフォームによって汚染されない。
   - フォームはデータを管理しない。
 - 隠されていない入出力
-  - ドメインモデル ↔ インプット要素 の入出力を隠蔽しない。
+  - モデル ↔ インプット要素 の入出力を隠蔽しない。
   - 自明かつ安全にコントロールできるようにする。
 - モジュラーな実装
   - Multi-package 構成にし、とりわけ動作モデルと UI を明確に分離する。
@@ -65,24 +122,25 @@ A TypeScript form management library designed to work seamlessly with MobX domai
 - 賢い型情報
   - 型システムを最大限活用し、エラー検出やコード補完による開発生産性を確保する。
 
+</details>
+
 ## Features
 
 - Asynchronous submission
 - Asynchronous validation
+- Smart error reporting
 - Nested forms
-- Dynamic forms - arrays, etc - work without special treatment
+- Dynamic forms - arrays, etc - just work without special treatment
 - [React](https://react.dev/) integration
 - [zod](https://zod.dev/) extension *(coming soon)*
 
 --------------------------------------------------------------------------------
 
-## Overview
+## Overview — Model
 
 ```typescript
 import { observable, makeObservable } from "mobx";
 import { FormDelegate } from "@form-model/core";
-
-enum SampleEnum { ... }
 
 class Sample implements FormDelegate<Sample> {
   @observable string: string = "hello";
@@ -107,7 +165,7 @@ class Sample implements FormDelegate<Sample> {
     return [this.nested, this.array];
   }
 
-  async [FormDelegate.validate]() {
+  async [FormDelegate.validate](signal: AbortSignal) {
     return { ... };
   }
 
@@ -124,22 +182,27 @@ class Other implements FormDelegate<Other> {
     makeObservable(this);
   }
 
-  async [FormDelegate.validate]() {
+  async [FormDelegate.validate](signal: AbortSignal) {
     return { ... };
   }
 }
 ```
 
+## Overview — React
+
 ```tsx
 import { observer } from "mobx-react-lite";
-import { Form } from "@form-model/core";
+import { useForm } from "@form-model/react";
 import "@form-model/react/dist/extension"; // Makes .bindTextInput() and other bind methods available
 
 const SampleForm: React.FC<{ model: Sample }> = observer(({ model }) => {
-  const form = Form.get(model);
+  const form = useForm(model);
 
   return (
     <form>
+      {/* Label */}
+      <label {...form.bindLabel(["string"])}>Label</label>
+
       {/* Text input */}
       <input
         {...form.bindInput("string", {
@@ -150,17 +213,9 @@ const SampleForm: React.FC<{ model: Sample }> = observer(({ model }) => {
       {/* Number input */}
       <input
         {...form.bindInput("number", {
-          valueAs: "number",
+          valueAs: "number", // also supports "date"
           getter: () => model.number,
           setter: (v) => (model.number = v),
-        })}
-      />
-      {/* Date input */}
-      <input
-        {...form.bindInput("date", {
-          valueAs: "date",
-          getter: () => model.date?.toISOString().split("T")[0] ?? null,
-          setter: (v) => (model.date = v),
         })}
       />
 
@@ -174,7 +229,7 @@ const SampleForm: React.FC<{ model: Sample }> = observer(({ model }) => {
 
       {/* Radio buttons */}
       {(() => {
-        const bindRadioButton = form.bindRadioButtonFactory("enum", {
+        const bindRadioButton = form.bindRadioButton("enum", {
           getter: () => model.enum,
           setter: (v) => (model.enum = v ? (v as SampleEnum) : null),
         });
@@ -222,7 +277,7 @@ const SampleForm: React.FC<{ model: Sample }> = observer(({ model }) => {
 });
 
 const OtherForm: React.FC<{ model: Other }> = observer(({ model }) => {
-  const form = Form.get(model);
+  const form = useForm(model);
 
   return (
     <fieldset>

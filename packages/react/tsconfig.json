@@ -6,6 +6,6 @@
     "jsx": "react",
     "types": ["vitest/globals", "react"]
   },
-  "include": ["src", "vitest.config.ts", "build.ts"],
+  "include": ["src", "*.config.{ts,mts}"],
   "exclude": ["node_modules", "dist"]
 }
