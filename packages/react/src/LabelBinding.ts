@@ -25,13 +25,12 @@ export class LabelBinding implements FormBinding {
   }
 
   @computed
-  get errorMessage(): LabelBinding.Attrs["aria-errormessage"] {
+  get errorMessage() {
     for (const field of this.fields) {
       if (field.hasReportedErrors && field.errors) {
         return field.errors.at(0);
       }
     }
-    return undefined;
   }
 
   get props() {

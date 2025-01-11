@@ -11,19 +11,19 @@
   "bugs": {
     "url": "https://github.com/creasty/form-model/issues"
   },
-  "main": "dist/index.cjs.js",
-  "module": "dist/index.esm.js",
+  "main": "dist/index.js",
+  "module": "dist/index.mjs",
+  "types": "dist/index.d.ts",
   "exports": {
-    "./package.json": "./package.json",
     ".": {
       "types": "./dist/index.d.ts",
       "import": "./dist/index.mjs",
-      "require": "./dist/index.cjs.js"
+      "require": "./dist/index.js"
     },
     "./extension": {
       "types": "./dist/extension.d.ts",
       "import": "./dist/extension.mjs",
-      "require": "./dist/extension.cjs.js"
+      "require": "./dist/extension.js"
     }
   },
   "files": [
@@ -32,9 +32,7 @@
   "scripts": {
     "test": "vitest run --coverage",
     "test:dev": "vitest",
-    "build": "run-p build:*",
-    "build:js": "tsx build.ts",
-    "build:types": "tsc -P tsconfig.build.json"
+    "build": "tsup"
   },
   "dependencies": {
     "@form-model/core": "workspace:*",
@@ -51,9 +49,8 @@
     "@types/react": "^19.0.2",
     "@types/react-dom": "^19.0.2",
     "@vitest/coverage-v8": "^2.1.8",
-    "esbuild": "^0.24.2",
     "jsdom": "^25.0.1",
-    "tsx": "^4.19.2",
+    "tsup": "^8.3.5",
     "typescript": "^5.5.0",
     "vitest": "^2.1.8"
   }

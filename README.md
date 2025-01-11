@@ -100,8 +100,8 @@ class Sample implements FormDelegate<Sample> {
     makeObservable(this);
   }
 
-  // ↓ フォーム関連の処理は symbol による Protocol パターンで実装する。
-  //   例は自分自身を Delegate として実装しているパターン。もちろん別のクラスに移譲することも可能。
+  // ↓ Form-related processing is implemented using a Protocol pattern with symbols.
+  //   You can either implement self-delegation as shown here, or literally delegate it to another class.
 
   [FormDelegate.connect]() {
     return [this.nested, this.array];
@@ -132,8 +132,8 @@ class Other implements FormDelegate<Other> {
 
 ```tsx
 import { observer } from "mobx-react-lite";
-import "@form-model/react";
 import { Form } from "@form-model/core";
+import "@form-model/react/dist/extension"; // Makes .bindTextInput() and other bind methods available
 
 const SampleForm: React.FC<{ model: Sample }> = observer(({ model }) => {
   const form = Form.get(model);
