@@ -83,8 +83,6 @@ describe("Validation", () => {
         [
           "isRunning: false, isScheduled: false",
           "isRunning: false, isScheduled: true",
-          "isRunning: false, isScheduled: false",
-          "isRunning: false, isScheduled: true",
           "exec: start 1",
           "isRunning: true, isScheduled: false",
           "exec: end 1",
