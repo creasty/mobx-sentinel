@@ -3,6 +3,7 @@ import { makeObservable, computed, action } from "mobx";
 
 export namespace InputBinding {
   export type Attrs = React.InputHTMLAttributes<HTMLInputElement>;
+  export type AttrsRequired = Required<Attrs>;
 
   type DateValueType = "date" | "datetime-local" | "month" | "time" | "week";
   type NumericValueType = "number" | "range" | DateValueType;
@@ -17,7 +18,16 @@ export namespace InputBinding {
     | DateValueType
     | NumericValueType;
 
-  export type Config =
+  export type Config = {
+    /** [Override] ID of the input element */
+    id?: Attrs["id"];
+    /** [Callback] Change handler */
+    onChange?: Attrs["onChange"];
+    /** [Callback] Focus handler */
+    onFocus?: Attrs["onFocus"];
+    /** [Callback] Blur handler */
+    onBlur?: Attrs["onBlur"];
+  } & (
     | {
         /**
          * Type of form control.
@@ -31,9 +41,9 @@ export namespace InputBinding {
          * It determines how getter/setter should handle the value.
          */
         valueAs?: "string";
-        /** Get the value from the model */
+        /** Get the value from the model @computed */
         getter: () => string | null;
-        /** Set the value to the model */
+        /** Set the value to the model @action */
         setter: (value: string) => void;
       }
     | {
@@ -49,9 +59,9 @@ export namespace InputBinding {
          * It determines how getter/setter should handle the value.
          */
         valueAs: "number";
-        /** Get the value from the model */
+        /** Get the value from the model @computed */
         getter: () => number | null;
-        /** Set the value to the model */
+        /** Set the value to the model @action */
         setter: (value: number | null) => void;
       }
     | {
@@ -68,7 +78,7 @@ export namespace InputBinding {
          */
         valueAs: "date";
         /**
-         * Get the value from the model
+         * Get the value from the model @computed
          *
          * String representation of the date.
          * As Date instance has no distinction between date and datetime,
@@ -88,9 +98,10 @@ export namespace InputBinding {
          * ```
          */
         getter: () => string | null;
-        /** Set the value to the model */
+        /** Set the value to the model @action */
         setter: (value: Date | null) => void;
-      };
+      }
+  );
 }
 
 export class InputBinding implements FormBinding {
@@ -102,11 +113,11 @@ export class InputBinding implements FormBinding {
   }
 
   @computed
-  get value(): InputBinding.Attrs["value"] {
+  get value(): InputBinding.AttrsRequired["value"] {
     return this.config.getter() ?? "";
   }
 
-  get type(): InputBinding.Attrs["type"] {
+  get type(): InputBinding.AttrsRequired["type"] {
     if (this.config.type) return this.config.type;
 
     switch (this.config.valueAs) {
@@ -120,7 +131,7 @@ export class InputBinding implements FormBinding {
   }
 
   @action
-  onChange: InputBinding.Attrs["onChange"] = (e) => {
+  onChange: InputBinding.AttrsRequired["onChange"] = (e) => {
     switch (this.config.valueAs) {
       case "number": {
         const value = e.currentTarget.valueAsNumber;
@@ -136,23 +147,29 @@ export class InputBinding implements FormBinding {
     }
     this.field.markAsChanged("intermediate");
     this.field.validateWithDelay();
+    this.config.onChange?.(e);
   };
 
-  onBlur: InputBinding.Attrs["onBlur"] = () => {
+  onBlur: InputBinding.AttrsRequired["onBlur"] = (e) => {
     this.field.validate();
+    this.config.onBlur?.(e);
   };
 
-  onFocus: InputBinding.Attrs["onFocus"] = () => {
+  onFocus: InputBinding.AttrsRequired["onFocus"] = (e) => {
     this.field.markAsTouched();
+    this.config.onFocus?.(e);
   };
 
   get props() {
     return {
       type: this.type,
       value: this.value,
+      id: this.config.id ?? this.field.id,
       onChange: this.onChange,
       onFocus: this.onFocus,
       onBlur: this.onBlur,
+      "aria-invalid": this.field.hasReportedErrors,
+      "aria-errormessage": this.field.hasReportedErrors ? this.field.errors?.join(", ") : undefined,
     } satisfies InputBinding.Attrs;
   }
 }

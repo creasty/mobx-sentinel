@@ -3,9 +3,10 @@ import "@testing-library/jest-dom";
 import { render, screen } from "@testing-library/react";
 import { userEvent } from "@testing-library/user-event";
 import { makeObservable, observable } from "mobx";
-import { Form } from "@form-model/core";
+import { Form, FormField } from "@form-model/core";
 import "./extension";
 import { observer } from "mobx-react-lite";
+import { SelectBoxBinding } from "./SelectBoxBinding";
 
 type SampleOption = {
   name: string;
@@ -77,25 +78,96 @@ const SampleComponent: React.FC<{ model: SampleModel }> = observer(({ model }) =
   );
 });
 
-function setupEnv(inputLabel: string) {
-  const model = new SampleModel();
-
-  render(<SampleComponent model={model} />);
-  const select = screen.getByLabelText(inputLabel) as HTMLSelectElement;
-
-  return {
-    model,
-    select,
-    async selectOptions(value: string | string[]) {
-      await userEvent.selectOptions(select, value);
-    },
-    async deselectOptions(value: string | string[]) {
-      await userEvent.deselectOptions(select, value);
-    },
-  };
-}
-
 describe("SelectBoxBinding", () => {
+  const setupEnv = () => {
+    const model = new SampleModel();
+    const form = Form.get(model);
+    const field = new FormField({
+      form,
+      formErrors: new Map(),
+      fieldName: "test",
+    });
+    const binding = new SelectBoxBinding(field, {
+      getter: () => "",
+      setter: () => {},
+    });
+    const element = document.createElement("select");
+    const fakeEvent = () => {
+      return { currentTarget: element } as any;
+    };
+
+    return {
+      model,
+      form,
+      field,
+      binding,
+      fakeEvent,
+    };
+  };
+
+  describe("props.id", () => {
+    it("uses the field id by default", () => {
+      const env = setupEnv();
+      expect(env.binding.props.id).toBe(env.field.id);
+    });
+
+    it("uses the provided id", () => {
+      const env = setupEnv();
+      env.binding.config.id = "somethingElse";
+      expect(env.binding.props.id).toBe("somethingElse");
+    });
+  });
+
+  describe("#onChange", () => {
+    it("works without a callback", () => {
+      const env = setupEnv();
+      env.binding.onChange(env.fakeEvent());
+    });
+
+    it("calls the callback if provided", () => {
+      const env = setupEnv();
+      const callback = vi.fn();
+      env.binding.config.onChange = callback;
+      env.binding.onChange(env.fakeEvent());
+      expect(callback).toHaveBeenCalledWith(env.fakeEvent());
+    });
+  });
+
+  describe("#onFocus", () => {
+    it("works without a callback", () => {
+      const env = setupEnv();
+      env.binding.onFocus(env.fakeEvent());
+    });
+
+    it("calls the callback if provided", () => {
+      const env = setupEnv();
+      const callback = vi.fn();
+      env.binding.config.onFocus = callback;
+      env.binding.onFocus(env.fakeEvent());
+      expect(callback).toHaveBeenCalledWith(env.fakeEvent());
+    });
+  });
+});
+
+suite("bindSelectBox", () => {
+  const setupEnv = (inputLabel: string) => {
+    const model = new SampleModel();
+
+    render(<SampleComponent model={model} />);
+    const select = screen.getByLabelText(inputLabel) as HTMLSelectElement;
+
+    return {
+      model,
+      select,
+      async selectOptions(value: string | string[]) {
+        await userEvent.selectOptions(select, value);
+      },
+      async deselectOptions(value: string | string[]) {
+        await userEvent.deselectOptions(select, value);
+      },
+    };
+  };
+
   describe("multiple=false", () => {
     test("works with a required field", async () => {
       const env = setupEnv("single");
