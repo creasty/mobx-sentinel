@@ -1,8 +1,7 @@
-import { comparer, observable, runInAction } from "mobx";
+import { action, comparer, computed, observable, runInAction } from "mobx";
 import { MaybeArray } from "./util";
 
 type ErrorValue = MaybeArray<string | Error>;
-
 export type FormValidationResult<T> = {
   [K in keyof T]?: ErrorValue | null;
 };
@@ -15,6 +14,7 @@ export class Validation {
   readonly #scheduleDelayMs: number;
   readonly #errors = observable.map<string, string[]>([], { equals: comparer.structural });
   readonly #isRunning = observable.box(false);
+  readonly #scheduleTimerId = observable.box<number | null>(null);
   #abortCtrl: AbortController | null = null;
 
   constructor(args: { requestDelayMs: number; scheduleDelayMs: number }) {
@@ -30,9 +30,16 @@ export class Validation {
     return this.#isRunning.get();
   }
 
+  @computed
+  get isScheduled() {
+    return !!this.#scheduleTimerId.get();
+  }
+
+  @action
   request(executor: Validation.Executor, opt?: Validation.ExecutorOptions): Validation.Status {
     if (this.isRunning) {
       if (opt?.force) {
+        this.#cancelScheduled();
         this.#exec(executor);
         return "forced";
       } else {
@@ -47,8 +54,6 @@ export class Validation {
   }
 
   async #exec(executor: Validation.Executor): Promise<void> {
-    this.#cancelScheduled();
-
     this.#abortCtrl?.abort();
     const abortCtrl = new AbortController();
     this.#abortCtrl = abortCtrl;
@@ -86,22 +91,31 @@ export class Validation {
     if (!executor) return;
     this.#scheduledExecutor = null;
 
-    this.#cancelScheduled();
-    this.#scheduleTimerId = setTimeout(() => {
-      this.#scheduleTimerId = null;
-
-      if (!this.isRunning) {
-        this.#exec(executor);
-      }
-    }, delayMs);
+    runInAction(() => {
+      this.#cancelScheduled();
+      const timerId = +setTimeout(
+        action(() => {
+          this.#scheduleTimerId.set(null);
+          if (!this.isRunning) {
+            this.#cancelScheduled();
+            this.#exec(executor);
+          }
+        }),
+        delayMs
+      );
+      this.#scheduleTimerId.set(timerId);
+    });
   }
 
   #cancelScheduled() {
-    if (!this.#scheduleTimerId) return;
-    clearTimeout(this.#scheduleTimerId);
-    this.#scheduleTimerId = null;
+    const timerId = this.#scheduleTimerId.get();
+    if (timerId) {
+      clearTimeout(timerId);
+      runInAction(() => {
+        this.#scheduleTimerId.set(null);
+      });
+    }
   }
-  #scheduleTimerId: ReturnType<typeof setTimeout> | null = null;
 }
 
 export namespace Validation {
