@@ -130,7 +130,9 @@ suite("bindSubmitButton", () => {
     expect(env.form.canSubmit).toBe(false);
     expect(env.button).toBeDisabled();
 
-    await env.model.completeSubmit();
+    await act(async () => {
+      await env.model.completeSubmit();
+    });
 
     expect(env.form.isSubmitting).toBe(false);
     expect(env.form.canSubmit).toBe(false);

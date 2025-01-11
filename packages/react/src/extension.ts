@@ -4,6 +4,7 @@ import { InputBinding } from "./InputBinding";
 import { RadioButtonBinding } from "./RadioButtonBinding";
 import { SelectBoxBinding } from "./SelectBoxBinding";
 import { SubmitButtonBinding } from "./SubmitButtonBinding";
+import { LabelBinding } from "./LabelBinding";
 
 export {};
 
@@ -89,6 +90,16 @@ declare module "@form-model/core" {
      * ```
      */
     bindSubmitButton(config?: SubmitButtonBinding.Config): SubmitButtonBinding["props"];
+
+    /**
+     * Bind the label to the form.
+     *
+     * @example
+     * ```typescript-react
+     * <label {...model.form.bindLabel(["field1", "field2"])}>Label</label>
+     * ```
+     */
+    bindLabel(fields: FormField.Name<T>[], config?: LabelBinding.Config): LabelBinding["props"];
   }
 }
 
@@ -113,4 +124,8 @@ Form.prototype.bindRadioButtonFactory = function (fieldName, config) {
 
 Form.prototype.bindSubmitButton = function (config) {
   return this.bind(SubmitButtonBinding, config ?? {});
+};
+
+Form.prototype.bindLabel = function (fields, config) {
+  return this.bind(fields, LabelBinding, config ?? {});
 };
