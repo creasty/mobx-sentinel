@@ -53,6 +53,14 @@ export class Validation {
     }
   }
 
+  @action
+  reset() {
+    this.#cancelScheduled();
+    this.#abortCtrl?.abort();
+    this.#errors.clear();
+    this.#isRunning.set(false);
+  }
+
   async #exec(executor: Validation.Executor): Promise<void> {
     this.#abortCtrl?.abort();
     const abortCtrl = new AbortController();
@@ -137,6 +145,7 @@ export namespace Validation {
    * The options for the validation request.
    */
   export type ExecutorOptions = {
+    /** Force the validation to be executed immediately */
     force?: boolean;
   };
 }

@@ -208,6 +208,7 @@ export class Form<T> {
   @action
   reset() {
     this.#isDirty.set(false);
+    this.#validation.reset();
     for (const field of this.#fields.values()) {
       field.reset();
     }
