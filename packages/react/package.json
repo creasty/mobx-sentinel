@@ -13,16 +13,17 @@
   },
   "main": "dist/index.cjs.js",
   "module": "dist/index.esm.js",
+  "types": "dist/index.d.ts",
   "exports": {
     "./package.json": "./package.json",
     ".": {
       "types": "./dist/index.d.ts",
-      "import": "./dist/index.mjs",
+      "import": "./dist/index.esm.js",
       "require": "./dist/index.cjs.js"
     },
     "./extension": {
       "types": "./dist/extension.d.ts",
-      "import": "./dist/extension.mjs",
+      "import": "./dist/extension.esm.js",
       "require": "./dist/extension.cjs.js"
     }
   },
