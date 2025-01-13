@@ -11,26 +11,17 @@ A TypeScript form management library designed to work seamlessly with MobX domai
 
 ## Packages
 
-[core-npm]: https://www.npmjs.com/package/@form-model/core
-[core-npm-badge]: https://badge.fury.io/js/@form-model%2Fcore.svg
-[core-size]: https://bundlephobia.com/package/@form-model/core
-[core-size-badge]: https://badgen.net/bundlephobia/min/@form-model/core
-[react-npm]: https://www.npmjs.com/package/@form-model/react
-[react-npm-badge]: https://badge.fury.io/js/@form-model%2Freact.svg
-[react-size]: https://bundlephobia.com/package/@form-model/react
-[react-size-badge]: https://badgen.net/bundlephobia/min/@form-model/react
-
 <pre><code>npm install --save <b>@form-model/core</b></code></pre>
 
-[![npm version][core-npm-badge]][core-npm]
-[![npm size][core-size-badge]][core-size]
+[![npm version](https://badge.fury.io/js/@form-model%2Fcore.svg)](https://www.npmjs.com/package/@form-model/core)
+[![npm size](https://badgen.net/bundlephobia/min/@form-model/core)](https://bundlephobia.com/package/@form-model/core)
 
 Use with `mobx`.
 
 <pre><code>npm install --save <b>@form-model/react</b></code></pre>
 
-[![npm version][react-npm-badge]][react-npm]
-[![npm size][react-size-badge]][react-size]
+[![npm version](https://badge.fury.io/js/@form-model%2Freact.svg)](https://www.npmjs.com/package/@form-model/react)
+[![npm size](https://badgen.net/bundlephobia/min/@form-model/react)](https://bundlephobia.com/package/@form-model/react)
 
 Use with `mobx-react-lite`.
 
@@ -38,7 +29,7 @@ Use with `mobx-react-lite`.
 
 TL;DR: Three core issues in form management:
 
-1. Model integration: Existing form libraries focus on data serialization, making them incompatible with rich domain models.
+1. Model integration: Existing form libraries focus on data serialization, making them incompatible with rich models.
 2. Mixed responsibilities: Form state management and data/model management are often entangled, creating maintenance challenges.
 3. Poor validation UX: Complex coordination of UI events leads to poor validation timing and suboptimal user experiences.
 
@@ -143,16 +134,21 @@ This library was implemented to provide only the essential form-specific functio
 - Asynchronous validation (abortable)
 - Smart error reporting
 - Nested and dynamic (array) forms
+- Custom bindings
 - [React](https://react.dev/) integration
 
---------------------------------------------------------------------------------
+---
 
 ## Overview — Model
 
+<!-- prettier-ignore-start -->
+
 ```typescript
-import { observable, makeObservable } from "mobx";
+import { action, observable, makeObservable } from "mobx";
 import { FormDelegate } from "@form-model/core";
 
+// Form-related processing is implemented using a Protocol pattern with symbols (along with the interface).
+// You can either implement self-delegation as shown here, or literally delegate it to another class.
 class Sample implements FormDelegate<Sample> {
   @observable string: string = "hello";
   @observable number: number | null = null;
@@ -169,10 +165,13 @@ class Sample implements FormDelegate<Sample> {
     makeObservable(this);
   }
 
-  // ↓ Form-related processing is implemented using a Protocol pattern with symbols.
-  //   You can either implement self-delegation as shown here, or literally delegate it to another class.
+  @action
+  addNewForm() {
+    this.array.push(new Other());
+  }
 
   [FormDelegate.connect]() {
+    // Nested/dynamic forms are achieved by returning a list of models.
     return [this.nested, this.array];
   }
 
@@ -199,89 +198,70 @@ class Other implements FormDelegate<Other> {
 }
 ```
 
+<!-- prettier-ignore-end -->
+
 ## Overview — React
+
+<!-- prettier-ignore-start -->
 
 ```tsx
 import { observer } from "mobx-react-lite";
 import { useForm } from "@form-model/react";
-import "@form-model/react/dist/extension"; // Makes .bindTextInput() and other bind methods available
+import "@form-model/react/dist/extension"; // Makes .bindTextInput() and other bind methods available.
 
 const SampleForm: React.FC<{ model: Sample }> = observer(({ model }) => {
   const form = useForm(model);
 
   return (
     <form>
-      {/* Label */}
       <label {...form.bindLabel(["string"])}>Label</label>
 
-      {/* Text input */}
-      <input
-        {...form.bindInput("string", {
-          getter: () => model.string,
-          setter: (v) => (model.string = v),
-        })}
-      />
-      {/* Number input */}
-      <input
-        {...form.bindInput("number", {
-          valueAs: "number", // also supports "date"
-          getter: () => model.number,
-          setter: (v) => (model.number = v),
-        })}
-      />
+      <input {...form.bindInput("string", {
+        getter: () => model.string,
+        setter: (v) => (model.string = v),
+      })} />
+      <input {...form.bindInput("number", {
+        valueAs: "number", // also supports "date"
+        getter: () => model.number,
+        setter: (v) => (model.number = v),
+      })} />
+      <input {...form.bindCheckBox("bool", {
+        getter: () => model.bool,
+        setter: (v) => (model.bool = v),
+      })} />
 
-      {/* Check box */}
-      <input
-        {...form.bindCheckBox("bool", {
-          getter: () => model.bool,
-          setter: (v) => (model.bool = v),
-        })}
-      />
-
-      {/* Radio buttons */}
       {(() => {
         const bindRadioButton = form.bindRadioButton("enum", {
           getter: () => model.enum,
           setter: (v) => (model.enum = v ? (v as SampleEnum) : null),
         });
-        return Object.values(SampleEnum).map((value) => <input key={value} {...bindRadioButton(value)} />);
+        return Object.values(SampleEnum)
+          .map((value) => (<input key={value} {...bindRadioButton(value)} />));
       })()}
 
-      {/* Single select box */}
-      <select
-        {...form.bindSelectBox("option", {
-          getter: () => model.option,
-          setter: (code) => (model.option = code),
-        })}
-      >
-        {!model.option && <option value="" disabled>Select...</option>}
+      <select {...form.bindSelectBox("option", {
+        getter: () => model.option,
+        setter: (code) => (model.option = code),
+      })}>
+        {!model.option && (<option value="" disabled>Select...</option>)}
         {SAMPLE_OPTIONS.map((option) => (
-          <option key={option.code} value={option.code}>
-            {option.name}
-          </option>
+          <option key={option.code} value={option.code}>{option.name}</option>
         ))}
       </select>
 
-      {/* Multiple select box */}
-      <select
-        {...form.bindSelectBox("multipleOption", {
-          multiple: true,
-          getter: () => model.multipleOption,
-          setter: (codes) => (model.multipleOption = codes),
-        })}
-      >
-        ...
-      </select>
+      <select {...form.bindSelectBox("multipleOption", {
+        multiple: true,
+        getter: () => model.multipleOption,
+        setter: (codes) => (model.multipleOption = codes),
+      })}>...</select>
 
       {/* Nested form */}
       <OtherForm model={model.nested} />
 
-      {/* Array of nested forms */}
-      {model.array.map((item, i) => (
-        <OtherForm key={i} model={item} />
-      ))}
+      {/* Dynamic form */}
+      {model.array.map((item, i) => (<OtherForm key={i} model={item} />))}
+      <button onClick={model.addNewForm}>Add a new form</button>
 
-      {/* Submit button */}
       <button {...form.bindSubmitButton()}>Submit</button>
     </form>
   );
@@ -292,18 +272,18 @@ const OtherForm: React.FC<{ model: Other }> = observer(({ model }) => {
 
   return (
     <fieldset>
-      <input
-        {...form.bindInput("other", {
-          getter: () => model.other,
-          setter: (v) => (model.other = v),
-        })}
-      />
+      <input {...form.bindInput("other", {
+        getter: () => model.other,
+        setter: (v) => (model.other = v),
+      })} />
     </fieldset>
   );
 });
 ```
 
---------------------------------------------------------------------------------
+<!-- prettier-ignore-end -->
+
+---
 
 ## Roadmap to v0.1
 
@@ -320,8 +300,8 @@ const OtherForm: React.FC<{ model: Other }> = observer(({ model }) => {
   - Options: always, first-and-dirty, only-dirty
   - Option to bypass submission when there are validation errors?
 - [ ] Computed validation errors & per-field validations
-  - Add a new `@computed get errors()` for most use-cases,<br>
-    and repurpose `validate()` for a time-consuming per-field validation (which results can be easily included in the `get errors()`).
+  - Add a new `@computed get errors()` for standard use-cases.
+  - Repurpose `validate()` for a time-consuming per-field validation (which results can be easily included in the `get errors()`).
 - [ ] Better way to implement delegate
   - Problem 1: Unlike `validate()`, `submit()` is more of an application layer responsibility.
   - Problem 2: `connect()` is lengthy. We could make it a field decorator.
@@ -329,6 +309,10 @@ const OtherForm: React.FC<{ model: Other }> = observer(({ model }) => {
   - [zod](https://zod.dev/) is a good candidate.
   - i18n support is also essential.
 - [ ] Give it a catchy name
+
+### Other ideas
+
+- Error severity
 
 ## License
 
