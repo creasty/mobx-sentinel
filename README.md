@@ -112,7 +112,7 @@ This library was implemented to provide only the essential form-specific functio
 - Modular implementation
   - Multi-package architecture with clear separation between behavior model and UI
   - Enhances testability and extensibility
-- Well-typed
+- Rigorous typing
   - Maximizes use of TypeScript's type system for error detection and code completion
   - Improves development productivity
 
@@ -132,20 +132,18 @@ This library was implemented to provide only the essential form-specific functio
 - モジュラーな実装
   - Multi-package 構成にし、とりわけ動作モデルと UI を明確に分離する。
   - テスタビリティと拡張性を高める。
-- 賢い型情報
+- 厳格な型情報
   - 型システムを最大限活用し、エラー検出やコード補完による開発生産性を確保する。
 
 </details>
 
 ## Features
 
-- Asynchronous submission
-- Asynchronous validation
+- Asynchronous submission (abortable)
+- Asynchronous validation (abortable)
 - Smart error reporting
-- Nested forms
-- Dynamic forms - arrays, etc - just work without special treatment
+- Nested and dynamic (array) forms
 - [React](https://react.dev/) integration
-- [zod](https://zod.dev/) extension *(coming soon)*
 
 --------------------------------------------------------------------------------
 
@@ -306,6 +304,31 @@ const OtherForm: React.FC<{ model: Other }> = observer(({ model }) => {
 ```
 
 --------------------------------------------------------------------------------
+
+## Roadmap to v0.1
+
+- [ ] Extensive documentation
+  - UX of smart error reporting.
+  - APIs.
+  - Examples.
+- [ ] Make the initial value of `isDirty` controllable from the model side somehow
+  - Add a new `isCreate` property to the delegate?
+- [ ] Make the validation strategy configurable
+  - Options: smart (default), submit, touch, change, blur, change-and-blur
+  - Option to force trigger validate on all nested forms?
+- [ ] Make the submission strategy configurable
+  - Options: always, first-and-dirty, only-dirty
+  - Option to bypass submission when there are validation errors?
+- [ ] Computed validation errors & per-field validations
+  - Add a new `@computed get errors()` for most use-cases,<br>
+    and repurpose `validate()` for a time-consuming per-field validation (which results can be easily included in the `get errors()`).
+- [ ] Better way to implement delegate
+  - Problem 1: Unlike `validate()`, `submit()` is more of an application layer responsibility.
+  - Problem 2: `connect()` is lengthy. We could make it a field decorator.
+- [ ] Add an integration with a data validation library
+  - [zod](https://zod.dev/) is a good candidate.
+  - i18n support is also essential.
+- [ ] Give it a catchy name
 
 ## License
 
