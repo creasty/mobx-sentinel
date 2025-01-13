@@ -1,14 +1,11 @@
 // @ts-check
 
-import { FlatCompat } from "@eslint/eslintrc";
 import js from "@eslint/js";
 import ts from "typescript-eslint";
 import configPrettier from "eslint-config-prettier";
 import pluginReact from "eslint-plugin-react";
 import pluginReactHooks from "eslint-plugin-react-hooks";
 import pluginMobx from "eslint-plugin-mobx";
-
-const compat = new FlatCompat();
 
 export default ts.config(
   js.configs.recommended,
@@ -55,7 +52,7 @@ export default ts.config(
       ...pluginReactHooks.configs.recommended.rules,
     },
   },
-  ...compat.config({
-    ignorePatterns: ["dist/", "coverage/"],
-  })
+  {
+    ignores: ["**/dist/", "**/coverage/"],
+  }
 );
