@@ -16,14 +16,14 @@
     "doc": "typedoc",
     "test": "turbo run test",
     "lint": "run-p -lc --aggregate-output 'lint:*'",
-    "lint:eslint": "eslint --color --cache './**/*.{mjs,ts,tsx}'",
-    "lint:prettier": "prettier --color --check './**/*.{mjs,ts,tsx,json}'",
+    "lint:eslint": "eslint --color --cache './**/*.{ts,tsx,mts,mjs}'",
+    "lint:prettier": "prettier --color --check './**/*.{ts,tsx,mts,mjs,json}'",
     "format": "run-s 'format:*'",
     "format:eslint": "pnpm lint:eslint --fix",
     "format:prettier": "pnpm lint:prettier --write"
   },
   "lint-staged": {
-    "*.{mjs,ts,tsx}": [
+    "*.{ts,tsx,mts,mjs}": [
       "eslint --fix",
       "prettier --write"
     ],
