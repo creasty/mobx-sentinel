@@ -83,7 +83,7 @@ export class FormField {
 
   validate() {
     this.cancelDelayedValidation();
-    this.#form.validate();
+    this.#form.validate({ force: true });
   }
 
   validateWithDelay() {
