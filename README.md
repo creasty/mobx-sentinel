@@ -37,7 +37,7 @@ With models as a premise, most responsibilities can and should be placed on the 
 
 While there are already many libraries for building forms using MobX, they are all designed from a data serialization perspective rather than modeling,
 and have issues either being unable to use models (classes) or not properly separating data and form state management.<br>
-Furthermore, from my research, there wasn't a single one designed to allow type-safe implementation from both model and UI perspectives.<br>
+Furthermore, from my research, there wasn't a single one designed to allow type-safe implementation from both model and UI ends.<br>
 (Check out the [comparison](#comparison-with-other-libraries) section for more details.)
 
 Given this background, I believe there are two fundamental challenges in implementing forms:
@@ -317,7 +317,7 @@ Legend for the features:
   - UX of smart error reporting.
   - APIs.
   - Examples.
-- [ ] Make the initial value of `isDirty` controllable from the model side somehow
+- [ ] Make the initial value of `isDirty` controllable from a model side somehow
   - Add a new `isCreate` property to the delegate?
 - [ ] Make the validation strategy configurable
   - Options: smart (default), submit, touch, change, blur, change-and-blur
@@ -328,7 +328,9 @@ Legend for the features:
 - [ ] Computed validation errors & per-field validations
   - Add a new `@computed get errors()` for standard use-cases.
   - Repurpose `validate()` for a time-consuming per-field validation (which results can be easily included in the `get errors()`).
-- [ ] Better way to implement delegate
+- [ ] Support callbacks for form events
+  - Use case: Display a toast message when the form is submitted. (Not a concern of a model nor a delegate)
+- [ ] Better way to implement delegation
   - Problem 1: Unlike `validate()`, `submit()` is more of an application layer responsibility.
   - Problem 2: `connect()` is lengthy. We could make it a field decorator.
 - [ ] Add an integration with a data validation library
