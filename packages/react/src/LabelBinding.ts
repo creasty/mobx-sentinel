@@ -25,7 +25,7 @@ export class LabelBinding implements FormBinding {
   }
 
   @computed
-  get errorMessage() {
+  get firstErrorMessage() {
     for (const field of this.fields) {
       if (field.hasReportedErrors && field.errors) {
         return field.errors.at(0);
@@ -36,8 +36,8 @@ export class LabelBinding implements FormBinding {
   get props() {
     return {
       htmlFor: this.config.htmlFor ?? this.firstFieldId,
-      "aria-invalid": !!this.errorMessage,
-      "aria-errormessage": this.errorMessage,
+      "aria-invalid": !!this.firstErrorMessage,
+      "aria-errormessage": this.firstErrorMessage,
     } satisfies LabelBinding.Attrs;
   }
 }
