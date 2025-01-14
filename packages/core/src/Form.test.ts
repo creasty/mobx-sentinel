@@ -223,8 +223,8 @@ describe("Form", () => {
       const spy2 = vi.spyOn(Form.get(model.array[0]), "reset");
 
       form.reset();
-      expect(spy1).toHaveBeenCalled();
-      expect(spy2).toHaveBeenCalled();
+      expect(spy1).toBeCalled();
+      expect(spy2).toBeCalled();
     });
   });
 
@@ -238,7 +238,7 @@ describe("Form", () => {
 
       const spy = vi.spyOn(field, "reportError");
       form.reportError();
-      expect(spy).toHaveBeenCalled();
+      expect(spy).toBeCalled();
     });
 
     it("recursively triggers reportError on sub-forms", () => {
@@ -250,8 +250,8 @@ describe("Form", () => {
       const spy1 = vi.spyOn(sampleForm, "reportError");
       const spy2 = vi.spyOn(arrayForm0, "reportError");
       form.reportError();
-      expect(spy1).toHaveBeenCalled();
-      expect(spy2).toHaveBeenCalled();
+      expect(spy1).toBeCalled();
+      expect(spy2).toBeCalled();
     });
   });
 
