@@ -89,19 +89,19 @@ describe("Form", () => {
       expect(form1.id).toBe(form2.id);
     });
 
-    it("retrieves instances of nested forms", () => {
+    it("retrieves instances of sub-forms", () => {
       const model = new NestedModel();
       const form = Form.get(model);
 
       const sampleForm = Form.get(model.sample);
       const arrayForm = Form.get(model.array[0]);
 
-      expect(form.nestedForms.size).toBe(2);
-      expect(form.nestedForms).toContain(sampleForm);
-      expect(form.nestedForms).toContain(arrayForm);
+      expect(form.subForms.size).toBe(2);
+      expect(form.subForms).toContain(sampleForm);
+      expect(form.subForms).toContain(arrayForm);
     });
 
-    it("retrieves instances of nested forms with a specified key", () => {
+    it("retrieves instances of sub-forms with a specified key", () => {
       const model = new NestedModel();
       const key = Symbol("custom-key");
       const form = Form.get(model, key);
@@ -109,9 +109,9 @@ describe("Form", () => {
       const sampleForm = Form.get(model.sample, key);
       const arrayForm = Form.get(model.array[0], key);
 
-      expect(form.nestedForms.size).toBe(2);
-      expect(form.nestedForms).toContain(sampleForm);
-      expect(form.nestedForms).toContain(arrayForm);
+      expect(form.subForms.size).toBe(2);
+      expect(form.subForms).toContain(sampleForm);
+      expect(form.subForms).toContain(arrayForm);
     });
   });
 
@@ -134,38 +134,38 @@ describe("Form", () => {
     });
   });
 
-  describe("#nestedForms", () => {
-    it("does not collect nested forms from objects that do not implement FormDelegate.connect", () => {
+  describe("#subForms", () => {
+    it("does not collect sub-forms from objects that do not implement FormDelegate.connect", () => {
       const model = new SampleModel();
       const form = Form.get(model);
-      expect(form.nestedForms.size).toBe(0);
+      expect(form.subForms.size).toBe(0);
     });
 
-    it("collects nested forms via the delegate", () => {
+    it("collects sub-forms via the delegate", () => {
       const model = new NestedModel();
       const form = Form.get(model);
 
-      expect(form.nestedForms).toEqual(new Set([Form.get(model.sample), Form.get(model.array[0])]));
+      expect(form.subForms).toEqual(new Set([Form.get(model.sample), Form.get(model.array[0])]));
     });
 
-    it("updates nested forms reactively", () => {
+    it("updates sub-forms reactively", () => {
       const model = new NestedModel();
       const form = Form.get(model);
 
-      let observed: typeof form.nestedForms | null = null;
+      let observed: typeof form.subForms | null = null;
       autorun(() => {
-        observed = form.nestedForms;
+        observed = form.subForms;
       });
       expect(observed).toBeDefined();
       expect(observed!.size).toBe(2);
-      expect(observed).toEqual(form.nestedForms);
+      expect(observed).toEqual(form.subForms);
 
       runInAction(() => {
         model.array.push(new SampleModel());
       });
       expect(observed).toBeDefined();
       expect(observed!.size).toBe(3);
-      expect(observed).toEqual(form.nestedForms);
+      expect(observed).toEqual(form.subForms);
     });
   });
 
@@ -215,7 +215,7 @@ describe("Form", () => {
       expect(form.isDirty).toBe(false);
     });
 
-    it("resets nested forms", () => {
+    it("resets sub-forms", () => {
       const model = new NestedModel();
       const form = Form.get(model);
 
@@ -241,7 +241,7 @@ describe("Form", () => {
       expect(spy).toHaveBeenCalled();
     });
 
-    it("recursively triggers reportError on nested forms", () => {
+    it("recursively triggers reportError on sub-forms", () => {
       const model = new NestedModel();
       const form = Form.get(model);
       const sampleForm = Form.get(model.sample);
@@ -520,7 +520,7 @@ describe("Form", () => {
   });
 });
 
-suite("Nested forms", () => {
+suite("Sub-forms", () => {
   class SampleModel implements FormDelegate<SampleModel> {
     @observable field = true;
 
@@ -576,7 +576,7 @@ suite("Nested forms", () => {
   };
 
   suite("Validation", () => {
-    test("when a nested form becomes invalid, the parent form also becomes invalid", async () => {
+    test("when a sub-form becomes invalid, the parent form also becomes invalid", async () => {
       const { model, form, sampleForm, waitForValidation } = setupEnv();
 
       expect(sampleForm.isValid).toBe(true);
@@ -592,7 +592,7 @@ suite("Nested forms", () => {
       expect(form.isValid).toBe(false);
     });
 
-    test("when a parent form becomes invalid, nested forms remain unaffected", async () => {
+    test("when a parent form becomes invalid, sub-forms remain unaffected", async () => {
       const { model, form, sampleForm, waitForValidation } = setupEnv();
 
       expect(sampleForm.isValid).toBe(true);
@@ -622,7 +622,7 @@ suite("Nested forms", () => {
       expect(field2.isErrorReported).toEqual(false);
     });
 
-    test("reporting errors on nested forms does not affect the parent form", async () => {
+    test("reporting errors on sub-forms does not affect the parent form", async () => {
       const { form, sampleForm, arrayForm0, getField } = setupEnv();
 
       // Touch fields to initialize them
@@ -630,7 +630,7 @@ suite("Nested forms", () => {
       const field2 = getField(sampleForm, "field");
       const field3 = getField(arrayForm0, "field");
 
-      // Report errors on nested forms
+      // Report errors on sub-forms
       sampleForm.reportError();
       arrayForm0.reportError();
 
@@ -639,7 +639,7 @@ suite("Nested forms", () => {
       expect(field3.isErrorReported).toEqual(true);
     });
 
-    test("when a new nested form is added after reportError is called, the error on the new form is not reported", async () => {
+    test("when a new sub-form is added after reportError is called, the error on the new form is not reported", async () => {
       const { model, form, arrayForm0, getField } = setupEnv();
 
       // Touch fields to initialize them
@@ -649,7 +649,7 @@ suite("Nested forms", () => {
       // Report errors on the parent form
       form.reportError();
 
-      // Add a new nested form
+      // Add a new sub-form
       runInAction(() => {
         model.array.push(new SampleModel());
       });

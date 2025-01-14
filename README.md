@@ -321,7 +321,7 @@ Legend for the features:
   - Add a new `isCreate` property to the delegate?
 - [ ] Make the validation strategy configurable
   - Options: smart (default), submit, touch, change, blur, change-and-blur
-  - Option to force trigger validate on all nested forms?
+  - Option to force trigger validate on all sub-forms?
 - [ ] Make the submission strategy configurable
   - Options: always, first-and-dirty, only-dirty
   - Option to bypass submission when there are validation errors?

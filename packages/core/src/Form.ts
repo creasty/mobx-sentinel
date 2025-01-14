@@ -141,13 +141,13 @@ export class Form<T> {
 
   /** Whether the form is valid */
   get isValid() {
-    return this.invalidFieldCount === 0 && this.invalidNestedFormCount === 0;
+    return this.invalidFieldCount === 0 && this.invalidSubFormCount === 0;
   }
 
   /**
    * The number of invalid fields
    *
-   * Note that this does not include the number of invalid fields of nested forms.
+   * Note that this does not include the number of invalid fields of sub-forms.
    */
   @computed
   get invalidFieldCount() {
@@ -155,26 +155,26 @@ export class Form<T> {
   }
 
   /**
-   * The number of invalid nested forms
+   * The number of invalid sub-forms
    *
    * Note that this is not the number of fields.
    */
   @computed
-  get invalidNestedFormCount() {
+  get invalidSubFormCount() {
     let count = 0;
-    for (const form of this.nestedForms) {
+    for (const form of this.subForms) {
       count += form.isValid ? 0 : 1;
     }
     return count;
   }
 
   /**
-   * Nested forms within the form.
+   * Sub-forms within the form.
    *
    * Forms are collected from the {@link FormDelegate.connect}.
    */
   @computed.struct
-  get nestedForms(): ReadonlySet<Form<unknown>> {
+  get subForms(): ReadonlySet<Form<unknown>> {
     const forms = new Set<Form<unknown>>();
 
     const connect = this.#getDelegateByKey(FormDelegate.connect);
@@ -193,13 +193,13 @@ export class Form<T> {
     return forms;
   }
 
-  /** Report error states on all fields and nested forms */
+  /** Report error states on all fields and sub-forms */
   @action
   reportError() {
     for (const field of this.#fields.values()) {
       field.reportError();
     }
-    for (const form of this.nestedForms) {
+    for (const form of this.subForms) {
       form.reportError();
     }
   }
@@ -212,7 +212,7 @@ export class Form<T> {
     for (const field of this.#fields.values()) {
       field.reset();
     }
-    for (const form of this.nestedForms) {
+    for (const form of this.subForms) {
       form.reset();
     }
   }
