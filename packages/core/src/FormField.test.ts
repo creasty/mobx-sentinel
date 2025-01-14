@@ -150,12 +150,13 @@ describe("FormField", () => {
   });
 
   describe("#validate", () => {
-    it("calls the validate on the form", () => {
+    it("calls the validate on the form with the force option", () => {
       const { field, form } = setupEnv();
       const spy = vi.spyOn(form, "validate");
 
       field.validate();
       expect(spy).toBeCalledTimes(1);
+      expect(spy).toBeCalledWith({ force: true });
     });
   });
 
