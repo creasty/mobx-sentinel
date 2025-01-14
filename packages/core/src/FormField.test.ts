@@ -150,12 +150,13 @@ describe("FormField", () => {
   });
 
   describe("#validate", () => {
-    it("calls the validate on the form", () => {
+    it("calls the validate on the form with the force option", () => {
       const { field, form } = setupEnv();
       const spy = vi.spyOn(form, "validate");
 
       field.validate();
-      expect(spy).toHaveBeenCalledTimes(1);
+      expect(spy).toBeCalledTimes(1);
+      expect(spy).toBeCalledWith({ force: true });
     });
   });
 
@@ -170,11 +171,11 @@ describe("FormField", () => {
       expect(field.isChanged).toBe(false);
 
       field.validateWithDelay();
-      expect(spy).toHaveBeenCalledTimes(0);
+      expect(spy).toBeCalledTimes(0);
 
       await waitForDelay(form);
 
-      expect(spy).toHaveBeenCalledTimes(1);
+      expect(spy).toBeCalledTimes(1);
       expect(field.isChanged).toBe(true);
       expect(field.isIntermediate).toBe(false);
     });
@@ -188,7 +189,7 @@ describe("FormField", () => {
       field.validateWithDelay();
       await waitForDelay(form);
 
-      expect(spy).toHaveBeenCalledTimes(1);
+      expect(spy).toBeCalledTimes(1);
     });
 
     it("cancels the delayed validation and triggers validation right away when validate() is called", async () => {
@@ -197,9 +198,9 @@ describe("FormField", () => {
 
       field.validateWithDelay();
       field.validate();
-      expect(spy).toHaveBeenCalledTimes(1);
+      expect(spy).toBeCalledTimes(1);
       await waitForDelay(form);
-      expect(spy).toHaveBeenCalledTimes(1);
+      expect(spy).toBeCalledTimes(1);
     });
 
     it("cancels the delayed validation when the field is reset", async () => {
@@ -210,7 +211,7 @@ describe("FormField", () => {
       field.reset();
       await waitForDelay(form);
 
-      expect(spy).toHaveBeenCalledTimes(0);
+      expect(spy).toBeCalledTimes(0);
     });
   });
 });

@@ -43,7 +43,7 @@ export namespace FormDelegate {
   /** Form configuration */
   export type Config = Readonly<Partial<FormConfig>>;
   /**
-   * Connect nested forms to the parent form.
+   * Connect other forms to the parent form.
    *
    * By connecting a form, the parent form will be able to integrate the validation state.
    * In regards to submitting a form, on the other hand, the parent form will need to handle submission manually,

@@ -53,11 +53,11 @@ describe("useForm", () => {
     const env = setupEnv();
     const spy = vi.spyOn(env.form, "reset");
 
-    expect(spy).toHaveBeenCalledTimes(0);
+    expect(spy).toBeCalledTimes(0);
     await env.mount();
-    expect(spy).toHaveBeenCalledTimes(1);
+    expect(spy).toBeCalledTimes(1);
 
     await env.unmount();
-    expect(spy).toHaveBeenCalledTimes(2);
+    expect(spy).toBeCalledTimes(2);
   });
 });

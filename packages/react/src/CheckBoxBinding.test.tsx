@@ -91,7 +91,7 @@ describe("CheckBoxBinding", () => {
       const callback = vi.fn();
       env.binding.config.onChange = callback;
       env.binding.onChange(env.fakeEvent());
-      expect(callback).toHaveBeenCalledWith(env.fakeEvent());
+      expect(callback).toBeCalledWith(env.fakeEvent());
     });
   });
 
@@ -106,7 +106,7 @@ describe("CheckBoxBinding", () => {
       const callback = vi.fn();
       env.binding.config.onFocus = callback;
       env.binding.onFocus(env.fakeEvent());
-      expect(callback).toHaveBeenCalledWith(env.fakeEvent());
+      expect(callback).toBeCalledWith(env.fakeEvent());
     });
   });
 });

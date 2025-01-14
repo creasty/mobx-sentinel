@@ -71,7 +71,7 @@ describe("SubmitButtonBinding", () => {
       const callback = vi.fn();
       env.binding.config.onClick = callback;
       env.binding.onClick(env.fakeEvent());
-      expect(callback).toHaveBeenCalledWith(env.fakeEvent());
+      expect(callback).toBeCalledWith(env.fakeEvent());
     });
   });
 
@@ -86,7 +86,7 @@ describe("SubmitButtonBinding", () => {
       const callback = vi.fn();
       env.binding.config.onMouseEnter = callback;
       env.binding.onMouseEnter(env.fakeEvent());
-      expect(callback).toHaveBeenCalledWith(env.fakeEvent());
+      expect(callback).toBeCalledWith(env.fakeEvent());
     });
   });
 });
@@ -148,6 +148,6 @@ suite("bindSubmitButton", () => {
     });
     await env.hoverButton();
 
-    expect(spy).toHaveBeenCalledTimes(1);
+    expect(spy).toBeCalledTimes(1);
   });
 });

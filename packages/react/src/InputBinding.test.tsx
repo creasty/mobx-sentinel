@@ -146,7 +146,7 @@ describe("InputBinding", () => {
       const callback = vi.fn();
       env.binding.config.onChange = callback;
       env.binding.onChange(env.fakeEvent());
-      expect(callback).toHaveBeenCalledWith(env.fakeEvent());
+      expect(callback).toBeCalledWith(env.fakeEvent());
     });
   });
 
@@ -161,7 +161,7 @@ describe("InputBinding", () => {
       const callback = vi.fn();
       env.binding.config.onFocus = callback;
       env.binding.onFocus(env.fakeEvent());
-      expect(callback).toHaveBeenCalledWith(env.fakeEvent());
+      expect(callback).toBeCalledWith(env.fakeEvent());
     });
   });
 
@@ -176,7 +176,7 @@ describe("InputBinding", () => {
       const callback = vi.fn();
       env.binding.config.onBlur = callback;
       env.binding.onBlur(env.fakeEvent());
-      expect(callback).toHaveBeenCalledWith(env.fakeEvent());
+      expect(callback).toBeCalledWith(env.fakeEvent());
     });
   });
 });
