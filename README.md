@@ -38,7 +38,7 @@ With models as a premise, most responsibilities can and should be placed on the 
 While there are already many libraries for building forms using MobX, they are all designed from a data serialization perspective rather than modeling,
 and have issues either being unable to use models (classes) or not properly separating data and form state management.<br>
 Furthermore, from my research, there wasn't a single one designed to allow type-safe implementation from both model and UI ends.<br>
-(Check out the [comparison](#comparison-with-other-libraries) section for more details.)
+(Check out the [Alternatives](#alternatives) section for more details.)
 
 Given this background, I believe there are two fundamental challenges in implementing forms:
 
@@ -67,7 +67,7 @@ This library aims to solve these problems through a model-centric design that pr
 すでに MobX を活用したフォーム構築のためのライブラリは多く存在しているが、どれもモデリングではなくデータシリアライズの観点で設計されており、
 モデル(クラス)を使うことができないか、データとフォームの状態管理の分離が適切にできていないかのいずれかの問題がある。
 さらに私の調べた限り、モデルと UI の両方から型安全に実装ができる設計になっているものは1つとして存在しなかった。<br>
-(詳細は[比較](#comparison-with-other-libraries)セクションを参照)
+(詳細は[既存ライブラリ](#alternatives)セクションを参照)
 
 ここまでの話を踏まえて、フォームを実装する上での本質的な課題は以下の2点であると考える。
 
@@ -285,14 +285,14 @@ const OtherForm: React.FC<{ model: Other }> = observer(({ model }) => {
 
 ---
 
-## Comparison with other libraries
+## Alternatives
 
 - Only two libraries are built with type safety in mind, and neither of them provides binding functionality.
 - Only two libraries support class-based implementation, and neither of them provides binding functionality.
 - **There isn't a single library that's properly usable.**
 
-| Repository | Stars | Language | Features |
-|------------|-------|----------|----------|
+| Repository | Stars | Language | Characteristics |
+|------------|-------|----------|-----------------|
 | [mobx-react-form](https://github.com/foxhound87/mobx-react-form) | ![GitHub stars](https://img.shields.io/github/stars/foxhound87/mobx-react-form?style=flat) | ![Language](https://img.shields.io/github/languages/top/foxhound87/mobx-react-form) | binding |
 | [formstate](https://github.com/formstate/formstate) | ![GitHub stars](https://img.shields.io/github/stars/formstate/formstate?style=flat) | ![Language](https://img.shields.io/github/languages/top/formstate/formstate) | typesafe |
 | [formst](https://github.com/formstjs/formst) | ![GitHub stars](https://img.shields.io/github/stars/formstjs/formst?style=flat) | ![Language](https://img.shields.io/github/languages/top/formstjs/formst) | binding |
@@ -306,33 +306,33 @@ const OtherForm: React.FC<{ model: Other }> = observer(({ model }) => {
 | [mobx-form-reactions](https://github.com/marvinhagemeister/mobx-form-reactions) | ![GitHub stars](https://img.shields.io/github/stars/marvinhagemeister/mobx-form-reactions?style=flat) | ![Language](https://img.shields.io/github/languages/top/marvinhagemeister/mobx-form-reactions) | - |
 | ...and many more | < 10 stars | | |
 
-Legend for the features:
-- `class` Can be implemented with classes? Including those with specific implementation requirements.
-- `binding` Provides binding functionality?
-- `typesafe` Has type-safe interfaces?
+Legend:
+- `class` Can be implemented with classes. Including those with specific implementation requirements.
+- `binding` Provides binding functionality.
+- `typesafe` Has type-safe interfaces.
 
 ## Roadmap to v0.1
 
-- [ ] Extensive documentation
-  - UX of smart error reporting.
-  - APIs.
-  - Examples.
+- [ ] Better way to implement delegation
+  - Problem 1: Unlike `validate()`, `submit()` is more of an application layer responsibility.
+  - Problem 2: `connect()` is lengthy. We could make it a field decorator.
+- [ ] Support callbacks for form events
+  - Use case: Display a toast message when the form is submitted. (Not a concern of a model nor a delegate)
 - [ ] Make the initial value of `isDirty` controllable from a model side somehow
   - Add a new `isCreate` property to the delegate?
+- [ ] Computed validation errors & per-field validations
+  - Add a new `@computed get errors()` for standard use-cases.
+  - Repurpose `validate()` for a time-consuming per-field validation (which results can be easily included in the `get errors()`).
 - [ ] Make the validation strategy configurable
   - Options: smart (default), submit, touch, change, blur, change-and-blur
   - Option to force trigger validate on all sub-forms?
 - [ ] Make the submission strategy configurable
   - Options: always, first-and-dirty, only-dirty
   - Option to bypass submission when there are validation errors?
-- [ ] Computed validation errors & per-field validations
-  - Add a new `@computed get errors()` for standard use-cases.
-  - Repurpose `validate()` for a time-consuming per-field validation (which results can be easily included in the `get errors()`).
-- [ ] Support callbacks for form events
-  - Use case: Display a toast message when the form is submitted. (Not a concern of a model nor a delegate)
-- [ ] Better way to implement delegation
-  - Problem 1: Unlike `validate()`, `submit()` is more of an application layer responsibility.
-  - Problem 2: `connect()` is lengthy. We could make it a field decorator.
+- [ ] Extensive documentation
+  - UX of smart error reporting.
+  - APIs.
+  - Examples.
 - [ ] Add an integration with a data validation library
   - [zod](https://zod.dev/) is a good candidate.
   - i18n support is also essential.
