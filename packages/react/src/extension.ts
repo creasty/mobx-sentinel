@@ -19,7 +19,7 @@ declare module "@form-model/core" {
      * @example
      * ```typescript-react
      * <input
-     *   {...model.form.bindInput("string", {
+     *   {...form.bindInput("string", {
      *     getter: () => model.string,
      *     setter: (v) => (model.string = v),
      *   })}
@@ -34,7 +34,7 @@ declare module "@form-model/core" {
      * @example
      * ```typescript-react
      * <select
-     *   {...model.form.bindSelectBox("single", {
+     *   {...form.bindSelectBox("single", {
      *     getter: () => model.single.code,
      *     setter: (v) => (model.single = findSampleOption(v)),
      *   })}
@@ -51,7 +51,7 @@ declare module "@form-model/core" {
      * @example
      * ```typescript-react
      * <input
-     *   {...model.form.bindCheckBox("boolean", {
+     *   {...form.bindCheckBox("boolean", {
      *     getter: () => model.boolean,
      *     setter: (v) => (model.boolean = v),
      *   })}
@@ -65,7 +65,7 @@ declare module "@form-model/core" {
      *
      * @example
      * ```typescript
-     * const bindRadioButton = model.form.bindRadioButton("enum", {
+     * const bindRadioButton = form.bindRadioButton("enum", {
      *   getter: () => model.enum,
      *   setter: (v) => (model.enum = v ? (v as SampleEnum) : SampleEnum.ZULU),
      * });
@@ -83,7 +83,7 @@ declare module "@form-model/core" {
      *
      * @example
      * ```typescript-react
-     * <button {...model.form.bindSubmitButton()}>Submit</button>
+     * <button {...form.bindSubmitButton()}>Submit</button>
      * ```
      */
     bindSubmitButton(config?: SubmitButtonBinding.Config): SubmitButtonBinding["props"];
@@ -93,7 +93,7 @@ declare module "@form-model/core" {
      *
      * @example
      * ```typescript-react
-     * <label {...model.form.bindLabel(["field1", "field2"])}>Label</label>
+     * <label {...form.bindLabel(["field1", "field2"])}>Label</label>
      * ```
      */
     bindLabel(fields: FormField.Name<T>[], config?: LabelBinding.Config): LabelBinding["props"];
