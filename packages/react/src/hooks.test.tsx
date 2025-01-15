@@ -1,12 +1,12 @@
 import React, { useState } from "react";
 import "@testing-library/jest-dom";
-import { render, screen } from "@testing-library/react";
+import { act, render, screen } from "@testing-library/react";
 import { userEvent } from "@testing-library/user-event";
 import { makeObservable, observable } from "mobx";
 import { Form } from "@form-model/core";
 import "./extension";
 import { observer } from "mobx-react-lite";
-import { useForm } from "./hooks";
+import { useForm, useFormEvent } from "./hooks";
 
 class SampleModel {
   @observable field = "hello";
@@ -16,39 +16,51 @@ class SampleModel {
   }
 }
 
-const ParentComponent: React.FC<{ model: SampleModel }> = observer(({ model }) => {
-  const [mounted, setMounted] = useState(false);
-  return (
-    <>
-      <button onClick={() => setMounted(true)}>Mount</button>
-      <button onClick={() => setMounted(false)}>Unmount</button>
-      {mounted && <SampleComponent model={model} />}
-    </>
-  );
-});
+const ParentComponent: React.FC<{ model: SampleModel; submitHandler: () => void }> = observer(
+  ({ model, submitHandler }) => {
+    const [mounted, setMounted] = useState(false);
+    return (
+      <>
+        <button onClick={() => setMounted(true)}>Mount</button>
+        <button onClick={() => setMounted(false)}>Unmount</button>
+        {mounted && <SampleComponent model={model} submitHandler={submitHandler} />}
+      </>
+    );
+  }
+);
 
-const SampleComponent: React.FC<{ model: SampleModel }> = observer(({ model }) => {
-  const form = useForm(model);
-  return <p>{form.id}</p>;
-});
+const SampleComponent: React.FC<{ model: SampleModel; submitHandler: () => void }> = observer(
+  ({ model, submitHandler }) => {
+    const form = useForm(model);
+
+    useFormEvent(form, "submit", async () => {
+      submitHandler();
+      return true;
+    });
+
+    return <p>{form.id}</p>;
+  }
+);
+
+const setupEnv = () => {
+  const model = new SampleModel();
+  const form = Form.get(model);
+  const spy = vi.fn();
+
+  render(<ParentComponent model={model} submitHandler={spy} />);
+  const mountButton = screen.getByText("Mount") as HTMLButtonElement;
+  const unmountButton = screen.getByText("Unmount") as HTMLButtonElement;
+
+  return {
+    model,
+    form,
+    spy,
+    mount: () => userEvent.click(mountButton),
+    unmount: () => userEvent.click(unmountButton),
+  };
+};
 
 describe("useForm", () => {
-  const setupEnv = () => {
-    const model = new SampleModel();
-    const form = Form.get(model);
-
-    render(<ParentComponent model={model} />);
-    const mountButton = screen.getByText("Mount") as HTMLButtonElement;
-    const unmountButton = screen.getByText("Unmount") as HTMLButtonElement;
-
-    return {
-      model,
-      form,
-      mount: () => userEvent.click(mountButton),
-      unmount: () => userEvent.click(unmountButton),
-    };
-  };
-
   test("auto resets the form when mounted/unmounted", async () => {
     const env = setupEnv();
     const spy = vi.spyOn(env.form, "reset");
@@ -59,5 +71,29 @@ describe("useForm", () => {
 
     await env.unmount();
     expect(spy).toBeCalledTimes(2);
+  });
+});
+
+describe("useFormEvent", () => {
+  test("subscribes to the form event", async () => {
+    const env = setupEnv();
+
+    await env.mount();
+    expect(env.spy).toBeCalledTimes(0);
+    await act(async () => {
+      await env.form.submit({ force: true });
+    });
+    expect(env.spy).toBeCalledTimes(1);
+  });
+
+  test("unsubscribes from the form event when unmounted", async () => {
+    const env = setupEnv();
+
+    await env.mount();
+    await env.unmount();
+    await act(async () => {
+      await env.form.submit({ force: true });
+    });
+    expect(env.spy).toBeCalledTimes(0);
   });
 });

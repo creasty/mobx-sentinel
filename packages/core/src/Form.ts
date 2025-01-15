@@ -1,10 +1,11 @@
-import { action, computed, makeObservable, observable, runInAction } from "mobx";
+import { action, computed, makeObservable, observable } from "mobx";
 import { v4 as uuidV4 } from "uuid";
 import { FormField } from "./FormField";
 import { FormBinding, FormBindingConstructor, FormBindingFunc } from "./binding";
 import { FormConfig, globalConfig } from "./config";
 import { Validation } from "./validation";
 import { FormDelegate, getDelegation, isConnectableObject } from "./delegation";
+import { Submission } from "./submission";
 
 const registry = new WeakMap<object, Map<symbol, Form<any>>>();
 const defaultFormKey = Symbol("Form.defaultFormKey");
@@ -14,11 +15,11 @@ export class Form<T> {
   readonly id = uuidV4();
   readonly #delegate?: FormDelegate<T>;
   readonly #formKey: symbol;
-  readonly #validation: Validation;
+  readonly #validation = new Validation();
+  readonly #submission = new Submission();
+  readonly #isDirty = observable.box(false);
   readonly #fields = new Map<string, FormField>();
   readonly #bindings = new Map<string, FormBinding>();
-  readonly #isSubmitting = observable.box(false);
-  readonly #isDirty = observable.box(false);
 
   /** Extension fields for bindings */
   [k: `bind${Capitalize<string>}`]: unknown;
@@ -87,9 +88,20 @@ export class Form<T> {
     this.#formKey = args.formKey;
     this.#delegate = args.delegate;
 
-    this.#validation = new Validation({
-      requestDelayMs: this.config.validationDelayMs,
-      scheduleDelayMs: this.config.subsequentValidationDelayMs,
+    this.#validation.addHandler(async (abortSignal) => {
+      const validate = this.#getDelegateByKey(FormDelegate.validate);
+      if (!validate) return {};
+      return await validate(abortSignal);
+    });
+    this.#submission.addHandler("submit", async (abortSignal) => {
+      const submit = this.#getDelegateByKey(FormDelegate.submit);
+      if (!submit) return true;
+      return await submit(abortSignal);
+    });
+    this.#submission.addHandler("didSubmit", (succeed) => {
+      if (succeed) {
+        this.reset();
+      }
     });
   }
 
@@ -121,13 +133,13 @@ export class Form<T> {
 
   /** Whether the form is in submitting state */
   get isSubmitting() {
-    return this.#isSubmitting.get();
+    return this.#submission.isRunning;
   }
 
   /** Whether the form is in validation state */
   @computed
   get isValidating() {
-    return this.#validation.isRunning || this.#validation.isScheduled;
+    return this.#validation.state !== "idle";
   }
 
   /** Whether the form can be submitted */
@@ -243,57 +255,42 @@ export class Form<T> {
   /**
    * Submit the form.
    *
-   * Returns true if the submission is occurred,
-   * false if the submission is discarded/canceled (e.g. invalid form, already in progress).
-   * Note that the return value does not indicate whether the submission succeeded.
-   *
-   * The process is delegated to the {@link FormDelegate.submit}.
+   * @returns true when the submission succeeded.
    */
   async submit(args?: { force?: boolean }) {
-    const submit = this.#getDelegateByKey(FormDelegate.submit);
-    if (!submit) return false;
-
-    if (args?.force) {
-      this.#submitAbortCtrl?.abort();
-      this.#submitAbortCtrl = null;
-    } else if (this.isSubmitting) {
-      return false;
-    } else if (!this.canSubmit) {
-      return false;
-    }
-
-    runInAction(() => {
-      this.#isSubmitting.set(true);
-    });
-    let succeed = false;
-    const abortCtrl = new AbortController();
-    try {
-      this.#submitAbortCtrl = abortCtrl;
-      succeed = await submit(abortCtrl.signal);
-    } finally {
-      this.#submitAbortCtrl = null;
-      runInAction(() => {
-        this.#isSubmitting.set(false);
-        if (succeed) {
-          this.reset();
-        }
-      });
-    }
-    return !abortCtrl.signal.aborted;
+    if (!args?.force && !this.canSubmit) return false;
+    return this.#submission.exec();
   }
-  #submitAbortCtrl: AbortController | null = null;
+
+  /** Validate the form */
+  validate(args?: {
+    /** Force the validation to be executed immediately */
+    force?: boolean;
+  }) {
+    this.#validation.request({
+      force: !!args?.force,
+      enqueueDelayMs: this.config.validationDelayMs,
+      scheduleDelayMs: this.config.subsequentValidationDelayMs,
+    });
+  }
 
   /**
-   * Validate the form.
+   * Subscribe to the form events.
    *
-   * The process is delegated to the {@link FormDelegate.validate}.
-   *
-   * @returns The execution status, or null if no delegate is found.
+   * @returns A function to unsubscribe from the event.
    */
-  validate(args?: Validation.ExecutorOptions): Validation.Status | null {
-    const validate = this.#getDelegateByKey(FormDelegate.validate);
-    if (!validate) return null;
-    return this.#validation.request(validate, args);
+  addHandler<K extends keyof Form.EventHandlers<T>>(event: K, handler: Form.EventHandlers<T>[K]) {
+    switch (event) {
+      case "willSubmit":
+      case "submit":
+      case "didSubmit":
+        return this.#submission.addHandler(event, handler as any);
+      case "validate":
+        return this.#validation.addHandler(handler as any);
+      default:
+        event satisfies never;
+        throw new Error(`Invalid event: ${event}`);
+    }
   }
 
   /** Get a field by name */
@@ -399,8 +396,15 @@ export class Form<T> {
       fields: this.#fields,
       bindings: this.#bindings,
       validation: this.#validation,
+      submission: this.#submission,
     };
   }
+}
+
+export namespace Form {
+  export type EventHandlers<T> = Submission.EventHandlers & {
+    validate: Validation.Handler<T>;
+  };
 }
 
 /** @internal */

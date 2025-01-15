@@ -4,4 +4,4 @@ export { RadioButtonBinding } from "./RadioButtonBinding";
 export { SelectBoxBinding } from "./SelectBoxBinding";
 export { SubmitButtonBinding } from "./SubmitButtonBinding";
 export { LabelBinding } from "./LabelBinding";
-export { useForm } from "./hooks";
+export { useForm, useFormEvent } from "./hooks";
