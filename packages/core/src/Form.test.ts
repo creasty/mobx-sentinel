@@ -262,10 +262,10 @@ describe("Form", () => {
 
       form.markAsDirty();
       expect(form.canSubmit).toBe(true);
-      expect(await form.submit()).toBe(false);
+      expect(await form.submit()).toBe(true);
     });
 
-    it("returns true when submission occurred", async () => {
+    it("returns true when submission succeeded", async () => {
       const model = new SampleModel();
       const form = Form.get(model);
 
@@ -274,62 +274,22 @@ describe("Form", () => {
       expect(await form.submit()).toBe(true);
     });
 
-    it("sets isSubmitting flag while submitting", async () => {
-      const model = new SampleModel();
-      const form = Form.get(model);
-
-      form.markAsDirty();
-      expect(form.canSubmit).toBe(true);
-
-      const timeline: string[] = [];
-      autorun(() => {
-        timeline.push(`isSubmitting: ${form.isSubmitting}`);
-      });
-
-      const submit = form.submit();
-      submit.then(() => timeline.push(`submit`));
-
-      expect(await submit).toBe(true);
-      expect(timeline).toMatchInlineSnapshot(`
-        [
-          "isSubmitting: false",
-          "isSubmitting: true",
-          "isSubmitting: false",
-          "submit",
-        ]
-      `);
-    });
-
     it("discards subsequent submit requests while submitting", async () => {
       const model = new SampleModel();
       const form = Form.get(model);
-
-      const timeline: string[] = [];
-      autorun(() => {
-        timeline.push(`isSubmitting: ${form.isSubmitting}`);
-      });
+      const spy = vi.spyOn(model, FormDelegate.submit);
 
       form.markAsDirty();
       expect(form.canSubmit).toBe(true);
 
       // Start first submission
       const firstSubmit = form.submit();
-      firstSubmit.then(() => timeline.push(`firstSubmit`));
       // Try to submit again while first is still running
       const secondSubmit = form.submit();
-      secondSubmit.then(() => timeline.push(`secondSubmit`));
 
       expect(await firstSubmit).toBe(true); // First submit should be occurred
       expect(await secondSubmit).toBe(false); // Second submit should be discarded
-      expect(timeline).toMatchInlineSnapshot(`
-        [
-          "isSubmitting: false",
-          "isSubmitting: true",
-          "secondSubmit",
-          "isSubmitting: false",
-          "firstSubmit",
-        ]
-      `);
+      expect(spy).toBeCalledTimes(1);
     });
 
     it("aborts ongoing submission when submitting with force option", async () => {

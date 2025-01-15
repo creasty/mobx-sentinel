@@ -178,11 +178,6 @@ class Sample implements FormDelegate<Sample> {
   async [FormDelegate.validate](signal: AbortSignal) {
     return { ... };
   }
-
-  async [FormDelegate.submit](signal: AbortSignal) {
-    ...
-    return true;
-  }
 }
 
 class Other implements FormDelegate<Other> {
@@ -211,6 +206,11 @@ import "@form-model/react/dist/extension"; // Makes .bindTextInput() and other b
 
 const SampleForm: React.FC<{ model: Sample }> = observer(({ model }) => {
   const form = useForm(model);
+
+  useFormEvent(form, "submit", async (abortSignal) => {
+    console.log("submit");
+    return true;
+  });
 
   return (
     <form>

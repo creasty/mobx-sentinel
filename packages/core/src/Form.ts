@@ -1,10 +1,11 @@
-import { action, computed, makeObservable, observable, runInAction } from "mobx";
+import { action, computed, makeObservable, observable } from "mobx";
 import { v4 as uuidV4 } from "uuid";
 import { FormField } from "./FormField";
 import { FormBinding, FormBindingConstructor, FormBindingFunc } from "./binding";
 import { FormConfig, globalConfig } from "./config";
 import { Validation } from "./validation";
 import { FormDelegate, getDelegation, isConnectableObject } from "./delegation";
+import { Submission } from "./submission";
 
 const registry = new WeakMap<object, Map<symbol, Form<any>>>();
 const defaultFormKey = Symbol("Form.defaultFormKey");
@@ -15,10 +16,10 @@ export class Form<T> {
   readonly #delegate?: FormDelegate<T>;
   readonly #formKey: symbol;
   readonly #validation: Validation;
+  readonly #submission = new Submission();
+  readonly #isDirty = observable.box(false);
   readonly #fields = new Map<string, FormField>();
   readonly #bindings = new Map<string, FormBinding>();
-  readonly #isSubmitting = observable.box(false);
-  readonly #isDirty = observable.box(false);
 
   /** Extension fields for bindings */
   [k: `bind${Capitalize<string>}`]: unknown;
@@ -91,6 +92,16 @@ export class Form<T> {
       requestDelayMs: this.config.validationDelayMs,
       scheduleDelayMs: this.config.subsequentValidationDelayMs,
     });
+    this.#submission.on("submit", async (abortSignal) => {
+      const submit = this.#getDelegateByKey(FormDelegate.submit);
+      if (!submit) return true;
+      return await submit(abortSignal);
+    });
+    this.#submission.on("didSubmit", (succeed) => {
+      if (succeed) {
+        this.reset();
+      }
+    });
   }
 
   /**
@@ -121,7 +132,7 @@ export class Form<T> {
 
   /** Whether the form is in submitting state */
   get isSubmitting() {
-    return this.#isSubmitting.get();
+    return this.#submission.isRunning;
   }
 
   /** Whether the form is in validation state */
@@ -243,45 +254,33 @@ export class Form<T> {
   /**
    * Submit the form.
    *
-   * Returns true if the submission is occurred,
-   * false if the submission is discarded/canceled (e.g. invalid form, already in progress).
-   * Note that the return value does not indicate whether the submission succeeded.
-   *
    * The process is delegated to the {@link FormDelegate.submit}.
+   *
+   * @returns true when the submission succeeded.
    */
   async submit(args?: { force?: boolean }) {
-    const submit = this.#getDelegateByKey(FormDelegate.submit);
-    if (!submit) return false;
-
-    if (args?.force) {
-      this.#submitAbortCtrl?.abort();
-      this.#submitAbortCtrl = null;
-    } else if (this.isSubmitting) {
-      return false;
-    } else if (!this.canSubmit) {
-      return false;
-    }
-
-    runInAction(() => {
-      this.#isSubmitting.set(true);
-    });
-    let succeed = false;
-    const abortCtrl = new AbortController();
-    try {
-      this.#submitAbortCtrl = abortCtrl;
-      succeed = await submit(abortCtrl.signal);
-    } finally {
-      this.#submitAbortCtrl = null;
-      runInAction(() => {
-        this.#isSubmitting.set(false);
-        if (succeed) {
-          this.reset();
-        }
-      });
-    }
-    return !abortCtrl.signal.aborted;
+    if (!args?.force && !this.canSubmit) return false;
+    return this.#submission.exec();
   }
-  #submitAbortCtrl: AbortController | null = null;
+
+  /**
+   * Subscribe to the form events.
+   *
+   * @param event The event to subscribe to.
+   * @param handler The event handler.
+   * @returns A function to unsubscribe from the event.
+   */
+  on<K extends keyof Form.EventHandlers>(event: K, handler: Form.EventHandlers[K]) {
+    switch (event) {
+      case "willSubmit":
+      case "submit":
+      case "didSubmit":
+        return this.#submission.on(event, handler);
+      default:
+        event satisfies never;
+        throw new Error(`Invalid event: ${event}`);
+    }
+  }
 
   /**
    * Validate the form.
@@ -401,6 +400,10 @@ export class Form<T> {
       validation: this.#validation,
     };
   }
+}
+
+export namespace Form {
+  export type EventHandlers = Submission.EventHandlers;
 }
 
 /** @internal */

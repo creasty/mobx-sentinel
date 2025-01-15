@@ -1,5 +1,5 @@
 import { Form } from "@form-model/core";
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 
 /**
  * Get the form instance for a subject.
@@ -17,4 +17,24 @@ export function useForm<T extends object>(subject: T, opt?: { formKey?: symbol; 
     return () => form.reset();
   }, [form]);
   return form;
+}
+
+/**
+ * Subscribe to the form events.
+ *
+ * It automatically unsubscribes when the component is unmounted.
+ *
+ * @param form The form instance.
+ * @param event The event to subscribe to.
+ * @param handler The event handler.
+ */
+export function useFormEvent<T extends object, Event extends keyof Form.EventHandlers>(
+  form: Form<T>,
+  event: Event,
+  handler: Form.EventHandlers[Event]
+) {
+  const handlerRef = useRef(handler);
+  handlerRef.current = handler;
+
+  useEffect(() => form.on(event, handlerRef.current), [form, event]);
 }
