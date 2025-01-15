@@ -67,7 +67,7 @@ This library aims to solve these problems through a model-centric design that pr
 すでに MobX を活用したフォーム構築のためのライブラリは多く存在しているが、どれもモデリングではなくデータシリアライズの観点で設計されており、
 モデル(クラス)を使うことができないか、データとフォームの状態管理の分離が適切にできていないかのいずれかの問題がある。
 さらに私の調べた限り、モデルと UI の両方から型安全に実装ができる設計になっているものは1つとして存在しなかった。<br>
-(詳細は[既存ライブラリ](#alternatives)セクションを参照)
+(詳細は [Alternatives](#alternatives) セクションを参照)
 
 ここまでの話を踏まえて、フォームを実装する上での本質的な課題は以下の2点であると考える。
 
@@ -130,12 +130,19 @@ This library aims to solve these problems through a model-centric design that pr
 
 ## Features
 
-- Asynchronous submission (abortable)
-- Asynchronous validation (abortable)
-- Smart error reporting
+- Asynchronous submission and validation
+  - Composable from multiple sources.
+  - Cancellable with [AbortSignal](https://developer.mozilla.org/en-US/docs/Web/API/AbortSignal).
 - Nested and dynamic (array) forms
+  - No bullsh\*t. Just mutate models directly.
 - Custom bindings
-- [React](https://react.dev/) integration
+  - Flexible and easy-to-create.
+  - Most cases can be implemented in less than 50 lines.
+- React integration
+  - React hooks that automatically handle component lifecycle under the hood.
+  - Standard bindings for most common form elements.
+- Smart error reporting.
+  - Original validation strategy for a supreme user experience.
 
 ---
 
@@ -287,29 +294,25 @@ const OtherForm: React.FC<{ model: Other }> = observer(({ model }) => {
 
 ## Alternatives
 
-- Only two libraries are built with type safety in mind, and neither of them provides binding functionality.
-- Only two libraries support class-based implementation, and neither of them provides binding functionality.
-- **There isn't a single library that's properly usable.**
+Criteria:
+[**T**] Type-safe interfaces.
+[**B**] Binding for UI.
+[**C**] Class-based implementation.
 
-| Repository | Stars | Language | Characteristics |
-|------------|-------|----------|-----------------|
-| [mobx-react-form](https://github.com/foxhound87/mobx-react-form) | ![GitHub stars](https://img.shields.io/github/stars/foxhound87/mobx-react-form?style=flat) | ![Language](https://img.shields.io/github/languages/top/foxhound87/mobx-react-form) | binding |
-| [formstate](https://github.com/formstate/formstate) | ![GitHub stars](https://img.shields.io/github/stars/formstate/formstate?style=flat) | ![Language](https://img.shields.io/github/languages/top/formstate/formstate) | typesafe |
-| [formst](https://github.com/formstjs/formst) | ![GitHub stars](https://img.shields.io/github/stars/formstjs/formst?style=flat) | ![Language](https://img.shields.io/github/languages/top/formstjs/formst) | binding |
-| [smashing-form](https://github.com/eyedea-io/smashing-form) | ![GitHub stars](https://img.shields.io/github/stars/eyedea-io/smashing-form?style=flat) | ![Language](https://img.shields.io/github/languages/top/eyedea-io/smashing-form) | binding |
-| [formstate-x](https://github.com/qiniu/formstate-x) | ![GitHub stars](https://img.shields.io/github/stars/qiniu/formstate-x?style=flat) | ![Language](https://img.shields.io/github/languages/top/qiniu/formstate-x) | typesafe |
-| [mobx-form-validate](https://github.com/tdzl2003/mobx-form-validate) | ![GitHub stars](https://img.shields.io/github/stars/tdzl2003/mobx-form-validate?style=flat) | ![Language](https://img.shields.io/github/languages/top/tdzl2003/mobx-form-validate) | class, typesafe |
-| [mobx-form](https://github.com/kentik/mobx-form) | ![GitHub stars](https://img.shields.io/github/stars/kentik/mobx-form?style=flat) | ![Language](https://img.shields.io/github/languages/top/kentik/mobx-form) | binding |
-| [mobx-schema-form](https://github.com/alexhisen/mobx-schema-form) | ![GitHub stars](https://img.shields.io/github/stars/alexhisen/mobx-schema-form?style=flat) | ![Language](https://img.shields.io/github/languages/top/alexhisen/mobx-schema-form) | - |
-| [mobx-form-schema](https://github.com/Yoskutik/mobx-form-schema) | ![GitHub stars](https://img.shields.io/github/stars/Yoskutik/mobx-form-schema?style=flat) | ![Language](https://img.shields.io/github/languages/top/Yoskutik/mobx-form-schema) | class |
-| [mobx-form-store](https://github.com/alexhisen/mobx-form-store) | ![GitHub stars](https://img.shields.io/github/stars/alexhisen/mobx-form-store?style=flat) | ![Language](https://img.shields.io/github/languages/top/alexhisen/mobx-form-store) | - |
-| [mobx-form-reactions](https://github.com/marvinhagemeister/mobx-form-reactions) | ![GitHub stars](https://img.shields.io/github/stars/marvinhagemeister/mobx-form-reactions?style=flat) | ![Language](https://img.shields.io/github/languages/top/marvinhagemeister/mobx-form-reactions) | - |
-| ...and many more | < 10 stars | | |
-
-Legend:
-- `class` Can be implemented with classes. Including those with specific implementation requirements.
-- `binding` Provides binding functionality.
-- `typesafe` Has type-safe interfaces.
+| Repository | Stars | Language | Tests | T | B | C |
+|------------|-------|----------|-------|---|---|---|
+| [mobx-react-form](https://github.com/foxhound87/mobx-react-form) | ![GitHub stars](https://img.shields.io/github/stars/foxhound87/mobx-react-form?style=flat) | ![Language](https://img.shields.io/github/languages/top/foxhound87/mobx-react-form) | [![Codecov Coverage](https://img.shields.io/codecov/c/github/foxhound87/mobx-react-form/master.svg)](https://codecov.io/gh/foxhound87/mobx-react-form) | | ✓ | |
+| [formstate](https://github.com/formstate/formstate) | ![GitHub stars](https://img.shields.io/github/stars/formstate/formstate?style=flat) | ![Language](https://img.shields.io/github/languages/top/formstate/formstate) | Good 👍 | ✓ | | |
+| [formst](https://github.com/formstjs/formst) | ![GitHub stars](https://img.shields.io/github/stars/formstjs/formst?style=flat) | ![Language](https://img.shields.io/github/languages/top/formstjs/formst) | None | | ✓ | |
+| [smashing-form](https://github.com/eyedea-io/smashing-form) | ![GitHub stars](https://img.shields.io/github/stars/eyedea-io/smashing-form?style=flat) | ![Language](https://img.shields.io/github/languages/top/eyedea-io/smashing-form) | Bad | | ✓ | |
+| [formstate-x](https://github.com/qiniu/formstate-x) | ![GitHub stars](https://img.shields.io/github/stars/qiniu/formstate-x?style=flat) | ![Language](https://img.shields.io/github/languages/top/qiniu/formstate-x) | [![Coverage Status](https://coveralls.io/repos/github/qiniu/formstate-x/badge.svg?branch=master)](https://coveralls.io/github/qiniu/formstate-x?branch=master) | ✓ | | |
+| [mobx-form-validate](https://github.com/tdzl2003/mobx-form-validate) | ![GitHub stars](https://img.shields.io/github/stars/tdzl2003/mobx-form-validate?style=flat) | ![Language](https://img.shields.io/github/languages/top/tdzl2003/mobx-form-validate) | None | ✓ | | ✓ |
+| [mobx-form](https://github.com/kentik/mobx-form) | ![GitHub stars](https://img.shields.io/github/stars/kentik/mobx-form?style=flat) | ![Language](https://img.shields.io/github/languages/top/kentik/mobx-form) | None | | ✓ | |
+| [mobx-schema-form](https://github.com/alexhisen/mobx-schema-form) | ![GitHub stars](https://img.shields.io/github/stars/alexhisen/mobx-schema-form?style=flat) | ![Language](https://img.shields.io/github/languages/top/alexhisen/mobx-schema-form) | Bad | | | |
+| [mobx-form-schema](https://github.com/Yoskutik/mobx-form-schema) | ![GitHub stars](https://img.shields.io/github/stars/Yoskutik/mobx-form-schema?style=flat) | ![Language](https://img.shields.io/github/languages/top/Yoskutik/mobx-form-schema) | ![Jest coverage](https://raw.githubusercontent.com/Yoskutik/mobx-form-schema/master/badges/coverage-jest%20coverage.svg) | | | ✓ |
+| [mobx-form-store](https://github.com/alexhisen/mobx-form-store) | ![GitHub stars](https://img.shields.io/github/stars/alexhisen/mobx-form-store?style=flat) | ![Language](https://img.shields.io/github/languages/top/alexhisen/mobx-form-store) | Good 👍 | | | |
+| [mobx-form-reactions](https://github.com/marvinhagemeister/mobx-form-reactions) | ![GitHub stars](https://img.shields.io/github/stars/marvinhagemeister/mobx-form-reactions?style=flat) | ![Language](https://img.shields.io/github/languages/top/marvinhagemeister/mobx-form-reactions) | None | | | |
+| ...and many more | < 10 stars | | | | | |
 
 ## Roadmap to v0.1
 
