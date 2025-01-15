@@ -123,14 +123,11 @@ export class Form<T> {
   get isSubmitting() {
     return this.#isSubmitting.get();
   }
+
   /** Whether the form is in validation state */
   @computed
   get isValidating() {
     return this.#validation.isRunning || this.#validation.isScheduled;
-  }
-  /** Whether the form is dirty */
-  get isDirty() {
-    return this.#isDirty.get();
   }
 
   /** Whether the form can be submitted */
@@ -139,9 +136,15 @@ export class Form<T> {
     return !this.isSubmitting && !this.isValidating && this.isValid && this.isDirty;
   }
 
-  /** Whether the form is valid */
+  /** Whether the form is valid (including sub-forms) */
   get isValid() {
     return this.invalidFieldCount === 0 && this.invalidSubFormCount === 0;
+  }
+
+  /** Whether the form is dirty (including sub-forms) */
+  @computed
+  get isDirty() {
+    return this.#isDirty.get() || this.dirtySubFormCount > 0;
   }
 
   /**
@@ -152,20 +155,6 @@ export class Form<T> {
   @computed
   get invalidFieldCount() {
     return this.#validation.errors.size;
-  }
-
-  /**
-   * The number of invalid sub-forms
-   *
-   * Note that this is not the number of fields.
-   */
-  @computed
-  get invalidSubFormCount() {
-    let count = 0;
-    for (const form of this.subForms) {
-      count += form.isValid ? 0 : 1;
-    }
-    return count;
   }
 
   /**
@@ -191,6 +180,34 @@ export class Form<T> {
     }
 
     return forms;
+  }
+
+  /**
+   * The number of invalid sub-forms
+   *
+   * Note that this is not the number of fields.
+   */
+  @computed
+  get invalidSubFormCount() {
+    let count = 0;
+    for (const form of this.subForms) {
+      count += form.isValid ? 0 : 1;
+    }
+    return count;
+  }
+
+  /**
+   * The number of dirty sub-forms
+   *
+   * Note that this is not the number of fields.
+   */
+  @computed
+  get dirtySubFormCount() {
+    let count = 0;
+    for (const form of this.subForms) {
+      count += form.isDirty ? 1 : 0;
+    }
+    return count;
   }
 
   /** Report error states on all fields and sub-forms */

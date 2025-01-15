@@ -575,6 +575,32 @@ suite("Sub-forms", () => {
     };
   };
 
+  suite("Dirty check", () => {
+    test("when a sub-form becomes dirty, the parent form also becomes dirty", () => {
+      const { form, sampleForm } = setupEnv();
+
+      expect(sampleForm.isDirty).toBe(false);
+      expect(form.isDirty).toBe(false);
+
+      sampleForm.markAsDirty();
+
+      expect(sampleForm.isDirty).toBe(true);
+      expect(form.isDirty).toBe(true);
+    });
+
+    test("when a parent form becomes dirty, sub-forms remain unaffected", () => {
+      const { form, sampleForm } = setupEnv();
+
+      expect(sampleForm.isDirty).toBe(false);
+      expect(form.isDirty).toBe(false);
+
+      form.markAsDirty();
+
+      expect(form.isDirty).toBe(true);
+      expect(sampleForm.isDirty).toBe(false);
+    });
+  });
+
   suite("Validation", () => {
     test("when a sub-form becomes invalid, the parent form also becomes invalid", async () => {
       const { model, form, sampleForm, waitForValidation } = setupEnv();
