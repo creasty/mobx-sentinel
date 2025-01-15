@@ -314,6 +314,34 @@ describe("Form", () => {
     });
   });
 
+  describe("#addHandler", () => {
+    it("adds a handler to the submission event", () => {
+      const model = new SampleModel();
+      const form = Form.get(model);
+      const internal = getInternal(form);
+      const spy = vi.spyOn(internal.submission, "addHandler");
+      expect(form.addHandler("willSubmit", () => void 0)).toBeInstanceOf(Function);
+      expect(form.addHandler("submit", async () => false)).toBeInstanceOf(Function);
+      expect(form.addHandler("didSubmit", () => void 0)).toBeInstanceOf(Function);
+      expect(spy).toBeCalledTimes(3);
+    });
+
+    it("adds a handler to the validation event", () => {
+      const model = new SampleModel();
+      const form = Form.get(model);
+      const internal = getInternal(form);
+      const spy = vi.spyOn(internal.validation, "addHandler");
+      expect(form.addHandler("validate", async () => ({}))).toBeInstanceOf(Function);
+      expect(spy).toBeCalledTimes(1);
+    });
+
+    it("throws an error when the event is invalid", () => {
+      const model = new SampleModel();
+      const form = Form.get(model);
+      expect(() => form.addHandler("INVALID" as any, () => void 0)).toThrow();
+    });
+  });
+
   describe("#bind", () => {
     describe("Create a binding for the form", () => {
       describe("Without a config", () => {

@@ -262,6 +262,18 @@ export class Form<T> {
     return this.#submission.exec();
   }
 
+  /** Validate the form */
+  validate(args?: {
+    /** Force the validation to be executed immediately */
+    force?: boolean;
+  }) {
+    this.#validation.request({
+      force: !!args?.force,
+      enqueueDelayMs: this.config.validationDelayMs,
+      scheduleDelayMs: this.config.subsequentValidationDelayMs,
+    });
+  }
+
   /**
    * Subscribe to the form events.
    *
@@ -279,18 +291,6 @@ export class Form<T> {
         event satisfies never;
         throw new Error(`Invalid event: ${event}`);
     }
-  }
-
-  /** Validate the form */
-  validate(args?: {
-    /** Force the validation to be executed immediately */
-    force?: boolean;
-  }) {
-    this.#validation.request({
-      force: !!args?.force,
-      enqueueDelayMs: this.config.validationDelayMs,
-      scheduleDelayMs: this.config.subsequentValidationDelayMs,
-    });
   }
 
   /** Get a field by name */
