@@ -8,24 +8,24 @@ describe("Submission", () => {
       const submission = new Submission();
       const timeline: string[] = [];
 
-      submission.on("willSubmit", () => {
+      submission.addHandler("willSubmit", () => {
         timeline.push("willSubmit 1");
       });
-      submission.on("submit", async () => {
+      submission.addHandler("submit", async () => {
         timeline.push("submit 1");
         return true;
       });
-      submission.on("didSubmit", () => {
+      submission.addHandler("didSubmit", () => {
         timeline.push("didSubmit 1");
       });
-      submission.on("willSubmit", () => {
+      submission.addHandler("willSubmit", () => {
         timeline.push("willSubmit 2");
       });
-      submission.on("submit", async () => {
+      submission.addHandler("submit", async () => {
         timeline.push("submit 2");
         return true;
       });
-      submission.on("didSubmit", () => {
+      submission.addHandler("didSubmit", () => {
         timeline.push("didSubmit 2");
       });
 
@@ -50,14 +50,14 @@ describe("Submission", () => {
         timeline.push(`isRunning: ${submission.isRunning}`);
       });
 
-      submission.on("willSubmit", () => {
+      submission.addHandler("willSubmit", () => {
         timeline.push("willSubmit");
       });
-      submission.on("submit", async () => {
+      submission.addHandler("submit", async () => {
         timeline.push("submit");
         return true;
       });
-      submission.on("didSubmit", () => {
+      submission.addHandler("didSubmit", () => {
         timeline.push("didSubmit");
       });
 
@@ -65,8 +65,8 @@ describe("Submission", () => {
       expect(timeline).toMatchInlineSnapshot(`
         [
           "isRunning: false",
-          "isRunning: true",
           "willSubmit",
+          "isRunning: true",
           "submit",
           "didSubmit",
           "isRunning: false",
@@ -78,19 +78,19 @@ describe("Submission", () => {
       const submission = new Submission();
       const timeline: string[] = [];
 
-      submission.on("submit", async () => {
+      submission.addHandler("submit", async () => {
         timeline.push("submit 1 start");
         await new Promise((resolve) => setTimeout(resolve, 50));
         timeline.push("submit 1 end");
         return true;
       });
-      submission.on("submit", async () => {
+      submission.addHandler("submit", async () => {
         timeline.push("submit 2 start");
         await new Promise((resolve) => setTimeout(resolve, 10));
         timeline.push("submit 2 end");
         return true;
       });
-      submission.on("submit", async () => {
+      submission.addHandler("submit", async () => {
         timeline.push("submit 3 start");
         await new Promise((resolve) => setTimeout(resolve, 30));
         timeline.push("submit 3 end");
@@ -113,8 +113,8 @@ describe("Submission", () => {
     it("returns true when all submit handlers succeed", async () => {
       const submission = new Submission();
 
-      submission.on("submit", async () => true);
-      submission.on("submit", async () => true);
+      submission.addHandler("submit", async () => true);
+      submission.addHandler("submit", async () => true);
 
       const result = await submission.exec();
       expect(result).toBe(true);
@@ -126,9 +126,9 @@ describe("Submission", () => {
       const secondhandler = vi.fn(async () => false);
       const thirdhandler = vi.fn(async () => true);
 
-      submission.on("submit", firsthandler);
-      submission.on("submit", secondhandler);
-      submission.on("submit", thirdhandler);
+      submission.addHandler("submit", firsthandler);
+      submission.addHandler("submit", secondhandler);
+      submission.addHandler("submit", thirdhandler);
 
       const result = await submission.exec();
       expect(result).toBe(false);
@@ -141,7 +141,7 @@ describe("Submission", () => {
       const submission = new Submission();
       const consoleSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
 
-      submission.on("willSubmit", () => {
+      submission.addHandler("willSubmit", () => {
         throw new Error("Test error");
       });
 
@@ -154,7 +154,7 @@ describe("Submission", () => {
       const submission = new Submission();
       const consoleSpy = vi.spyOn(console, "error").mockImplementation(() => {});
 
-      submission.on("submit", async () => {
+      submission.addHandler("submit", async () => {
         throw new Error("Test error");
       });
 
@@ -167,7 +167,7 @@ describe("Submission", () => {
       const submission = new Submission();
       const consoleSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
 
-      submission.on("didSubmit", () => {
+      submission.addHandler("didSubmit", () => {
         throw new Error("Test error");
       });
 
@@ -181,7 +181,7 @@ describe("Submission", () => {
       const timeline: string[] = [];
 
       let counter = 0;
-      submission.on("submit", async (abortSignal) => {
+      submission.addHandler("submit", async (abortSignal) => {
         const localCounter = ++counter;
         timeline.push(`submit ${localCounter} start`);
         await new Promise((resolve) => {
@@ -216,7 +216,7 @@ describe("Submission", () => {
       const submission = new Submission();
       const handler = vi.fn();
 
-      const dispose = submission.on("willSubmit", handler);
+      const dispose = submission.addHandler("willSubmit", handler);
       await submission.exec();
       expect(handler).toHaveBeenCalledTimes(1);
 

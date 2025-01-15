@@ -15,6 +15,11 @@ export class Submission {
     return this.#isRunning.get();
   }
 
+  addHandler<K extends keyof Submission.EventHandlers>(event: K, handler: Submission.EventHandlers[K]) {
+    this.#handlers[event].add(handler);
+    return () => void this.#handlers[event].delete(handler);
+  }
+
   async exec() {
     this.#abortCtrl?.abort();
     const abortCtrl = new AbortController();
@@ -22,20 +27,21 @@ export class Submission {
 
     runInAction(() => {
       this.#isRunning.set(true);
-    });
 
-    try {
-      for (const handler of this.#handlers.willSubmit) {
-        handler();
+      try {
+        for (const handler of this.#handlers.willSubmit) {
+          handler();
+        }
+      } catch (e) {
+        console.warn(e);
       }
-    } catch (e) {
-      console.warn(e);
-    }
+    });
 
     let succeed = true;
     try {
       for (const handler of this.#handlers.submit) {
         if (!(await handler(abortCtrl.signal))) {
+          // Serialized
           succeed = false;
           break;
         }
@@ -59,11 +65,6 @@ export class Submission {
     });
 
     return succeed;
-  }
-
-  on<K extends keyof Submission.EventHandlers>(event: K, handler: Submission.EventHandlers[K]) {
-    this.#handlers[event].add(handler);
-    return () => void this.#handlers[event].delete(handler);
   }
 }
 

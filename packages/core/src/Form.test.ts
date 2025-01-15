@@ -256,88 +256,60 @@ describe("Form", () => {
   });
 
   describe("#submit", () => {
-    it("does nothing when FormDelegate.submit is not implemented", async () => {
+    it("does not call Submission#exec when the form is not dirty", async () => {
       const model = new EmptyModel();
       const form = Form.get(model);
-
-      form.markAsDirty();
-      expect(form.canSubmit).toBe(true);
-      expect(await form.submit()).toBe(true);
+      const internal = getInternal(form);
+      const spy = vi.spyOn(internal.submission, "exec");
+      await form.submit();
+      expect(spy).not.toBeCalled();
     });
 
-    it("returns true when submission succeeded", async () => {
-      const model = new SampleModel();
+    it("calls Submission#exec when the form is dirty", async () => {
+      const model = new EmptyModel();
       const form = Form.get(model);
-
+      const internal = getInternal(form);
+      const spy = vi.spyOn(internal.submission, "exec");
       form.markAsDirty();
-      expect(form.canSubmit).toBe(true);
-      expect(await form.submit()).toBe(true);
+      await form.submit();
+      expect(spy).toBeCalled();
     });
 
-    it("discards subsequent submit requests while submitting", async () => {
-      const model = new SampleModel();
+    it("calls Submission#exec when the force option is true", async () => {
+      const model = new EmptyModel();
       const form = Form.get(model);
+      const internal = getInternal(form);
+      const spy = vi.spyOn(internal.submission, "exec");
+      await form.submit({ force: true });
+      expect(spy).toBeCalled();
+    });
+
+    it("calls FormDelegate.submit when implemented", async () => {
+      const model = new SampleModel();
       const spy = vi.spyOn(model, FormDelegate.submit);
-
-      form.markAsDirty();
-      expect(form.canSubmit).toBe(true);
-
-      // Start first submission
-      const firstSubmit = form.submit();
-      // Try to submit again while first is still running
-      const secondSubmit = form.submit();
-
-      expect(await firstSubmit).toBe(true); // First submit should be occurred
-      expect(await secondSubmit).toBe(false); // Second submit should be discarded
-      expect(spy).toBeCalledTimes(1);
-    });
-
-    it("aborts ongoing submission when submitting with force option", async () => {
-      const model = new SampleModel();
       const form = Form.get(model);
-
-      const timeline: string[] = [];
-      autorun(() => {
-        timeline.push(`isSubmitting: ${form.isSubmitting}`);
-      });
-
       form.markAsDirty();
-      expect(form.canSubmit).toBe(true);
-
-      // Start first submission
-      const firstSubmit = form.submit();
-      firstSubmit.then(() => timeline.push(`firstSubmit`));
-      // Force second submission while first is still running
-      const secondSubmit = form.submit({ force: true });
-      secondSubmit.then(() => timeline.push(`secondSubmit`));
-
-      expect(await firstSubmit).toBe(false); // First submit should be aborted
-      expect(await secondSubmit).toBe(true); // Second submit should be occurred
-      expect(timeline).toMatchInlineSnapshot(`
-        [
-          "isSubmitting: false",
-          "isSubmitting: true",
-          "isSubmitting: false",
-          "firstSubmit",
-          "secondSubmit",
-        ]
-      `);
+      await form.submit();
+      expect(spy).toBeCalled();
     });
   });
 
   describe("#validate", () => {
-    it("returns null and does nothing when FormDelegate.validate is not implemented", async () => {
+    it("calls Validation#request", async () => {
       const model = new EmptyModel();
-      const form = Form.get(model);
-      expect(form.validate()).toBe(null);
-    });
-
-    it("calls Validation#request and returns the status", async () => {
-      const model = new SampleModel();
       const form = Form.get(model);
       const internal = getInternal(form);
       const spy = vi.spyOn(internal.validation, "request");
-      expect(form.validate()).toBe("requested");
+      form.validate();
+      expect(spy).toBeCalled();
+    });
+
+    it("calls FormDelegate.validate when implemented", async () => {
+      const model = new SampleModel();
+      const spy = vi.spyOn(model, FormDelegate.validate);
+      const form = Form.get(model);
+      form.validate();
+      await vi.waitFor(() => expect(form.isValidating).toBe(false));
       expect(spy).toBeCalled();
     });
   });

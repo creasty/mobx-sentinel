@@ -28,13 +28,13 @@ export function useForm<T extends object>(subject: T, opt?: { formKey?: symbol; 
  * @param event The event to subscribe to.
  * @param handler The event handler.
  */
-export function useFormEvent<T extends object, Event extends keyof Form.EventHandlers>(
+export function useFormEvent<T extends object, Event extends keyof Form.EventHandlers<T>>(
   form: Form<T>,
   event: Event,
-  handler: Form.EventHandlers[Event]
+  handler: Form.EventHandlers<T>[Event]
 ) {
   const handlerRef = useRef(handler);
   handlerRef.current = handler;
 
-  useEffect(() => form.on(event, handlerRef.current), [form, event]);
+  useEffect(() => form.addHandler(event, handlerRef.current), [form, event]);
 }

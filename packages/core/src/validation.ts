@@ -1,4 +1,4 @@
-import { action, comparer, computed, makeObservable, observable, runInAction } from "mobx";
+import { action, comparer, makeObservable, observable, runInAction } from "mobx";
 import { MaybeArray } from "./util";
 
 type ErrorValue = MaybeArray<string | Error>;
@@ -10,154 +10,159 @@ type MutableErrorMap = Map<string, string[]>;
 export type ErrorMap = ReadonlyMap<string, ReadonlyArray<string>>;
 
 export class Validation {
-  readonly #requestDelayMs: number;
-  readonly #scheduleDelayMs: number;
   readonly #errors = observable.map<string, string[]>([], { equals: comparer.structural });
-  readonly #isRunning = observable.box(false);
-  readonly #scheduleTimerId = observable.box<number | null>(null);
+  readonly #state = observable.box<Validation.JobState>("idle");
+  #nextJobRequested = false;
+  #timerId: number | null = null;
   #abortCtrl: AbortController | null = null;
+  readonly #handlers = new Set<Validation.Handler>();
 
-  constructor(args: { requestDelayMs: number; scheduleDelayMs: number }) {
+  constructor() {
     makeObservable(this);
-    this.#requestDelayMs = args.requestDelayMs;
-    this.#scheduleDelayMs = args.scheduleDelayMs;
   }
 
   get errors(): ErrorMap {
     return this.#errors;
   }
 
-  get isRunning() {
-    return this.#isRunning.get();
+  get state() {
+    return this.#state.get();
   }
 
-  @computed
-  get isScheduled() {
-    return !!this.#scheduleTimerId.get();
-  }
-
-  @action
-  request(executor: Validation.Executor, opt?: Validation.ExecutorOptions): Validation.Status {
-    if (this.isRunning) {
-      if (opt?.force) {
-        this.#cancelScheduled();
-        this.#exec(executor);
-        return "forced";
-      } else {
-        this.#schedule(executor);
-        return "scheduled";
-      }
-    } else {
-      this.#schedule(executor);
-      this.#execScheduled(this.#requestDelayMs);
-      return "requested";
-    }
+  addHandler(handler: Validation.Handler) {
+    this.#handlers.add(handler);
+    return () => void this.#handlers.delete(handler);
   }
 
   @action
   reset() {
-    this.#cancelScheduled();
+    this.#resetTimer();
     this.#abortCtrl?.abort();
     this.#errors.clear();
-    this.#isRunning.set(false);
+    this.#state.set("idle");
   }
 
-  async #exec(executor: Validation.Executor): Promise<void> {
+  request(opt: Validation.RunOptions) {
+    if (opt.force) {
+      this.#runJob(opt);
+      return;
+    }
+
+    switch (this.state) {
+      case "idle": {
+        this.#transitionToEnqueued(opt);
+        break;
+      }
+      case "enqueued": {
+        this.#resetTimer();
+        this.#transitionToEnqueued(opt);
+        break;
+      }
+      case "running": {
+        this.#nextJobRequested = true;
+        break;
+      }
+      case "scheduled": {
+        this.#resetTimer();
+        this.#transitionToScheduled(opt);
+        break;
+      }
+    }
+  }
+
+  #transitionToEnqueued(opt: Validation.RunOptions) {
+    runInAction(() => {
+      this.#state.set("enqueued");
+    });
+    this.#timerId = +setTimeout(() => {
+      this.#runJob(opt);
+    }, opt.enqueueDelayMs);
+  }
+
+  #transitionToScheduled(opt: Validation.RunOptions) {
+    runInAction(() => {
+      this.#state.set("scheduled");
+    });
+    this.#timerId = +setTimeout(() => {
+      this.#runJob(opt);
+    }, opt.scheduleDelayMs);
+  }
+
+  #resetTimer(): void {
+    if (this.#timerId) {
+      clearTimeout(this.#timerId);
+      this.#timerId = null;
+    }
+  }
+
+  async #runJob(opt: Validation.RunOptions) {
+    this.#resetTimer();
+
     this.#abortCtrl?.abort();
     const abortCtrl = new AbortController();
     this.#abortCtrl = abortCtrl;
 
     runInAction(() => {
-      this.#isRunning.set(true);
+      this.#state.set("running");
     });
 
-    let result: FormValidationResult<any> | undefined;
+    let results: FormValidationResult<any>[] = [];
     try {
-      result = await executor(abortCtrl.signal);
+      const promises = [];
+      for (const handler of this.#handlers) {
+        promises.push(handler(abortCtrl.signal)); // Parallelized
+      }
+      results = await Promise.all(promises);
     } catch (e) {
       console.error(e);
     }
     this.#abortCtrl = null;
 
     runInAction(() => {
-      this.#isRunning.set(false);
-      if (result) {
-        this.#errors.replace(toErrorMap(result));
+      if (results.length > 0) {
+        try {
+          this.#errors.replace(toErrorMap(results));
+        } catch (e) {
+          console.warn(e);
+        }
+      }
+
+      if (this.#nextJobRequested) {
+        this.#nextJobRequested = false;
+        this.#transitionToScheduled(opt);
+      } else {
+        this.#state.set("idle");
       }
     });
-
-    this.#execScheduled(this.#scheduleDelayMs);
-  }
-
-  #schedule(executor: Validation.Executor) {
-    this.#cancelScheduled();
-    this.#scheduledExecutor = executor;
-  }
-  #scheduledExecutor: Validation.Executor | null = null;
-
-  #execScheduled(delayMs: number) {
-    const executor = this.#scheduledExecutor;
-    if (!executor) return;
-    this.#scheduledExecutor = null;
-
-    runInAction(() => {
-      this.#cancelScheduled();
-      const timerId = +setTimeout(
-        action(() => {
-          this.#scheduleTimerId.set(null);
-          if (!this.isRunning) {
-            this.#cancelScheduled();
-            this.#exec(executor);
-          }
-        }),
-        delayMs
-      );
-      this.#scheduleTimerId.set(timerId);
-    });
-  }
-
-  #cancelScheduled() {
-    const timerId = this.#scheduleTimerId.get();
-    if (timerId) {
-      clearTimeout(timerId);
-      runInAction(() => {
-        this.#scheduleTimerId.set(null);
-      });
-    }
   }
 }
 
 export namespace Validation {
-  /**
-   * The status of the validation request.
-   *
-   * - "requested": The validation request is pending.
-   * - "scheduled": The validation request is scheduled to be executed after the current running validation is completed.
-   * - "forced": The validation request is forced to be executed immediately.
-   */
-  export type Status = "requested" | "scheduled" | "forced";
+  export type JobState = "idle" | "enqueued" | "running" | "scheduled";
 
-  /**
-   * The executor of the validation.
-   */
-  export type Executor<T = any> = (abortSignal: AbortSignal) => Promise<FormValidationResult<T>>;
-
-  /**
-   * The options for the validation request.
-   */
-  export type ExecutorOptions = {
-    /** Force the validation to be executed immediately */
-    force?: boolean;
+  export type RunOptions = {
+    force: boolean;
+    enqueueDelayMs: number;
+    scheduleDelayMs: number;
   };
+
+  export type Handler<T = any> = (abortSignal: AbortSignal) => Promise<FormValidationResult<T>>;
 }
 
-export function toErrorMap(result: FormValidationResult<any>): MutableErrorMap {
+export function toErrorMap(results: FormValidationResult<any>[]): MutableErrorMap {
   const map: MutableErrorMap = new Map();
-  for (const [key, value] of Object.entries(result)) {
-    if (!value) continue;
-    const messages = getMessages(value);
-    if (messages.length > 0) {
-      map.set(key, messages);
+  for (const result of results) {
+    for (const [key, value] of Object.entries(result)) {
+      if (!value) continue;
+      const messages = getMessages(value);
+      if (messages.length > 0) {
+        let list = map.get(key);
+        if (!list) {
+          list = [];
+          map.set(key, list);
+        }
+        list.push(...messages);
+      }
     }
   }
   return map;

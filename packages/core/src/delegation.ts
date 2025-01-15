@@ -1,4 +1,5 @@
 import type { FormConfig } from "./config";
+import type { Submission } from "./submission";
 import type { MaybeArray } from "./util";
 import type { Validation } from "./validation";
 
@@ -57,13 +58,13 @@ export namespace FormDelegate {
    *
    * Returns true if the form was submitted successfully.
    */
-  export type Submit = (abortSignal: AbortSignal) => Promise<boolean>;
+  export type Submit = Submission.EventHandlers["submit"];
   /**
    * Validate the form.
    *
    * Returns a map of field names to error messages.
    */
-  export type Validate<T> = Validation.Executor<T>;
+  export type Validate<T> = Validation.Handler<T>;
 
   /**
    * Symbol for implementing {@link Config}.

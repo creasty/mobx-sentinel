@@ -201,7 +201,7 @@ class Other implements FormDelegate<Other> {
 
 ```tsx
 import { observer } from "mobx-react-lite";
-import { useForm } from "@form-model/react";
+import { useForm, useFormEvent } from "@form-model/react";
 import "@form-model/react/dist/extension"; // Makes .bindTextInput() and other bind methods available.
 
 const SampleForm: React.FC<{ model: Sample }> = observer(({ model }) => {
@@ -314,9 +314,9 @@ Legend:
 ## Roadmap to v0.1
 
 - [ ] Better way to implement delegation
-  - Problem 1: Unlike `validate()`, `submit()` is more of an application layer responsibility.
-  - Problem 2: `connect()` is lengthy. We could make it a field decorator.
-- [ ] Support callbacks for form events
+  - [x] Problem 1: Unlike `validate()`, `submit()` is more of an application layer responsibility.
+  - [ ] Problem 2: `connect()` is lengthy. We could make it a field decorator.
+- [x] Support callbacks for form events
   - Use case: Display a toast message when the form is submitted. (Not a concern of a model nor a delegate)
 - [ ] Make the initial value of `isDirty` controllable from a model side somehow
   - Add a new `isCreate` property to the delegate?
