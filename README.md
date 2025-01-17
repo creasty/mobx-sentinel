@@ -299,19 +299,22 @@ Criteria:
 [**B**] Binding for UI.
 [**C**] Class-based implementation.
 
+[badge-ts]: https://img.shields.io/badge/-TypeScript-3178C6.svg?logo=typescript&logoColor=white
+[badge-js]: https://img.shields.io/badge/JavaScript-F7DF1E.svg?logo=javascript&logoColor=333
+
 | Repository | Stars | Language | Tests | T | B | C |
 |------------|-------|----------|-------|---|---|---|
-| [mobx-react-form](https://github.com/foxhound87/mobx-react-form) | ![GitHub stars](https://img.shields.io/github/stars/foxhound87/mobx-react-form?style=flat) | ![Language](https://img.shields.io/github/languages/top/foxhound87/mobx-react-form) | [![Codecov Coverage](https://img.shields.io/codecov/c/github/foxhound87/mobx-react-form/master.svg)](https://codecov.io/gh/foxhound87/mobx-react-form) | | ✓ | |
-| [formstate](https://github.com/formstate/formstate) | ![GitHub stars](https://img.shields.io/github/stars/formstate/formstate?style=flat) | ![Language](https://img.shields.io/github/languages/top/formstate/formstate) | Good 👍 | ✓ | | |
-| [formst](https://github.com/formstjs/formst) | ![GitHub stars](https://img.shields.io/github/stars/formstjs/formst?style=flat) | ![Language](https://img.shields.io/github/languages/top/formstjs/formst) | None | | ✓ | |
-| [smashing-form](https://github.com/eyedea-io/smashing-form) | ![GitHub stars](https://img.shields.io/github/stars/eyedea-io/smashing-form?style=flat) | ![Language](https://img.shields.io/github/languages/top/eyedea-io/smashing-form) | Bad | | ✓ | |
-| [formstate-x](https://github.com/qiniu/formstate-x) | ![GitHub stars](https://img.shields.io/github/stars/qiniu/formstate-x?style=flat) | ![Language](https://img.shields.io/github/languages/top/qiniu/formstate-x) | [![Coverage Status](https://coveralls.io/repos/github/qiniu/formstate-x/badge.svg?branch=master)](https://coveralls.io/github/qiniu/formstate-x?branch=master) | ✓ | | |
-| [mobx-form-validate](https://github.com/tdzl2003/mobx-form-validate) | ![GitHub stars](https://img.shields.io/github/stars/tdzl2003/mobx-form-validate?style=flat) | ![Language](https://img.shields.io/github/languages/top/tdzl2003/mobx-form-validate) | None | ✓ | | ✓ |
-| [mobx-form](https://github.com/kentik/mobx-form) | ![GitHub stars](https://img.shields.io/github/stars/kentik/mobx-form?style=flat) | ![Language](https://img.shields.io/github/languages/top/kentik/mobx-form) | None | | ✓ | |
-| [mobx-schema-form](https://github.com/alexhisen/mobx-schema-form) | ![GitHub stars](https://img.shields.io/github/stars/alexhisen/mobx-schema-form?style=flat) | ![Language](https://img.shields.io/github/languages/top/alexhisen/mobx-schema-form) | Bad | | | |
-| [mobx-form-schema](https://github.com/Yoskutik/mobx-form-schema) | ![GitHub stars](https://img.shields.io/github/stars/Yoskutik/mobx-form-schema?style=flat) | ![Language](https://img.shields.io/github/languages/top/Yoskutik/mobx-form-schema) | ![Jest coverage](https://raw.githubusercontent.com/Yoskutik/mobx-form-schema/master/badges/coverage-jest%20coverage.svg) | | | ✓ |
-| [mobx-form-store](https://github.com/alexhisen/mobx-form-store) | ![GitHub stars](https://img.shields.io/github/stars/alexhisen/mobx-form-store?style=flat) | ![Language](https://img.shields.io/github/languages/top/alexhisen/mobx-form-store) | Good 👍 | | | |
-| [mobx-form-reactions](https://github.com/marvinhagemeister/mobx-form-reactions) | ![GitHub stars](https://img.shields.io/github/stars/marvinhagemeister/mobx-form-reactions?style=flat) | ![Language](https://img.shields.io/github/languages/top/marvinhagemeister/mobx-form-reactions) | None | | | |
+| [mobx-react-form](https://github.com/foxhound87/mobx-react-form) | ![GitHub stars](https://img.shields.io/github/stars/foxhound87/mobx-react-form?style=flat) | ![TypeScript][badge-ts] | [![Codecov Coverage](https://img.shields.io/codecov/c/github/foxhound87/mobx-react-form/master.svg)](https://codecov.io/gh/foxhound87/mobx-react-form) | | ✓ | |
+| [formstate](https://github.com/formstate/formstate) | ![GitHub stars](https://img.shields.io/github/stars/formstate/formstate?style=flat) | ![TypeScript][badge-ts] | Comprehensive | ✓ | | |
+| [formst](https://github.com/formstjs/formst) | ![GitHub stars](https://img.shields.io/github/stars/formstjs/formst?style=flat) | ![TypeScript][badge-ts] | | | ✓ | |
+| [smashing-form](https://github.com/eyedea-io/smashing-form) | ![GitHub stars](https://img.shields.io/github/stars/eyedea-io/smashing-form?style=flat) | ![TypeScript][badge-ts] | Sparse | | ✓ | |
+| [formstate-x](https://github.com/qiniu/formstate-x) | ![GitHub stars](https://img.shields.io/github/stars/qiniu/formstate-x?style=flat) | ![TypeScript][badge-ts] | [![Coverage Status](https://coveralls.io/repos/github/qiniu/formstate-x/badge.svg?branch=master)](https://coveralls.io/github/qiniu/formstate-x?branch=master) | ✓ | | |
+| [mobx-form-validate](https://github.com/tdzl2003/mobx-form-validate) | ![GitHub stars](https://img.shields.io/github/stars/tdzl2003/mobx-form-validate?style=flat) | ![JavaScript][badge-js] | | | | ✓ |
+| [mobx-form](https://github.com/kentik/mobx-form) | ![GitHub stars](https://img.shields.io/github/stars/kentik/mobx-form?style=flat) | ![JavaScript][badge-js] | | | ✓ | |
+| [mobx-schema-form](https://github.com/alexhisen/mobx-schema-form) | ![GitHub stars](https://img.shields.io/github/stars/alexhisen/mobx-schema-form?style=flat) | ![JavaScript][badge-js] | Sparse | | | |
+| [mobx-form-schema](https://github.com/Yoskutik/mobx-form-schema) | ![GitHub stars](https://img.shields.io/github/stars/Yoskutik/mobx-form-schema?style=flat) | ![TypeScript][badge-ts] | ![Jest coverage](https://raw.githubusercontent.com/Yoskutik/mobx-form-schema/master/badges/coverage-jest%20coverage.svg) | | | ✓ |
+| [mobx-form-store](https://github.com/alexhisen/mobx-form-store) | ![GitHub stars](https://img.shields.io/github/stars/alexhisen/mobx-form-store?style=flat) | ![JavaScript][badge-js] | Comprehensive | | | |
+| [mobx-form-reactions](https://github.com/marvinhagemeister/mobx-form-reactions) | ![GitHub stars](https://img.shields.io/github/stars/marvinhagemeister/mobx-form-reactions?style=flat) | ![TypeScript][badge-ts] | | | | |
 | ...and many more | < 10 stars | | | | | |
 
 ## Roadmap to v0.1
