@@ -45,6 +45,7 @@ export class Validation {
     this.#abortCtrl?.abort();
     this.#errors.clear();
     this.#state.set("idle");
+    this.#hasRun.set(false);
   }
 
   request(opt: Validation.RunOptions) {

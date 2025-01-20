@@ -319,9 +319,11 @@ describe("Validation", () => {
 
       env.request();
       await env.waitFor("idle");
+      expect(env.validation.hasRun).toBe(true);
       expect(env.validation.errors.size).toBe(1);
 
       env.validation.reset();
+      expect(env.validation.hasRun).toBe(false);
       expect(env.validation.state).toBe("idle");
       expect(env.validation.errors.size).toBe(0);
     });
