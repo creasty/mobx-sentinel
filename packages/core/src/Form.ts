@@ -225,6 +225,10 @@ export class Form<T> {
   /** Report error states on all fields and sub-forms */
   @action
   reportError() {
+    if (!this.#validation.hasRun) {
+      // FIXME: This is a workaround
+      this.validate({ force: true });
+    }
     for (const field of this.#fields.values()) {
       field.reportError();
     }

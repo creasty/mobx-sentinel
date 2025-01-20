@@ -53,6 +53,22 @@ function setupEnv(opt?: { cleanHandlers?: boolean }) {
 }
 
 describe("Validation", () => {
+  describe("#hasRun", () => {
+    it("is set to true when the validation has ever run", async () => {
+      const env = setupEnv({ cleanHandlers: true });
+
+      expect(env.validation.hasRun).toBe(false);
+      env.request();
+      await env.waitFor("idle");
+      expect(env.validation.hasRun).toBe(true);
+
+      // Doesn't change for the second time
+      env.request();
+      await env.waitFor("idle");
+      expect(env.validation.hasRun).toBe(true);
+    });
+  });
+
   describe("#request", () => {
     it("process validation handlers in parallel", async () => {
       const env = setupEnv({ cleanHandlers: true });
@@ -76,7 +92,7 @@ describe("Validation", () => {
         return {};
       });
 
-      await env.request();
+      env.request();
       await env.waitFor("idle");
       expect(env.timeline).toMatchInlineSnapshot(`
         [
@@ -102,7 +118,7 @@ describe("Validation", () => {
         throw new Error("Test error");
       });
 
-      await env.request();
+      env.request();
       await env.waitFor("idle");
       expect(consoleSpy).toHaveBeenCalled();
     });

@@ -12,6 +12,7 @@ export type ErrorMap = ReadonlyMap<string, ReadonlyArray<string>>;
 export class Validation {
   readonly #errors = observable.map<string, string[]>([], { equals: comparer.structural });
   readonly #state = observable.box<Validation.JobState>("idle");
+  readonly #hasRun = observable.box(false);
   #nextJobRequested = false;
   #timerId: number | null = null;
   #abortCtrl: AbortController | null = null;
@@ -27,6 +28,10 @@ export class Validation {
 
   get state() {
     return this.#state.get();
+  }
+
+  get hasRun() {
+    return this.#hasRun.get();
   }
 
   addHandler(handler: Validation.Handler) {
@@ -104,6 +109,7 @@ export class Validation {
 
     runInAction(() => {
       this.#state.set("running");
+      this.#hasRun.set(true);
     });
 
     let results: FormValidationResult<any>[] = [];
