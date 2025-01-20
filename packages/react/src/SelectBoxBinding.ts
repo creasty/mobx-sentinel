@@ -7,9 +7,9 @@ export namespace SelectBoxBinding {
   export type Config = {
     /** [Override] ID of the input element */
     id?: Attrs["id"];
-    /** [Callback] Change handler */
+    /** [Extend] Change handler */
     onChange?: Attrs["onChange"];
-    /** [Callback] Focus handler */
+    /** [Extend] Focus handler */
     onFocus?: Attrs["onFocus"];
   } & (
     | {

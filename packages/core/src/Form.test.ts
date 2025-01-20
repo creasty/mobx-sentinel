@@ -253,6 +253,23 @@ describe("Form", () => {
       expect(spy1).toBeCalled();
       expect(spy2).toBeCalled();
     });
+
+    it("triggers validate with the force option when the validation has never run", async () => {
+      const model = new SampleModel();
+      const form = Form.get(model);
+      const spy = vi.spyOn(form, "validate");
+      const internal = getInternal(form);
+
+      expect(internal.validation.hasRun).toBe(false);
+      form.reportError();
+      expect(spy).toBeCalledWith({ force: true });
+
+      await vi.waitFor(() => expect(form.isValidating).toBe(false));
+      expect(internal.validation.hasRun).toBe(true);
+
+      form.reportError(); // Doesn't trigger a new validation
+      expect(spy).toBeCalledTimes(1);
+    });
   });
 
   describe("#submit", () => {

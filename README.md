@@ -299,34 +299,44 @@ Criteria:
 [**B**] Binding for UI.
 [**C**] Class-based implementation.
 
-[badge-ts]: https://img.shields.io/badge/-TypeScript-3178C6.svg?logo=typescript&logoColor=white
-[badge-js]: https://img.shields.io/badge/JavaScript-F7DF1E.svg?logo=javascript&logoColor=333
+[img-ts]: https://cdn.simpleicons.org/typescript/3178c6?size=16
+[img-js]: https://cdn.simpleicons.org/javascript/f7df1e?size=16
+[img-adequate]: https://img.shields.io/badge/adequate-_?style=flat&label=test&color=yellowgreen
+[img-sparse]: https://img.shields.io/badge/sparse-_?style=flat&label=test&color=red
 
-| Repository | Stars | Language | Tests | T | B | C |
-|------------|-------|----------|-------|---|---|---|
-| [mobx-react-form](https://github.com/foxhound87/mobx-react-form) | ![GitHub stars](https://img.shields.io/github/stars/foxhound87/mobx-react-form?style=flat) | ![TypeScript][badge-ts] | [![Codecov Coverage](https://img.shields.io/codecov/c/github/foxhound87/mobx-react-form/master.svg)](https://codecov.io/gh/foxhound87/mobx-react-form) | | ✓ | |
-| [formstate](https://github.com/formstate/formstate) | ![GitHub stars](https://img.shields.io/github/stars/formstate/formstate?style=flat) | ![TypeScript][badge-ts] | Comprehensive | ✓ | | |
-| [formst](https://github.com/formstjs/formst) | ![GitHub stars](https://img.shields.io/github/stars/formstjs/formst?style=flat) | ![TypeScript][badge-ts] | | | ✓ | |
-| [smashing-form](https://github.com/eyedea-io/smashing-form) | ![GitHub stars](https://img.shields.io/github/stars/eyedea-io/smashing-form?style=flat) | ![TypeScript][badge-ts] | Sparse | | ✓ | |
-| [formstate-x](https://github.com/qiniu/formstate-x) | ![GitHub stars](https://img.shields.io/github/stars/qiniu/formstate-x?style=flat) | ![TypeScript][badge-ts] | [![Coverage Status](https://coveralls.io/repos/github/qiniu/formstate-x/badge.svg?branch=master)](https://coveralls.io/github/qiniu/formstate-x?branch=master) | ✓ | | |
-| [mobx-form-validate](https://github.com/tdzl2003/mobx-form-validate) | ![GitHub stars](https://img.shields.io/github/stars/tdzl2003/mobx-form-validate?style=flat) | ![JavaScript][badge-js] | | | | ✓ |
-| [mobx-form](https://github.com/kentik/mobx-form) | ![GitHub stars](https://img.shields.io/github/stars/kentik/mobx-form?style=flat) | ![JavaScript][badge-js] | | | ✓ | |
-| [mobx-schema-form](https://github.com/alexhisen/mobx-schema-form) | ![GitHub stars](https://img.shields.io/github/stars/alexhisen/mobx-schema-form?style=flat) | ![JavaScript][badge-js] | Sparse | | | |
-| [mobx-form-schema](https://github.com/Yoskutik/mobx-form-schema) | ![GitHub stars](https://img.shields.io/github/stars/Yoskutik/mobx-form-schema?style=flat) | ![TypeScript][badge-ts] | ![Jest coverage](https://raw.githubusercontent.com/Yoskutik/mobx-form-schema/master/badges/coverage-jest%20coverage.svg) | | | ✓ |
-| [mobx-form-store](https://github.com/alexhisen/mobx-form-store) | ![GitHub stars](https://img.shields.io/github/stars/alexhisen/mobx-form-store?style=flat) | ![JavaScript][badge-js] | Comprehensive | | | |
-| [mobx-form-reactions](https://github.com/marvinhagemeister/mobx-form-reactions) | ![GitHub stars](https://img.shields.io/github/stars/marvinhagemeister/mobx-form-reactions?style=flat) | ![TypeScript][badge-ts] | | | | |
-| ...and many more | < 10 stars | | | | | |
+| Repository | Stars | Tests | T | B | C |
+|------------|-------|-------|---|---|---|
+| ![TypeScript][img-ts] [mobx-react-form](https://github.com/foxhound87/mobx-react-form) | ![GitHub stars](https://img.shields.io/github/stars/foxhound87/mobx-react-form?style=flat-square&label&color=960) | [![Codecov Coverage](https://img.shields.io/codecov/c/github/foxhound87/mobx-react-form/master.svg)](https://codecov.io/gh/foxhound87/mobx-react-form) | | ✓ | |
+| ![TypeScript][img-ts] [formstate](https://github.com/formstate/formstate) | ![GitHub stars](https://img.shields.io/github/stars/formstate/formstate?style=flat-square&label&color=960) | ![Adequate][img-adequate] | ✓ | | |
+| ![TypeScript][img-ts] [formst](https://github.com/formstjs/formst) | ![GitHub stars](https://img.shields.io/github/stars/formstjs/formst?style=flat-square&label&color=960) | N/A | | ✓ | |
+| ![TypeScript][img-ts] [smashing-form](https://github.com/eyedea-io/smashing-form) | ![GitHub stars](https://img.shields.io/github/stars/eyedea-io/smashing-form?style=flat-square&label&color=960) | ![Sparse][img-sparse] | | ✓ | |
+| ![TypeScript][img-ts] [formstate-x](https://github.com/qiniu/formstate-x) | ![GitHub stars](https://img.shields.io/github/stars/qiniu/formstate-x?style=flat-square&label&color=960) | [![Coverage Status](https://coveralls.io/repos/github/qiniu/formstate-x/badge.svg?branch=master)](https://coveralls.io/github/qiniu/formstate-x?branch=master) | ✓ | | |
+| ![JavaScript][img-js] [mobx-form-validate](https://github.com/tdzl2003/mobx-form-validate) | ![GitHub stars](https://img.shields.io/github/stars/tdzl2003/mobx-form-validate?style=flat-square&label&color=960) | N/A | | | ✓ |
+| ![JavaScript][img-js] [mobx-form](https://github.com/kentik/mobx-form) | ![GitHub stars](https://img.shields.io/github/stars/kentik/mobx-form?style=flat-square&label&color=960) | N/A | | ✓ | |
+| ![JavaScript][img-js] [mobx-schema-form](https://github.com/alexhisen/mobx-schema-form) | ![GitHub stars](https://img.shields.io/github/stars/alexhisen/mobx-schema-form?style=flat-square&label&color=960) | ![Sparse][img-sparse] | | | |
+| ![TypeScript][img-ts] [mobx-form-schema](https://github.com/Yoskutik/mobx-form-schema) | ![GitHub stars](https://img.shields.io/github/stars/Yoskutik/mobx-form-schema?style=flat-square&label&color=960) | ![Jest coverage](https://raw.githubusercontent.com/Yoskutik/mobx-form-schema/master/badges/coverage-jest%20coverage.svg) | | | ✓ |
+| ![JavaScript][img-js] [mobx-form-store](https://github.com/alexhisen/mobx-form-store) | ![GitHub stars](https://img.shields.io/github/stars/alexhisen/mobx-form-store?style=flat-square&label&color=960) | ![Adequate][img-adequate] | | | |
+| ![TypeScript][img-ts] [mobx-form-reactions](https://github.com/marvinhagemeister/mobx-form-reactions) | ![GitHub stars](https://img.shields.io/github/stars/marvinhagemeister/mobx-form-reactions?style=flat-square&label&color=960) | N/A | | | |
+| ...and many more | <10 | | | | | |
 
 ## Roadmap to v0.1
 
-- [ ] Better way to implement delegation
-  - [x] Problem 1: Unlike `validate()`, `submit()` is more of an application layer responsibility.
-  - [ ] Problem 2: `connect()` is lengthy. We could make it a field decorator.
+- [x] Make validation and submission composable and injectable
 - [x] Support callbacks for form events
   - Use case: Display a toast message when the form is submitted. (Not a concern of a model nor a delegate)
-- [ ] Make the initial value of `isDirty` controllable from a model side somehow
-  - Add a new `isCreate` property to the delegate?
-- [ ] Computed validation errors & per-field validations
+- [ ] Extract model validation responsibility and make it a standalone feature
+  - Split `core` package into `validation` (schema definition & error state management) and `form` (submission etc) packages.
+  - Validation is essentially a domain model logic, thus should be directly implemented in a model.
+    - Remove `connect` delegate. Leave `validate` delegate as is.
+    - Introduce `@validate(...)` (per-field schema definition), `@validateChild` (substitution of `connect`) annotation.
+  - Submission is an application logic, thus should be implemented in UI components or thru a delegate.
+- [ ] Allow submission of unchanged (non-dirty) models
+  - Needs control of the initial value of `isDirty`.
+  - Idea 1: `@createFlag` annotation for a boolean property? (`validation` package)
+  - Idea 2: Add a new `isCreate` delegate? (`form` package)
+  - Idea 3: Add a new `isCreate` option to `useForm`? (`react` package)
+  - Idea 4: Move `isDirty` check to `SubmitButtonBinding`? (`react` package)
+- [x] ~~Computed validation errors & per-field validations~~ — Not-needed in favor of composable architecture.
   - Add a new `@computed get errors()` for standard use-cases.
   - Repurpose `validate()` for a time-consuming per-field validation (which results can be easily included in the `get errors()`).
 - [ ] Make the validation strategy configurable

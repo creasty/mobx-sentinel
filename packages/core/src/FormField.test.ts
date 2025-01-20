@@ -158,13 +158,33 @@ describe("FormField", () => {
       expect(spy).toBeCalledTimes(1);
       expect(spy).toBeCalledWith({ force: true });
     });
+
+    it("finalize changes only if there have been intermediate changes", async () => {
+      const { field } = setupEnv();
+
+      // No changes - doesn't change state
+      expect(field.isChanged).toBe(false);
+      field.validate();
+      expect(field.isChanged).toBe(false);
+      expect(field.isIntermediate).toBe(false);
+
+      // Intermediate changes
+      field.markAsChanged("intermediate");
+      expect(field.isChanged).toBe(true);
+      expect(field.isIntermediate).toBe(true);
+
+      // Intermediate changes are finalized
+      field.validate();
+      expect(field.isChanged).toBe(true);
+      expect(field.isIntermediate).toBe(false);
+    });
   });
 
   describe("#validateWithDelay", () => {
     const waitForDelay = (form: Form<unknown>, shift = 10) =>
       new Promise((resolve) => setTimeout(resolve, form.config.intermediateValidationDelayMs + shift));
 
-    it("calls the validate on the form after the delay and marks the field as changed", async () => {
+    it("calls the validate on the form after the delay", async () => {
       const { field, form } = setupEnv();
       const spy = vi.spyOn(form, "validate");
 
@@ -176,8 +196,6 @@ describe("FormField", () => {
       await waitForDelay(form);
 
       expect(spy).toBeCalledTimes(1);
-      expect(field.isChanged).toBe(true);
-      expect(field.isIntermediate).toBe(false);
     });
 
     it("prolongs the delay when the validation is requested again before it is completed", async () => {

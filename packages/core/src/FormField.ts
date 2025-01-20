@@ -11,6 +11,7 @@ export class FormField {
   readonly #isTouched = observable.box(false);
   readonly #changeType = observable.box<FormField.ChangeType | null>(null);
   readonly #isErrorReported = observable.box(false);
+  #timerId: number | null = null;
 
   constructor(args: { form: Form<any>; formErrors: ErrorMap; fieldName: string }) {
     makeObservable(this);
@@ -65,7 +66,7 @@ export class FormField {
   markAsChanged(type: FormField.ChangeType = "final") {
     this.#form.markAsDirty();
     this.#changeType.set(type);
-    this.#isErrorReported.set(this.isChanged && !this.isIntermediate);
+    this.#isErrorReported.set(type !== "intermediate");
   }
 
   @action
@@ -84,22 +85,25 @@ export class FormField {
   validate() {
     this.cancelDelayedValidation();
     this.#form.validate({ force: true });
+
+    if (this.isIntermediate) {
+      this.markAsChanged("final");
+    }
   }
 
   validateWithDelay() {
     this.cancelDelayedValidation();
-    this.#validationTimerId = setTimeout(() => {
+    this.#timerId = +setTimeout(() => {
       this.validate();
-      this.markAsChanged("final");
     }, this.#form.config.intermediateValidationDelayMs);
   }
 
   cancelDelayedValidation() {
-    if (!this.#validationTimerId) return;
-    clearTimeout(this.#validationTimerId);
-    this.#validationTimerId = null;
+    if (this.#timerId) {
+      clearTimeout(this.#timerId);
+      this.#timerId = null;
+    }
   }
-  #validationTimerId: ReturnType<typeof setTimeout> | null = null;
 }
 
 export namespace FormField {

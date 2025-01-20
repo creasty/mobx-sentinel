@@ -6,9 +6,9 @@ export namespace SubmitButtonBinding {
   export type AttrsRequired = Required<Attrs>;
 
   export type Config = {
-    /** [Callback] Click handler */
+    /** [Extend] Click handler */
     onClick?: Attrs["onClick"];
-    /** [Callback] Mouse enter handler */
+    /** [Extend] Mouse enter handler */
     onMouseEnter?: Attrs["onMouseEnter"];
   };
 }
