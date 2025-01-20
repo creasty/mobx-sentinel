@@ -4,7 +4,7 @@
   "version": "0.0.1",
   "author": "creasty <yuki@creasty.com>",
   "license": "MIT",
-  "packageManager": "pnpm@8.0.0",
+  "packageManager": "pnpm@9.15.4",
   "type": "module",
   "workspaces": [
     "packages/*"
