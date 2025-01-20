@@ -10,9 +10,9 @@ export namespace RadioButtonBinding {
     /** Set the value to the model */
     setter: (value: string) => void;
 
-    /** [Callback] Change handler */
+    /** [Extend] Change handler */
     onChange?: Attrs["onChange"];
-    /** [Callback] Focus handler */
+    /** [Extend] Focus handler */
     onFocus?: Attrs["onFocus"];
   };
 }
