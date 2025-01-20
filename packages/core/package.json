@@ -1,7 +1,7 @@
 {
   "name": "@form-model/core",
   "description": "MobX + Model x Form",
-  "version": "0.0.2",
+  "version": "0.0.3",
   "author": "creasty <yuki@creasty.com>",
   "license": "MIT",
   "homepage": "https://github.com/creasty/form-model",
