@@ -319,44 +319,9 @@ Criteria:
 | ![TypeScript][img-ts] [mobx-form-reactions](https://github.com/marvinhagemeister/mobx-form-reactions) | ![GitHub stars](https://img.shields.io/github/stars/marvinhagemeister/mobx-form-reactions?style=flat-square&label&color=960) | N/A | | | |
 | ...and many more | <10 | | | | | |
 
-## Roadmap to v0.1
+## Milestones
 
-- [x] Make validation and submission composable and injectable
-- [x] Support callbacks for form events
-  - Use case: Display a toast message when the form is submitted. (Not a concern of a model nor a delegate)
-- [ ] Extract model validation responsibility and make it a standalone feature
-  - Split `core` package into `validation` (schema definition & error state management) and `form` (submission etc) packages.
-  - Validation is essentially a domain model logic, thus should be directly implemented in a model.
-    - Remove `connect` delegate. Leave `validate` delegate as is.
-    - Introduce `@validate(...)` (per-field schema definition), `@validateChild` (substitution of `connect`) annotation.
-  - Submission is an application logic, thus should be implemented in UI components or thru a delegate.
-- [ ] Allow submission of unchanged (non-dirty) models
-  - Needs control of the initial value of `isDirty`.
-  - Idea 1: `@createFlag` annotation for a boolean property? (`validation` package)
-  - Idea 2: Add a new `isCreate` delegate? (`form` package)
-  - Idea 3: Add a new `isCreate` option to `useForm`? (`react` package)
-  - Idea 4: Move `isDirty` check to `SubmitButtonBinding`? (`react` package)
-- [x] ~~Computed validation errors & per-field validations~~ — Not-needed in favor of composable architecture.
-  - Add a new `@computed get errors()` for standard use-cases.
-  - Repurpose `validate()` for a time-consuming per-field validation (which results can be easily included in the `get errors()`).
-- [ ] Make the validation strategy configurable
-  - Options: smart (default), submit, touch, change, blur, change-and-blur
-  - Option to force trigger validate on all sub-forms?
-- [ ] Make the submission strategy configurable
-  - Options: always, first-and-dirty, only-dirty
-  - Option to bypass submission when there are validation errors?
-- [ ] Extensive documentation
-  - UX of smart error reporting.
-  - APIs.
-  - Examples.
-- [ ] Add an integration with a data validation library
-  - [zod](https://zod.dev/) is a good candidate.
-  - i18n support is also essential.
-- [ ] Give it a catchy name
-
-### Other ideas
-
-- Error severity
+Check out https://github.com/creasty/form-model/milestones
 
 ## License
 
