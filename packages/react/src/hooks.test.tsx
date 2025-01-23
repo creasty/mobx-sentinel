@@ -6,7 +6,7 @@ import { makeObservable, observable } from "mobx";
 import { Form } from "@form-model/core";
 import "./extension";
 import { observer } from "mobx-react-lite";
-import { useForm, useFormEvent } from "./hooks";
+import { useFormAutoReset, useFormEvent } from "./hooks";
 
 class SampleModel {
   @observable field = "hello";
@@ -31,7 +31,9 @@ const ParentComponent: React.FC<{ model: SampleModel; submitHandler: () => void 
 
 const SampleComponent: React.FC<{ model: SampleModel; submitHandler: () => void }> = observer(
   ({ model, submitHandler }) => {
-    const form = useForm(model);
+    const form = Form.get(model);
+
+    useFormAutoReset(form);
 
     useFormEvent(form, "submit", async () => {
       submitHandler();
@@ -60,7 +62,7 @@ const setupEnv = () => {
   };
 };
 
-describe("useForm", () => {
+describe("useFormAutoReset", () => {
   test("auto resets the form when mounted/unmounted", async () => {
     const env = setupEnv();
     const spy = vi.spyOn(env.form, "reset");

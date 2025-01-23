@@ -208,11 +208,12 @@ class Other implements FormDelegate<Other> {
 
 ```tsx
 import { observer } from "mobx-react-lite";
-import { useForm, useFormEvent } from "@form-model/react";
+import { Form } from "@form-model/core";
+import { useFormEvent } from "@form-model/react";
 import "@form-model/react/dist/extension"; // Makes .bindTextInput() and other bind methods available.
 
 const SampleForm: React.FC<{ model: Sample }> = observer(({ model }) => {
-  const form = useForm(model);
+  const form = Form.get(model);
 
   useFormEvent(form, "submit", async (abortSignal) => {
     console.log("submit");
@@ -275,7 +276,7 @@ const SampleForm: React.FC<{ model: Sample }> = observer(({ model }) => {
 });
 
 const OtherForm: React.FC<{ model: Other }> = observer(({ model }) => {
-  const form = useForm(model);
+  const form = Form.get(model);
 
   return (
     <fieldset>
