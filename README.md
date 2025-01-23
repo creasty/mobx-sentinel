@@ -25,7 +25,7 @@ Use with `mobx`.
 
 Use with `mobx-react-lite`.
 
-## Premises
+## Premises / Motivation
 
 TL;DR: This library provides a model-centric form management solution for MobX applications. Unlike other form libraries that focus on data serialization, it's designed to work with domain models (classes) while properly separating form state management from business logic. It offers type-safe bindings and smart error handling to create a better developer and user experience.
 
@@ -43,14 +43,13 @@ Furthermore, from my research, there wasn't a single one designed to allow type-
 Given this background, I believe there are two fundamental challenges in implementing forms:
 
 - Form-specific state management: When considering data separately, this only involves submission and validation processing. For example:
-  - Controlling submit button state based on submission status or validation errors.
+  - Disabling the submit button based on submission status or validation errors.
   - Running validations in response to form updates.
 - Input element connection (a.k.a. binding): Properly handling form state and UI events to update forms, models and UI.
   - Getting values from the model and writing back on input changes.
   - Expressing error states (red borders, displaying messages, etc.)
 
-Additionally, showing error messages to users at appropriate times is important for user experience.<br>
-*(Haven't you been frustrated by UIs that show errors before you've done anything, or immediately display errors while you're still typing?)*<br>
+Additionally, showing error messages to users at appropriate times is important for user experience — _Haven't you been frustrated by UIs that show errors before you've done anything, or immediately display errors while you're still typing?_<br>
 Achieving optimal experience requires coordinating multiple UI events (change, focus, blur) and states.<br>
 While this is something we'd prefer to delegate to a library since it's complex to write manually, it's a major factor complicating implementation on both "form state management" and "input element connection" fronts, and many existing libraries haven't achieved proper design.
 
@@ -76,10 +75,9 @@ This library aims to solve these problems through a model-centric design that pr
   - フォームの更新に応じてバリデーションを走らせる。
 - インプット要素との接続: フォームの状態と UI イベントを適切に処理し、フォームとモデルと UI をそれぞれ更新する。
   - モデルから値を取り出し、入力変化があったらモデルに書き込む。
-  - エラー状態を表現する。(枠を赤くしたり、メッセージを表示したり等)
+  - エラー状態を表現する。(枠を赤くする、メッセージを表示する等)
 
-また、エラーメッセージをユーザに適切なタイミングで表示することはユーザ体験として重要である。<br>
-*(何もしていないのに最初からエラーが表示されていたり、入力途中なのに即座にエラーと表示される UI にイライラしたことはないだろうか？)*<br>
+また、エラーメッセージをユーザに適切なタイミングで表示することはユーザ体験として重要である — _何もしていないのに最初からエラーが表示されていたり、入力途中なのに即座にエラーと表示される UI にイライラしたことはないだろうか？_<br>
 最適な体験を実現するためには、複数の UI イベント (change, focus, blur) や状態を組み合わせる必要がある。<br>
 これを手で書くのは大変なためライブラリに任せたいところだが、「フォーム自体の状態管理」と「インプット要素との接続」の両側面で実装が複雑になる主な要因であると考えており、多くの既存ライブラリは適切な設計ができていない。
 
@@ -107,48 +105,26 @@ This library aims to solve these problems through a model-centric design that pr
   - Maximizes use of TypeScript's type system for error detection and code completion
   - Improves development productivity
 
-<details><summary>Japanese</summary>
-
-- モデルファースト
-  - モデルがあることを前提にする。
-  - モデルの方の責務になるべく寄せ、フォームの責務を最小限にする。
-  - データファーストで簡易にフォームを実装することは目的としない。
-- フォーム状態管理とモデルの分離
-  - フォームとモデルがお互いに直接的な参照を持たない。
-  - モデルがフォームによって汚染されない。
-  - フォームはデータを管理しない。
-- 隠されていない入出力
-  - モデル ↔ インプット要素 の入出力を隠蔽しない。
-  - 自明かつ安全にコントロールできるようにする。
-- モジュラーな実装
-  - Multi-package 構成にし、とりわけ動作モデルと UI を明確に分離する。
-  - テスタビリティと拡張性を高める。
-- 厳格な型情報
-  - 型システムを最大限活用し、エラー検出やコード補完による開発生産性を確保する。
-
-</details>
-
 ## Features
 
 - Asynchronous submission and validation
   - Composable from multiple sources.
   - Cancellable with [AbortSignal](https://developer.mozilla.org/en-US/docs/Web/API/AbortSignal).
 - Nested and dynamic (array) forms
-  - No bullsh\*t. Just mutate models directly.
+  - Works by mutating models directly.
+  - Forms are created independently; they don't need to be aware of each other.
 - Custom bindings
   - Flexible and easy-to-create.
   - Most cases can be implemented in less than 50 lines.
 - React integration
   - React hooks that automatically handle component lifecycle under the hood.
   - Standard bindings for most common form elements.
-- Smart error reporting.
+- Smart error reporting
   - Original validation strategy for a supreme user experience.
 
 ---
 
 ## Overview — Model
-
-<!-- prettier-ignore-start -->
 
 ```typescript
 import { action, observable, makeObservable } from "mobx";
@@ -157,7 +133,7 @@ import { FormDelegate } from "@form-model/core";
 // Form-related processing is implemented using a Protocol pattern with symbols (along with the interface).
 // You can either implement self-delegation as shown here, or literally delegate it to another class.
 class Sample implements FormDelegate<Sample> {
-  @observable string: string = "hello";
+  @observable text: string = "";
   @observable number: number | null = null;
   @observable date: Date | null = null;
   @observable bool: boolean = false;
@@ -177,42 +153,50 @@ class Sample implements FormDelegate<Sample> {
     this.array.push(new Other());
   }
 
+  // Nested/dynamic forms are achieved by returning a list of models.
   [FormDelegate.connect]() {
-    // Nested/dynamic forms are achieved by returning a list of models.
     return [this.nested, this.array];
   }
 
-  async [FormDelegate.validate](signal: AbortSignal) {
-    return { ... };
-  }
+  // Validation is implemented by returning an object with error messages.
+  [FormDelegate.validate]: FormDelegate.Validate<Sample> = async (abortSignal) => {
+    return {
+      text: this.text === "" ? "Required" : null,
+      number: this.number === null ? "Required" : null,
+      date: this.date === null ? "Required" : null,
+      enum: this.enum === null ? "Required" : null,
+      option: this.option === null ? "Required" : null,
+      multiOption: this.multiOption.length === 0 ? "Required" : null,
+      array: this.array.length === 0 ? "Required" : null,
+    };
+  };
 }
 
 class Other implements FormDelegate<Other> {
-  @observable other: string = "world";
+  @observable other: string = "";
 
   constructor() {
     makeObservable(this);
   }
 
-  async [FormDelegate.validate](signal: AbortSignal) {
-    return { ... };
-  }
+  [FormDelegate.validate]: FormDelegate.Validate<Other> = async (abortSignal) => {
+    return {
+      other: this.other === "" ? "Required" : null,
+    };
+  };
 }
 ```
 
-<!-- prettier-ignore-end -->
-
 ## Overview — React
-
-<!-- prettier-ignore-start -->
 
 ```tsx
 import { observer } from "mobx-react-lite";
-import { useForm, useFormEvent } from "@form-model/react";
+import { Form } from "@form-model/core";
+import { useFormEvent } from "@form-model/react";
 import "@form-model/react/dist/extension"; // Makes .bindTextInput() and other bind methods available.
 
 const SampleForm: React.FC<{ model: Sample }> = observer(({ model }) => {
-  const form = useForm(model);
+  const form = Form.get(model);
 
   useFormEvent(form, "submit", async (abortSignal) => {
     console.log("submit");
@@ -221,53 +205,75 @@ const SampleForm: React.FC<{ model: Sample }> = observer(({ model }) => {
 
   return (
     <form>
-      <label {...form.bindLabel(["string"])}>Label</label>
+      <label {...form.bindLabel(["text"])}>Text input</label>
+      <input
+        {...form.bindInput("text", {
+          getter: () => model.text,
+          setter: (v) => (model.text = v),
+        })}
+      />
 
-      <input {...form.bindInput("string", {
-        getter: () => model.string,
-        setter: (v) => (model.string = v),
-      })} />
-      <input {...form.bindInput("number", {
-        valueAs: "number", // also supports "date"
-        getter: () => model.number,
-        setter: (v) => (model.number = v),
-      })} />
-      <input {...form.bindCheckBox("bool", {
-        getter: () => model.bool,
-        setter: (v) => (model.bool = v),
-      })} />
+      <fieldset>
+        <label {...form.bindLabel(["number", "bool"])}>Number input & Checkbox</label>
+        <input
+          {...form.bindInput("number", {
+            valueAs: "number", // also supports "date"
+            getter: () => model.number,
+            setter: (v) => (model.number = v),
+          })}
+        />
+        <input
+          {...form.bindCheckBox("bool", {
+            getter: () => model.bool,
+            setter: (v) => (model.bool = v),
+          })}
+        />
+      </fieldset>
 
-      {(() => {
-        const bindRadioButton = form.bindRadioButton("enum", {
-          getter: () => model.enum,
-          setter: (v) => (model.enum = v ? (v as SampleEnum) : null),
-        });
-        return Object.values(SampleEnum)
-          .map((value) => (<input key={value} {...bindRadioButton(value)} />));
-      })()}
+      <fieldset role="radiogroup">
+        <label {...form.bindLabel(["enum"])}>Radio buttons</label>
+        {(() => {
+          const bind = form.bindRadioButton("enum", {
+            getter: () => model.enum,
+            setter: (v) => (model.enum = v ? (v as SampleEnum) : null),
+          });
+          return Object.values(SampleEnum).map((v) => <input key={v} {...bind(v)} />);
+        })()}
+      </fieldset>
 
-      <select {...form.bindSelectBox("option", {
-        getter: () => model.option,
-        setter: (code) => (model.option = code),
-      })}>
-        {!model.option && (<option value="" disabled>Select...</option>)}
-        {SAMPLE_OPTIONS.map((option) => (
-          <option key={option.code} value={option.code}>{option.name}</option>
-        ))}
+      <label {...form.bindLabel(["option"])}>Select box</label>
+      <select
+        {...form.bindSelectBox("option", {
+          getter: () => model.option,
+          setter: (v) => (model.option = v),
+        })}
+      >
+        ...
       </select>
 
-      <select {...form.bindSelectBox("multipleOption", {
-        multiple: true,
-        getter: () => model.multipleOption,
-        setter: (codes) => (model.multipleOption = codes),
-      })}>...</select>
+      <label {...form.bindLabel(["multiOption"])}>Multi select box</label>
+      <select
+        {...form.bindSelectBox("multiOption", {
+          multiple: true,
+          getter: () => model.multiOption,
+          setter: (v) => (model.multiOption = v),
+        })}
+      >
+        ...
+      </select>
 
-      {/* Nested form */}
-      <OtherForm model={model.nested} />
+      <fieldset>
+        <label {...form.bindLabel(["nested"])}>Nested form</label>
+        <OtherForm model={model.nested} />
+      </fieldset>
 
-      {/* Dynamic form */}
-      {model.array.map((item, i) => (<OtherForm key={i} model={item} />))}
-      <button onClick={model.addNewForm}>Add a new form</button>
+      <fieldset>
+        <label {...form.bindLabel(["array"])}>Dynamic form</label>
+        {model.array.map((item, i) => (
+          <OtherForm key={i} model={item} />
+        ))}
+        <button onClick={model.addNewForm}>Add a new form</button>
+      </fieldset>
 
       <button {...form.bindSubmitButton()}>Submit</button>
     </form>
@@ -275,20 +281,20 @@ const SampleForm: React.FC<{ model: Sample }> = observer(({ model }) => {
 });
 
 const OtherForm: React.FC<{ model: Other }> = observer(({ model }) => {
-  const form = useForm(model);
+  const form = Form.get(model);
 
   return (
     <fieldset>
-      <input {...form.bindInput("other", {
-        getter: () => model.other,
-        setter: (v) => (model.other = v),
-      })} />
+      <input
+        {...form.bindInput("other", {
+          getter: () => model.other,
+          setter: (v) => (model.other = v),
+        })}
+      />
     </fieldset>
   );
 });
 ```
-
-<!-- prettier-ignore-end -->
 
 ---
 
@@ -304,6 +310,8 @@ Criteria:
 [img-adequate]: https://img.shields.io/badge/adequate-_?style=flat&label=test&color=yellowgreen
 [img-sparse]: https://img.shields.io/badge/sparse-_?style=flat&label=test&color=red
 
+<!-- prettier-ignore-start -->
+
 | Repository | Stars | Tests | T | B | C |
 |------------|-------|-------|---|---|---|
 | ![TypeScript][img-ts] [mobx-react-form](https://github.com/foxhound87/mobx-react-form) | ![GitHub stars](https://img.shields.io/github/stars/foxhound87/mobx-react-form?style=flat-square&label&color=960) | [![Codecov Coverage](https://img.shields.io/codecov/c/github/foxhound87/mobx-react-form/master.svg)](https://codecov.io/gh/foxhound87/mobx-react-form) | | ✓ | |
@@ -318,6 +326,8 @@ Criteria:
 | ![JavaScript][img-js] [mobx-form-store](https://github.com/alexhisen/mobx-form-store) | ![GitHub stars](https://img.shields.io/github/stars/alexhisen/mobx-form-store?style=flat-square&label&color=960) | ![Adequate][img-adequate] | | | |
 | ![TypeScript][img-ts] [mobx-form-reactions](https://github.com/marvinhagemeister/mobx-form-reactions) | ![GitHub stars](https://img.shields.io/github/stars/marvinhagemeister/mobx-form-reactions?style=flat-square&label&color=960) | N/A | | | |
 | ...and many more | <10 | | | | | |
+
+<!-- prettier-ignore-end -->
 
 ## Milestones
 

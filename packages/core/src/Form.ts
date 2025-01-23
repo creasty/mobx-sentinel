@@ -298,7 +298,7 @@ export class Form<T> {
   }
 
   /** Get a field by name */
-  #getField(fieldName: FormField.Name<T>) {
+  getField(fieldName: FormField.Name<T>) {
     let field = this.#fields.get(fieldName);
     if (!field) {
       field = new FormField({
@@ -340,7 +340,7 @@ export class Form<T> {
   ) => {
     const key = `${fieldName}@${binding.name}:${config?.cacheKey}`;
     const instance = this.#defineBinding(key, () => {
-      const field = this.#getField(fieldName);
+      const field = this.getField(fieldName);
       return new binding(field, config);
     });
     instance.config = config; // Update on every call
@@ -355,7 +355,7 @@ export class Form<T> {
   ) => {
     const key = `${fieldNames.join(",")}@${binding.name}:${config?.cacheKey}`;
     const instance = this.#defineBinding(key, () => {
-      const fields = fieldNames.map((name) => this.#getField(name));
+      const fields = fieldNames.map((name) => this.getField(name));
       return new binding(fields, config);
     });
     instance.config = config; // Update on every call
@@ -375,7 +375,7 @@ export class Form<T> {
 
   /** Get the error messages for a field */
   getError(fieldName: FormField.Name<T>, includePreReported = false) {
-    const field = this.#getField(fieldName);
+    const field = this.getField(fieldName);
 
     if (!includePreReported && !field.isErrorReported) {
       return null;
@@ -396,7 +396,6 @@ export class Form<T> {
    */
   [internalToken]() {
     return {
-      getField: this.#getField.bind(this),
       fields: this.#fields,
       bindings: this.#bindings,
       validation: this.#validation,

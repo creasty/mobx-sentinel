@@ -2,21 +2,15 @@ import { Form } from "@form-model/core";
 import { useEffect, useRef } from "react";
 
 /**
- * Get the form instance for a subject.
+ * Auto reset the form when when the component is mounted and unmounted.
  *
- * The difference from `Form.get` is that this hook automatically resets the form
- * when the component is mounted and unmounted.
- *
- * @inheritdoc {@link @form-model/core!Form.get}
+ * @param form The form instance.
  */
-export function useForm<T extends object>(subject: T, opt?: { formKey?: symbol; noReset?: boolean }): Form<T> {
-  const form = Form.get(subject, opt?.formKey);
+export function useFormAutoReset(form: Form<any>) {
   useEffect(() => {
-    if (opt?.noReset) return;
     form.reset();
     return () => form.reset();
   }, [form]);
-  return form;
 }
 
 /**
