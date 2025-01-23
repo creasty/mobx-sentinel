@@ -10,7 +10,6 @@ import {
   SampleMultiFieldBinding,
 } from "./binding.test";
 import { defaultConfig } from "./config";
-import { FormField } from "./FormField";
 
 describe("Form", () => {
   class EmptyModel {}
@@ -232,9 +231,7 @@ describe("Form", () => {
     it("triggers reportError on all fields", () => {
       const model = new SampleModel();
       const form = Form.get(model);
-      const internal = getInternal(form);
-
-      const field = internal.getField("field");
+      const field = form.getField("field");
 
       const spy = vi.spyOn(field, "reportError");
       form.reportError();
@@ -543,9 +540,6 @@ suite("Sub-forms", () => {
       form,
       sampleForm,
       arrayForm0,
-      getField<T>(form: Form<T>, fieldName: FormField.Name<T>) {
-        return getInternal(form).getField(fieldName);
-      },
       async waitForValidation() {
         await new Promise((resolve) => setTimeout(resolve, defaultConfig.validationDelayMs + 10));
       },
@@ -614,24 +608,24 @@ suite("Sub-forms", () => {
 
   suite("Reporting errors", () => {
     test("when a new field is added after reportError is called, the error on the new field is not reported", async () => {
-      const { form, getField } = setupEnv();
+      const { form } = setupEnv();
 
-      const field1 = getField(form, "field");
+      const field1 = form.getField("field");
       expect(field1.isErrorReported).toEqual(false);
       form.reportError();
       expect(field1.isErrorReported).toEqual(true);
 
-      const field2 = getField(form, "sample");
+      const field2 = form.getField("sample");
       expect(field2.isErrorReported).toEqual(false);
     });
 
     test("reporting errors on sub-forms does not affect the parent form", async () => {
-      const { form, sampleForm, arrayForm0, getField } = setupEnv();
+      const { form, sampleForm, arrayForm0 } = setupEnv();
 
       // Touch fields to initialize them
-      const field1 = getField(form, "field");
-      const field2 = getField(sampleForm, "field");
-      const field3 = getField(arrayForm0, "field");
+      const field1 = form.getField("field");
+      const field2 = sampleForm.getField("field");
+      const field3 = arrayForm0.getField("field");
 
       // Report errors on sub-forms
       sampleForm.reportError();
@@ -643,11 +637,11 @@ suite("Sub-forms", () => {
     });
 
     test("when a new sub-form is added after reportError is called, the error on the new form is not reported", async () => {
-      const { model, form, arrayForm0, getField } = setupEnv();
+      const { model, form, arrayForm0 } = setupEnv();
 
       // Touch fields to initialize them
-      const field1 = getField(form, "field");
-      const field2 = getField(arrayForm0, "field");
+      const field1 = form.getField("field");
+      const field2 = arrayForm0.getField("field");
 
       // Report errors on the parent form
       form.reportError();
@@ -657,7 +651,7 @@ suite("Sub-forms", () => {
         model.array.push(new SampleModel());
       });
       const arrayForm1 = Form.get(model.array[1]);
-      const field3 = getField(arrayForm1, "field");
+      const field3 = arrayForm1.getField("field");
 
       expect(field1.isErrorReported).toEqual(true);
       expect(field2.isErrorReported).toEqual(true);
