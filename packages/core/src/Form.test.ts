@@ -492,6 +492,39 @@ describe("Form", () => {
       });
     });
   });
+
+  describe("#getError", () => {
+    it("returns the error messages for a field", async () => {
+      const model = new SampleModel();
+      const form = Form.get(model);
+      const field = form.getField("field");
+
+      runInAction(() => {
+        model.field = false;
+        form.validate();
+      });
+      await vi.waitFor(() => expect(form.isValidating).toBe(false));
+
+      expect(form.getError("field")).toEqual(null);
+      field.reportError();
+      expect(form.getError("field")).toEqual(["invalid"]);
+    });
+
+    it("returns the error messages for a field when includePreReported is true", async () => {
+      const model = new SampleModel();
+      const form = Form.get(model);
+      const field = form.getField("field");
+
+      runInAction(() => {
+        model.field = false;
+        form.validate();
+      });
+      await vi.waitFor(() => expect(form.isValidating).toBe(false));
+
+      field.reportError();
+      expect(form.getError("field", true)).toEqual(["invalid"]);
+    });
+  });
 });
 
 suite("Sub-forms", () => {
