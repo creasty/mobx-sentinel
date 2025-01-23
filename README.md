@@ -181,11 +181,80 @@ class Other implements FormDelegate<Other> {
 
   [FormDelegate.validate]: FormDelegate.Validate<Other> = async (abortSignal) => {
     return {
-      other: this.other === "" ? "Required" : null,
+      other: this.other === "" ? "Required" : !isValidFormat(this.other) ? "Invalid format" : null,
     };
   };
 }
 ```
+
+### Sneak peek: Annotation-based validation (Planned for v0.1)
+
+<details>
+
+```typescript
+import { action, observable, makeObservable } from "mobx";
+import { validate } from "@form-model/validation";
+
+class Sample {
+  @observable
+  @validate.required
+  text: string = "";
+
+  @observable
+  @validate.required
+  number: number | null = null;
+
+  @observable
+  @validate.required
+  date: Date | null = null;
+
+  @observable
+  bool: boolean = false;
+
+  @observable
+  @validate.required
+  enum: SampleEnum | null = null;
+
+  @observable
+  @validate.required
+  option: string | null = null;
+
+  @observable
+  @validate.required
+  multiOption: string[] = [];
+
+  @observable
+  @validate.nested
+  nested = new Other();
+
+  @observable
+  @validate.nested
+  @validate.required
+  array = [new Other()];
+
+  constructor() {
+    makeObservable(this);
+  }
+
+  @action
+  addNewForm() {
+    this.array.push(new Other());
+  }
+}
+
+class Other {
+  @observable
+  @validate.required
+  @validate(isValidFormat)
+  other: string = "";
+
+  constructor() {
+    makeObservable(this);
+  }
+}
+```
+
+</details>
 
 ## Overview — React
 
