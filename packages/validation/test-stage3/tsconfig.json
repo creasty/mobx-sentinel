@@ -1,0 +1,12 @@
+{
+  "extends": "../../../tsconfig.json",
+  "compilerOptions": {
+    "outDir": "dist",
+    "moduleResolution": "node",
+    "module": "commonjs",
+    "types": ["vitest/globals"],
+    "experimentalDecorators": false,
+    "emitDecoratorMetadata": false,
+  },
+  "include": ["../src", "."],
+}

@@ -1,0 +1,42 @@
+{
+  "name": "@form-model/validation",
+  "description": "MobX + Model x Form",
+  "version": "0.0.4",
+  "author": "creasty <yuki@creasty.com>",
+  "license": "MIT",
+  "homepage": "https://github.com/creasty/form-model",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/creasty/form-model.git"
+  },
+  "bugs": {
+    "url": "https://github.com/creasty/form-model/issues"
+  },
+  "keywords": [
+    "mobx",
+    "model",
+    "form",
+    "react"
+  ],
+  "main": "dist/index.js",
+  "module": "dist/index.mjs",
+  "types": "dist/index.d.ts",
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "test": "vitest run --coverage",
+    "test:dev": "vitest",
+    "build": "tsup"
+  },
+  "dependencies": {
+    "mobx": "^6.12.3"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.2",
+    "@vitest/coverage-v8": "^2.1.8",
+    "tsup": "^8.3.5",
+    "typescript": "^5.5.0",
+    "vitest": "^2.1.8"
+  }
+}
