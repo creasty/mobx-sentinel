@@ -1,4 +1,4 @@
-import { Form, FormField } from "@form-model/core";
+import { Form, FormBindingFuncExtension } from "@form-model/core";
 import { CheckBoxBinding } from "./CheckBoxBinding";
 import { InputBinding } from "./InputBinding";
 import { RadioButtonBinding } from "./RadioButtonBinding";
@@ -26,7 +26,7 @@ declare module "@form-model/core" {
      * />
      * ```
      */
-    bindInput(fieldName: FormField.Name<T>, config: InputBinding.Config): InputBinding["props"];
+    bindInput: FormBindingFuncExtension.ForField.RequiredConfig<T, typeof InputBinding>;
 
     /**
      * Bind the select box field to the form.
@@ -43,7 +43,7 @@ declare module "@form-model/core" {
      * </select>
      * ```
      */
-    bindSelectBox(fieldName: FormField.Name<T>, config: SelectBoxBinding.Config): SelectBoxBinding["props"];
+    bindSelectBox: FormBindingFuncExtension.ForField.RequiredConfig<T, typeof SelectBoxBinding>;
 
     /**
      * Bind the checkbox field to the form.
@@ -58,7 +58,7 @@ declare module "@form-model/core" {
      * />
      * ```
      */
-    bindCheckBox(fieldName: FormField.Name<T>, config: CheckBoxBinding.Config): CheckBoxBinding["props"];
+    bindCheckBox: FormBindingFuncExtension.ForField.RequiredConfig<T, typeof CheckBoxBinding>;
 
     /**
      * Bind the radio button field to the form.
@@ -76,7 +76,7 @@ declare module "@form-model/core" {
      * ))
      * ```
      */
-    bindRadioButton(fieldName: FormField.Name<T>, config: RadioButtonBinding.Config): RadioButtonBinding["props"];
+    bindRadioButton: FormBindingFuncExtension.ForField.RequiredConfig<T, typeof RadioButtonBinding>;
 
     /**
      * Bind the submit button to the form.
@@ -86,7 +86,7 @@ declare module "@form-model/core" {
      * <button {...form.bindSubmitButton()}>Submit</button>
      * ```
      */
-    bindSubmitButton(config?: SubmitButtonBinding.Config): SubmitButtonBinding["props"];
+    bindSubmitButton: FormBindingFuncExtension.ForForm.OptionalConfig<T, typeof SubmitButtonBinding>;
 
     /**
      * Bind the label to the form.
@@ -96,14 +96,14 @@ declare module "@form-model/core" {
      * <label {...form.bindLabel(["field1", "field2"])}>Label</label>
      * ```
      */
-    bindLabel(fields: FormField.Name<T>[], config?: LabelBinding.Config): LabelBinding["props"];
+    bindLabel: FormBindingFuncExtension.ForMultiField.OptionalConfig<T, typeof LabelBinding>;
   }
 }
 
 Form.prototype.bindInput = function (fieldName, config) {
   return this.bind(fieldName, InputBinding, {
-    cacheKey: config.valueAs,
     ...config,
+    cacheKey: `${config.valueAs}:${config.cacheKey}`,
   });
 };
 
