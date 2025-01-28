@@ -48,7 +48,8 @@ export namespace FormBindingFunc {
     /** Create a binding for the field */
     <Binding extends new (field: FormField) => FormBinding>(
       fieldName: FormField.Name<T>,
-      binding: Binding
+      binding: Binding,
+      config?: Config
     ): InstanceType<Binding>["props"];
 
     /** Create a binding for the field with the config */
@@ -64,7 +65,8 @@ export namespace FormBindingFunc {
     /** Create a binding for the multiple fields */
     <Binding extends new (fields: FormField[]) => FormBinding>(
       fieldNames: FormField.Name<T>[],
-      binding: Binding
+      binding: Binding,
+      config?: Config
     ): InstanceType<Binding>["props"];
 
     /** Create a binding for the multiple fields with the config */
@@ -78,12 +80,63 @@ export namespace FormBindingFunc {
   /** Bind to the form */
   export interface ForForm<T> {
     /** Create a binding for the form */
-    <Binding extends new (form: Form<T>) => FormBinding>(binding: Binding): InstanceType<Binding>["props"];
+    <Binding extends new (form: Form<T>) => FormBinding>(
+      binding: Binding,
+      config?: Config
+    ): InstanceType<Binding>["props"];
 
     /** Create a binding for the form with the config */
     <Binding extends new (form: Form<T>, config: any) => FormBinding>(
       binding: Binding,
       config: NoInfer<ConfigOf<Binding>> & Config
     ): InstanceType<Binding>["props"];
+  }
+}
+
+export namespace FormBindingFuncExtension {
+  /** Bind configuration */
+  export type Config = FormBindingFunc.Config;
+
+  /** Bind to a field */
+  export namespace ForField {
+    /** Create a binding for the field with an optional config */
+    export type OptionalConfig<T, Binding extends new (field: FormField, config?: any) => FormBinding> = (
+      fieldName: FormField.Name<T>,
+      config?: NoInfer<ConfigOf<Binding>> & Config
+    ) => InstanceType<Binding>["props"];
+
+    /** Create a binding for the field with a required config */
+    export type RequiredConfig<T, Binding extends new (field: FormField, config: any) => FormBinding> = (
+      fieldName: FormField.Name<T>,
+      config: NoInfer<ConfigOf<Binding>> & Config
+    ) => InstanceType<Binding>["props"];
+  }
+
+  /** Bind to multiple fields */
+  export namespace ForMultiField {
+    /** Create a binding for the multiple fields */
+    export type OptionalConfig<T, Binding extends new (fields: FormField[], config?: any) => FormBinding> = (
+      fieldNames: FormField.Name<T>[],
+      config?: NoInfer<ConfigOf<Binding>> & Config
+    ) => InstanceType<Binding>["props"];
+
+    /** Create a binding for the multiple fields with the config */
+    export type RequiredConfig<T, Binding extends new (fields: FormField[], config: any) => FormBinding> = (
+      fieldNames: FormField.Name<T>[],
+      config: NoInfer<ConfigOf<Binding>> & Config
+    ) => InstanceType<Binding>["props"];
+  }
+
+  /** Bind to the form */
+  export namespace ForForm {
+    /** Create a binding for the form */
+    export type OptionalConfig<T, Binding extends new (form: Form<T>, config: any) => FormBinding> = (
+      config?: NoInfer<ConfigOf<Binding>> & Config
+    ) => InstanceType<Binding>["props"];
+
+    /** Create a binding for the form with the config */
+    export type RequiredConfig<T, Binding extends new (form: Form<T>, config: any) => FormBinding> = (
+      config: NoInfer<ConfigOf<Binding>> & Config
+    ) => InstanceType<Binding>["props"];
   }
 }

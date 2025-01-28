@@ -1,12 +1,12 @@
 import { v4 as uuidV4 } from "uuid";
-import { FormBinding, FormBindingConstructor, FormBindingFunc } from "./binding";
+import { FormBinding, FormBindingConstructor, FormBindingFunc, FormBindingFuncExtension } from "./binding";
 import { Form } from "./Form";
 import { FormField } from "./FormField";
 
 export class SampleFormBinding implements FormBinding {
   readonly id = uuidV4();
 
-  constructor(private form: Form<unknown>) {
+  constructor(private form: Form<any>) {
     this.form = form;
   }
 
@@ -22,7 +22,7 @@ export class SampleConfigurableFormBinding implements FormBinding {
   readonly id = uuidV4();
 
   constructor(
-    private form: Form<unknown>,
+    private form: Form<any>,
     public config: { sample: boolean }
   ) {}
 
@@ -148,5 +148,115 @@ describe("FormBindingFunc", () => {
     bind("string", SampleConfigurableFieldBinding, { sample: true });
     bind(["string"], SampleMultiFieldBinding);
     bind(["string"], SampleConfigurableMultiFieldBinding, { sample: true });
+  });
+});
+
+describe("FormBindingFuncExtension", () => {
+  test("provides correct type definitions for form and field bindings", () => {
+    const bindForm1: FormBindingFuncExtension.ForForm.OptionalConfig<SampleModel, typeof SampleFormBinding> = () =>
+      ({}) as any;
+    bindForm1();
+    bindForm1({});
+    bindForm1({ cacheKey: "key" });
+
+    const bindForm2: FormBindingFuncExtension.ForForm.RequiredConfig<SampleModel, typeof SampleFormBinding> = () =>
+      ({}) as any;
+    // @ts-expect-error Expected 1 arguments, but got 0
+    bindForm2();
+    bindForm2({});
+    bindForm2({ cacheKey: "key" });
+
+    const bindForm3: FormBindingFuncExtension.ForForm.OptionalConfig<
+      SampleModel,
+      typeof SampleConfigurableFormBinding
+    > = () => ({}) as any;
+    bindForm3();
+    // @ts-expect-error Property 'sample' is missing
+    bindForm3({});
+    bindForm3({ sample: true });
+    bindForm3({ sample: true, cacheKey: "key" });
+
+    const bindForm4: FormBindingFuncExtension.ForForm.RequiredConfig<
+      SampleModel,
+      typeof SampleConfigurableFormBinding
+    > = () => ({}) as any;
+    // @ts-expect-error Expected 1 arguments, but got 0
+    bindForm4();
+    // @ts-expect-error Property 'sample' is missing
+    bindForm4({});
+    bindForm4({ sample: true });
+    bindForm4({ sample: true, cacheKey: "key" });
+
+    const bindField1: FormBindingFuncExtension.ForField.OptionalConfig<SampleModel, typeof SampleFieldBinding> = () =>
+      ({}) as any;
+    bindField1("string");
+    bindField1("string", {});
+    bindField1("string", { cacheKey: "key" });
+
+    const bindField2: FormBindingFuncExtension.ForField.RequiredConfig<SampleModel, typeof SampleFieldBinding> = () =>
+      ({}) as any;
+    // @ts-expect-error Expected 2 arguments, but got 1
+    bindField2("string");
+    bindField2("string", {});
+    bindField2("string", { cacheKey: "key" });
+
+    const bindField3: FormBindingFuncExtension.ForField.OptionalConfig<
+      SampleModel,
+      typeof SampleConfigurableFieldBinding
+    > = () => ({}) as any;
+    bindField3("string");
+    // @ts-expect-error Property 'sample' is missing
+    bindField3("string", {});
+    bindField3("string", { sample: true });
+    bindField3("string", { sample: true, cacheKey: "key" });
+
+    const bindField4: FormBindingFuncExtension.ForField.RequiredConfig<
+      SampleModel,
+      typeof SampleConfigurableFieldBinding
+    > = () => ({}) as any;
+    // @ts-expect-error Expected 2 arguments, but got 1
+    bindField4("string");
+    // @ts-expect-error Property 'sample' is missing
+    bindField4("string", {});
+    bindField4("string", { sample: true });
+    bindField4("string", { sample: true, cacheKey: "key" });
+
+    const bindMultiField1: FormBindingFuncExtension.ForMultiField.OptionalConfig<
+      SampleModel,
+      typeof SampleMultiFieldBinding
+    > = () => ({}) as any;
+    bindMultiField1(["string"]);
+    bindMultiField1(["string"], {});
+    bindMultiField1(["string"], { cacheKey: "key" });
+
+    const bindMultiField2: FormBindingFuncExtension.ForMultiField.RequiredConfig<
+      SampleModel,
+      typeof SampleMultiFieldBinding
+    > = () => ({}) as any;
+    // @ts-expect-error Expected 2 arguments, but got 1
+    bindMultiField2(["string"]);
+    bindMultiField2(["string"], {});
+    bindMultiField2(["string"], { cacheKey: "key" });
+
+    const bindMultiField3: FormBindingFuncExtension.ForMultiField.OptionalConfig<
+      SampleModel,
+      typeof SampleConfigurableMultiFieldBinding
+    > = () => ({}) as any;
+    bindMultiField3(["string"]);
+    // @ts-expect-error Property 'sample' is missing
+    bindMultiField3(["string"], {});
+    bindMultiField3(["string"], { sample: true });
+    bindMultiField3(["string"], { sample: true, cacheKey: "key" });
+
+    const bindMultiField4: FormBindingFuncExtension.ForMultiField.RequiredConfig<
+      SampleModel,
+      typeof SampleConfigurableMultiFieldBinding
+    > = () => ({}) as any;
+    // @ts-expect-error Expected 2 arguments, but got 1
+    bindMultiField4(["string"]);
+    // @ts-expect-error Property 'sample' is missing
+    bindMultiField4(["string"], {});
+    bindMultiField4(["string"], { sample: true });
+    bindMultiField4(["string"], { sample: true, cacheKey: "key" });
   });
 });
