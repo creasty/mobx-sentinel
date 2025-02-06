@@ -1,5 +1,11 @@
 import { v4 as uuidV4 } from "uuid";
-import { FormBinding, FormBindingConstructor, FormBindingFunc, FormBindingFuncExtension } from "./binding";
+import {
+  FormBinding,
+  FormBindingConstructor,
+  FormBindingFunc,
+  FormBindingFuncExtension,
+  getSafeBindingName,
+} from "./binding";
 import { Form } from "./Form";
 import { FormField } from "./FormField";
 
@@ -98,6 +104,30 @@ export class SampleConfigurableMultiFieldBinding implements FormBinding {
 class SampleModel {
   string = "sample";
 }
+
+describe("getSafeBindingName", () => {
+  it("returns the same name for the same binding constructor", () => {
+    const name1 = getSafeBindingName(SampleFormBinding);
+    const name2 = getSafeBindingName(SampleFormBinding);
+    expect(name1).toBe(name2);
+  });
+
+  it("returns different names for different binding constructors", () => {
+    const name1 = getSafeBindingName(SampleFormBinding);
+    const name2 = getSafeBindingName(SampleFieldBinding);
+    expect(name1).not.toBe(name2);
+  });
+
+  it("returns different names for different binding constructors with the same Function.name", () => {
+    const SampleFormBinding1 = SampleFormBinding;
+    const SampleFormBinding2 = class SampleFormBinding extends SampleFormBinding1 {};
+
+    const name1 = getSafeBindingName(SampleFormBinding1);
+    const name2 = getSafeBindingName(SampleFormBinding2);
+    expect(SampleFormBinding1.name).toBe(SampleFormBinding2.name);
+    expect(name1).not.toBe(name2);
+  });
+});
 
 describe("FormBindingConstructor", () => {
   test("provides correct type definitions for form and field bindings", () => {

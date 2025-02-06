@@ -1,7 +1,7 @@
 import { action, computed, makeObservable, observable } from "mobx";
 import { v4 as uuidV4 } from "uuid";
 import { FormField } from "./FormField";
-import { FormBinding, FormBindingConstructor, FormBindingFunc } from "./binding";
+import { FormBinding, FormBindingConstructor, FormBindingFunc, getSafeBindingName } from "./binding";
 import { FormConfig, globalConfig } from "./config";
 import { Validation } from "./validation";
 import { FormDelegate, getDelegation, isConnectableObject } from "./delegation";
@@ -326,7 +326,7 @@ export class Form<T> {
     binding: FormBindingConstructor.ForForm,
     config?: FormBindingFunc.Config
   ) => {
-    const key = `${binding.name}:${config?.cacheKey}`;
+    const key = `${getSafeBindingName(binding)}:${config?.cacheKey}`;
     const instance = this.#defineBinding(key, () => new binding(this, config));
     instance.config = config; // Update on every call
     return instance.props;
@@ -338,7 +338,7 @@ export class Form<T> {
     binding: FormBindingConstructor.ForField,
     config?: FormBindingFunc.Config
   ) => {
-    const key = `${fieldName}@${binding.name}:${config?.cacheKey}`;
+    const key = `${fieldName}@${getSafeBindingName(binding)}:${config?.cacheKey}`;
     const instance = this.#defineBinding(key, () => {
       const field = this.getField(fieldName);
       return new binding(field, config);
@@ -353,7 +353,7 @@ export class Form<T> {
     binding: FormBindingConstructor.ForMultiField,
     config?: FormBindingFunc.Config
   ) => {
-    const key = `${fieldNames.join(",")}@${binding.name}:${config?.cacheKey}`;
+    const key = `${fieldNames.join(",")}@${getSafeBindingName(binding)}:${config?.cacheKey}`;
     const instance = this.#defineBinding(key, () => {
       const fields = fieldNames.map((name) => this.getField(name));
       return new binding(fields, config);
