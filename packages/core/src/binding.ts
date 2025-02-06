@@ -1,5 +1,6 @@
 import type { Form } from "./Form";
 import type { FormField } from "./FormField";
+import { v4 as uuidV4 } from "uuid";
 
 type ConfigOf<T> = T extends new (form: Form<any>, config: infer Config) => FormBinding
   ? Config
@@ -30,6 +31,22 @@ export namespace FormBindingConstructor {
   /** Constructor for form binding classes */
   export type ForForm = new (form: Form<any>, config?: any) => FormBinding;
 }
+
+/**
+ * Get a safe name for the binding class
+ *
+ * Since Function.name is vulnerable to minification,
+ * a UUID is appended to the name to ensure uniqueness.
+ */
+export function getSafeBindingName(constructor: FormBindingConstructor): string {
+  let name = safeBindingNameCache.get(constructor);
+  if (!name) {
+    name = `${constructor.name}--${uuidV4()}`;
+    safeBindingNameCache.set(constructor, name);
+  }
+  return name;
+}
+const safeBindingNameCache = new WeakMap<FormBindingConstructor, string>();
 
 /** Polymorphic function of Form#bind */
 export interface FormBindingFunc<T>
