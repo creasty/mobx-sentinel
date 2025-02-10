@@ -170,6 +170,18 @@ export class Form<T> {
   }
 
   /**
+   * The number of total invalid fields (including sub-forms)
+   */
+  @computed
+  get totalInvalidFieldCount() {
+    let count = this.invalidFieldCount;
+    for (const form of this.subForms) {
+      count += form.totalInvalidFieldCount;
+    }
+    return count;
+  }
+
+  /**
    * Sub-forms within the form.
    *
    * Forms are collected from the {@link FormDelegate.connect}.

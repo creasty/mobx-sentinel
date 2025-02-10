@@ -9,7 +9,6 @@ import {
   SampleFormBinding,
   SampleMultiFieldBinding,
 } from "./binding.test";
-import { defaultConfig } from "./config";
 
 describe("Form", () => {
   class EmptyModel {}
@@ -574,7 +573,11 @@ suite("Sub-forms", () => {
       sampleForm,
       arrayForm0,
       async waitForValidation() {
-        await new Promise((resolve) => setTimeout(resolve, defaultConfig.validationDelayMs + 10));
+        await vi.waitFor(() => {
+          expect(form.isValidating).toBe(false);
+          expect(sampleForm.isValidating).toBe(false);
+          expect(arrayForm0.isValidating).toBe(false);
+        });
       },
     };
   };
@@ -636,6 +639,25 @@ suite("Sub-forms", () => {
 
       expect(form.isValid).toBe(false);
       expect(sampleForm.isValid).toBe(true);
+    });
+
+    test("count total invalid fields", async () => {
+      const { model, form, sampleForm, arrayForm0, waitForValidation } = setupEnv();
+
+      runInAction(() => {
+        model.field = false;
+        model.sample.field = false;
+        model.array[0].field = false;
+      });
+      form.validate();
+      sampleForm.validate();
+      arrayForm0.validate();
+      await waitForValidation();
+
+      expect(form.invalidFieldCount).toBe(1);
+      expect(sampleForm.invalidFieldCount).toBe(1);
+      expect(arrayForm0.invalidFieldCount).toBe(1);
+      expect(form.totalInvalidFieldCount).toBe(3);
     });
   });
 
