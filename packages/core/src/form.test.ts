@@ -1,6 +1,6 @@
 import { makeValidatable, watch } from "@form-model/validation";
 import { autorun, makeObservable, observable, runInAction } from "mobx";
-import { Form, getInternal } from "./Form";
+import { Form, getInternal } from "./form";
 import { FormDelegate } from "./delegation";
 import {
   SampleConfigurableFieldBinding,

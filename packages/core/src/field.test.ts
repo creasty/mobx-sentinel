@@ -1,6 +1,6 @@
 import { makeObservable, observable } from "mobx";
-import { Form } from "./Form";
-import { FormField } from "./FormField";
+import { Form } from "./form";
+import { FormField } from "./field";
 import { FormDelegate } from "./delegation";
 import { ErrorMap } from "@form-model/validation";
 

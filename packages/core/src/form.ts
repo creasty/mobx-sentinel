@@ -1,7 +1,7 @@
 import { action, computed, makeObservable, observable, reaction } from "mobx";
 import { v4 as uuidV4 } from "uuid";
 import { Validator, Watcher, getValidator, getWatcher } from "@form-model/validation";
-import { FormField } from "./FormField";
+import { FormField } from "./field";
 import { FormBinding, FormBindingConstructor, FormBindingFunc, getSafeBindingName } from "./binding";
 import { FormConfig, globalConfig } from "./config";
 import { FormDelegate, getDelegation } from "./delegation";

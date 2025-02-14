@@ -1,5 +1,5 @@
-export { Form } from "./Form";
-export { FormField } from "./FormField";
+export { Form } from "./form";
+export { FormField } from "./field";
 export { FormConfig, configureForm } from "./config";
 export type { FormBinding, FormBindingFuncExtension } from "./binding";
 export { FormDelegate, FormDelegated } from "./delegation";
