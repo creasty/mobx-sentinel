@@ -1,5 +1,5 @@
 import { autorun } from "mobx";
-import { Validator } from "./validator";
+import { getValidator, Validator } from "./validator";
 
 function setupEnv(opt?: { cleanHandlers?: boolean }) {
   const lag = {
@@ -51,6 +51,29 @@ function setupEnv(opt?: { cleanHandlers?: boolean }) {
     },
   };
 }
+
+describe("getValidator", () => {
+  it("throws an error when a non-object is given", () => {
+    expect(() => {
+      getValidator(null as any);
+    }).toThrowError(/Expected an object/);
+    expect(() => {
+      getValidator(1 as any);
+    }).toThrowError(/Expected an object/);
+  });
+
+  it("returns the same instance for the same target", () => {
+    const target = {};
+    const validator = getValidator(target);
+    expect(getValidator(target)).toBe(validator);
+  });
+
+  it("returns different instances for different targets", () => {
+    const target1 = {};
+    const target2 = {};
+    expect(getValidator(target1)).not.toBe(getValidator(target2));
+  });
+});
 
 describe("Validator", () => {
   describe("#hasRun", () => {

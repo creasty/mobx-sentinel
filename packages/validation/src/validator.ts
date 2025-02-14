@@ -147,3 +147,17 @@ export namespace Validator {
 
   export type Handler<T = any> = (abortSignal: AbortSignal) => Promise<FormValidatorResult<T>>;
 }
+
+/** Get a validator for a target object */
+export function getValidator<T extends object>(target: T) {
+  if (!target || typeof target !== "object") {
+    throw new Error("target: Expected an object");
+  }
+  let validator: Validator | null = (target as any)[validatorKey] ?? null;
+  if (!validator) {
+    validator = new Validator();
+    Object.defineProperty(target, validatorKey, { value: validator });
+  }
+  return validator;
+}
+const validatorKey = Symbol("validator");
