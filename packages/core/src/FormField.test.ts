@@ -2,9 +2,9 @@ import { makeObservable, observable } from "mobx";
 import { Form } from "./Form";
 import { FormField } from "./FormField";
 import { FormDelegate } from "./delegation";
-import { ErrorMap } from "./validation";
+import { ErrorMap } from "@form-model/validation";
 
-class SampleModel implements FormDelegate<SampleModel> {
+class SampleModel implements FormDelegate {
   @observable test = "test";
 
   [FormDelegate.config]: FormDelegate.Config = {

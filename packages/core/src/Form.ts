@@ -1,10 +1,10 @@
-import { action, computed, makeObservable, observable } from "mobx";
+import { action, computed, makeObservable, observable, reaction } from "mobx";
 import { v4 as uuidV4 } from "uuid";
-import { Validator } from "@form-model/validation";
+import { Validator, Watcher, getValidator, getWatcher } from "@form-model/validation";
 import { FormField } from "./FormField";
 import { FormBinding, FormBindingConstructor, FormBindingFunc, getSafeBindingName } from "./binding";
 import { FormConfig, globalConfig } from "./config";
-import { FormDelegate, getDelegation, isConnectableObject } from "./delegation";
+import { FormDelegate, getDelegation } from "./delegation";
 import { Submission } from "./submission";
 
 const registry = new WeakMap<object, Map<symbol, Form<any>>>();
@@ -13,9 +13,10 @@ const internalToken = Symbol("Form.internalToken");
 
 export class Form<T> {
   readonly id = uuidV4();
-  readonly #delegate?: FormDelegate<T>;
+  readonly #delegate?: FormDelegate;
   readonly #formKey: symbol;
-  readonly #validator = new Validator();
+  readonly watcher: Watcher;
+  readonly validator: Validator;
   readonly #submission = new Submission();
   readonly #isDirty = observable.box(false);
   readonly #fields = new Map<string, FormField>();
@@ -49,7 +50,14 @@ export class Form<T> {
     let instance = map.get(formKey);
     if (!instance) {
       const delegate = getDelegation(subject);
-      instance = new Form<T>(internalToken, { formKey, delegate });
+      const watcher = getWatcher(subject);
+      const validator = getValidator(subject);
+      instance = new Form<T>(internalToken, {
+        formKey,
+        delegate,
+        watcher,
+        validator,
+      });
       map.set(formKey, instance);
     }
     return instance;
@@ -78,7 +86,9 @@ export class Form<T> {
     token: symbol,
     args: {
       formKey: symbol;
-      delegate?: FormDelegate<T>;
+      delegate?: FormDelegate;
+      watcher: Watcher;
+      validator: Validator;
     }
   ) {
     if (token !== internalToken) {
@@ -87,12 +97,16 @@ export class Form<T> {
     makeObservable(this);
     this.#formKey = args.formKey;
     this.#delegate = args.delegate;
+    this.watcher = args.watcher;
+    this.validator = args.validator;
 
-    this.#validator.addHandler(async (abortSignal) => {
-      const validate = this.#getDelegateByKey(FormDelegate.validate);
-      if (!validate) return {};
-      return await validate(abortSignal);
-    });
+    reaction(
+      () => this.watcher.changedTick,
+      () => {
+        this.markAsDirty();
+        this.validate();
+      }
+    );
     this.#submission.addHandler("submit", async (abortSignal) => {
       const submit = this.#getDelegateByKey(FormDelegate.submit);
       if (!submit) return true;
@@ -110,7 +124,7 @@ export class Form<T> {
    *
    * Returns an object, or a method that is bound to the delegate.
    */
-  #getDelegateByKey<K extends symbol & keyof FormDelegate<T>>(key: K): FormDelegate<T>[K] | undefined {
+  #getDelegateByKey<K extends symbol & keyof FormDelegate>(key: K): FormDelegate[K] | undefined {
     const delegate = this.#delegate;
     if (!delegate) return;
 
@@ -139,7 +153,7 @@ export class Form<T> {
   /** Whether the form is in validator state */
   @computed
   get isValidating() {
-    return this.#validator.state !== "idle";
+    return this.validator.state !== "idle";
   }
 
   /** Whether the form can be submitted */
@@ -166,7 +180,7 @@ export class Form<T> {
    */
   @computed
   get invalidFieldCount() {
-    return this.#validator.errors.size;
+    return this.validator.errors.size;
   }
 
   /**
@@ -190,17 +204,10 @@ export class Form<T> {
   get subForms(): ReadonlySet<Form<unknown>> {
     const forms = new Set<Form<unknown>>();
 
-    const connect = this.#getDelegateByKey(FormDelegate.connect);
-    if (connect) {
-      for (const object of connect()) {
-        if (!object) continue;
-        const items = Array.isArray(object) ? object : [object];
-        for (const item of items) {
-          if (!isConnectableObject(item)) continue;
-          const form = Form.get(item, this.#formKey);
-          forms.add(form);
-        }
-      }
+    for (const object of this.watcher.nestedObjects) {
+      if (!object || typeof object !== "object") continue;
+      const form = Form.get(object, this.#formKey);
+      forms.add(form);
     }
 
     return forms;
@@ -237,7 +244,7 @@ export class Form<T> {
   /** Report error states on all fields and sub-forms */
   @action
   reportError() {
-    if (!this.#validator.hasRun) {
+    if (!this.validator.hasRun) {
       // FIXME: This is a workaround
       this.validate({ force: true });
     }
@@ -253,7 +260,7 @@ export class Form<T> {
   @action
   reset() {
     this.#isDirty.set(false);
-    this.#validator.reset();
+    this.validator.reset();
     for (const field of this.#fields.values()) {
       field.reset();
     }
@@ -283,7 +290,7 @@ export class Form<T> {
     /** Force the validator to be executed immediately */
     force?: boolean;
   }) {
-    this.#validator.request({
+    this.validator.request({
       force: !!args?.force,
       enqueueDelayMs: this.config.validationDelayMs,
       scheduleDelayMs: this.config.subsequentValidationDelayMs,
@@ -302,7 +309,7 @@ export class Form<T> {
       case "didSubmit":
         return this.#submission.addHandler(event, handler as any);
       case "validate":
-        return this.#validator.addHandler(handler as any);
+        return this.validator.addHandler(handler as any);
       default:
         event satisfies never;
         throw new Error(`Invalid event: ${event}`);
@@ -315,7 +322,7 @@ export class Form<T> {
     if (!field) {
       field = new FormField({
         form: this,
-        formErrors: this.#validator.errors,
+        formErrors: this.validator.errors,
         fieldName: String(fieldName),
       });
       this.#fields.set(fieldName, field);
@@ -410,7 +417,6 @@ export class Form<T> {
     return {
       fields: this.#fields,
       bindings: this.#bindings,
-      validator: this.#validator,
       submission: this.#submission,
     };
   }

@@ -1,3 +1,4 @@
+import { makeValidatable, watch } from "@form-model/validation";
 import { autorun, makeObservable, observable, runInAction } from "mobx";
 import { Form, getInternal } from "./Form";
 import { FormDelegate } from "./delegation";
@@ -13,18 +14,18 @@ import {
 describe("Form", () => {
   class EmptyModel {}
 
-  class SampleModel implements FormDelegate<SampleModel> {
+  class SampleModel {
     @observable field = true;
     @observable otherField = true;
 
     constructor() {
       makeObservable(this);
-    }
 
-    async [FormDelegate.validate]() {
-      return {
-        field: this.field ? null : "invalid",
-      };
+      makeValidatable(this, () => {
+        return {
+          field: this.field ? null : "invalid",
+        };
+      });
     }
 
     async [FormDelegate.submit](signal: AbortSignal) {
@@ -38,17 +39,13 @@ describe("Form", () => {
     }
   }
 
-  class NestedModel implements FormDelegate<NestedModel> {
+  class NestedModel {
     @observable field = true;
-    @observable sample = new SampleModel();
-    @observable array = [new SampleModel()];
+    @watch.nested @observable sample = new SampleModel();
+    @watch.nested @observable array = [new SampleModel()];
 
     constructor() {
       makeObservable(this);
-    }
-
-    [FormDelegate.connect]() {
-      return [this.sample, this.array];
     }
   }
 
@@ -254,14 +251,13 @@ describe("Form", () => {
       const model = new SampleModel();
       const form = Form.get(model);
       const spy = vi.spyOn(form, "validate");
-      const internal = getInternal(form);
 
-      expect(internal.validator.hasRun).toBe(false);
+      expect(form.validator.hasRun).toBe(false);
       form.reportError();
       expect(spy).toBeCalledWith({ force: true });
 
       await vi.waitFor(() => expect(form.isValidating).toBe(false));
-      expect(internal.validator.hasRun).toBe(true);
+      expect(form.validator.hasRun).toBe(true);
 
       form.reportError(); // Doesn't trigger a new validation
       expect(spy).toBeCalledTimes(1);
@@ -311,18 +307,8 @@ describe("Form", () => {
     it("calls Validation#request", async () => {
       const model = new EmptyModel();
       const form = Form.get(model);
-      const internal = getInternal(form);
-      const spy = vi.spyOn(internal.validator, "request");
+      const spy = vi.spyOn(form.validator, "request");
       form.validate();
-      expect(spy).toBeCalled();
-    });
-
-    it("calls FormDelegate.validate when implemented", async () => {
-      const model = new SampleModel();
-      const spy = vi.spyOn(model, FormDelegate.validate);
-      const form = Form.get(model);
-      form.validate();
-      await vi.waitFor(() => expect(form.isValidating).toBe(false));
       expect(spy).toBeCalled();
     });
   });
@@ -342,8 +328,7 @@ describe("Form", () => {
     it("adds a handler to the validation event", () => {
       const model = new SampleModel();
       const form = Form.get(model);
-      const internal = getInternal(form);
-      const spy = vi.spyOn(internal.validator, "addHandler");
+      const spy = vi.spyOn(form.validator, "addHandler");
       expect(form.addHandler("validate", async () => ({}))).toBeInstanceOf(Function);
       expect(spy).toBeCalledTimes(1);
     });
@@ -527,37 +512,33 @@ describe("Form", () => {
 });
 
 suite("Sub-forms", () => {
-  class SampleModel implements FormDelegate<SampleModel> {
+  class SampleModel {
     @observable field = true;
 
     constructor() {
       makeObservable(this);
-    }
 
-    async [FormDelegate.validate]() {
-      return {
-        field: this.field ? null : "invalid",
-      };
+      makeValidatable(this, () => {
+        return {
+          field: this.field ? null : "invalid",
+        };
+      });
     }
   }
 
-  class NestedModel implements FormDelegate<NestedModel> {
+  class NestedModel {
     @observable field = true;
-    @observable sample = new SampleModel();
-    @observable array = [new SampleModel()];
+    @watch.nested @observable sample = new SampleModel();
+    @watch.nested @observable array = [new SampleModel()];
 
     constructor() {
       makeObservable(this);
-    }
 
-    async [FormDelegate.validate]() {
-      return {
-        field: this.field ? null : "invalid",
-      };
-    }
-
-    [FormDelegate.connect]() {
-      return [this.sample, this.array];
+      makeValidatable(this, () => {
+        return {
+          field: this.field ? null : "invalid",
+        };
+      });
     }
   }
 
