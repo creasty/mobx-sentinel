@@ -1,10 +1,10 @@
 import { makeObservable, observable } from "mobx";
-import { Form } from "./Form";
-import { FormField } from "./FormField";
+import { Form } from "./form";
+import { FormField } from "./field";
 import { FormDelegate } from "./delegation";
-import { ErrorMap } from "./validation";
+import { ErrorMap } from "@form-model/validation";
 
-class SampleModel implements FormDelegate<SampleModel> {
+class SampleModel implements FormDelegate {
   @observable test = "test";
 
   [FormDelegate.config]: FormDelegate.Config = {
@@ -20,8 +20,16 @@ function setupEnv() {
   const model = new SampleModel();
   const form = Form.get(model);
   const formErrors = observable.map<string, string[]>() satisfies ErrorMap;
-  const field = new FormField({ form, formErrors, fieldName: "test" });
-  return { model, formErrors, form, field };
+  const field = new FormField({
+    fieldName: "test",
+    formErrors,
+    getFinalizationDelayMs: () => form.config.intermediateValidationDelayMs,
+  });
+
+  const waitForDelay = (shift = 10) =>
+    new Promise((resolve) => setTimeout(resolve, form.config.intermediateValidationDelayMs + shift));
+
+  return { model, formErrors, waitForDelay, field };
 }
 
 describe("FormField", () => {
@@ -102,22 +110,102 @@ describe("FormField", () => {
   });
 
   describe("#markAsChanged", () => {
-    it("marks the field as changed (intermediate)", () => {
-      const { field } = setupEnv();
-      field.markAsChanged("intermediate");
-      expect(field.isTouched).toBe(false);
-      expect(field.isIntermediate).toBe(true);
-      expect(field.isChanged).toBe(true);
-      expect(field.isErrorReported).toBe(false);
+    describe("final", () => {
+      it("marks the field as changed and reports error instantly", () => {
+        const { field } = setupEnv();
+        field.markAsChanged("final");
+        expect(field.isTouched).toBe(false);
+        expect(field.isIntermediate).toBe(false);
+        expect(field.isChanged).toBe(true);
+        expect(field.isErrorReported).toBe(true);
+      });
     });
 
-    it("marks the field as changed (final)", () => {
+    describe("intermediate", () => {
+      it("marks the field as 'intermediately' changed and calls finalizeChangeIfNeeded() after a delay", async () => {
+        const { field, waitForDelay } = setupEnv();
+        const spy = vi.spyOn(field, "finalizeChangeIfNeeded");
+
+        field.markAsChanged("intermediate");
+        expect(spy).toBeCalledTimes(0);
+        expect(field.isTouched).toBe(false);
+        expect(field.isIntermediate).toBe(true);
+        expect(field.isChanged).toBe(true);
+        expect(field.isErrorReported).toBe(false);
+
+        // Finalized after a delay
+        await waitForDelay();
+        expect(spy).toBeCalledTimes(1);
+      });
+
+      it("prolongs the delay when changes are made again", async () => {
+        const { field, waitForDelay } = setupEnv();
+        const spy = vi.spyOn(field, "finalizeChangeIfNeeded");
+
+        field.markAsChanged("intermediate");
+        await waitForDelay(-10);
+        expect(spy).toBeCalledTimes(0);
+
+        field.markAsChanged("intermediate");
+        await waitForDelay(-10);
+        expect(spy).toBeCalledTimes(0);
+
+        await waitForDelay();
+        expect(spy).toBeCalledTimes(1);
+      });
+
+      it("cancels the delay with markAsChanged(final)", async () => {
+        const { field, waitForDelay } = setupEnv();
+        const spy = vi.spyOn(field, "finalizeChangeIfNeeded");
+
+        field.markAsChanged("intermediate");
+        field.markAsChanged("final");
+        expect(spy).toBeCalledTimes(0);
+        await waitForDelay();
+        expect(spy).toBeCalledTimes(0);
+      });
+    });
+  });
+
+  describe("#finalizeChangeIfNeeded", () => {
+    it("does nothing if the field is not intermediate", () => {
       const { field } = setupEnv();
-      field.markAsChanged("final");
-      expect(field.isTouched).toBe(false);
-      expect(field.isIntermediate).toBe(false);
-      expect(field.isChanged).toBe(true);
-      expect(field.isErrorReported).toBe(true);
+      const spy = vi.spyOn(field, "markAsChanged");
+
+      field.finalizeChangeIfNeeded();
+      expect(spy).toBeCalledTimes(0);
+    });
+
+    it("finalizes changes if there have been intermediate changes", async () => {
+      const { field } = setupEnv();
+      const spy = vi.spyOn(field, "markAsChanged");
+
+      field.markAsChanged("intermediate");
+      field.finalizeChangeIfNeeded();
+      expect(spy).toBeCalledTimes(2);
+      expect(spy).toHaveBeenLastCalledWith("final");
+    });
+
+    it("cancels the delay and finalizes changes right away", async () => {
+      const { field, waitForDelay } = setupEnv();
+      const spy = vi.spyOn(field, "finalizeChangeIfNeeded");
+
+      field.markAsChanged("intermediate");
+      field.finalizeChangeIfNeeded();
+      expect(spy).toBeCalledTimes(1);
+      await waitForDelay();
+      expect(spy).toBeCalledTimes(1);
+    });
+
+    it("cancels the delayed validation when the field is reset", async () => {
+      const { field, waitForDelay } = setupEnv();
+      const spy = vi.spyOn(field, "finalizeChangeIfNeeded");
+
+      field.markAsChanged("intermediate");
+      field.reset();
+      await waitForDelay();
+
+      expect(spy).toBeCalledTimes(0);
     });
   });
 
@@ -146,90 +234,6 @@ describe("FormField", () => {
       expect(field.isIntermediate).toBe(false);
       expect(field.isChanged).toBe(false);
       expect(field.isErrorReported).toBe(false);
-    });
-  });
-
-  describe("#validate", () => {
-    it("calls the validate on the form with the force option", () => {
-      const { field, form } = setupEnv();
-      const spy = vi.spyOn(form, "validate");
-
-      field.validate();
-      expect(spy).toBeCalledTimes(1);
-      expect(spy).toBeCalledWith({ force: true });
-    });
-
-    it("finalize changes only if there have been intermediate changes", async () => {
-      const { field } = setupEnv();
-
-      // No changes - doesn't change state
-      expect(field.isChanged).toBe(false);
-      field.validate();
-      expect(field.isChanged).toBe(false);
-      expect(field.isIntermediate).toBe(false);
-
-      // Intermediate changes
-      field.markAsChanged("intermediate");
-      expect(field.isChanged).toBe(true);
-      expect(field.isIntermediate).toBe(true);
-
-      // Intermediate changes are finalized
-      field.validate();
-      expect(field.isChanged).toBe(true);
-      expect(field.isIntermediate).toBe(false);
-    });
-  });
-
-  describe("#validateWithDelay", () => {
-    const waitForDelay = (form: Form<unknown>, shift = 10) =>
-      new Promise((resolve) => setTimeout(resolve, form.config.intermediateValidationDelayMs + shift));
-
-    it("calls the validate on the form after the delay", async () => {
-      const { field, form } = setupEnv();
-      const spy = vi.spyOn(form, "validate");
-
-      expect(field.isChanged).toBe(false);
-
-      field.validateWithDelay();
-      expect(spy).toBeCalledTimes(0);
-
-      await waitForDelay(form);
-
-      expect(spy).toBeCalledTimes(1);
-    });
-
-    it("prolongs the delay when the validation is requested again before it is completed", async () => {
-      const { field, form } = setupEnv();
-      const spy = vi.spyOn(form, "validate");
-
-      field.validateWithDelay();
-      await waitForDelay(form, -10);
-      field.validateWithDelay();
-      await waitForDelay(form);
-
-      expect(spy).toBeCalledTimes(1);
-    });
-
-    it("cancels the delayed validation and triggers validation right away when validate() is called", async () => {
-      const { field, form } = setupEnv();
-      const spy = vi.spyOn(form, "validate");
-
-      field.validateWithDelay();
-      field.validate();
-      expect(spy).toBeCalledTimes(1);
-      await waitForDelay(form);
-      expect(spy).toBeCalledTimes(1);
-    });
-
-    it("cancels the delayed validation when the field is reset", async () => {
-      const { field, form } = setupEnv();
-      const spy = vi.spyOn(form, "validate");
-
-      field.validateWithDelay();
-      field.reset();
-      await waitForDelay(form);
-
-      expect(spy).toBeCalledTimes(0);
     });
   });
 });

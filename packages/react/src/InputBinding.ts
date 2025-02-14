@@ -146,12 +146,11 @@ export class InputBinding implements FormBinding {
         break;
     }
     this.field.markAsChanged("intermediate");
-    this.field.validateWithDelay();
     this.config.onChange?.(e);
   };
 
   onBlur: InputBinding.AttrsRequired["onBlur"] = (e) => {
-    this.field.validate();
+    this.field.finalizeChangeIfNeeded();
     this.config.onBlur?.(e);
   };
 

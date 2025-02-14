@@ -1,5 +1,5 @@
 import { autorun } from "mobx";
-import { Validator } from "./validator";
+import { getValidator, Validator } from "./validator";
 
 function setupEnv(opt?: { cleanHandlers?: boolean }) {
   const lag = {
@@ -52,23 +52,30 @@ function setupEnv(opt?: { cleanHandlers?: boolean }) {
   };
 }
 
-describe("Validator", () => {
-  describe("#hasRun", () => {
-    it("is set to true when the validation has ever run", async () => {
-      const env = setupEnv({ cleanHandlers: true });
-
-      expect(env.validator.hasRun).toBe(false);
-      env.request();
-      await env.waitFor("idle");
-      expect(env.validator.hasRun).toBe(true);
-
-      // Doesn't change for the second time
-      env.request();
-      await env.waitFor("idle");
-      expect(env.validator.hasRun).toBe(true);
-    });
+describe("getValidator", () => {
+  it("throws an error when a non-object is given", () => {
+    expect(() => {
+      getValidator(null as any);
+    }).toThrowError(/Expected an object/);
+    expect(() => {
+      getValidator(1 as any);
+    }).toThrowError(/Expected an object/);
   });
 
+  it("returns the same instance for the same target", () => {
+    const target = {};
+    const validator = getValidator(target);
+    expect(getValidator(target)).toBe(validator);
+  });
+
+  it("returns different instances for different targets", () => {
+    const target1 = {};
+    const target2 = {};
+    expect(getValidator(target1)).not.toBe(getValidator(target2));
+  });
+});
+
+describe("Validator", () => {
   describe("#request", () => {
     it("process validation handlers in parallel", async () => {
       const env = setupEnv({ cleanHandlers: true });
@@ -319,11 +326,9 @@ describe("Validator", () => {
 
       env.request();
       await env.waitFor("idle");
-      expect(env.validator.hasRun).toBe(true);
       expect(env.validator.errors.size).toBe(1);
 
       env.validator.reset();
-      expect(env.validator.hasRun).toBe(false);
       expect(env.validator.state).toBe("idle");
       expect(env.validator.errors.size).toBe(0);
     });

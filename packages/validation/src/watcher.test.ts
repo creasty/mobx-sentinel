@@ -72,20 +72,20 @@ describe("Annotations", () => {
     test("changedTick is incremented for each change", () => {
       const sample = new Sample();
       const watcher = getWatcher(sample);
-      expect(watcher.changedTick).toBe(0);
+      expect(watcher.changedTick).toBe(0n);
 
       runInAction(() => {
         sample.field1 = true;
       });
       // 1 change to 3 fields each (field1, computed1, computed3)
-      expect(watcher.changedTick).toBe(3);
+      expect(watcher.changedTick).toBe(3n);
 
       runInAction(() => {
         sample.field2 = true;
       });
       // 1 change to 2 fields each (field2, computed2)
       // Since the value of computed3 is constant, it won't be counted.
-      expect(watcher.changedTick).toBe(3 + 2);
+      expect(watcher.changedTick).toBe(3n + 2n);
 
       runInAction(() => {
         sample.field1 = false;
@@ -93,7 +93,7 @@ describe("Annotations", () => {
       });
       // 1 change to all 5 fields each
       // Since runInAction is used, change to field1 and field2 are counted as 1 change.
-      expect(watcher.changedTick).toBe(3 + 2 + 5);
+      expect(watcher.changedTick).toBe(3n + 2n + 5n);
     });
 
     test("when the value is not changed, the watcher is not updated", () => {
@@ -114,19 +114,19 @@ describe("Annotations", () => {
       const watcher = getWatcher(sample);
       expect(watcher.changed).toBe(false);
       expect(watcher.changedKeys).toEqual(new Set());
-      expect(watcher.changedTick).toBe(0);
+      expect(watcher.changedTick).toBe(0n);
 
       runInAction(() => {
         sample.field1 = true;
       });
       expect(watcher.changed).toBe(true);
       expect(watcher.changedKeys).not.toEqual(new Set());
-      expect(watcher.changedTick).not.toBe(0);
+      expect(watcher.changedTick).not.toBe(0n);
 
       watcher.reset();
       expect(watcher.changed).toBe(false);
       expect(watcher.changedKeys).toEqual(new Set());
-      expect(watcher.changedTick).toBe(0);
+      expect(watcher.changedTick).toBe(0n);
     });
 
     describe("object", () => {
@@ -701,6 +701,38 @@ describe("Annotations", () => {
         });
         expect(watcher.changedKeys).toEqual(new Set(["field1", "field2"]));
         expect(watcher.changedKeyPaths).toEqual(new Set(["field1", "field1.value", "field2", "field2.value"]));
+      });
+
+      test("resetting a nested object does not reset the parent", () => {
+        const sample = new Sample();
+        const watcher = getWatcher(sample);
+        const watcherNested = getWatcher(sample.field1);
+
+        runInAction(() => {
+          sample.field1.value = true;
+        });
+        expect(watcher.changed).toBe(true);
+        expect(watcherNested.changed).toBe(true);
+
+        watcherNested.reset();
+        expect(watcher.changed).toBe(true);
+        expect(watcherNested.changed).toBe(false);
+      });
+
+      test("the parent can reset all nested objects recursively", () => {
+        const sample = new Sample();
+        const watcher = getWatcher(sample);
+        const watcherNested = getWatcher(sample.field1);
+
+        runInAction(() => {
+          sample.field1.value = true;
+        });
+        expect(watcher.changed).toBe(true);
+        expect(watcherNested.changed).toBe(true);
+
+        watcher.reset();
+        expect(watcher.changed).toBe(false);
+        expect(watcherNested.changed).toBe(false);
       });
     });
   });

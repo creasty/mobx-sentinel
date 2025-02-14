@@ -45,9 +45,9 @@ describe("CheckBoxBinding", () => {
     const model = new SampleModel();
     const form = Form.get(model);
     const field = new FormField({
-      form,
-      formErrors: new Map(),
       fieldName: "test",
+      formErrors: new Map(),
+      getFinalizationDelayMs: () => form.config.intermediateValidationDelayMs,
     });
     const binding = new CheckBoxBinding(field, {
       getter: () => false,

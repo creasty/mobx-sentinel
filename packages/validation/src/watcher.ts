@@ -71,17 +71,17 @@ export const unwatch = createPropertyLikeAnnotation(unwatchKey, () => true);
 
 /** Watcher for changes to a target object */
 export class Watcher {
-  readonly #changedTick = observable.box(0);
+  readonly #changedTick = observable.box(0n);
   readonly #changedKeys = observable.set<string>();
   readonly #processedKeys = new Set<string>();
   readonly #nested = new Map<string, () => Array<{ value: any; key?: string | symbol | number }>>();
 
   constructor(target: object) {
-    makeObservable(this);
-
     this.#processUnwatchAnnotations(target);
     this.#processWatchAnnotations(target);
     this.#processMobxAnnotations(target);
+
+    makeObservable(this);
   }
 
   /**
@@ -89,6 +89,7 @@ export class Watcher {
    *
    * It is incremented for each change and each key.
    */
+  @computed
   get changedTick() {
     return this.#changedTick.get();
   }
@@ -96,7 +97,7 @@ export class Watcher {
   /** Whether any keys have changed */
   @computed
   get changed() {
-    return this.#changedTick.get() > 0;
+    return this.changedTick > 0n;
   }
 
   /** The keys that have changed */
@@ -142,17 +143,24 @@ export class Watcher {
   }
 
   /** Reset the changed keys */
-  @action.bound
+  @action
   reset() {
     this.#changedKeys.clear();
-    this.#changedTick.set(0);
+    this.#changedTick.set(0n);
+
+    for (const [, fn] of this.#nested) {
+      for (const { value } of fn()) {
+        const watcher = getWatcherSafe(value);
+        watcher?.reset();
+      }
+    }
   }
 
   /** Mark a key as changed */
   #didChange(key: string) {
     runInAction(() => {
       this.#changedKeys.add(key);
-      this.#changedTick.set(this.#changedTick.get() + 1);
+      this.#changedTick.set(this.#changedTick.get() + 1n);
     });
   }
 
@@ -252,7 +260,7 @@ export class Watcher {
         this.#processedKeys.add(key);
 
         const isNested = metadata.data.includes(WatchMode.Nested);
-        const isShallow = metadata.data.includes(WatchMode.Shallow);
+        const isShallow = isNested || metadata.data.includes(WatchMode.Shallow); // false if one and only @watch.ref is specified
         const getValue = () => (key in target ? (target as any)[key] : metadata.get?.());
 
         reaction(
@@ -261,9 +269,10 @@ export class Watcher {
         );
 
         if (isNested) {
+          // TODO: Rewrite this reaction with @computed
           reaction(
-            () => this.#processNested(getValue(), (v) => getWatcherSafe(v)?.changed),
-            () => this.#didChange(key)
+            () => this.#processNested(getValue(), (v) => getWatcherSafe(v)?.changed ?? false).some(Boolean),
+            (changed) => changed && this.#didChange(key)
           );
           this.#nested.set(key, () => this.#processNested(getValue(), (v, k) => ({ value: v, key: k })));
         }
