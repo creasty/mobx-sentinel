@@ -71,10 +71,10 @@ export const unwatch = createPropertyLikeAnnotation(unwatchKey, () => true);
 
 /** Watcher for changes to a target object */
 class Watcher {
-  #changedTick = observable.box(0);
-  #changedKeys = observable.set<string>();
-  #processedKeys = new Set<string>();
-  #nested = new Map<string, () => Array<{ value: any; key?: string | symbol | number }>>();
+  readonly #changedTick = observable.box(0);
+  readonly #changedKeys = observable.set<string>();
+  readonly #processedKeys = new Set<string>();
+  readonly #nested = new Map<string, () => Array<{ value: any; key?: string | symbol | number }>>();
 
   constructor(target: object) {
     makeObservable(this);
