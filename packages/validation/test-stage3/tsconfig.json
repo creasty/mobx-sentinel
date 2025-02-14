@@ -6,7 +6,7 @@
     "module": "commonjs",
     "types": ["vitest/globals"],
     "experimentalDecorators": false,
-    "emitDecoratorMetadata": false,
+    "emitDecoratorMetadata": false
   },
-  "include": ["../src", "."],
+  "include": ["../src", "."]
 }
