@@ -49,16 +49,18 @@ const createWatchNested = createPropertyLikeAnnotation(watchKey, () => WatchMode
  * `@observable` and `@computed` (and their variants) are automatically assumed to be `@watched`,\
  * unless `@unwatch` or `@unwatch.ref` or `@unwatch.nested` is specified.
  */
-export const watch = Object.assign(createWatch, {
-  /**
-   * Annotation for watching only assignments to a property and a getter
-   */
-  ref: createWatchRef,
-  /**
-   * Annotation for watching nested objects
-   */
-  nested: createWatchNested,
-});
+export const watch = Object.freeze(
+  Object.assign(createWatch, {
+    /**
+     * Annotation for watching only assignments to a property and a getter
+     */
+    ref: createWatchRef,
+    /**
+     * Annotation for watching nested objects
+     */
+    nested: createWatchNested,
+  })
+);
 
 /**
  * Annotation for unwatching changes to a property and a getter
