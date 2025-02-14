@@ -142,7 +142,7 @@ export class Watcher {
   }
 
   /** Reset the changed keys */
-  @action.bound
+  @action
   reset() {
     this.#changedKeys.clear();
     this.#changedTick.set(0);
@@ -262,8 +262,8 @@ export class Watcher {
 
         if (isNested) {
           reaction(
-            () => this.#processNested(getValue(), (v) => getWatcherSafe(v)?.changed),
-            () => this.#didChange(key)
+            () => this.#processNested(getValue(), (v) => getWatcherSafe(v)?.changed ?? false).some(Boolean),
+            (changed) => changed && this.#didChange(key)
           );
           this.#nested.set(key, () => this.#processNested(getValue(), (v, k) => ({ value: v, key: k })));
         }

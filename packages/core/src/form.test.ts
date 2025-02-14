@@ -210,6 +210,24 @@ describe("Form", () => {
       expect(form.isDirty).toBe(false);
     });
 
+    it("resets the watcher", () => {
+      const model = new SampleModel();
+      const form = Form.get(model);
+      const spy = vi.spyOn(form.watcher, "reset");
+
+      form.reset();
+      expect(spy).toBeCalled();
+    });
+
+    it("resets the validator", () => {
+      const model = new SampleModel();
+      const form = Form.get(model);
+      const spy = vi.spyOn(form.validator, "reset");
+
+      form.reset();
+      expect(spy).toBeCalled();
+    });
+
     it("resets sub-forms", () => {
       const model = new NestedModel();
       const form = Form.get(model);

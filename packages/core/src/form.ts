@@ -170,7 +170,7 @@ export class Form<T> {
   /** Whether the form is dirty (including sub-forms) */
   @computed
   get isDirty() {
-    return this.#isDirty.get() || this.dirtySubFormCount > 0;
+    return this.#isDirty.get() || this.watcher.changed || this.dirtySubFormCount > 0;
   }
 
   /**
@@ -257,6 +257,7 @@ export class Form<T> {
   reset() {
     this.#isDirty.set(false);
     this.validator.reset();
+    this.watcher.reset();
     for (const field of this.#fields.values()) {
       field.reset();
     }
