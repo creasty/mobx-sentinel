@@ -128,11 +128,9 @@ This library aims to solve these problems through a model-centric design that pr
 
 ```typescript
 import { action, observable, makeObservable } from "mobx";
-import { FormDelegate } from "@form-model/core";
+import { watch, makeValidatable } from "@form-model/validation";
 
-// Form-related processing is implemented using a Protocol pattern with symbols (along with the interface).
-// You can either implement self-delegation as shown here, or literally delegate it to another class.
-class Sample implements FormDelegate<Sample> {
+class Sample {
   @observable text: string = "";
   @observable number: number | null = null;
   @observable date: Date | null = null;
@@ -141,99 +139,25 @@ class Sample implements FormDelegate<Sample> {
   @observable option: string | null = null;
   @observable multiOption: string[] = [];
 
-  @observable nested = new Other();
-  @observable array = [new Other()];
+  // Nested/dynamic objects can be tracked with the annotation.
+  @watch.nested @observable nested = new Other();
+  @watch.nested @observable array = [new Other()];
 
   constructor() {
     makeObservable(this);
-  }
 
-  @action
-  addNewForm() {
-    this.array.push(new Other());
-  }
-
-  // Nested/dynamic forms are achieved by returning a list of models.
-  [FormDelegate.connect]() {
-    return [this.nested, this.array];
-  }
-
-  // Validation is implemented by returning an object with error messages.
-  [FormDelegate.validate]: FormDelegate.Validate<Sample> = async (abortSignal) => {
-    return {
-      text: this.text === "" ? "Required" : null,
-      number: this.number === null ? "Required" : null,
-      date: this.date === null ? "Required" : null,
-      enum: this.enum === null ? "Required" : null,
-      option: this.option === null ? "Required" : null,
-      multiOption: this.multiOption.length === 0 ? "Required" : null,
-      array: this.array.length === 0 ? "Required" : null,
-    };
-  };
-}
-
-class Other implements FormDelegate<Other> {
-  @observable other: string = "";
-
-  constructor() {
-    makeObservable(this);
-  }
-
-  [FormDelegate.validate]: FormDelegate.Validate<Other> = async (abortSignal) => {
-    return {
-      other: this.other === "" ? "Required" : !isValidFormat(this.other) ? "Invalid format" : null,
-    };
-  };
-}
-```
-
-### Sneak peek: Annotation-based validation (Planned for v0.1)
-
-<details>
-
-```typescript
-import { action, observable, makeObservable } from "mobx";
-import { validate } from "@form-model/validation";
-
-class Sample {
-  @observable
-  @validate.required
-  text: string = "";
-
-  @observable
-  @validate.required
-  number: number | null = null;
-
-  @observable
-  @validate.required
-  date: Date | null = null;
-
-  @observable
-  bool: boolean = false;
-
-  @observable
-  @validate.required
-  enum: SampleEnum | null = null;
-
-  @observable
-  @validate.required
-  option: string | null = null;
-
-  @observable
-  @validate.required
-  multiOption: string[] = [];
-
-  @observable
-  @validate.nested
-  nested = new Other();
-
-  @observable
-  @validate.nested
-  @validate.required
-  array = [new Other()];
-
-  constructor() {
-    makeObservable(this);
+    // Validation is implemented by returning an object with error messages.
+    makeValidatable(this, () => {
+      return {
+        text: this.text === "" ? "Required" : null,
+        number: this.number === null ? "Required" : null,
+        date: this.date === null ? "Required" : null,
+        enum: this.enum === null ? "Required" : null,
+        option: this.option === null ? "Required" : null,
+        multiOption: this.multiOption.length === 0 ? "Required" : null,
+        array: this.array.length === 0 ? "Required" : null,
+      };
+    });
   }
 
   @action
@@ -243,13 +167,16 @@ class Sample {
 }
 
 class Other {
-  @observable
-  @validate.required
-  @validate(isValidFormat)
-  other: string = "";
+  @observable other: string = "";
 
   constructor() {
     makeObservable(this);
+
+    makeValidatable(this, () => {
+      return {
+        other: this.other === "" ? "Required" : !isValidFormat(this.other) ? "Invalid format" : null,
+      };
+    });
   }
 }
 ```
@@ -268,9 +195,16 @@ const SampleForm: React.FC<{ model: Sample }> = observer(({ model }) => {
   const form = Form.get(model);
 
   useFormEvent(form, "submit", async (abortSignal) => {
-    console.log("submit");
+    // TODO: Serialize the model and send the data to a server
     return true;
   });
+
+  // Optional:
+  // useFormEvent(form, "validate", async (abortSignal) => {
+  //   return {
+  //     // Extend validation rules here.
+  //   };
+  // });
 
   return (
     <form>
