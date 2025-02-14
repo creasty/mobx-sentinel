@@ -485,7 +485,6 @@ describe("Form", () => {
 
       runInAction(() => {
         model.field = false;
-        form.validate();
       });
       await vi.waitFor(() => expect(form.isValidating).toBe(false));
 
@@ -501,7 +500,6 @@ describe("Form", () => {
 
       runInAction(() => {
         model.field = false;
-        form.validate();
       });
       await vi.waitFor(() => expect(form.isValidating).toBe(false));
 
@@ -599,7 +597,6 @@ suite("Sub-forms", () => {
       runInAction(() => {
         model.sample.field = false;
       });
-      sampleForm.validate();
       await waitForValidation();
 
       expect(sampleForm.isValid).toBe(false);
@@ -615,7 +612,6 @@ suite("Sub-forms", () => {
       runInAction(() => {
         model.field = false;
       });
-      form.validate();
       await waitForValidation();
 
       expect(form.isValid).toBe(false);
@@ -630,9 +626,6 @@ suite("Sub-forms", () => {
         model.sample.field = false;
         model.array[0].field = false;
       });
-      form.validate();
-      sampleForm.validate();
-      arrayForm0.validate();
       await waitForValidation();
 
       expect(form.invalidFieldCount).toBe(1);
