@@ -1,5 +1,5 @@
 import { autorun } from "mobx";
-import { toErrorMap, Validation } from "./validation";
+import { Validator } from "./validator";
 
 function setupEnv(opt?: { cleanHandlers?: boolean }) {
   const lag = {
@@ -8,16 +8,16 @@ function setupEnv(opt?: { cleanHandlers?: boolean }) {
     runTime: 140,
   };
 
-  const validation = new Validation();
+  const validator = new Validator();
 
   const timeline: string[] = [];
   autorun(() => {
-    timeline.push(`state: ${validation.state}`);
+    timeline.push(`state: ${validator.state}`);
   });
 
   let counter = 0;
   if (!opt?.cleanHandlers) {
-    validation.addHandler(async (abortSignal) => {
+    validator.addHandler(async (abortSignal) => {
       const localCounter = ++counter;
       timeline.push(`job start ${localCounter}`);
       return new Promise((resolve) => {
@@ -34,38 +34,38 @@ function setupEnv(opt?: { cleanHandlers?: boolean }) {
   }
 
   return {
-    validation,
+    validator,
     timeline,
     getCallCount() {
       return counter;
     },
     request(opt?: { force?: boolean }) {
-      return validation.request({
+      return validator.request({
         force: !!opt?.force,
         enqueueDelayMs: lag.requestDelay,
         scheduleDelayMs: lag.scheduleDelay,
       });
     },
-    async waitFor(state: Validation.JobState) {
-      return vi.waitFor(() => expect(this.validation.state).toBe(state));
+    async waitFor(state: Validator.JobState) {
+      return vi.waitFor(() => expect(this.validator.state).toBe(state));
     },
   };
 }
 
-describe("Validation", () => {
+describe("Validator", () => {
   describe("#hasRun", () => {
     it("is set to true when the validation has ever run", async () => {
       const env = setupEnv({ cleanHandlers: true });
 
-      expect(env.validation.hasRun).toBe(false);
+      expect(env.validator.hasRun).toBe(false);
       env.request();
       await env.waitFor("idle");
-      expect(env.validation.hasRun).toBe(true);
+      expect(env.validator.hasRun).toBe(true);
 
       // Doesn't change for the second time
       env.request();
       await env.waitFor("idle");
-      expect(env.validation.hasRun).toBe(true);
+      expect(env.validator.hasRun).toBe(true);
     });
   });
 
@@ -73,19 +73,19 @@ describe("Validation", () => {
     it("process validation handlers in parallel", async () => {
       const env = setupEnv({ cleanHandlers: true });
 
-      env.validation.addHandler(async () => {
+      env.validator.addHandler(async () => {
         env.timeline.push("validate 1 start");
         await new Promise((resolve) => setTimeout(resolve, 50));
         env.timeline.push("validate 1 end");
         return {};
       });
-      env.validation.addHandler(async () => {
+      env.validator.addHandler(async () => {
         env.timeline.push("validate 2 start");
         await new Promise((resolve) => setTimeout(resolve, 10));
         env.timeline.push("validate 2 end");
         return {};
       });
-      env.validation.addHandler(async () => {
+      env.validator.addHandler(async () => {
         env.timeline.push("validate 3 start");
         await new Promise((resolve) => setTimeout(resolve, 30));
         env.timeline.push("validate 3 end");
@@ -114,7 +114,7 @@ describe("Validation", () => {
       const env = setupEnv({ cleanHandlers: true });
       const consoleSpy = vi.spyOn(console, "error").mockImplementation(() => {});
 
-      env.validation.addHandler(async () => {
+      env.validator.addHandler(async () => {
         throw new Error("Test error");
       });
 
@@ -126,9 +126,9 @@ describe("Validation", () => {
     it("enqueues a new validation request", async () => {
       const env = setupEnv();
 
-      expect(env.validation.state).toBe("idle");
+      expect(env.validator.state).toBe("idle");
       env.request();
-      expect(env.validation.state).toBe("enqueued");
+      expect(env.validator.state).toBe("enqueued");
       await env.waitFor("idle");
 
       expect(env.getCallCount()).toBe(1);
@@ -149,11 +149,11 @@ describe("Validation", () => {
 
       // 1st request
       env.request();
-      expect(env.validation.state).toBe("enqueued");
+      expect(env.validator.state).toBe("enqueued");
 
       // 2nd request
       env.request();
-      expect(env.validation.state).toBe("enqueued");
+      expect(env.validator.state).toBe("enqueued");
       await env.waitFor("idle");
 
       expect(env.getCallCount()).toBe(1);
@@ -174,12 +174,12 @@ describe("Validation", () => {
 
       // 1st request
       env.request();
-      expect(env.validation.state).toBe("enqueued");
+      expect(env.validator.state).toBe("enqueued");
       await env.waitFor("running");
 
       // 2nd request
       env.request();
-      expect(env.validation.state).toBe("running");
+      expect(env.validator.state).toBe("running");
       await env.waitFor("scheduled");
       expect(env.getCallCount()).toBe(1);
       await env.waitFor("idle");
@@ -206,18 +206,18 @@ describe("Validation", () => {
 
       // 1st request
       env.request();
-      expect(env.validation.state).toBe("enqueued");
+      expect(env.validator.state).toBe("enqueued");
       await env.waitFor("running");
 
       // 2nd request
       env.request();
-      expect(env.validation.state).toBe("running");
+      expect(env.validator.state).toBe("running");
       await env.waitFor("scheduled");
       expect(env.getCallCount()).toBe(1);
 
       // 3rd request
       env.request();
-      expect(env.validation.state).toBe("scheduled");
+      expect(env.validator.state).toBe("scheduled");
       expect(env.getCallCount()).toBe(1);
       await env.waitFor("idle");
 
@@ -243,7 +243,7 @@ describe("Validation", () => {
         const env = setupEnv();
 
         env.request({ force: true });
-        expect(env.validation.state).toBe("running");
+        expect(env.validator.state).toBe("running");
         await env.waitFor("idle");
 
         expect(env.getCallCount()).toBe(1);
@@ -263,11 +263,11 @@ describe("Validation", () => {
 
         // 1st request
         env.request();
-        expect(env.validation.state).toBe("enqueued");
+        expect(env.validator.state).toBe("enqueued");
 
         // 2nd request - before the 1st request is run
         env.request({ force: true });
-        expect(env.validation.state).toBe("running");
+        expect(env.validator.state).toBe("running");
         await env.waitFor("idle");
 
         expect(env.getCallCount()).toBe(1);
@@ -288,12 +288,12 @@ describe("Validation", () => {
 
         // 1st request
         env.request();
-        expect(env.validation.state).toBe("enqueued");
+        expect(env.validator.state).toBe("enqueued");
         await env.waitFor("running");
 
         // 2nd request - while the 1st request is running
         env.request({ force: true });
-        expect(env.validation.state).toBe("running");
+        expect(env.validator.state).toBe("running");
         await env.waitFor("idle");
 
         expect(env.getCallCount()).toBe(2);
@@ -319,20 +319,20 @@ describe("Validation", () => {
 
       env.request();
       await env.waitFor("idle");
-      expect(env.validation.hasRun).toBe(true);
-      expect(env.validation.errors.size).toBe(1);
+      expect(env.validator.hasRun).toBe(true);
+      expect(env.validator.errors.size).toBe(1);
 
-      env.validation.reset();
-      expect(env.validation.hasRun).toBe(false);
-      expect(env.validation.state).toBe("idle");
-      expect(env.validation.errors.size).toBe(0);
+      env.validator.reset();
+      expect(env.validator.hasRun).toBe(false);
+      expect(env.validator.state).toBe("idle");
+      expect(env.validator.errors.size).toBe(0);
     });
 
     it("cancels the scheduled validation", async () => {
       const env = setupEnv();
 
       env.request();
-      env.validation.reset();
+      env.validator.reset();
       await env.waitFor("idle");
 
       expect(env.timeline).toMatchInlineSnapshot(`
@@ -342,81 +342,6 @@ describe("Validation", () => {
           "state: idle",
         ]
       `);
-    });
-  });
-});
-
-describe("toErrorMap", () => {
-  describe("single result", () => {
-    it("ignores null and undefined values", () => {
-      expect(toErrorMap([{ field1: null, field2: undefined }])).toEqual(new Map());
-    });
-
-    it("ignores empty strings", () => {
-      expect(toErrorMap([{ field1: "" }])).toEqual(new Map());
-    });
-
-    it("ignores empty arrays", () => {
-      expect(toErrorMap([{ field1: [] }])).toEqual(new Map());
-    });
-
-    it("works with a string", () => {
-      expect(toErrorMap([{ field1: "error" }])).toEqual(new Map([["field1", ["error"]]]));
-    });
-
-    it("works with an error", () => {
-      expect(toErrorMap([{ field1: new Error("error") }])).toEqual(new Map([["field1", ["error"]]]));
-    });
-
-    it("works with an array of strings", () => {
-      expect(toErrorMap([{ field1: ["error1", "error2"] }])).toEqual(new Map([["field1", ["error1", "error2"]]]));
-    });
-
-    it("works with an array of errors", () => {
-      expect(toErrorMap([{ field1: [new Error("error1"), new Error("error2")] }])).toEqual(
-        new Map([["field1", ["error1", "error2"]]])
-      );
-    });
-
-    it("works with an array of strings and errors", () => {
-      expect(toErrorMap([{ field1: ["error1", new Error("error2")] }])).toEqual(
-        new Map([["field1", ["error1", "error2"]]])
-      );
-    });
-  });
-
-  describe("multiple results", () => {
-    it("does not invalidate the result with null or undefined values", () => {
-      expect(toErrorMap([{ field1: "error" }, { field1: null }, { field1: undefined }])).toEqual(
-        new Map([["field1", ["error"]]])
-      );
-    });
-
-    it("merges a string and an error", () => {
-      expect(toErrorMap([{ field1: "error" }, { field1: new Error("error2") }])).toEqual(
-        new Map([["field1", ["error", "error2"]]])
-      );
-    });
-
-    it("merges non-arrays and arrays", () => {
-      expect(toErrorMap([{ field1: "error" }, { field1: ["error2", "error3"] }])).toEqual(
-        new Map([["field1", ["error", "error2", "error3"]]])
-      );
-    });
-
-    it("merges an array of strings and an array of errors", () => {
-      expect(
-        toErrorMap([{ field1: ["error1", "error2"] }, { field1: [new Error("error3"), new Error("error4")] }])
-      ).toEqual(new Map([["field1", ["error1", "error2", "error3", "error4"]]]));
-    });
-
-    it("merges multiple fields", () => {
-      expect(toErrorMap([{ field1: "error1" }, { field1: "error3", field2: "error4" }])).toEqual(
-        new Map([
-          ["field1", ["error1", "error3"]],
-          ["field2", ["error4"]],
-        ])
-      );
     });
   });
 });
