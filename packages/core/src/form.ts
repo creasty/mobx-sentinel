@@ -198,7 +198,7 @@ export class Form<T> {
   /**
    * Sub-forms within the form.
    *
-   * Forms are collected from the {@link FormDelegate.connect}.
+   * Forms are collected via `@watch.nested` annotation.
    */
   @computed.struct
   get subForms(): ReadonlySet<Form<unknown>> {
