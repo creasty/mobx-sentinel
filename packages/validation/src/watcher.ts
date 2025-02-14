@@ -252,7 +252,7 @@ export class Watcher {
         this.#processedKeys.add(key);
 
         const isNested = metadata.data.includes(WatchMode.Nested);
-        const isShallow = metadata.data.includes(WatchMode.Shallow);
+        const isShallow = isNested || metadata.data.includes(WatchMode.Shallow); // false if one and only @watch.ref is specified
         const getValue = () => (key in target ? (target as any)[key] : metadata.get?.());
 
         reaction(
