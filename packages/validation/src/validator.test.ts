@@ -76,22 +76,6 @@ describe("getValidator", () => {
 });
 
 describe("Validator", () => {
-  describe("#hasRun", () => {
-    it("is set to true when the validation has ever run", async () => {
-      const env = setupEnv({ cleanHandlers: true });
-
-      expect(env.validator.hasRun).toBe(false);
-      env.request();
-      await env.waitFor("idle");
-      expect(env.validator.hasRun).toBe(true);
-
-      // Doesn't change for the second time
-      env.request();
-      await env.waitFor("idle");
-      expect(env.validator.hasRun).toBe(true);
-    });
-  });
-
   describe("#request", () => {
     it("process validation handlers in parallel", async () => {
       const env = setupEnv({ cleanHandlers: true });
@@ -342,11 +326,9 @@ describe("Validator", () => {
 
       env.request();
       await env.waitFor("idle");
-      expect(env.validator.hasRun).toBe(true);
       expect(env.validator.errors.size).toBe(1);
 
       env.validator.reset();
-      expect(env.validator.hasRun).toBe(false);
       expect(env.validator.state).toBe("idle");
       expect(env.validator.errors.size).toBe(0);
     });

@@ -244,10 +244,6 @@ export class Form<T> {
   /** Report error states on all fields and sub-forms */
   @action
   reportError() {
-    if (!this.validator.hasRun) {
-      // FIXME: This is a workaround
-      this.validate({ force: true });
-    }
     for (const field of this.#fields.values()) {
       field.reportError();
     }
@@ -321,9 +317,9 @@ export class Form<T> {
     let field = this.#fields.get(fieldName);
     if (!field) {
       field = new FormField({
-        form: this,
-        formErrors: this.validator.errors,
         fieldName: String(fieldName),
+        formErrors: this.validator.errors,
+        getFinalizationDelayMs: () => this.config.intermediateValidationDelayMs,
       });
       this.#fields.set(fieldName, field);
     }

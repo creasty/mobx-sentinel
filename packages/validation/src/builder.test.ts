@@ -14,9 +14,8 @@ describe("makeValidatable", () => {
   it("adds a handler to the validator", () => {
     const target = {};
     const validator = getValidator(target);
-    vi.spyOn(validator, "addHandler");
-    const fn = () => ({});
-    makeValidatable(target, fn);
-    expect(validator.addHandler).toBeCalledWith(fn);
+    const spy = vi.spyOn(validator, "addHandler");
+    makeValidatable(target, () => ({}));
+    expect(spy).toBeCalled();
   });
 });

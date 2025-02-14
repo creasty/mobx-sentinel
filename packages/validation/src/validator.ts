@@ -4,7 +4,6 @@ import { ErrorMap, FormValidatorResult, toErrorMap } from "./error";
 export class Validator {
   readonly #errors = observable.map<string, string[]>([], { equals: comparer.structural });
   readonly #state = observable.box<Validator.JobState>("idle");
-  readonly #hasRun = observable.box(false);
   #nextJobRequested = false;
   #timerId: number | null = null;
   #abortCtrl: AbortController | null = null;
@@ -22,10 +21,6 @@ export class Validator {
     return this.#state.get();
   }
 
-  get hasRun() {
-    return this.#hasRun.get();
-  }
-
   addHandler(handler: Validator.Handler) {
     this.#handlers.add(handler);
     return () => void this.#handlers.delete(handler);
@@ -37,7 +32,6 @@ export class Validator {
     this.#abortCtrl?.abort();
     this.#errors.clear();
     this.#state.set("idle");
-    this.#hasRun.set(false);
   }
 
   request(opt: Validator.RunOptions) {
@@ -102,7 +96,6 @@ export class Validator {
 
     runInAction(() => {
       this.#state.set("running");
-      this.#hasRun.set(true);
     });
 
     let results: FormValidatorResult<any>[] = [];

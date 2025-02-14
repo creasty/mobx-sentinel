@@ -8,7 +8,7 @@ import "./extension";
 import { observer } from "mobx-react-lite";
 import { SubmitButtonBinding } from "./SubmitButtonBinding";
 
-class SampleModel implements FormDelegate<SampleModel> {
+class SampleModel implements FormDelegate {
   constructor() {
     makeObservable(this);
   }

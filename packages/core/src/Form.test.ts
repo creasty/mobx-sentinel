@@ -130,13 +130,13 @@ describe("Form", () => {
   });
 
   describe("#subForms", () => {
-    it("does not collect sub-forms from objects that do not implement FormDelegate.connect", () => {
+    it("does not collect sub-forms from objects without @watch.nested", () => {
       const model = new SampleModel();
       const form = Form.get(model);
       expect(form.subForms.size).toBe(0);
     });
 
-    it("collects sub-forms via the delegate", () => {
+    it("collects sub-forms via @watch.nested", () => {
       const model = new NestedModel();
       const form = Form.get(model);
 
@@ -245,22 +245,6 @@ describe("Form", () => {
       form.reportError();
       expect(spy1).toBeCalled();
       expect(spy2).toBeCalled();
-    });
-
-    it("triggers validate with the force option when the validation has never run", async () => {
-      const model = new SampleModel();
-      const form = Form.get(model);
-      const spy = vi.spyOn(form, "validate");
-
-      expect(form.validator.hasRun).toBe(false);
-      form.reportError();
-      expect(spy).toBeCalledWith({ force: true });
-
-      await vi.waitFor(() => expect(form.isValidating).toBe(false));
-      expect(form.validator.hasRun).toBe(true);
-
-      form.reportError(); // Doesn't trigger a new validation
-      expect(spy).toBeCalledTimes(1);
     });
   });
 
