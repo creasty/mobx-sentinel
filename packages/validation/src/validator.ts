@@ -1,22 +1,14 @@
 import { action, comparer, makeObservable, observable, runInAction } from "mobx";
-import { MaybeArray } from "./util";
+import { ErrorMap, FormValidatorResult, toErrorMap } from "./error";
 
-type ErrorValue = MaybeArray<string | Error>;
-export type FormValidationResult<T> = {
-  [K in keyof T]?: ErrorValue | null;
-};
-
-type MutableErrorMap = Map<string, string[]>;
-export type ErrorMap = ReadonlyMap<string, ReadonlyArray<string>>;
-
-export class Validation {
+export class Validator {
   readonly #errors = observable.map<string, string[]>([], { equals: comparer.structural });
-  readonly #state = observable.box<Validation.JobState>("idle");
+  readonly #state = observable.box<Validator.JobState>("idle");
   readonly #hasRun = observable.box(false);
   #nextJobRequested = false;
   #timerId: number | null = null;
   #abortCtrl: AbortController | null = null;
-  readonly #handlers = new Set<Validation.Handler>();
+  readonly #handlers = new Set<Validator.Handler>();
 
   constructor() {
     makeObservable(this);
@@ -34,7 +26,7 @@ export class Validation {
     return this.#hasRun.get();
   }
 
-  addHandler(handler: Validation.Handler) {
+  addHandler(handler: Validator.Handler) {
     this.#handlers.add(handler);
     return () => void this.#handlers.delete(handler);
   }
@@ -48,7 +40,7 @@ export class Validation {
     this.#hasRun.set(false);
   }
 
-  request(opt: Validation.RunOptions) {
+  request(opt: Validator.RunOptions) {
     if (opt.force) {
       this.#runJob(opt);
       return;
@@ -76,7 +68,7 @@ export class Validation {
     }
   }
 
-  #transitionToEnqueued(opt: Validation.RunOptions) {
+  #transitionToEnqueued(opt: Validator.RunOptions) {
     runInAction(() => {
       this.#state.set("enqueued");
     });
@@ -85,7 +77,7 @@ export class Validation {
     }, opt.enqueueDelayMs);
   }
 
-  #transitionToScheduled(opt: Validation.RunOptions) {
+  #transitionToScheduled(opt: Validator.RunOptions) {
     runInAction(() => {
       this.#state.set("scheduled");
     });
@@ -101,7 +93,7 @@ export class Validation {
     }
   }
 
-  async #runJob(opt: Validation.RunOptions) {
+  async #runJob(opt: Validator.RunOptions) {
     this.#resetTimer();
 
     this.#abortCtrl?.abort();
@@ -113,7 +105,7 @@ export class Validation {
       this.#hasRun.set(true);
     });
 
-    let results: FormValidationResult<any>[] = [];
+    let results: FormValidatorResult<any>[] = [];
     try {
       const promises = [];
       for (const handler of this.#handlers) {
@@ -144,7 +136,7 @@ export class Validation {
   }
 }
 
-export namespace Validation {
+export namespace Validator {
   export type JobState = "idle" | "enqueued" | "running" | "scheduled";
 
   export type RunOptions = {
@@ -153,34 +145,5 @@ export namespace Validation {
     scheduleDelayMs: number;
   };
 
-  export type Handler<T = any> = (abortSignal: AbortSignal) => Promise<FormValidationResult<T>>;
-}
-
-export function toErrorMap(results: FormValidationResult<any>[]): MutableErrorMap {
-  const map: MutableErrorMap = new Map();
-  for (const result of results) {
-    for (const [key, value] of Object.entries(result)) {
-      if (!value) continue;
-      const messages = getMessages(value);
-      if (messages.length > 0) {
-        let list = map.get(key);
-        if (!list) {
-          list = [];
-          map.set(key, list);
-        }
-        list.push(...messages);
-      }
-    }
-  }
-  return map;
-}
-
-function getMessages(target: ErrorValue): string[] {
-  if (typeof target === "string") {
-    return [target];
-  }
-  if (target instanceof Error) {
-    return [target.message];
-  }
-  return target.flatMap((v) => getMessages(v));
+  export type Handler<T = any> = (abortSignal: AbortSignal) => Promise<FormValidatorResult<T>>;
 }

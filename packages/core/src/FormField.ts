@@ -1,7 +1,7 @@
 import { action, computed, makeObservable, observable } from "mobx";
 import { v4 as uuidV4 } from "uuid";
+import type { ErrorMap } from "@form-model/validation";
 import type { Form } from "./Form";
-import { ErrorMap } from "./validation";
 
 export class FormField {
   readonly id = uuidV4();

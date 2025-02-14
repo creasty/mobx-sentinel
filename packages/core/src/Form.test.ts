@@ -256,12 +256,12 @@ describe("Form", () => {
       const spy = vi.spyOn(form, "validate");
       const internal = getInternal(form);
 
-      expect(internal.validation.hasRun).toBe(false);
+      expect(internal.validator.hasRun).toBe(false);
       form.reportError();
       expect(spy).toBeCalledWith({ force: true });
 
       await vi.waitFor(() => expect(form.isValidating).toBe(false));
-      expect(internal.validation.hasRun).toBe(true);
+      expect(internal.validator.hasRun).toBe(true);
 
       form.reportError(); // Doesn't trigger a new validation
       expect(spy).toBeCalledTimes(1);
@@ -312,7 +312,7 @@ describe("Form", () => {
       const model = new EmptyModel();
       const form = Form.get(model);
       const internal = getInternal(form);
-      const spy = vi.spyOn(internal.validation, "request");
+      const spy = vi.spyOn(internal.validator, "request");
       form.validate();
       expect(spy).toBeCalled();
     });
@@ -343,7 +343,7 @@ describe("Form", () => {
       const model = new SampleModel();
       const form = Form.get(model);
       const internal = getInternal(form);
-      const spy = vi.spyOn(internal.validation, "addHandler");
+      const spy = vi.spyOn(internal.validator, "addHandler");
       expect(form.addHandler("validate", async () => ({}))).toBeInstanceOf(Function);
       expect(spy).toBeCalledTimes(1);
     });

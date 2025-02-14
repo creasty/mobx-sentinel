@@ -1,9 +1,9 @@
 import { action, computed, makeObservable, observable } from "mobx";
 import { v4 as uuidV4 } from "uuid";
+import { Validator } from "@form-model/validation";
 import { FormField } from "./FormField";
 import { FormBinding, FormBindingConstructor, FormBindingFunc, getSafeBindingName } from "./binding";
 import { FormConfig, globalConfig } from "./config";
-import { Validation } from "./validation";
 import { FormDelegate, getDelegation, isConnectableObject } from "./delegation";
 import { Submission } from "./submission";
 
@@ -15,7 +15,7 @@ export class Form<T> {
   readonly id = uuidV4();
   readonly #delegate?: FormDelegate<T>;
   readonly #formKey: symbol;
-  readonly #validation = new Validation();
+  readonly #validator = new Validator();
   readonly #submission = new Submission();
   readonly #isDirty = observable.box(false);
   readonly #fields = new Map<string, FormField>();
@@ -88,7 +88,7 @@ export class Form<T> {
     this.#formKey = args.formKey;
     this.#delegate = args.delegate;
 
-    this.#validation.addHandler(async (abortSignal) => {
+    this.#validator.addHandler(async (abortSignal) => {
       const validate = this.#getDelegateByKey(FormDelegate.validate);
       if (!validate) return {};
       return await validate(abortSignal);
@@ -136,10 +136,10 @@ export class Form<T> {
     return this.#submission.isRunning;
   }
 
-  /** Whether the form is in validation state */
+  /** Whether the form is in validator state */
   @computed
   get isValidating() {
-    return this.#validation.state !== "idle";
+    return this.#validator.state !== "idle";
   }
 
   /** Whether the form can be submitted */
@@ -166,7 +166,7 @@ export class Form<T> {
    */
   @computed
   get invalidFieldCount() {
-    return this.#validation.errors.size;
+    return this.#validator.errors.size;
   }
 
   /**
@@ -237,7 +237,7 @@ export class Form<T> {
   /** Report error states on all fields and sub-forms */
   @action
   reportError() {
-    if (!this.#validation.hasRun) {
+    if (!this.#validator.hasRun) {
       // FIXME: This is a workaround
       this.validate({ force: true });
     }
@@ -253,7 +253,7 @@ export class Form<T> {
   @action
   reset() {
     this.#isDirty.set(false);
-    this.#validation.reset();
+    this.#validator.reset();
     for (const field of this.#fields.values()) {
       field.reset();
     }
@@ -280,10 +280,10 @@ export class Form<T> {
 
   /** Validate the form */
   validate(args?: {
-    /** Force the validation to be executed immediately */
+    /** Force the validator to be executed immediately */
     force?: boolean;
   }) {
-    this.#validation.request({
+    this.#validator.request({
       force: !!args?.force,
       enqueueDelayMs: this.config.validationDelayMs,
       scheduleDelayMs: this.config.subsequentValidationDelayMs,
@@ -302,7 +302,7 @@ export class Form<T> {
       case "didSubmit":
         return this.#submission.addHandler(event, handler as any);
       case "validate":
-        return this.#validation.addHandler(handler as any);
+        return this.#validator.addHandler(handler as any);
       default:
         event satisfies never;
         throw new Error(`Invalid event: ${event}`);
@@ -315,7 +315,7 @@ export class Form<T> {
     if (!field) {
       field = new FormField({
         form: this,
-        formErrors: this.#validation.errors,
+        formErrors: this.#validator.errors,
         fieldName: String(fieldName),
       });
       this.#fields.set(fieldName, field);
@@ -410,7 +410,7 @@ export class Form<T> {
     return {
       fields: this.#fields,
       bindings: this.#bindings,
-      validation: this.#validation,
+      validator: this.#validator,
       submission: this.#submission,
     };
   }
@@ -418,7 +418,7 @@ export class Form<T> {
 
 export namespace Form {
   export type EventHandlers<T> = Submission.EventHandlers & {
-    validate: Validation.Handler<T>;
+    validate: Validator.Handler<T>;
   };
 }
 

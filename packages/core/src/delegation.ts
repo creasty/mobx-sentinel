@@ -1,7 +1,8 @@
 import type { FormConfig } from "./config";
 import type { Submission } from "./submission";
-import type { MaybeArray } from "./util";
-import type { Validation } from "./validation";
+import { Validator } from "@form-model/validation";
+
+type MaybeArray<T> = T | T[];
 
 /** Indirect delegate for the form */
 export interface FormDelegated<T> {
@@ -46,7 +47,7 @@ export namespace FormDelegate {
   /**
    * Connect other forms to the parent form.
    *
-   * By connecting a form, the parent form will be able to integrate the validation state.
+   * By connecting a form, the parent form will be able to integrate the validator state.
    * In regards to submitting a form, on the other hand, the parent form will need to handle submission manually,
    * because the correct sequence of submit events is form-specific.
    *
@@ -64,7 +65,7 @@ export namespace FormDelegate {
    *
    * Returns a map of field names to error messages.
    */
-  export type Validate<T> = Validation.Handler<T>;
+  export type Validate<T> = Validator.Handler<T>;
 
   /**
    * Symbol for implementing {@link Config}.

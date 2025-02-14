@@ -70,7 +70,7 @@ export const watch = Object.freeze(
 export const unwatch = createPropertyLikeAnnotation(unwatchKey, () => true);
 
 /** Watcher for changes to a target object */
-class Watcher {
+export class Watcher {
   readonly #changedTick = observable.box(0);
   readonly #changedKeys = observable.set<string>();
   readonly #processedKeys = new Set<string>();
