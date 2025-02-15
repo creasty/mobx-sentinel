@@ -6,7 +6,9 @@
       "outputs": ["dist/**"]
     },
     "test": {
-      "cache": false
+      "dependsOn": ["^build", "^test"],
+      "inputs": ["src/**", "test-*/**"],
+      "outputs": ["coverage/**"]
     }
   }
 }
