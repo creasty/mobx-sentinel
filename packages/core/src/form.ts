@@ -1,4 +1,4 @@
-import { action, computed, makeObservable, reaction } from "mobx";
+import { action, computed, makeObservable } from "mobx";
 import { v4 as uuidV4 } from "uuid";
 import { Validator, Watcher } from "@form-model/validation";
 import { FormField } from "./field";
@@ -16,7 +16,7 @@ export class Form<T> {
   readonly #delegate?: FormDelegate;
   readonly #formKey: symbol;
   readonly watcher: Watcher;
-  readonly validator: Validator;
+  readonly validator: Validator<T>;
   readonly #submission = new Submission();
   readonly #fields = new Map<string, FormField>();
   readonly #bindings = new Map<string, FormBinding>();
@@ -106,7 +106,7 @@ export class Form<T> {
       formKey: symbol;
       delegate?: FormDelegate;
       watcher: Watcher;
-      validator: Validator;
+      validator: Validator<T>;
     }
   ) {
     if (token !== internalToken) {
@@ -118,10 +118,6 @@ export class Form<T> {
     this.watcher = args.watcher;
     this.validator = args.validator;
 
-    reaction(
-      () => this.watcher.changedTick,
-      () => this.validate()
-    );
     this.#submission.addHandler("submit", async (abortSignal) => {
       const submit = this.#getDelegateByKey(FormDelegate.submit);
       if (!submit) return true;
@@ -165,6 +161,21 @@ export class Form<T> {
     return this.watcher.changed;
   }
 
+  /** Whether the form is valid (including sub-forms) */
+  get isValid() {
+    return this.validator.isValid;
+  }
+
+  /** The number of invalid fields */
+  get invalidFieldCount() {
+    return this.validator.invalidKeyCount;
+  }
+
+  /** The number of total invalid field paths (counts invalid fields in sub-forms) */
+  get invalidFieldPathCount() {
+    return this.validator.invalidKeyPathCount;
+  }
+
   /** Whether the form is in validator state */
   get isValidating() {
     return this.validator.isValidating;
@@ -187,55 +198,14 @@ export class Form<T> {
     return !this.isBusy && this.isValid && this.isDirty;
   }
 
-  /** Whether the form is valid (including sub-forms) */
-  get isValid() {
-    return this.invalidFieldCount === 0 && this.invalidSubFormCount === 0;
-  }
-
-  /**
-   * The number of invalid fields
-   *
-   * Note that this does not include the number of invalid fields of sub-forms.
-   */
-  @computed
-  get invalidFieldCount() {
-    return this.validator.errors.size;
-  }
-
-  /**
-   * The number of total invalid fields (including sub-forms)
-   */
-  @computed
-  get totalInvalidFieldCount() {
-    let count = this.invalidFieldCount;
-    for (const form of this.subForms) {
-      count += form.totalInvalidFieldCount;
-    }
-    return count;
-  }
-
-  /**
-   * The number of invalid sub-forms
-   *
-   * Note that this is not the number of fields.
-   */
-  @computed
-  get invalidSubFormCount() {
-    let count = 0;
-    for (const form of this.subForms) {
-      count += form.isValid ? 0 : 1;
-    }
-    return count;
-  }
-
   /**
    * Sub-forms within the form.
    *
    * Forms are collected via `@watch.nested` annotation.
    */
   @computed.struct
-  get subForms(): ReadonlySet<Form<unknown>> {
-    const forms = new Set<Form<unknown>>();
+  get subForms(): ReadonlySet<Form<any>> {
+    const forms = new Set<Form<any>>();
 
     for (const { value } of this.watcher.nested.values()) {
       const form = Form.getSafe(value, this.#formKey);
@@ -286,7 +256,7 @@ export class Form<T> {
   }
 
   /** Validate the form */
-  validate(...args: Parameters<Validator["request"]>) {
+  validate(...args: Parameters<Validator<T>["request"]>) {
     this.validator.request(...args);
   }
 

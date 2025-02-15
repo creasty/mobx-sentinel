@@ -1,28 +1,39 @@
-import { action, comparer, computed, makeObservable, observable, runInAction } from "mobx";
-import { ErrorMap, FormValidatorResult, toErrorMap } from "./error";
+import { action, comparer, computed, makeObservable, observable, reaction, runInAction } from "mobx";
+import { ValidationError, ValidationErrorsBuilder } from "./error";
 import { Watcher } from "./watcher";
 
 const validatorKey = Symbol("validator");
 const internalToken = Symbol("validator.internal");
+const defaultErrorGroupKey = Symbol("validator.defaultErrorGroupKey");
 
-export class Validator {
+export function makeValidatable<T extends object>(target: T, handler: Validator.ReactiveHandler<T>) {
+  const validator = Validator.get(target);
+  validator.addReactiveHandler(handler);
+}
+
+export class Validator<T> {
+  readonly watcher: Watcher;
+  readonly #errors = observable.map<symbol, ReadonlyArray<ValidationError>>([], { equals: comparer.structural });
+
+  // Async handler
   enqueueDelayMs = 100;
   scheduleDelayMs = 300;
-  readonly watcher: Watcher;
-  readonly #errors = observable.map<string, string[]>([], { equals: comparer.structural });
-  readonly #state = observable.box<Validator.JobState>("idle");
+  readonly #asyncHandlers = new Set<Validator.AsyncHandler<T>>();
+  readonly #jobState = observable.box<Validator.JobState>("idle");
   #nextJobRequested = false;
-  #timerId: number | null = null;
+  #jobTimerId: number | null = null;
   #abortCtrl: AbortController | null = null;
-  readonly #reactiveHandlers = new Set<Validator.ReactiveHandler>();
-  readonly #asyncHandlers = new Set<Validator.AsyncHandler>();
+
+  // Reactive handler
+  reactionDelayMs = 100;
+  readonly #reactionTimerIds = observable.map<symbol, number>();
 
   /**
    * Get a validator for a target object
    *
    * @throws TypeError when the target is not an object.
    */
-  static get<T extends object>(target: T): Validator {
+  static get<T extends object>(target: T): Validator<T> {
     const validator = this.getSafe(target);
     if (!validator) throw new TypeError("target: Expected an object");
     return validator;
@@ -33,12 +44,12 @@ export class Validator {
    *
    * Same as {@link Validator.get} but returns null instead of throwing an error.
    */
-  static getSafe(target: any): Validator | null {
+  static getSafe<T>(target: T): Validator<T> | null {
     if (!target || typeof target !== "object") {
       return null;
     }
 
-    let validator: Validator | null = (target as any)[validatorKey] ?? null;
+    let validator: Validator<T> | null = (target as any)[validatorKey] ?? null;
     if (!validator) {
       validator = new this(internalToken, target);
       Object.defineProperty(target, validatorKey, { value: validator });
@@ -51,152 +62,266 @@ export class Validator {
       throw new Error("private constructor");
     }
 
+    makeObservable(this);
     this.watcher = Watcher.get(target);
 
-    makeObservable(this);
+    reaction(
+      () => this.watcher.changedTick,
+      () => this.request()
+    );
   }
 
-  get errors(): ErrorMap {
-    return this.#errors;
+  @computed.struct
+  get errors(): Validator.KeyPathErrorMap {
+    const result = new Map<string, string[]>();
+    for (const errors of this.#errors.values()) {
+      for (const error of errors) {
+        let list = result.get(error.keyPath);
+        if (!list) {
+          list = [];
+          result.set(error.keyPath, list);
+        }
+        list.push(error.message);
+      }
+    }
+    return result;
   }
 
-  get state() {
-    return this.#state.get();
+  /** Whether no errors are found */
+  @computed
+  get isValid() {
+    return this.invalidKeyPathCount === 0;
   }
 
-  /**
-   * Whether the validator is in validator state
-   *
-   * This is true when the validation state is not "idle".
-   */
+  /** The number of invalid keys */
+  @computed
+  get invalidKeyCount() {
+    return this.invalidKeys.size;
+  }
+
+  /** The number of invalid keys */
+  @computed
+  get invalidKeys(): ReadonlySet<string> {
+    const seenKeys = new Set<string>();
+    for (const errors of this.#errors.values()) {
+      for (const error of errors) {
+        seenKeys.add(error.key);
+      }
+    }
+    return Object.freeze(seenKeys);
+  }
+
+  /** The number of invalid key paths */
+  @computed
+  get invalidKeyPathCount() {
+    return this.invalidKeyPaths.size;
+  }
+
+  /** The number of invalid key paths */
+  @computed
+  get invalidKeyPaths(): ReadonlySet<string> {
+    const seenKeyPaths = new Set<string>();
+    for (const errors of this.#errors.values()) {
+      for (const error of errors) {
+        seenKeyPaths.add(error.keyPath);
+      }
+    }
+    for (const [parentKeyPath, validator] of this.nested) {
+      for (const keyPath of validator.invalidKeyPaths) {
+        seenKeyPaths.add(`${parentKeyPath}.${keyPath}`);
+      }
+    }
+    return Object.freeze(seenKeyPaths);
+  }
+
+  get jobState() {
+    return this.#jobState.get();
+  }
+
+  /** Whether the validator is computing errors */
   @computed
   get isValidating() {
-    return this.state !== "idle";
+    return this.jobState !== "idle" || this.#reactionTimerIds.size > 0;
   }
 
-  addReactiveHandler(handler: Validator.ReactiveHandler) {
-    this.#reactiveHandlers.add(handler);
-    return () => void this.#reactiveHandlers.delete(handler);
-  }
-
-  addAsyncHandler(handler: Validator.AsyncHandler) {
-    this.#asyncHandlers.add(handler);
-    return () => void this.#asyncHandlers.delete(handler);
+  /** Nested validators */
+  @computed.struct
+  get nested() {
+    const result = new Map<string, Validator<any>>();
+    for (const [key, nested] of this.watcher.nested) {
+      const validator = Validator.getSafe(nested.value);
+      if (validator) {
+        result.set(key, validator);
+      }
+    }
+    return result;
   }
 
   @action
   reset() {
-    this.#resetTimer();
+    this.#resetJobTimer();
     this.#abortCtrl?.abort();
+    this.#jobState.set("idle");
+
+    for (const timerId of this.#reactionTimerIds.values()) {
+      clearTimeout(timerId);
+    }
+    this.#reactionTimerIds.clear();
+
     this.#errors.clear();
-    this.#state.set("idle");
+  }
+
+  addReactiveHandler(handler: Validator.ReactiveHandler<T>) {
+    const key = Symbol();
+
+    const dispose = reaction(
+      () => {
+        const builder = new ValidationErrorsBuilder();
+        handler(builder);
+        return ValidationErrorsBuilder.build(builder);
+      },
+      (result) => {
+        if (result.length > 0) {
+          this.#errors.set(key, result);
+        } else {
+          this.#errors.delete(key);
+        }
+      },
+      {
+        scheduler: (fn) => {
+          let timerId = this.#reactionTimerIds.get(key);
+          if (timerId) {
+            clearTimeout(timerId);
+          }
+          timerId = +setTimeout(fn, this.reactionDelayMs);
+          this.#reactionTimerIds.set(key, timerId);
+        },
+      }
+    );
+
+    return () => {
+      dispose();
+
+      const timerId = this.#reactionTimerIds.get(key);
+      if (timerId) {
+        clearTimeout(timerId);
+        this.#reactionTimerIds.delete(key);
+      }
+    };
+  }
+
+  addAsyncHandler(handler: Validator.AsyncHandler<T>) {
+    this.#asyncHandlers.add(handler);
+    return () => void this.#asyncHandlers.delete(handler);
   }
 
   request(opt?: {
     /** Force the validator to be executed immediately */
     force?: boolean;
   }) {
-    if (this.#reactiveHandlers.size > 0) {
-      // TODO:
+    if (this.#asyncHandlers.size === 0) {
+      return;
     }
-    if (this.#asyncHandlers.size > 0) {
-      if (opt?.force) {
-        this.#runJob();
-        return;
-      }
 
-      switch (this.state) {
-        case "idle": {
-          this.#transitionToEnqueued();
-          break;
-        }
-        case "enqueued": {
-          this.#resetTimer();
-          this.#transitionToEnqueued();
-          break;
-        }
-        case "running": {
-          this.#nextJobRequested = true;
-          break;
-        }
-        case "scheduled": {
-          this.#resetTimer();
-          this.#transitionToScheduled();
-          break;
-        }
+    if (opt?.force) {
+      this.#runJob();
+      return;
+    }
+
+    switch (this.jobState) {
+      case "idle": {
+        this.#transitionToEnqueued();
+        break;
+      }
+      case "enqueued": {
+        this.#resetJobTimer();
+        this.#transitionToEnqueued();
+        break;
+      }
+      case "running": {
+        this.#nextJobRequested = true;
+        break;
+      }
+      case "scheduled": {
+        this.#resetJobTimer();
+        this.#transitionToScheduled();
+        break;
       }
     }
   }
 
   #transitionToEnqueued() {
     runInAction(() => {
-      this.#state.set("enqueued");
+      this.#jobState.set("enqueued");
     });
-    this.#timerId = +setTimeout(() => {
+    this.#jobTimerId = +setTimeout(() => {
       this.#runJob();
     }, this.enqueueDelayMs);
   }
 
   #transitionToScheduled() {
     runInAction(() => {
-      this.#state.set("scheduled");
+      this.#jobState.set("scheduled");
     });
-    this.#timerId = +setTimeout(() => {
+    this.#jobTimerId = +setTimeout(() => {
       this.#runJob();
     }, this.scheduleDelayMs);
   }
 
-  #resetTimer(): void {
-    if (this.#timerId) {
-      clearTimeout(this.#timerId);
-      this.#timerId = null;
+  #resetJobTimer(): void {
+    if (this.#jobTimerId) {
+      clearTimeout(this.#jobTimerId);
+      this.#jobTimerId = null;
     }
   }
 
   async #runJob() {
-    this.#resetTimer();
+    this.#resetJobTimer();
 
     this.#abortCtrl?.abort();
     const abortCtrl = new AbortController();
     this.#abortCtrl = abortCtrl;
 
     runInAction(() => {
-      this.#state.set("running");
+      this.#jobState.set("running");
     });
 
-    let results: FormValidatorResult<any>[] = [];
+    const builder = new ValidationErrorsBuilder();
     try {
       const promises = [];
       for (const handler of this.#asyncHandlers) {
-        promises.push(handler(abortCtrl.signal)); // Parallelized
+        promises.push(handler(builder, abortCtrl.signal)); // Parallelized
       }
-      results = await Promise.all(promises);
+      await Promise.all(promises);
     } catch (e) {
       console.error(e);
     }
     this.#abortCtrl = null;
 
     runInAction(() => {
-      if (results.length > 0) {
+      if (builder.hasError) {
         try {
-          this.#errors.replace(toErrorMap(results));
+          this.#errors.set(defaultErrorGroupKey, ValidationErrorsBuilder.build(builder));
         } catch (e) {
           console.warn(e);
         }
+      } else {
+        this.#errors.delete(defaultErrorGroupKey);
       }
 
       if (this.#nextJobRequested) {
         this.#nextJobRequested = false;
         this.#transitionToScheduled();
       } else {
-        this.#state.set("idle");
+        this.#jobState.set("idle");
       }
     });
   }
 }
 
 export namespace Validator {
+  export type KeyPathErrorMap = ReadonlyMap<string, ReadonlyArray<string>>;
   export type JobState = "idle" | "enqueued" | "running" | "scheduled";
-  export type AsyncHandler<T = any> = (abortSignal: AbortSignal) => Promise<FormValidatorResult<T>>;
-  export type ReactiveHandler<T = any> = () => FormValidatorResult<T>;
+  export type AsyncHandler<T> = (builder: ValidationErrorsBuilder<T>, abortSignal: AbortSignal) => Promise<void>;
+  export type ReactiveHandler<T> = (builder: ValidationErrorsBuilder<T>) => void;
 }

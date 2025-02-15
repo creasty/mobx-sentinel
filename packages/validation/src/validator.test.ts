@@ -1,5 +1,5 @@
 import { autorun } from "mobx";
-import { Validator } from "./validator";
+import { Validator, makeValidatable } from "./validator";
 
 function setupEnv(opt?: { cleanHandlers?: boolean }) {
   const lag = {
@@ -8,24 +8,25 @@ function setupEnv(opt?: { cleanHandlers?: boolean }) {
     runTime: 140,
   };
 
-  const validator = Validator.get({});
+  const validator = Validator.get({ sample: false });
   validator.enqueueDelayMs = lag.requestDelay;
   validator.scheduleDelayMs = lag.scheduleDelay;
 
   const timeline: string[] = [];
   autorun(() => {
-    timeline.push(`state: ${validator.state}`);
+    timeline.push(`jobState: ${validator.jobState}`);
   });
 
   let counter = 0;
   if (!opt?.cleanHandlers) {
-    validator.addAsyncHandler(async (abortSignal) => {
+    validator.addAsyncHandler(async (builder, abortSignal) => {
       const localCounter = ++counter;
       timeline.push(`job start ${localCounter}`);
       return new Promise((resolve) => {
         const timerId = setTimeout(() => {
           timeline.push(`job end ${localCounter}`);
-          resolve({ sample: "error" });
+          builder.invalidate("sample", "invalid");
+          resolve();
         }, lag.runTime);
         abortSignal.onabort = () => {
           clearTimeout(timerId);
@@ -44,11 +45,30 @@ function setupEnv(opt?: { cleanHandlers?: boolean }) {
     request(opt?: { force?: boolean }) {
       return validator.request({ force: !!opt?.force });
     },
-    async waitFor(state: Validator.JobState) {
-      return vi.waitFor(() => expect(this.validator.state).toBe(state));
+    async waitFor(jobState: Validator.JobState) {
+      return vi.waitFor(() => expect(this.validator.jobState).toBe(jobState));
     },
   };
 }
+
+describe("makeValidatable", () => {
+  it("throws an error when a non-object is given", () => {
+    expect(() => {
+      makeValidatable(null as any, () => ({}));
+    }).toThrowError(/Expected an object/);
+    expect(() => {
+      makeValidatable(1 as any, () => ({}));
+    }).toThrowError(/Expected an object/);
+  });
+
+  it("adds a reactive handler to the validator", () => {
+    const target = {};
+    const validator = Validator.get(target);
+    const spy = vi.spyOn(validator, "addReactiveHandler");
+    makeValidatable(target, () => ({}));
+    expect(spy).toBeCalled();
+  });
+});
 
 describe("Validator", () => {
   describe("constructor", () => {
@@ -93,7 +113,7 @@ describe("Validator", () => {
     it("does nothing when there are no handlers", () => {
       const env = setupEnv({ cleanHandlers: true });
       env.request();
-      expect(env.validator.state).toBe("idle");
+      expect(env.validator.jobState).toBe("idle");
     });
 
     it("process validation handlers in parallel", async () => {
@@ -103,35 +123,32 @@ describe("Validator", () => {
         env.timeline.push("validate 1 start");
         await new Promise((resolve) => setTimeout(resolve, 50));
         env.timeline.push("validate 1 end");
-        return {};
       });
       env.validator.addAsyncHandler(async () => {
         env.timeline.push("validate 2 start");
         await new Promise((resolve) => setTimeout(resolve, 10));
         env.timeline.push("validate 2 end");
-        return {};
       });
       env.validator.addAsyncHandler(async () => {
         env.timeline.push("validate 3 start");
         await new Promise((resolve) => setTimeout(resolve, 30));
         env.timeline.push("validate 3 end");
-        return {};
       });
 
       env.request();
       await env.waitFor("idle");
       expect(env.timeline).toMatchInlineSnapshot(`
         [
-          "state: idle",
-          "state: enqueued",
-          "state: running",
+          "jobState: idle",
+          "jobState: enqueued",
+          "jobState: running",
           "validate 1 start",
           "validate 2 start",
           "validate 3 start",
           "validate 2 end",
           "validate 3 end",
           "validate 1 end",
-          "state: idle",
+          "jobState: idle",
         ]
       `);
     });
@@ -152,20 +169,20 @@ describe("Validator", () => {
     it("enqueues a new validation request", async () => {
       const env = setupEnv();
 
-      expect(env.validator.state).toBe("idle");
+      expect(env.validator.jobState).toBe("idle");
       env.request();
-      expect(env.validator.state).toBe("enqueued");
+      expect(env.validator.jobState).toBe("enqueued");
       await env.waitFor("idle");
 
       expect(env.getCallCount()).toBe(1);
       expect(env.timeline).toMatchInlineSnapshot(`
         [
-          "state: idle",
-          "state: enqueued",
-          "state: running",
+          "jobState: idle",
+          "jobState: enqueued",
+          "jobState: running",
           "job start 1",
           "job end 1",
-          "state: idle",
+          "jobState: idle",
         ]
       `);
     });
@@ -175,22 +192,22 @@ describe("Validator", () => {
 
       // 1st request
       env.request();
-      expect(env.validator.state).toBe("enqueued");
+      expect(env.validator.jobState).toBe("enqueued");
 
       // 2nd request
       env.request();
-      expect(env.validator.state).toBe("enqueued");
+      expect(env.validator.jobState).toBe("enqueued");
       await env.waitFor("idle");
 
       expect(env.getCallCount()).toBe(1);
       expect(env.timeline).toMatchInlineSnapshot(`
         [
-          "state: idle",
-          "state: enqueued",
-          "state: running",
+          "jobState: idle",
+          "jobState: enqueued",
+          "jobState: running",
           "job start 1",
           "job end 1",
-          "state: idle",
+          "jobState: idle",
         ]
       `);
     });
@@ -200,12 +217,12 @@ describe("Validator", () => {
 
       // 1st request
       env.request();
-      expect(env.validator.state).toBe("enqueued");
+      expect(env.validator.jobState).toBe("enqueued");
       await env.waitFor("running");
 
       // 2nd request
       env.request();
-      expect(env.validator.state).toBe("running");
+      expect(env.validator.jobState).toBe("running");
       await env.waitFor("scheduled");
       expect(env.getCallCount()).toBe(1);
       await env.waitFor("idle");
@@ -213,16 +230,16 @@ describe("Validator", () => {
       expect(env.getCallCount()).toBe(2);
       expect(env.timeline).toMatchInlineSnapshot(`
         [
-          "state: idle",
-          "state: enqueued",
-          "state: running",
+          "jobState: idle",
+          "jobState: enqueued",
+          "jobState: running",
           "job start 1",
           "job end 1",
-          "state: scheduled",
-          "state: running",
+          "jobState: scheduled",
+          "jobState: running",
           "job start 2",
           "job end 2",
-          "state: idle",
+          "jobState: idle",
         ]
       `);
     });
@@ -232,34 +249,34 @@ describe("Validator", () => {
 
       // 1st request
       env.request();
-      expect(env.validator.state).toBe("enqueued");
+      expect(env.validator.jobState).toBe("enqueued");
       await env.waitFor("running");
 
       // 2nd request
       env.request();
-      expect(env.validator.state).toBe("running");
+      expect(env.validator.jobState).toBe("running");
       await env.waitFor("scheduled");
       expect(env.getCallCount()).toBe(1);
 
       // 3rd request
       env.request();
-      expect(env.validator.state).toBe("scheduled");
+      expect(env.validator.jobState).toBe("scheduled");
       expect(env.getCallCount()).toBe(1);
       await env.waitFor("idle");
 
       expect(env.getCallCount()).toBe(2);
       expect(env.timeline).toMatchInlineSnapshot(`
         [
-          "state: idle",
-          "state: enqueued",
-          "state: running",
+          "jobState: idle",
+          "jobState: enqueued",
+          "jobState: running",
           "job start 1",
           "job end 1",
-          "state: scheduled",
-          "state: running",
+          "jobState: scheduled",
+          "jobState: running",
           "job start 2",
           "job end 2",
-          "state: idle",
+          "jobState: idle",
         ]
       `);
     });
@@ -269,17 +286,17 @@ describe("Validator", () => {
         const env = setupEnv();
 
         env.request({ force: true });
-        expect(env.validator.state).toBe("running");
+        expect(env.validator.jobState).toBe("running");
         await env.waitFor("idle");
 
         expect(env.getCallCount()).toBe(1);
         expect(env.timeline).toMatchInlineSnapshot(`
           [
-            "state: idle",
-            "state: running",
+            "jobState: idle",
+            "jobState: running",
             "job start 1",
             "job end 1",
-            "state: idle",
+            "jobState: idle",
           ]
         `);
       });
@@ -289,22 +306,22 @@ describe("Validator", () => {
 
         // 1st request
         env.request();
-        expect(env.validator.state).toBe("enqueued");
+        expect(env.validator.jobState).toBe("enqueued");
 
         // 2nd request - before the 1st request is run
         env.request({ force: true });
-        expect(env.validator.state).toBe("running");
+        expect(env.validator.jobState).toBe("running");
         await env.waitFor("idle");
 
         expect(env.getCallCount()).toBe(1);
         expect(env.timeline).toMatchInlineSnapshot(`
           [
-            "state: idle",
-            "state: enqueued",
-            "state: running",
+            "jobState: idle",
+            "jobState: enqueued",
+            "jobState: running",
             "job start 1",
             "job end 1",
-            "state: idle",
+            "jobState: idle",
           ]
         `);
       });
@@ -314,25 +331,25 @@ describe("Validator", () => {
 
         // 1st request
         env.request();
-        expect(env.validator.state).toBe("enqueued");
+        expect(env.validator.jobState).toBe("enqueued");
         await env.waitFor("running");
 
         // 2nd request - while the 1st request is running
         env.request({ force: true });
-        expect(env.validator.state).toBe("running");
+        expect(env.validator.jobState).toBe("running");
         await env.waitFor("idle");
 
         expect(env.getCallCount()).toBe(2);
         expect(env.timeline).toMatchInlineSnapshot(`
           [
-            "state: idle",
-            "state: enqueued",
-            "state: running",
+            "jobState: idle",
+            "jobState: enqueued",
+            "jobState: running",
             "job start 1",
             "job aborted 1",
             "job start 2",
             "job end 2",
-            "state: idle",
+            "jobState: idle",
           ]
         `);
       });
@@ -348,7 +365,7 @@ describe("Validator", () => {
       expect(env.validator.errors.size).toBe(1);
 
       env.validator.reset();
-      expect(env.validator.state).toBe("idle");
+      expect(env.validator.jobState).toBe("idle");
       expect(env.validator.errors.size).toBe(0);
     });
 
@@ -361,9 +378,9 @@ describe("Validator", () => {
 
       expect(env.timeline).toMatchInlineSnapshot(`
         [
-          "state: idle",
-          "state: enqueued",
-          "state: idle",
+          "jobState: idle",
+          "jobState: enqueued",
+          "jobState: idle",
         ]
       `);
     });

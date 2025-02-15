@@ -1,18 +1,22 @@
 import { action, computed, makeObservable, observable } from "mobx";
 import { v4 as uuidV4 } from "uuid";
-import type { ErrorMap } from "@form-model/validation";
+import type { Validator } from "@form-model/validation";
 
 export class FormField {
   readonly id = uuidV4();
   readonly fieldName: string;
-  readonly #formErrors: ErrorMap;
+  readonly #formErrors: Validator.KeyPathErrorMap;
   readonly #getFinalizationDelayMs: () => number;
   readonly #isTouched = observable.box(false);
   readonly #changeType = observable.box<FormField.ChangeType | null>(null);
   readonly #isErrorReported = observable.box(false);
   #timerId: number | null = null;
 
-  constructor(args: { fieldName: string; formErrors: ErrorMap; getFinalizationDelayMs: () => number }) {
+  constructor(args: {
+    fieldName: string;
+    formErrors: Validator.KeyPathErrorMap;
+    getFinalizationDelayMs: () => number;
+  }) {
     makeObservable(this);
     this.fieldName = args.fieldName;
     this.#formErrors = args.formErrors;

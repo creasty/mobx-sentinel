@@ -1,38 +1,44 @@
-import { MaybeArray } from "./util";
+export class ValidationError extends Error {
+  readonly key: string;
+  readonly keyPath: string;
+  readonly message: string;
+  readonly cause?: Error;
 
-type ErrorValue = MaybeArray<string | Error>;
-export type FormValidatorResult<T> = {
-  [K in keyof T]?: ErrorValue | null;
-};
-
-type MutableErrorMap = Map<string, string[]>;
-export type ErrorMap = ReadonlyMap<string, ReadonlyArray<string>>;
-
-export function toErrorMap(results: FormValidatorResult<any>[]): MutableErrorMap {
-  const map: MutableErrorMap = new Map();
-  for (const result of results) {
-    for (const [key, value] of Object.entries(result)) {
-      if (!value) continue;
-      const messages = getMessages(value);
-      if (messages.length > 0) {
-        let list = map.get(key);
-        if (!list) {
-          list = [];
-          map.set(key, list);
-        }
-        list.push(...messages);
-      }
-    }
+  constructor(args: { keyPath: string; reason: string | Error }) {
+    super();
+    this.key = args.keyPath.split(".", 1)[0];
+    this.keyPath = args.keyPath;
+    this.message = args.reason instanceof Error ? args.reason.message : args.reason;
+    this.cause = args.reason instanceof Error ? args.reason : undefined;
   }
-  return map;
 }
 
-function getMessages(target: ErrorValue): string[] {
-  if (typeof target === "string") {
-    return [target];
+const buildToken = Symbol("ValidationErrorsBuilder.build");
+
+export class ValidationErrorsBuilder<T> {
+  readonly #errors: ValidationError[] = [];
+
+  /**
+   * @internal
+   * @ignore
+   */
+  static build(instance: ValidationErrorsBuilder<any>) {
+    return instance[buildToken]();
   }
-  if (target instanceof Error) {
-    return [target.message];
+
+  invalidate(key: keyof T & string, reason: string | Error) {
+    this.#errors.push(new ValidationError({ keyPath: key, reason }));
   }
-  return target.flatMap((v) => getMessages(v));
+
+  get hasError() {
+    return this.#errors.length > 0;
+  }
+
+  /**
+   * @internal
+   * @ignore
+   */
+  [buildToken](): ReadonlyArray<ValidationError> {
+    return Object.freeze(this.#errors);
+  }
 }

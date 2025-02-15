@@ -174,7 +174,7 @@ export class Watcher {
     return result;
   }
 
-  /** The nested being watched */
+  /** The nested objects being watched */
   @computed.struct
   get nested() {
     const result = new Map<string, { value: any; watcher: Watcher | null }>();

@@ -2,7 +2,7 @@ import { makeObservable, observable } from "mobx";
 import { Form } from "./form";
 import { FormField } from "./field";
 import { FormDelegate } from "./delegation";
-import { ErrorMap } from "@form-model/validation";
+import type { Validator } from "@form-model/validation";
 
 class SampleModel implements FormDelegate {
   @observable test = "test";
@@ -19,7 +19,7 @@ class SampleModel implements FormDelegate {
 function setupEnv() {
   const model = new SampleModel();
   const form = Form.get(model);
-  const formErrors = observable.map<string, string[]>() satisfies ErrorMap;
+  const formErrors = observable.map<string, string[]>() satisfies Validator.KeyPathErrorMap;
   const field = new FormField({
     fieldName: "test",
     formErrors,

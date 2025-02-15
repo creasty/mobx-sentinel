@@ -657,7 +657,7 @@ suite("Sub-forms", () => {
       expect(form.invalidFieldCount).toBe(1);
       expect(sampleForm.invalidFieldCount).toBe(1);
       expect(arrayForm0.invalidFieldCount).toBe(1);
-      expect(form.totalInvalidFieldCount).toBe(3);
+      expect(form.invalidFieldPathCount).toBe(3);
     });
   });
 
