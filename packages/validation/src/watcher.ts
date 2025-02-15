@@ -160,11 +160,8 @@ export class Watcher {
         if (watcher) {
           for (const changedKey of watcher.changedKeyPaths) {
             if (typeof subKey === "string" || typeof subKey === "number") {
-              result.add(`${key}`);
-              result.add(`${key}.${subKey}`);
               result.add(`${key}.${subKey}.${changedKey}`);
             } else {
-              result.add(`${key}`);
               result.add(`${key}.${changedKey}`);
             }
           }
@@ -317,8 +314,21 @@ export class Watcher {
         if (this.#processedKeys.has(key)) continue;
         this.#processedKeys.add(key);
 
-        const isNested = metadata.data.includes(WatchMode.Nested);
-        const isShallow = isNested || metadata.data.includes(WatchMode.Shallow); // false if one and only @watch.ref is specified
+        let isNested = false;
+        let isShallow = false;
+        for (const data of metadata.data) {
+          if (data === WatchMode.Nested) {
+            isNested = true;
+            isShallow = true;
+          }
+          if (data === WatchMode.Shallow) {
+            isShallow = true;
+          }
+          if (isNested && isShallow) {
+            break;
+          }
+        }
+
         const getValue = () => (key in target ? (target as any)[key] : metadata.get?.());
 
         reaction(

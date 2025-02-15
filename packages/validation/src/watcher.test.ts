@@ -636,9 +636,7 @@ describe("Annotations", () => {
           sample.field2[0].value = true;
         });
         expect(watcher.changedKeys).toEqual(new Set(["field1", "field2"]));
-        expect(watcher.changedKeyPaths).toEqual(
-          new Set(["field1", "field1.0", "field1.0.value", "field2", "field2.0", "field2.0.value"])
-        );
+        expect(watcher.changedKeyPaths).toEqual(new Set(["field1", "field1.0.value", "field2", "field2.0.value"]));
       });
     });
 
@@ -677,9 +675,7 @@ describe("Annotations", () => {
           }
         });
         expect(watcher.changedKeys).toEqual(new Set(["field1", "field2"]));
-        expect(watcher.changedKeyPaths).toEqual(
-          new Set(["field1", "field1.0", "field1.0.value", "field2", "field2.0", "field2.0.value"])
-        );
+        expect(watcher.changedKeyPaths).toEqual(new Set(["field1", "field1.0.value", "field2", "field2.0.value"]));
       });
     });
 
@@ -711,7 +707,7 @@ describe("Annotations", () => {
         });
         expect(watcher.changedKeys).toEqual(new Set(["field1", "field2"]));
         expect(watcher.changedKeyPaths).toEqual(
-          new Set(["field1", "field1.key1", "field1.key1.value", "field2", "field2.key1", "field2.key1.value"])
+          new Set(["field1", "field1.key1.value", "field2", "field2.key1.value"])
         );
       });
     });
