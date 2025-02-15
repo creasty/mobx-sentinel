@@ -9,6 +9,8 @@ function setupEnv(opt?: { cleanHandlers?: boolean }) {
   };
 
   const validator = Validator.get({});
+  validator.enqueueDelayMs = lag.requestDelay;
+  validator.scheduleDelayMs = lag.scheduleDelay;
 
   const timeline: string[] = [];
   autorun(() => {
@@ -17,7 +19,7 @@ function setupEnv(opt?: { cleanHandlers?: boolean }) {
 
   let counter = 0;
   if (!opt?.cleanHandlers) {
-    validator.addHandler(async (abortSignal) => {
+    validator.addAsyncHandler(async (abortSignal) => {
       const localCounter = ++counter;
       timeline.push(`job start ${localCounter}`);
       return new Promise((resolve) => {
@@ -40,11 +42,7 @@ function setupEnv(opt?: { cleanHandlers?: boolean }) {
       return counter;
     },
     request(opt?: { force?: boolean }) {
-      return validator.request({
-        force: !!opt?.force,
-        enqueueDelayMs: lag.requestDelay,
-        scheduleDelayMs: lag.scheduleDelay,
-      });
+      return validator.request({ force: !!opt?.force });
     },
     async waitFor(state: Validator.JobState) {
       return vi.waitFor(() => expect(this.validator.state).toBe(state));
@@ -92,22 +90,28 @@ describe("Validator", () => {
   });
 
   describe("#request", () => {
+    it("does nothing when there are no handlers", () => {
+      const env = setupEnv({ cleanHandlers: true });
+      env.request();
+      expect(env.validator.state).toBe("idle");
+    });
+
     it("process validation handlers in parallel", async () => {
       const env = setupEnv({ cleanHandlers: true });
 
-      env.validator.addHandler(async () => {
+      env.validator.addAsyncHandler(async () => {
         env.timeline.push("validate 1 start");
         await new Promise((resolve) => setTimeout(resolve, 50));
         env.timeline.push("validate 1 end");
         return {};
       });
-      env.validator.addHandler(async () => {
+      env.validator.addAsyncHandler(async () => {
         env.timeline.push("validate 2 start");
         await new Promise((resolve) => setTimeout(resolve, 10));
         env.timeline.push("validate 2 end");
         return {};
       });
-      env.validator.addHandler(async () => {
+      env.validator.addAsyncHandler(async () => {
         env.timeline.push("validate 3 start");
         await new Promise((resolve) => setTimeout(resolve, 30));
         env.timeline.push("validate 3 end");
@@ -136,7 +140,7 @@ describe("Validator", () => {
       const env = setupEnv({ cleanHandlers: true });
       const consoleSpy = vi.spyOn(console, "error").mockImplementation(() => {});
 
-      env.validator.addHandler(async () => {
+      env.validator.addAsyncHandler(async () => {
         throw new Error("Test error");
       });
 

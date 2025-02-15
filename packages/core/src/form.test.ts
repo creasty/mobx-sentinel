@@ -354,7 +354,7 @@ describe("Form", () => {
     it("adds a handler to the validation event", () => {
       const model = new SampleModel();
       const form = Form.get(model);
-      const spy = vi.spyOn(form.validator, "addHandler");
+      const spy = vi.spyOn(form.validator, "addAsyncHandler");
       expect(form.addHandler("validate", async () => ({}))).toBeInstanceOf(Function);
       expect(spy).toBeCalledTimes(1);
     });

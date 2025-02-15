@@ -1,16 +1,21 @@
 import { action, comparer, computed, makeObservable, observable, runInAction } from "mobx";
 import { ErrorMap, FormValidatorResult, toErrorMap } from "./error";
+import { Watcher } from "./watcher";
 
 const validatorKey = Symbol("validator");
 const internalToken = Symbol("validator.internal");
 
 export class Validator {
+  enqueueDelayMs = 100;
+  scheduleDelayMs = 300;
+  readonly watcher: Watcher;
   readonly #errors = observable.map<string, string[]>([], { equals: comparer.structural });
   readonly #state = observable.box<Validator.JobState>("idle");
   #nextJobRequested = false;
   #timerId: number | null = null;
   #abortCtrl: AbortController | null = null;
-  readonly #handlers = new Set<Validator.Handler>();
+  readonly #reactiveHandlers = new Set<Validator.ReactiveHandler>();
+  readonly #asyncHandlers = new Set<Validator.AsyncHandler>();
 
   /**
    * Get a validator for a target object
@@ -35,16 +40,18 @@ export class Validator {
 
     let validator: Validator | null = (target as any)[validatorKey] ?? null;
     if (!validator) {
-      validator = new this(internalToken);
+      validator = new this(internalToken, target);
       Object.defineProperty(target, validatorKey, { value: validator });
     }
     return validator;
   }
 
-  private constructor(token: symbol) {
+  private constructor(token: symbol, target: object) {
     if (token !== internalToken) {
       throw new Error("private constructor");
     }
+
+    this.watcher = Watcher.get(target);
 
     makeObservable(this);
   }
@@ -67,9 +74,14 @@ export class Validator {
     return this.state !== "idle";
   }
 
-  addHandler(handler: Validator.Handler) {
-    this.#handlers.add(handler);
-    return () => void this.#handlers.delete(handler);
+  addReactiveHandler(handler: Validator.ReactiveHandler) {
+    this.#reactiveHandlers.add(handler);
+    return () => void this.#reactiveHandlers.delete(handler);
+  }
+
+  addAsyncHandler(handler: Validator.AsyncHandler) {
+    this.#asyncHandlers.add(handler);
+    return () => void this.#asyncHandlers.delete(handler);
   }
 
   @action
@@ -80,50 +92,58 @@ export class Validator {
     this.#state.set("idle");
   }
 
-  request(opt: Validator.RunOptions) {
-    if (opt.force) {
-      this.#runJob(opt);
-      return;
+  request(opt?: {
+    /** Force the validator to be executed immediately */
+    force?: boolean;
+  }) {
+    if (this.#reactiveHandlers.size > 0) {
+      // TODO:
     }
+    if (this.#asyncHandlers.size > 0) {
+      if (opt?.force) {
+        this.#runJob();
+        return;
+      }
 
-    switch (this.state) {
-      case "idle": {
-        this.#transitionToEnqueued(opt);
-        break;
-      }
-      case "enqueued": {
-        this.#resetTimer();
-        this.#transitionToEnqueued(opt);
-        break;
-      }
-      case "running": {
-        this.#nextJobRequested = true;
-        break;
-      }
-      case "scheduled": {
-        this.#resetTimer();
-        this.#transitionToScheduled(opt);
-        break;
+      switch (this.state) {
+        case "idle": {
+          this.#transitionToEnqueued();
+          break;
+        }
+        case "enqueued": {
+          this.#resetTimer();
+          this.#transitionToEnqueued();
+          break;
+        }
+        case "running": {
+          this.#nextJobRequested = true;
+          break;
+        }
+        case "scheduled": {
+          this.#resetTimer();
+          this.#transitionToScheduled();
+          break;
+        }
       }
     }
   }
 
-  #transitionToEnqueued(opt: Validator.RunOptions) {
+  #transitionToEnqueued() {
     runInAction(() => {
       this.#state.set("enqueued");
     });
     this.#timerId = +setTimeout(() => {
-      this.#runJob(opt);
-    }, opt.enqueueDelayMs);
+      this.#runJob();
+    }, this.enqueueDelayMs);
   }
 
-  #transitionToScheduled(opt: Validator.RunOptions) {
+  #transitionToScheduled() {
     runInAction(() => {
       this.#state.set("scheduled");
     });
     this.#timerId = +setTimeout(() => {
-      this.#runJob(opt);
-    }, opt.scheduleDelayMs);
+      this.#runJob();
+    }, this.scheduleDelayMs);
   }
 
   #resetTimer(): void {
@@ -133,7 +153,7 @@ export class Validator {
     }
   }
 
-  async #runJob(opt: Validator.RunOptions) {
+  async #runJob() {
     this.#resetTimer();
 
     this.#abortCtrl?.abort();
@@ -147,7 +167,7 @@ export class Validator {
     let results: FormValidatorResult<any>[] = [];
     try {
       const promises = [];
-      for (const handler of this.#handlers) {
+      for (const handler of this.#asyncHandlers) {
         promises.push(handler(abortCtrl.signal)); // Parallelized
       }
       results = await Promise.all(promises);
@@ -167,7 +187,7 @@ export class Validator {
 
       if (this.#nextJobRequested) {
         this.#nextJobRequested = false;
-        this.#transitionToScheduled(opt);
+        this.#transitionToScheduled();
       } else {
         this.#state.set("idle");
       }
@@ -177,12 +197,6 @@ export class Validator {
 
 export namespace Validator {
   export type JobState = "idle" | "enqueued" | "running" | "scheduled";
-
-  export type RunOptions = {
-    force: boolean;
-    enqueueDelayMs: number;
-    scheduleDelayMs: number;
-  };
-
-  export type Handler<T = any> = (abortSignal: AbortSignal) => Promise<FormValidatorResult<T>>;
+  export type AsyncHandler<T = any> = (abortSignal: AbortSignal) => Promise<FormValidatorResult<T>>;
+  export type ReactiveHandler<T = any> = () => FormValidatorResult<T>;
 }

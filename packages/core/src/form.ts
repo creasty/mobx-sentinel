@@ -286,15 +286,8 @@ export class Form<T> {
   }
 
   /** Validate the form */
-  validate(args?: {
-    /** Force the validator to be executed immediately */
-    force?: boolean;
-  }) {
-    this.validator.request({
-      force: !!args?.force,
-      enqueueDelayMs: this.config.validationDelayMs,
-      scheduleDelayMs: this.config.subsequentValidationDelayMs,
-    });
+  validate(...args: Parameters<Validator["request"]>) {
+    this.validator.request(...args);
   }
 
   /**
@@ -309,7 +302,7 @@ export class Form<T> {
       case "didSubmit":
         return this.#submission.addHandler(event, handler as any);
       case "validate":
-        return this.validator.addHandler(handler as any);
+        return this.validator.addAsyncHandler(handler as any);
       default:
         event satisfies never;
         throw new Error(`Invalid event: ${event}`);
@@ -424,7 +417,7 @@ export class Form<T> {
 
 export namespace Form {
   export type EventHandlers<T> = Submission.EventHandlers & {
-    validate: Validator.Handler<T>;
+    validate: Validator.AsyncHandler<T>;
   };
 }
 
