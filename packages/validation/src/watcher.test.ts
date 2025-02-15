@@ -1,26 +1,43 @@
 import { computed, makeObservable, observable, runInAction } from "mobx";
-import { getWatcher, unwatch, watch } from "./watcher";
+import { Watcher, unwatch, watch } from "./watcher";
 
-describe("getWatcher", () => {
-  it("throws an error when a non-object is given", () => {
-    expect(() => {
-      getWatcher(null as any);
-    }).toThrowError(/Expected an object/);
-    expect(() => {
-      getWatcher(1 as any);
-    }).toThrowError(/Expected an object/);
+describe("Watcher", () => {
+  describe("constructor", () => {
+    it("throws an error when attempted to be instantiated directly", () => {
+      expect(() => {
+        new (Watcher as any)();
+      }).toThrowError(/private constructor/);
+    });
   });
 
-  it("returns the same instance for the same target", () => {
-    const target = {};
-    const watcher = getWatcher(target);
-    expect(getWatcher(target)).toBe(watcher);
+  describe(".get", () => {
+    it("throws an error when a non-object is given", () => {
+      expect(() => {
+        Watcher.get(null as any);
+      }).toThrowError(/Expected an object/);
+      expect(() => {
+        Watcher.get(1 as any);
+      }).toThrowError(/Expected an object/);
+    });
+
+    it("returns the same instance for the same target", () => {
+      const target = {};
+      const watcher = Watcher.get(target);
+      expect(Watcher.get(target)).toBe(watcher);
+    });
+
+    it("returns different instances for different targets", () => {
+      const target1 = {};
+      const target2 = {};
+      expect(Watcher.get(target1)).not.toBe(Watcher.get(target2));
+    });
   });
 
-  it("returns different instances for different targets", () => {
-    const target1 = {};
-    const target2 = {};
-    expect(getWatcher(target1)).not.toBe(getWatcher(target2));
+  describe(".getSafe", () => {
+    it("returns null when the target is not an object", () => {
+      expect(Watcher.getSafe(null as any)).toBeNull();
+      expect(Watcher.getSafe(1 as any)).toBeNull();
+    });
   });
 });
 
@@ -52,7 +69,7 @@ describe("Annotations", () => {
 
     test("changes to @observable/@computed fields are tracked", () => {
       const sample = new Sample();
-      const watcher = getWatcher(sample);
+      const watcher = Watcher.get(sample);
       expect(watcher.changed).toBe(false);
       expect(watcher.changedKeys).toEqual(new Set());
 
@@ -71,7 +88,7 @@ describe("Annotations", () => {
 
     test("changedTick is incremented for each change", () => {
       const sample = new Sample();
-      const watcher = getWatcher(sample);
+      const watcher = Watcher.get(sample);
       expect(watcher.changedTick).toBe(0n);
 
       runInAction(() => {
@@ -98,7 +115,7 @@ describe("Annotations", () => {
 
     test("when the value is not changed, the watcher is not updated", () => {
       const sample = new Sample();
-      const watcher = getWatcher(sample);
+      const watcher = Watcher.get(sample);
       expect(watcher.changed).toBe(false);
       expect(watcher.changedKeys).toEqual(new Set());
 
@@ -111,7 +128,7 @@ describe("Annotations", () => {
 
     test("reset() resets changed, changedKeys, and changedTick", () => {
       const sample = new Sample();
-      const watcher = getWatcher(sample);
+      const watcher = Watcher.get(sample);
       expect(watcher.changed).toBe(false);
       expect(watcher.changedKeys).toEqual(new Set());
       expect(watcher.changedTick).toBe(0n);
@@ -140,7 +157,7 @@ describe("Annotations", () => {
 
       test("changes to an object are NOT tracked", () => {
         const sample = new Sample();
-        const watcher = getWatcher(sample);
+        const watcher = Watcher.get(sample);
 
         runInAction(() => {
           sample.field1.value = true;
@@ -161,7 +178,7 @@ describe("Annotations", () => {
 
       test("assignments to an array are tracked", () => {
         const sample = new Sample();
-        const watcher = getWatcher(sample);
+        const watcher = Watcher.get(sample);
 
         runInAction(() => {
           sample.field1[0] = true;
@@ -171,7 +188,7 @@ describe("Annotations", () => {
 
       test("mutations to an array are tracked", () => {
         const sample = new Sample();
-        const watcher = getWatcher(sample);
+        const watcher = Watcher.get(sample);
 
         runInAction(() => {
           sample.field1.push(true);
@@ -181,7 +198,7 @@ describe("Annotations", () => {
 
       test("changes to array elements are NOT tracked", () => {
         const sample = new Sample();
-        const watcher = getWatcher(sample);
+        const watcher = Watcher.get(sample);
 
         runInAction(() => {
           sample.field2[0].value = true;
@@ -202,7 +219,7 @@ describe("Annotations", () => {
 
       test("mutations to a set are tracked", () => {
         const sample = new Sample();
-        const watcher = getWatcher(sample);
+        const watcher = Watcher.get(sample);
 
         runInAction(() => {
           sample.field1.add(true);
@@ -212,7 +229,7 @@ describe("Annotations", () => {
 
       test("changes to set elements are NOT tracked", () => {
         const sample = new Sample();
-        const watcher = getWatcher(sample);
+        const watcher = Watcher.get(sample);
 
         runInAction(() => {
           for (const element of sample.field2) {
@@ -235,7 +252,7 @@ describe("Annotations", () => {
 
       test("assignments to a map are tracked", () => {
         const sample = new Sample();
-        const watcher = getWatcher(sample);
+        const watcher = Watcher.get(sample);
 
         runInAction(() => {
           sample.field1.set("key2", true);
@@ -245,7 +262,7 @@ describe("Annotations", () => {
 
       test("changes to map elements are NOT tracked", () => {
         const sample = new Sample();
-        const watcher = getWatcher(sample);
+        const watcher = Watcher.get(sample);
 
         runInAction(() => {
           sample.field2.get("key1")!.value = true;
@@ -285,7 +302,7 @@ describe("Annotations", () => {
 
     test("changes to @watch fields are tracked", () => {
       const sample = new Sample();
-      const watcher = getWatcher(sample);
+      const watcher = Watcher.get(sample);
       expect(watcher.changed).toBe(false);
       expect(watcher.changedKeys).toEqual(new Set());
 
@@ -332,7 +349,7 @@ describe("Annotations", () => {
 
     test("changes to @unwatch fields are ignored", () => {
       const sample = new Sample();
-      const watcher = getWatcher(sample);
+      const watcher = Watcher.get(sample);
       expect(watcher.changed).toBe(false);
       expect(watcher.changedKeys).toEqual(new Set());
 
@@ -362,7 +379,7 @@ describe("Annotations", () => {
 
       test("changes to an object are NOT tracked", () => {
         const sample = new Sample();
-        const watcher = getWatcher(sample);
+        const watcher = Watcher.get(sample);
 
         runInAction(() => {
           sample.field1.value = true;
@@ -383,7 +400,7 @@ describe("Annotations", () => {
 
       test("assignments to an array are NOT tracked", () => {
         const sample = new Sample();
-        const watcher = getWatcher(sample);
+        const watcher = Watcher.get(sample);
 
         runInAction(() => {
           sample.field1[0] = true;
@@ -393,7 +410,7 @@ describe("Annotations", () => {
 
       test("mutations to an array are NOT tracked", () => {
         const sample = new Sample();
-        const watcher = getWatcher(sample);
+        const watcher = Watcher.get(sample);
 
         runInAction(() => {
           sample.field1.push(true);
@@ -403,7 +420,7 @@ describe("Annotations", () => {
 
       test("changes to array elements are NOT tracked", () => {
         const sample = new Sample();
-        const watcher = getWatcher(sample);
+        const watcher = Watcher.get(sample);
 
         runInAction(() => {
           sample.field2[0].value = true;
@@ -424,7 +441,7 @@ describe("Annotations", () => {
 
       test("mutations to a set are NOT tracked", () => {
         const sample = new Sample();
-        const watcher = getWatcher(sample);
+        const watcher = Watcher.get(sample);
 
         runInAction(() => {
           sample.field1.add(true);
@@ -434,7 +451,7 @@ describe("Annotations", () => {
 
       test("changes to set elements are NOT tracked", () => {
         const sample = new Sample();
-        const watcher = getWatcher(sample);
+        const watcher = Watcher.get(sample);
 
         runInAction(() => {
           for (const element of sample.field2) {
@@ -457,7 +474,7 @@ describe("Annotations", () => {
 
       test("assignments to a map are NOT tracked", () => {
         const sample = new Sample();
-        const watcher = getWatcher(sample);
+        const watcher = Watcher.get(sample);
 
         runInAction(() => {
           sample.field1.set("key2", true);
@@ -467,7 +484,7 @@ describe("Annotations", () => {
 
       test("changes to map elements are NOT tracked", () => {
         const sample = new Sample();
-        const watcher = getWatcher(sample);
+        const watcher = Watcher.get(sample);
 
         runInAction(() => {
           sample.field2.get("key1")!.value = true;
@@ -489,7 +506,7 @@ describe("Annotations", () => {
 
       test("#nested does not include the value", () => {
         const sample = new Sample();
-        const watcher = getWatcher(sample);
+        const watcher = Watcher.get(sample);
         expect(watcher.nested.size).toBe(0);
       });
     });
@@ -506,7 +523,7 @@ describe("Annotations", () => {
 
       test("#nested returns the nested objects", () => {
         const sample = new Sample();
-        const watcher = getWatcher(sample);
+        const watcher = Watcher.get(sample);
         expect(watcher.nested.size).toBe(2);
         expect(watcher.nested.get("field1")?.value).toBe(sample.field1);
         expect(watcher.nested.get("field2")?.value).toBe(sample.field2);
@@ -514,7 +531,7 @@ describe("Annotations", () => {
 
       test("changes to an object are tracked", () => {
         const sample = new Sample();
-        const watcher = getWatcher(sample);
+        const watcher = Watcher.get(sample);
 
         runInAction(() => {
           sample.field1.value = true;
@@ -532,14 +549,14 @@ describe("Annotations", () => {
 
       test("#nested returns the nested objects", () => {
         const sample = new Sample();
-        const watcher = getWatcher(sample);
+        const watcher = Watcher.get(sample);
         expect(watcher.nested.size).toBe(1);
         expect(watcher.nested.get("field1")?.value).toBe(sample.field1.get());
       });
 
       test("assignments to a boxed observable field are tracked", () => {
         const sample = new Sample();
-        const watcher = getWatcher(sample);
+        const watcher = Watcher.get(sample);
 
         runInAction(() => {
           sample.field1.set({ value: true });
@@ -549,7 +566,7 @@ describe("Annotations", () => {
 
       test("changes to a boxed observable field are tracked", () => {
         const sample = new Sample();
-        const watcher = getWatcher(sample);
+        const watcher = Watcher.get(sample);
 
         runInAction(() => {
           sample.field1.get().value = true;
@@ -570,7 +587,7 @@ describe("Annotations", () => {
 
       test("#nested returns the nested objects", () => {
         const sample = new Sample();
-        const watcher = getWatcher(sample);
+        const watcher = Watcher.get(sample);
         expect(watcher.nested.size).toBe(2);
         expect(watcher.nested.get("field1.0")?.value).toBe(sample.field1[0]);
         expect(watcher.nested.get("field2.0")?.value).toBe(sample.field2[0]);
@@ -578,7 +595,7 @@ describe("Annotations", () => {
 
       test("changes to array elements are tracked", () => {
         const sample = new Sample();
-        const watcher = getWatcher(sample);
+        const watcher = Watcher.get(sample);
 
         runInAction(() => {
           sample.field1[0].value = true;
@@ -603,7 +620,7 @@ describe("Annotations", () => {
 
       test("#nested returns the nested objects", () => {
         const sample = new Sample();
-        const watcher = getWatcher(sample);
+        const watcher = Watcher.get(sample);
         expect(watcher.nested.size).toBe(2);
         for (const element of sample.field1) {
           expect(watcher.nested.get("field1.0")?.value).toBe(element);
@@ -615,7 +632,7 @@ describe("Annotations", () => {
 
       test("changes to set elements are tracked", () => {
         const sample = new Sample();
-        const watcher = getWatcher(sample);
+        const watcher = Watcher.get(sample);
 
         runInAction(() => {
           for (const element of sample.field1) {
@@ -644,7 +661,7 @@ describe("Annotations", () => {
 
       test("#nested returns the nested objects", () => {
         const sample = new Sample();
-        const watcher = getWatcher(sample);
+        const watcher = Watcher.get(sample);
         expect(watcher.nested.size).toBe(2);
         expect(watcher.nested.get("field1.key1")?.value).toBe(sample.field1.get("key1"));
         expect(watcher.nested.get("field2.key1")?.value).toBe(sample.field2.get("key1"));
@@ -652,7 +669,7 @@ describe("Annotations", () => {
 
       test("changes to map elements are tracked", () => {
         const sample = new Sample();
-        const watcher = getWatcher(sample);
+        const watcher = Watcher.get(sample);
 
         runInAction(() => {
           sample.field1.get("key1")!.value = true;
@@ -685,7 +702,7 @@ describe("Annotations", () => {
 
       test("#nested returns the nested objects", () => {
         const sample = new Sample();
-        const watcher = getWatcher(sample);
+        const watcher = Watcher.get(sample);
         expect(watcher.nested.size).toBe(2);
         expect(watcher.nested.get("field1")?.value).toBe(sample.field1);
         expect(watcher.nested.get("field2")?.value).toBe(sample.field2);
@@ -693,7 +710,7 @@ describe("Annotations", () => {
 
       test("changes to a nested class are tracked", () => {
         const sample = new Sample();
-        const watcher = getWatcher(sample);
+        const watcher = Watcher.get(sample);
 
         runInAction(() => {
           sample.field1.value = true;
@@ -705,8 +722,8 @@ describe("Annotations", () => {
 
       test("resetting a nested object does not reset the parent", () => {
         const sample = new Sample();
-        const watcher = getWatcher(sample);
-        const watcherNested = getWatcher(sample.field1);
+        const watcher = Watcher.get(sample);
+        const watcherNested = Watcher.get(sample.field1);
 
         runInAction(() => {
           sample.field1.value = true;
@@ -721,8 +738,8 @@ describe("Annotations", () => {
 
       test("the parent can reset all nested objects recursively", () => {
         const sample = new Sample();
-        const watcher = getWatcher(sample);
-        const watcherNested = getWatcher(sample.field1);
+        const watcher = Watcher.get(sample);
+        const watcherNested = Watcher.get(sample.field1);
 
         runInAction(() => {
           sample.field1.value = true;

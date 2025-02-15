@@ -69,6 +69,9 @@ export const watch = Object.freeze(
  */
 export const unwatch = createPropertyLikeAnnotation(unwatchKey, () => true);
 
+const watcherKey = Symbol("watcher");
+const internalToken = Symbol("watcher.internal");
+
 /** Watcher for changes to a target object */
 export class Watcher {
   readonly #changedTick = observable.box(0n);
@@ -83,7 +86,40 @@ export class Watcher {
     }>
   >();
 
-  constructor(target: object) {
+  /**
+   * Get a watcher for a target object
+   *
+   * @throws TypeError when the target is not an object.
+   */
+  static get<T extends object>(target: T): Watcher {
+    const watcher = this.getSafe(target);
+    if (!watcher) throw new TypeError("target: Expected an object");
+    return watcher;
+  }
+
+  /**
+   * Get a watcher for a target object
+   *
+   * Same as {@link Watcher.get} but returns null instead of throwing an error.
+   */
+  static getSafe(target: any): Watcher | null {
+    if (!target || typeof target !== "object") {
+      return null;
+    }
+
+    let watcher: Watcher | null = (target as any)[watcherKey] ?? null;
+    if (!watcher) {
+      watcher = new this(internalToken, target);
+      Object.defineProperty(target, watcherKey, { value: watcher });
+    }
+    return watcher;
+  }
+
+  private constructor(token: symbol, target: object) {
+    if (token !== internalToken) {
+      throw new Error("private constructor");
+    }
+
     this.#processUnwatchAnnotations(target);
     this.#processWatchAnnotations(target);
     this.#processMobxAnnotations(target);
@@ -160,7 +196,7 @@ export class Watcher {
 
     for (const [, fn] of this.#nested) {
       for (const { value } of fn()) {
-        const watcher = getWatcherSafe(value);
+        const watcher = Watcher.getSafe(value);
         watcher?.reset();
       }
     }
@@ -280,14 +316,14 @@ export class Watcher {
 
         if (isNested) {
           reaction(
-            () => this.#processNested(getValue(), (v) => getWatcherSafe(v)?.changed ?? false).some(Boolean),
+            () => this.#processNested(getValue(), (v) => Watcher.getSafe(v)?.changed ?? false).some(Boolean),
             (changed) => changed && this.#didChange(key)
           );
           this.#nested.set(key, () =>
             this.#processNested(getValue(), (v, k) => ({
               value: v,
               subKey: k,
-              watcher: getWatcherSafe(v),
+              watcher: Watcher.getSafe(v),
             }))
           );
         }
@@ -310,23 +346,4 @@ export class Watcher {
       }
     }
   }
-}
-
-/** Get a watcher for a target object */
-export function getWatcher(target: object) {
-  const watcher = getWatcherSafe(target);
-  if (!watcher) throw new Error("target: Expected an object");
-  return watcher;
-}
-const watcherKey = Symbol("watcher");
-
-function getWatcherSafe(target: any) {
-  if (!target || typeof target !== "object") return null;
-
-  let watcher: Watcher | null = (target as any)[watcherKey] ?? null;
-  if (!watcher) {
-    watcher = new Watcher(target);
-    Object.defineProperty(target, watcherKey, { value: watcher });
-  }
-  return watcher;
 }

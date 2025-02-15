@@ -1,6 +1,6 @@
 /* eslint-disable mobx/missing-make-observable */
 import { observable, computed, runInAction } from "mobx";
-import { getWatcher } from "../src/watcher";
+import { Watcher } from "../src/watcher";
 
 describe("Annotations", () => {
   describe("@observable / @computed", () => {
@@ -26,7 +26,7 @@ describe("Annotations", () => {
 
     test("changes to @observable/@computed fields are tracked", () => {
       const sample = new Sample();
-      const watcher = getWatcher(sample);
+      const watcher = Watcher.get(sample);
       expect(watcher.changed).toBe(false);
       expect(watcher.changedKeys).toEqual(new Set());
 
@@ -45,7 +45,7 @@ describe("Annotations", () => {
 
     test("when the value is not changed, the watcher is not updated", () => {
       const sample = new Sample();
-      const watcher = getWatcher(sample);
+      const watcher = Watcher.get(sample);
       expect(watcher.changed).toBe(false);
       expect(watcher.changedKeys).toEqual(new Set());
 
@@ -73,7 +73,7 @@ describe("Annotations", () => {
 
       test("private fields are tracked", () => {
         const sample = new Sample();
-        const watcher = getWatcher(sample);
+        const watcher = Watcher.get(sample);
         expect(watcher.changed).toBe(false);
         expect(watcher.changedKeys).toEqual(new Set());
 

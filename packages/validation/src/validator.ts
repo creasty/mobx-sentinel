@@ -1,6 +1,9 @@
 import { action, comparer, makeObservable, observable, runInAction } from "mobx";
 import { ErrorMap, FormValidatorResult, toErrorMap } from "./error";
 
+const validatorKey = Symbol("validator");
+const internalToken = Symbol("validator.internal");
+
 export class Validator {
   readonly #errors = observable.map<string, string[]>([], { equals: comparer.structural });
   readonly #state = observable.box<Validator.JobState>("idle");
@@ -9,7 +12,40 @@ export class Validator {
   #abortCtrl: AbortController | null = null;
   readonly #handlers = new Set<Validator.Handler>();
 
-  constructor() {
+  /**
+   * Get a validator for a target object
+   *
+   * @throws TypeError when the target is not an object.
+   */
+  static get<T extends object>(target: T): Validator {
+    const validator = this.getSafe(target);
+    if (!validator) throw new TypeError("target: Expected an object");
+    return validator;
+  }
+
+  /**
+   * Get a validator for a target object
+   *
+   * Same as {@link Validator.get} but returns null instead of throwing an error.
+   */
+  static getSafe(target: any): Validator | null {
+    if (!target || typeof target !== "object") {
+      return null;
+    }
+
+    let validator: Validator | null = (target as any)[validatorKey] ?? null;
+    if (!validator) {
+      validator = new this(internalToken);
+      Object.defineProperty(target, validatorKey, { value: validator });
+    }
+    return validator;
+  }
+
+  private constructor(token: symbol) {
+    if (token !== internalToken) {
+      throw new Error("private constructor");
+    }
+
     makeObservable(this);
   }
 
@@ -140,17 +176,3 @@ export namespace Validator {
 
   export type Handler<T = any> = (abortSignal: AbortSignal) => Promise<FormValidatorResult<T>>;
 }
-
-/** Get a validator for a target object */
-export function getValidator<T extends object>(target: T) {
-  if (!target || typeof target !== "object") {
-    throw new Error("target: Expected an object");
-  }
-  let validator: Validator | null = (target as any)[validatorKey] ?? null;
-  if (!validator) {
-    validator = new Validator();
-    Object.defineProperty(target, validatorKey, { value: validator });
-  }
-  return validator;
-}
-const validatorKey = Symbol("validator");

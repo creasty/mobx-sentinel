@@ -1,5 +1,5 @@
 import { autorun } from "mobx";
-import { getValidator, Validator } from "./validator";
+import { Validator } from "./validator";
 
 function setupEnv(opt?: { cleanHandlers?: boolean }) {
   const lag = {
@@ -8,7 +8,7 @@ function setupEnv(opt?: { cleanHandlers?: boolean }) {
     runTime: 140,
   };
 
-  const validator = new Validator();
+  const validator = Validator.get({});
 
   const timeline: string[] = [];
   autorun(() => {
@@ -52,30 +52,45 @@ function setupEnv(opt?: { cleanHandlers?: boolean }) {
   };
 }
 
-describe("getValidator", () => {
-  it("throws an error when a non-object is given", () => {
-    expect(() => {
-      getValidator(null as any);
-    }).toThrowError(/Expected an object/);
-    expect(() => {
-      getValidator(1 as any);
-    }).toThrowError(/Expected an object/);
-  });
-
-  it("returns the same instance for the same target", () => {
-    const target = {};
-    const validator = getValidator(target);
-    expect(getValidator(target)).toBe(validator);
-  });
-
-  it("returns different instances for different targets", () => {
-    const target1 = {};
-    const target2 = {};
-    expect(getValidator(target1)).not.toBe(getValidator(target2));
-  });
-});
-
 describe("Validator", () => {
+  describe("constructor", () => {
+    it("throws an error when attempted to be instantiated directly", () => {
+      expect(() => {
+        new (Validator as any)();
+      }).toThrowError(/private constructor/);
+    });
+  });
+
+  describe(".get", () => {
+    it("throws an error when a non-object is given", () => {
+      expect(() => {
+        Validator.get(null as any);
+      }).toThrowError(/Expected an object/);
+      expect(() => {
+        Validator.get(1 as any);
+      }).toThrowError(/Expected an object/);
+    });
+
+    it("returns the same instance for the same target", () => {
+      const target = {};
+      const validator = Validator.get(target);
+      expect(Validator.get(target)).toBe(validator);
+    });
+
+    it("returns different instances for different targets", () => {
+      const target1 = {};
+      const target2 = {};
+      expect(Validator.get(target1)).not.toBe(Validator.get(target2));
+    });
+  });
+
+  describe(".getSafe", () => {
+    it("returns null when the target is not an object", () => {
+      expect(Validator.getSafe(null as any)).toBeNull();
+      expect(Validator.getSafe(1 as any)).toBeNull();
+    });
+  });
+
   describe("#request", () => {
     it("process validation handlers in parallel", async () => {
       const env = setupEnv({ cleanHandlers: true });

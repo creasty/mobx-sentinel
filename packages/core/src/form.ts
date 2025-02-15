@@ -1,6 +1,6 @@
 import { action, computed, makeObservable, observable, reaction } from "mobx";
 import { v4 as uuidV4 } from "uuid";
-import { Validator, Watcher, getValidator, getWatcher } from "@form-model/validation";
+import { Validator, Watcher } from "@form-model/validation";
 import { FormField } from "./field";
 import { FormBinding, FormBindingConstructor, FormBindingFunc, getSafeBindingName } from "./binding";
 import { FormConfig, globalConfig } from "./config";
@@ -8,8 +8,8 @@ import { FormDelegate, getDelegation } from "./delegation";
 import { Submission } from "./submission";
 
 const registry = new WeakMap<object, Map<symbol, Form<any>>>();
-const defaultFormKey = Symbol("Form.defaultFormKey");
-const internalToken = Symbol("Form.internalToken");
+const defaultFormKey = Symbol("form.defaultFormKey");
+const internalToken = Symbol("form.internalToken");
 
 export class Form<T> {
   readonly id = uuidV4();
@@ -37,8 +37,27 @@ export class Form<T> {
    * @param subject The subject to associate with the form
    * @param formKey The key to associate with the form.
    *   If you need to associate multiple forms with the same subject, use different keys.
+   *
+   * @throws TypeError when the subject is not an object.
    */
   static get<T extends object>(subject: T, formKey?: symbol): Form<T> {
+    const form = this.getSafe(subject, formKey);
+    if (!form) {
+      throw new TypeError("subject: Expected an object");
+    }
+    return form;
+  }
+
+  /**
+   * Get the form instance for a subject.
+   *
+   * Same as {@link Form.get} but returns null instead of throwing an error.
+   */
+  static getSafe<T extends object>(subject: T, formKey?: symbol): Form<T> | null {
+    if (!subject || typeof subject !== "object") {
+      return null;
+    }
+
     formKey ??= defaultFormKey;
 
     let map = registry.get(subject);
@@ -50,9 +69,9 @@ export class Form<T> {
     let instance = map.get(formKey);
     if (!instance) {
       const delegate = getDelegation(subject);
-      const watcher = getWatcher(subject);
-      const validator = getValidator(subject);
-      instance = new Form<T>(internalToken, {
+      const watcher = Watcher.get(subject);
+      const validator = Validator.get(subject);
+      instance = new this<T>(internalToken, {
         formKey,
         delegate,
         watcher,
@@ -92,7 +111,7 @@ export class Form<T> {
     }
   ) {
     if (token !== internalToken) {
-      throw new Error("Instantiate Form via Form.get() instead");
+      throw new Error("private constructor");
     }
     makeObservable(this);
     this.#formKey = args.formKey;
@@ -205,9 +224,8 @@ export class Form<T> {
     const forms = new Set<Form<unknown>>();
 
     for (const { value } of this.watcher.nested.values()) {
-      if (!value || typeof value !== "object") continue;
-      const form = Form.get(value, this.#formKey);
-      forms.add(form);
+      const form = Form.getSafe(value, this.#formKey);
+      if (form) forms.add(form);
     }
 
     return forms;
