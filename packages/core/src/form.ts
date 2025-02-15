@@ -1,4 +1,4 @@
-import { action, computed, makeObservable, observable, reaction } from "mobx";
+import { action, computed, makeObservable, reaction } from "mobx";
 import { v4 as uuidV4 } from "uuid";
 import { Validator, Watcher } from "@form-model/validation";
 import { FormField } from "./field";
@@ -18,7 +18,6 @@ export class Form<T> {
   readonly watcher: Watcher;
   readonly validator: Validator;
   readonly #submission = new Submission();
-  readonly #isDirty = observable.box(false);
   readonly #fields = new Map<string, FormField>();
   readonly #bindings = new Map<string, FormBinding>();
 
@@ -121,10 +120,7 @@ export class Form<T> {
 
     reaction(
       () => this.watcher.changedTick,
-      () => {
-        this.markAsDirty();
-        this.validate();
-      }
+      () => this.validate()
     );
     this.#submission.addHandler("submit", async (abortSignal) => {
       const submit = this.#getDelegateByKey(FormDelegate.submit);
@@ -164,32 +160,36 @@ export class Form<T> {
     };
   }
 
+  /** Whether the form is dirty (including sub-forms) */
+  get isDirty() {
+    return this.watcher.changed;
+  }
+
+  /** Whether the form is in validator state */
+  get isValidating() {
+    return this.validator.isValidating;
+  }
+
   /** Whether the form is in submitting state */
   get isSubmitting() {
     return this.#submission.isRunning;
   }
 
-  /** Whether the form is in validator state */
+  /** Whether the form is busy (submitting or validating) */
   @computed
-  get isValidating() {
-    return this.validator.state !== "idle";
+  get isBusy() {
+    return this.isSubmitting || this.isValidating;
   }
 
   /** Whether the form can be submitted */
   @computed
   get canSubmit() {
-    return !this.isSubmitting && !this.isValidating && this.isValid && this.isDirty;
+    return !this.isBusy && this.isValid && this.isDirty;
   }
 
   /** Whether the form is valid (including sub-forms) */
   get isValid() {
     return this.invalidFieldCount === 0 && this.invalidSubFormCount === 0;
-  }
-
-  /** Whether the form is dirty (including sub-forms) */
-  @computed
-  get isDirty() {
-    return this.#isDirty.get() || this.watcher.changed || this.dirtySubFormCount > 0;
   }
 
   /**
@@ -215,6 +215,20 @@ export class Form<T> {
   }
 
   /**
+   * The number of invalid sub-forms
+   *
+   * Note that this is not the number of fields.
+   */
+  @computed
+  get invalidSubFormCount() {
+    let count = 0;
+    for (const form of this.subForms) {
+      count += form.isValid ? 0 : 1;
+    }
+    return count;
+  }
+
+  /**
    * Sub-forms within the form.
    *
    * Forms are collected via `@watch.nested` annotation.
@@ -231,34 +245,6 @@ export class Form<T> {
     return forms;
   }
 
-  /**
-   * The number of invalid sub-forms
-   *
-   * Note that this is not the number of fields.
-   */
-  @computed
-  get invalidSubFormCount() {
-    let count = 0;
-    for (const form of this.subForms) {
-      count += form.isValid ? 0 : 1;
-    }
-    return count;
-  }
-
-  /**
-   * The number of dirty sub-forms
-   *
-   * Note that this is not the number of fields.
-   */
-  @computed
-  get dirtySubFormCount() {
-    let count = 0;
-    for (const form of this.subForms) {
-      count += form.isDirty ? 1 : 0;
-    }
-    return count;
-  }
-
   /** Report error states on all fields and sub-forms */
   @action
   reportError() {
@@ -273,7 +259,6 @@ export class Form<T> {
   /** Reset the form's state */
   @action
   reset() {
-    this.#isDirty.set(false);
     this.validator.reset();
     this.watcher.reset();
     for (const field of this.#fields.values()) {
@@ -287,7 +272,7 @@ export class Form<T> {
   /** Mark the form as dirty */
   @action
   markAsDirty() {
-    this.#isDirty.set(true);
+    this.watcher.assumeChanged();
   }
 
   /**

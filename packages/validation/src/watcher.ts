@@ -74,6 +74,7 @@ const internalToken = Symbol("watcher.internal");
 
 /** Watcher for changes to a target object */
 export class Watcher {
+  readonly #assumeChanged = observable.box(false);
   readonly #changedTick = observable.box(0n);
   readonly #changedKeys = observable.set<string>();
   readonly #processedKeys = new Set<string>();
@@ -130,17 +131,18 @@ export class Watcher {
   /**
    * The total number of changes have been processed
    *
-   * It is incremented for each change and each key.
+   * The value is incremented for each change and each key.
+   * Observe this value to react to changes.
    */
   @computed
   get changedTick() {
     return this.#changedTick.get();
   }
 
-  /** Whether any keys have changed */
+  /** Whether changes have been made */
   @computed
   get changed() {
-    return this.changedTick > 0n;
+    return this.changedTick > 0n || this.#assumeChanged.get();
   }
 
   /** The keys that have changed */
@@ -193,13 +195,23 @@ export class Watcher {
   reset() {
     this.#changedKeys.clear();
     this.#changedTick.set(0n);
+    this.#assumeChanged.set(false);
 
-    for (const [, fn] of this.#nested) {
-      for (const { value } of fn()) {
-        const watcher = Watcher.getSafe(value);
+    for (const fn of this.#nested.values()) {
+      for (const { watcher } of fn()) {
         watcher?.reset();
       }
     }
+  }
+
+  /**
+   * Assume some changes have been made
+   *
+   * It only changes {@link changed} to true and does not increment {@link changedTick}.
+   */
+  @action
+  assumeChanged() {
+    this.#assumeChanged.set(true);
   }
 
   /** Mark a key as changed */
@@ -346,4 +358,23 @@ export class Watcher {
       }
     }
   }
+
+  /**
+   * Get the internal properties of the watcher.
+   *
+   * For internal testing purposes only.
+   *
+   * @internal
+   * @ignore
+   */
+  [internalToken]() {
+    return {
+      didChange: this.#didChange.bind(this),
+    };
+  }
+}
+
+/** @internal */
+export function getInternal(watcher: Watcher) {
+  return watcher[internalToken]();
 }

@@ -1,5 +1,5 @@
 import { computed, makeObservable, observable, runInAction } from "mobx";
-import { Watcher, unwatch, watch } from "./watcher";
+import { Watcher, getInternal, unwatch, watch } from "./watcher";
 
 describe("Watcher", () => {
   describe("constructor", () => {
@@ -37,6 +37,40 @@ describe("Watcher", () => {
     it("returns null when the target is not an object", () => {
       expect(Watcher.getSafe(null as any)).toBeNull();
       expect(Watcher.getSafe(1 as any)).toBeNull();
+    });
+  });
+
+  describe("#assumeChanged", () => {
+    it("sets changed to true without incrementing changedTick", () => {
+      const watcher = Watcher.get({});
+      expect(watcher.changedTick).toBe(0n);
+      expect(watcher.changed).toBe(false);
+      watcher.assumeChanged();
+      expect(watcher.changedTick).toBe(0n);
+      expect(watcher.changed).toBe(true);
+    });
+  });
+
+  describe("#reset", () => {
+    it("resets the state", () => {
+      const watcher = Watcher.get({});
+      const internal = getInternal(watcher);
+
+      watcher.assumeChanged();
+      expect(watcher.changed).toBe(true);
+
+      watcher.reset();
+      expect(watcher.changed).toBe(false);
+
+      internal.didChange("field1");
+      expect(watcher.changedTick).toBe(1n);
+      expect(watcher.changedKeys).toEqual(new Set(["field1"]));
+      expect(watcher.changed).toBe(true);
+
+      watcher.reset();
+      expect(watcher.changedTick).toBe(0n);
+      expect(watcher.changedKeys).toEqual(new Set());
+      expect(watcher.changed).toBe(false);
     });
   });
 });

@@ -1,4 +1,4 @@
-import { action, comparer, makeObservable, observable, runInAction } from "mobx";
+import { action, comparer, computed, makeObservable, observable, runInAction } from "mobx";
 import { ErrorMap, FormValidatorResult, toErrorMap } from "./error";
 
 const validatorKey = Symbol("validator");
@@ -55,6 +55,16 @@ export class Validator {
 
   get state() {
     return this.#state.get();
+  }
+
+  /**
+   * Whether the validator is in validator state
+   *
+   * This is true when the validation state is not "idle".
+   */
+  @computed
+  get isValidating() {
+    return this.state !== "idle";
   }
 
   addHandler(handler: Validator.Handler) {
