@@ -74,7 +74,14 @@ export class Watcher {
   readonly #changedTick = observable.box(0n);
   readonly #changedKeys = observable.set<string>();
   readonly #processedKeys = new Set<string>();
-  readonly #nested = new Map<string, () => Array<{ value: any; key?: string | symbol | number }>>();
+  readonly #nested = new Map<
+    string,
+    () => Array<{
+      value: any;
+      subKey?: string | symbol | number;
+      watcher: Watcher | null;
+    }>
+  >();
 
   constructor(target: object) {
     this.#processUnwatchAnnotations(target);
@@ -111,8 +118,7 @@ export class Watcher {
   get changedKeyPaths(): ReadonlySet<string> {
     const result = new Set(this.#changedKeys);
     for (const [key, fn] of this.#nested) {
-      for (const { key: subKey, value } of fn()) {
-        const watcher = getWatcherSafe(value);
+      for (const { subKey, watcher } of fn()) {
         if (watcher) {
           for (const changedKey of watcher.changedKeyPaths) {
             if (typeof subKey === "string" || typeof subKey === "number") {
@@ -130,13 +136,17 @@ export class Watcher {
     return result;
   }
 
-  /** The nested objects being watched */
+  /** The nested being watched */
   @computed.struct
-  get nestedObjects() {
-    const result: any[] = [];
-    for (const fn of this.#nested.values()) {
-      for (const { value } of fn()) {
-        result.push(value);
+  get nested() {
+    const result = new Map<string, { value: any; watcher: Watcher | null }>();
+    for (const [key, fn] of this.#nested) {
+      for (const { subKey, value, watcher } of fn()) {
+        if (typeof subKey === "string" || typeof subKey === "number") {
+          result.set(`${key}.${subKey}`, { value, watcher });
+        } else {
+          result.set(key, { value, watcher });
+        }
       }
     }
     return result;
@@ -269,12 +279,17 @@ export class Watcher {
         );
 
         if (isNested) {
-          // TODO: Rewrite this reaction with @computed
           reaction(
             () => this.#processNested(getValue(), (v) => getWatcherSafe(v)?.changed ?? false).some(Boolean),
             (changed) => changed && this.#didChange(key)
           );
-          this.#nested.set(key, () => this.#processNested(getValue(), (v, k) => ({ value: v, key: k })));
+          this.#nested.set(key, () =>
+            this.#processNested(getValue(), (v, k) => ({
+              value: v,
+              subKey: k,
+              watcher: getWatcherSafe(v),
+            }))
+          );
         }
       }
     }
@@ -298,19 +313,20 @@ export class Watcher {
 }
 
 /** Get a watcher for a target object */
-export function getWatcher<T extends object>(target: T) {
-  if (!target || typeof target !== "object") {
-    throw new Error("target: Expected an object");
-  }
+export function getWatcher(target: object) {
+  const watcher = getWatcherSafe(target);
+  if (!watcher) throw new Error("target: Expected an object");
+  return watcher;
+}
+const watcherKey = Symbol("watcher");
+
+function getWatcherSafe(target: any) {
+  if (!target || typeof target !== "object") return null;
+
   let watcher: Watcher | null = (target as any)[watcherKey] ?? null;
   if (!watcher) {
     watcher = new Watcher(target);
     Object.defineProperty(target, watcherKey, { value: watcher });
   }
   return watcher;
-}
-const watcherKey = Symbol("watcher");
-
-function getWatcherSafe(value: any) {
-  return isObservableObject(value) ? getWatcher(value) : null;
 }

@@ -487,10 +487,10 @@ describe("Annotations", () => {
         }
       }
 
-      test("nestedObjects does not include the value", () => {
+      test("#nested does not include the value", () => {
         const sample = new Sample();
         const watcher = getWatcher(sample);
-        expect(watcher.nestedObjects.length).toBe(0);
+        expect(watcher.nested.size).toBe(0);
       });
     });
 
@@ -504,12 +504,12 @@ describe("Annotations", () => {
         }
       }
 
-      test("nestedObjects returns the nested objects", () => {
+      test("#nested returns the nested objects", () => {
         const sample = new Sample();
         const watcher = getWatcher(sample);
-        expect(watcher.nestedObjects.length).toBe(2);
-        expect(watcher.nestedObjects).toContain(sample.field1);
-        expect(watcher.nestedObjects).toContain(sample.field2);
+        expect(watcher.nested.size).toBe(2);
+        expect(watcher.nested.get("field1")?.value).toBe(sample.field1);
+        expect(watcher.nested.get("field2")?.value).toBe(sample.field2);
       });
 
       test("changes to an object are tracked", () => {
@@ -530,11 +530,11 @@ describe("Annotations", () => {
         @watch.nested field1 = observable.box({ value: false });
       }
 
-      test("nestedObjects returns the nested objects", () => {
+      test("#nested returns the nested objects", () => {
         const sample = new Sample();
         const watcher = getWatcher(sample);
-        expect(watcher.nestedObjects.length).toBe(1);
-        expect(watcher.nestedObjects).toContain(sample.field1.get());
+        expect(watcher.nested.size).toBe(1);
+        expect(watcher.nested.get("field1")?.value).toBe(sample.field1.get());
       });
 
       test("assignments to a boxed observable field are tracked", () => {
@@ -568,12 +568,12 @@ describe("Annotations", () => {
         }
       }
 
-      test("nestedObjects returns the nested objects", () => {
+      test("#nested returns the nested objects", () => {
         const sample = new Sample();
         const watcher = getWatcher(sample);
-        expect(watcher.nestedObjects.length).toBe(2);
-        expect(watcher.nestedObjects).toContain(sample.field1[0]);
-        expect(watcher.nestedObjects).toContain(sample.field2[0]);
+        expect(watcher.nested.size).toBe(2);
+        expect(watcher.nested.get("field1.0")?.value).toBe(sample.field1[0]);
+        expect(watcher.nested.get("field2.0")?.value).toBe(sample.field2[0]);
       });
 
       test("changes to array elements are tracked", () => {
@@ -601,15 +601,15 @@ describe("Annotations", () => {
         }
       }
 
-      test("nestedObjects returns the nested objects", () => {
+      test("#nested returns the nested objects", () => {
         const sample = new Sample();
         const watcher = getWatcher(sample);
-        expect(watcher.nestedObjects.length).toBe(2);
+        expect(watcher.nested.size).toBe(2);
         for (const element of sample.field1) {
-          expect(watcher.nestedObjects).toContain(element);
+          expect(watcher.nested.get("field1.0")?.value).toBe(element);
         }
         for (const element of sample.field2) {
-          expect(watcher.nestedObjects).toContain(element);
+          expect(watcher.nested.get("field2.0")?.value).toBe(element);
         }
       });
 
@@ -642,12 +642,12 @@ describe("Annotations", () => {
         }
       }
 
-      test("nestedObjects returns the nested objects", () => {
+      test("#nested returns the nested objects", () => {
         const sample = new Sample();
         const watcher = getWatcher(sample);
-        expect(watcher.nestedObjects.length).toBe(2);
-        expect(watcher.nestedObjects).toContain(sample.field1.get("key1"));
-        expect(watcher.nestedObjects).toContain(sample.field2.get("key1"));
+        expect(watcher.nested.size).toBe(2);
+        expect(watcher.nested.get("field1.key1")?.value).toBe(sample.field1.get("key1"));
+        expect(watcher.nested.get("field2.key1")?.value).toBe(sample.field2.get("key1"));
       });
 
       test("changes to map elements are tracked", () => {
@@ -683,12 +683,12 @@ describe("Annotations", () => {
         }
       }
 
-      test("nestedObjects returns the nested objects", () => {
+      test("#nested returns the nested objects", () => {
         const sample = new Sample();
         const watcher = getWatcher(sample);
-        expect(watcher.nestedObjects.length).toBe(2);
-        expect(watcher.nestedObjects).toContain(sample.field1);
-        expect(watcher.nestedObjects).toContain(sample.field2);
+        expect(watcher.nested.size).toBe(2);
+        expect(watcher.nested.get("field1")?.value).toBe(sample.field1);
+        expect(watcher.nested.get("field2")?.value).toBe(sample.field2);
       });
 
       test("changes to a nested class are tracked", () => {
