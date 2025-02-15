@@ -1,4 +1,5 @@
 ignore:
   - 'packages/*/*.config.ts'
+  - 'packages/*/src/index.ts'
   - '**/*.mts'
   - '**/*.mjs'
