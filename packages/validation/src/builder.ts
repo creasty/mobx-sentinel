@@ -1,7 +1,7 @@
 import { FormValidatorResult } from "./error";
-import { getValidator } from "./validator";
+import { Validator } from "./validator";
 
 export function makeValidatable<T extends object>(target: T, build: () => FormValidatorResult<T>) {
-  const validator = getValidator(target);
+  const validator = Validator.get(target);
   validator.addHandler(async () => build());
 }

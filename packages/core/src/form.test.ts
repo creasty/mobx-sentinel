@@ -49,7 +49,24 @@ describe("Form", () => {
     }
   }
 
+  describe("constructor", () => {
+    it("throws an error when attempted to be instantiated directly", () => {
+      expect(() => {
+        new (Form as any)();
+      }).toThrowError(/private constructor/);
+    });
+  });
+
   describe(".get", () => {
+    it("throws an error when a non-object is given", () => {
+      expect(() => {
+        Form.get(null as any);
+      }).toThrowError(/Expected an object/);
+      expect(() => {
+        Form.get(1 as any);
+      }).toThrowError(/Expected an object/);
+    });
+
     it("returns the same instance for the same subject", () => {
       const model = new SampleModel();
       const form1 = Form.get(model);
@@ -107,6 +124,13 @@ describe("Form", () => {
       expect(form.subForms.size).toBe(2);
       expect(form.subForms).toContain(sampleForm);
       expect(form.subForms).toContain(arrayForm);
+    });
+  });
+
+  describe(".getSafe", () => {
+    it("returns null when the subject is not an object", () => {
+      expect(Form.getSafe(null as any)).toBeNull();
+      expect(Form.getSafe(1 as any)).toBeNull();
     });
   });
 
