@@ -2,7 +2,7 @@ import { action, computed, makeObservable, observable, reaction, runInAction } f
 import { createPropertyLikeAnnotation, getAnnotationProcessor } from "./annotationProcessor";
 import { getMobxObservableAnnotations, shallowReadValue, unwrapShallowContents } from "./mobx";
 import { getNestedAnnotations } from "./nested";
-import { buildKeyPath } from "./keyPath";
+import { KeyPath, buildKeyPath } from "./keyPath";
 
 enum WatchMode {
   /**
@@ -59,7 +59,7 @@ export class Watcher {
   readonly #nestedFetchers = new Map<
     string,
     () => Array<{
-      keyPath: string;
+      keyPath: KeyPath;
       watcher: Watcher;
     }>
   >();
@@ -134,8 +134,8 @@ export class Watcher {
   get changedKeyPaths(): ReadonlySet<string> {
     const result = new Set(this.#changedKeys);
     for (const [keyPath, watcher] of this.#nested()) {
-      for (const changedKey of watcher.changedKeyPaths) {
-        result.add(buildKeyPath(keyPath, changedKey));
+      for (const changedKeyPath of watcher.changedKeyPaths) {
+        result.add(buildKeyPath(keyPath, changedKeyPath));
       }
     }
     return result;
@@ -144,7 +144,7 @@ export class Watcher {
   /** Nested watchers */
   @computed.struct
   get nested() {
-    const result = new Map<string, Watcher>();
+    const result = new Map<KeyPath, Watcher>();
     for (const [keyPath, watcher] of this.#nested()) {
       result.set(keyPath, watcher);
     }

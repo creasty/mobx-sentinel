@@ -1,6 +1,9 @@
 import { action, comparer, computed, makeObservable, observable, reaction, runInAction } from "mobx";
 import { ValidationError, ValidationErrorsBuilder } from "./error";
 import { Watcher } from "./watcher";
+import { getNestedAnnotations } from "./nested";
+import { unwrapShallowContents } from "./mobx";
+import { KeyPath, buildKeyPath } from "./keyPath";
 
 const validatorKey = Symbol("validator");
 const internalToken = Symbol("validator.internal");
@@ -14,6 +17,13 @@ export function makeValidatable<T extends object>(target: T, handler: Validator.
 export class Validator<T> {
   readonly watcher: Watcher;
   readonly #errors = observable.map<symbol, ReadonlyArray<ValidationError>>([], { equals: comparer.structural });
+  readonly #nestedFetchers = new Map<
+    string,
+    () => Array<{
+      keyPath: KeyPath;
+      validator: Validator<any>;
+    }>
+  >();
 
   // Async handler
   enqueueDelayMs = 100;
@@ -62,6 +72,8 @@ export class Validator<T> {
       throw new Error("private constructor");
     }
 
+    this.#processNestedAnnotations(target);
+
     makeObservable(this);
     this.watcher = Watcher.get(target);
 
@@ -71,9 +83,27 @@ export class Validator<T> {
     );
   }
 
+  #processNestedAnnotations(target: object) {
+    for (const [key, getValue] of getNestedAnnotations(target)) {
+      this.#nestedFetchers.set(key, () => {
+        const result = [];
+        for (const [subKey, value] of unwrapShallowContents(getValue())) {
+          if (typeof subKey === "symbol") continue; // symbol keys are not supported
+          const validator = Validator.getSafe(value);
+          if (!validator) continue;
+          result.push({
+            keyPath: buildKeyPath(key, subKey),
+            validator,
+          });
+        }
+        return result;
+      });
+    }
+  }
+
   @computed.struct
   get errors(): Validator.KeyPathErrorMap {
-    const result = new Map<string, string[]>();
+    const result = new Map<KeyPath, string[]>();
     for (const errors of this.#errors.values()) {
       for (const error of errors) {
         let list = result.get(error.keyPath);
@@ -120,18 +150,18 @@ export class Validator<T> {
   /** The number of invalid key paths */
   @computed
   get invalidKeyPaths(): ReadonlySet<string> {
-    const seenKeyPaths = new Set<string>();
+    const result = new Set<string>();
     for (const errors of this.#errors.values()) {
       for (const error of errors) {
-        seenKeyPaths.add(error.keyPath);
+        result.add(error.keyPath);
       }
     }
-    for (const [parentKeyPath, validator] of this.nested) {
-      for (const keyPath of validator.invalidKeyPaths) {
-        seenKeyPaths.add(`${parentKeyPath}.${keyPath}`);
+    for (const [keyPath, validator] of this.nested) {
+      for (const changedKeyPath of validator.invalidKeyPaths) {
+        result.add(buildKeyPath(keyPath, changedKeyPath));
       }
     }
-    return Object.freeze(seenKeyPaths);
+    return Object.freeze(result);
   }
 
   get jobState() {
@@ -148,13 +178,19 @@ export class Validator<T> {
   @computed.struct
   get nested() {
     const result = new Map<string, Validator<any>>();
-    for (const [key, nested] of this.watcher.nested) {
-      const validator = Validator.getSafe(nested.value);
-      if (validator) {
-        result.set(key, validator);
-      }
+    for (const [keyPath, validator] of this.#nested()) {
+      result.set(keyPath, validator);
     }
     return result;
+  }
+
+  /** Iterate over the nested validators */
+  *#nested() {
+    for (const fn of this.#nestedFetchers.values()) {
+      for (const { keyPath, validator } of fn()) {
+        yield [keyPath, validator] as const;
+      }
+    }
   }
 
   @action

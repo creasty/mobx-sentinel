@@ -1,10 +1,12 @@
+import { KeyPath } from "./keyPath";
+
 export class ValidationError extends Error {
   readonly key: string;
-  readonly keyPath: string;
+  readonly keyPath: KeyPath;
   readonly message: string;
   readonly cause?: Error;
 
-  constructor(args: { keyPath: string; reason: string | Error }) {
+  constructor(args: { keyPath: KeyPath; reason: string | Error }) {
     super();
     this.key = args.keyPath.split(".", 1)[0];
     this.keyPath = args.keyPath;
@@ -27,7 +29,7 @@ export class ValidationErrorsBuilder<T> {
   }
 
   invalidate(key: keyof T & string, reason: string | Error) {
-    this.#errors.push(new ValidationError({ keyPath: key, reason }));
+    this.#errors.push(new ValidationError({ keyPath: key as KeyPath, reason }));
   }
 
   get hasError() {
