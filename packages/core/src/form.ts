@@ -1,6 +1,6 @@
-import { action, computed, makeObservable, observable, reaction } from "mobx";
+import { action, computed, makeObservable } from "mobx";
 import { v4 as uuidV4 } from "uuid";
-import { Validator, Watcher } from "@form-model/validation";
+import { KeyPath, Validator, Watcher, StandardNestedFetcher } from "@form-model/validation";
 import { FormField } from "./field";
 import { FormBinding, FormBindingConstructor, FormBindingFunc, getSafeBindingName } from "./binding";
 import { FormConfig, globalConfig } from "./config";
@@ -16,11 +16,11 @@ export class Form<T> {
   readonly #delegate?: FormDelegate;
   readonly #formKey: symbol;
   readonly watcher: Watcher;
-  readonly validator: Validator;
+  readonly validator: Validator<T>;
   readonly #submission = new Submission();
-  readonly #isDirty = observable.box(false);
   readonly #fields = new Map<string, FormField>();
   readonly #bindings = new Map<string, FormBinding>();
+  readonly #nestedFetchers: StandardNestedFetcher<Form<any>>;
 
   /** Extension fields for bindings */
   [k: `bind${Capitalize<string>}`]: unknown;
@@ -68,14 +68,9 @@ export class Form<T> {
 
     let instance = map.get(formKey);
     if (!instance) {
-      const delegate = getDelegation(subject);
-      const watcher = Watcher.get(subject);
-      const validator = Validator.get(subject);
       instance = new this<T>(internalToken, {
+        subject,
         formKey,
-        delegate,
-        watcher,
-        validator,
       });
       map.set(formKey, instance);
     }
@@ -104,28 +99,22 @@ export class Form<T> {
   private constructor(
     token: symbol,
     args: {
+      subject: T & object;
       formKey: symbol;
-      delegate?: FormDelegate;
-      watcher: Watcher;
-      validator: Validator;
     }
   ) {
     if (token !== internalToken) {
       throw new Error("private constructor");
     }
-    makeObservable(this);
-    this.#formKey = args.formKey;
-    this.#delegate = args.delegate;
-    this.watcher = args.watcher;
-    this.validator = args.validator;
 
-    reaction(
-      () => this.watcher.changedTick,
-      () => {
-        this.markAsDirty();
-        this.validate();
-      }
-    );
+    this.#formKey = args.formKey;
+    this.#delegate = getDelegation(args.subject);
+    this.watcher = Watcher.get(args.subject);
+    this.validator = Validator.get(args.subject);
+    this.#nestedFetchers = new StandardNestedFetcher(args.subject, (entry) => Form.getSafe(entry.data, this.#formKey));
+
+    makeObservable(this);
+
     this.#submission.addHandler("submit", async (abortSignal) => {
       const submit = this.#getDelegateByKey(FormDelegate.submit);
       if (!submit) return true;
@@ -164,99 +153,60 @@ export class Form<T> {
     };
   }
 
+  /** Whether the form is dirty (including sub-forms) */
+  get isDirty() {
+    return this.watcher.changed;
+  }
+
+  /** Whether the form is valid (including sub-forms) */
+  get isValid() {
+    return this.validator.isValid;
+  }
+
+  /** The number of invalid fields */
+  get invalidFieldCount() {
+    return this.validator.invalidKeyCount;
+  }
+
+  /** The number of total invalid field paths (counts invalid fields in sub-forms) */
+  get invalidFieldPathCount() {
+    return this.validator.invalidKeyPathCount;
+  }
+
+  /** Whether the form is in validator state */
+  get isValidating() {
+    return this.validator.isValidating;
+  }
+
   /** Whether the form is in submitting state */
   get isSubmitting() {
     return this.#submission.isRunning;
   }
 
-  /** Whether the form is in validator state */
+  /** Whether the form is busy (submitting or validating) */
   @computed
-  get isValidating() {
-    return this.validator.state !== "idle";
+  get isBusy() {
+    return this.isSubmitting || this.isValidating;
   }
 
   /** Whether the form can be submitted */
   @computed
   get canSubmit() {
-    return !this.isSubmitting && !this.isValidating && this.isValid && this.isDirty;
-  }
-
-  /** Whether the form is valid (including sub-forms) */
-  get isValid() {
-    return this.invalidFieldCount === 0 && this.invalidSubFormCount === 0;
-  }
-
-  /** Whether the form is dirty (including sub-forms) */
-  @computed
-  get isDirty() {
-    return this.#isDirty.get() || this.watcher.changed || this.dirtySubFormCount > 0;
-  }
-
-  /**
-   * The number of invalid fields
-   *
-   * Note that this does not include the number of invalid fields of sub-forms.
-   */
-  @computed
-  get invalidFieldCount() {
-    return this.validator.errors.size;
-  }
-
-  /**
-   * The number of total invalid fields (including sub-forms)
-   */
-  @computed
-  get totalInvalidFieldCount() {
-    let count = this.invalidFieldCount;
-    for (const form of this.subForms) {
-      count += form.totalInvalidFieldCount;
-    }
-    return count;
+    return !this.isBusy && this.isValid && this.isDirty;
   }
 
   /**
    * Sub-forms within the form.
    *
-   * Forms are collected via `@watch.nested` annotation.
+   * Forms are collected via `@nested` annotation.
    */
   @computed.struct
-  get subForms(): ReadonlySet<Form<unknown>> {
-    const forms = new Set<Form<unknown>>();
-
-    for (const { value } of this.watcher.nested.values()) {
-      const form = Form.getSafe(value, this.#formKey);
-      if (form) forms.add(form);
+  get subForms(): ReadonlyMap<KeyPath, Form<any>> {
+    const result = new Map<KeyPath, Form<any>>();
+    for (const entry of this.#nestedFetchers) {
+      result.set(entry.keyPath, entry.data);
     }
-
-    return forms;
-  }
-
-  /**
-   * The number of invalid sub-forms
-   *
-   * Note that this is not the number of fields.
-   */
-  @computed
-  get invalidSubFormCount() {
-    let count = 0;
-    for (const form of this.subForms) {
-      count += form.isValid ? 0 : 1;
-    }
-    return count;
-  }
-
-  /**
-   * The number of dirty sub-forms
-   *
-   * Note that this is not the number of fields.
-   */
-  @computed
-  get dirtySubFormCount() {
-    let count = 0;
-    for (const form of this.subForms) {
-      count += form.isDirty ? 1 : 0;
-    }
-    return count;
+    return result;
   }
 
   /** Report error states on all fields and sub-forms */
@@ -265,29 +215,28 @@ export class Form<T> {
     for (const field of this.#fields.values()) {
       field.reportError();
     }
-    for (const form of this.subForms) {
-      form.reportError();
+    for (const entry of this.#nestedFetchers) {
+      entry.data.reportError();
     }
   }
 
   /** Reset the form's state */
   @action
   reset() {
-    this.#isDirty.set(false);
     this.validator.reset();
     this.watcher.reset();
     for (const field of this.#fields.values()) {
       field.reset();
     }
-    for (const form of this.subForms) {
-      form.reset();
+    for (const entry of this.#nestedFetchers) {
+      entry.data.reset();
     }
   }
 
   /** Mark the form as dirty */
   @action
   markAsDirty() {
-    this.#isDirty.set(true);
+    this.watcher.assumeChanged();
   }
 
   /**
@@ -301,15 +250,8 @@ export class Form<T> {
   }
 
   /** Validate the form */
-  validate(args?: {
-    /** Force the validator to be executed immediately */
-    force?: boolean;
-  }) {
-    this.validator.request({
-      force: !!args?.force,
-      enqueueDelayMs: this.config.validationDelayMs,
-      scheduleDelayMs: this.config.subsequentValidationDelayMs,
-    });
+  validate(...args: Parameters<Validator<T>["request"]>) {
+    this.validator.request(...args);
   }
 
   /**
@@ -324,7 +266,7 @@ export class Form<T> {
       case "didSubmit":
         return this.#submission.addHandler(event, handler as any);
       case "validate":
-        return this.validator.addHandler(handler as any);
+        return this.validator.addAsyncHandler(handler as any);
       default:
         event satisfies never;
         throw new Error(`Invalid event: ${event}`);
@@ -337,7 +279,7 @@ export class Form<T> {
     if (!field) {
       field = new FormField({
         fieldName: String(fieldName),
-        formErrors: this.validator.errors,
+        validator: this.validator,
         getFinalizationDelayMs: () => this.config.intermediateValidationDelayMs,
       });
       this.#fields.set(fieldName, field);
@@ -439,7 +381,7 @@ export class Form<T> {
 
 export namespace Form {
   export type EventHandlers<T> = Submission.EventHandlers & {
-    validate: Validator.Handler<T>;
+    validate: Validator.AsyncHandler<T>;
   };
 }
 

@@ -1,76 +1,73 @@
-import { toErrorMap } from "./error";
+import { ValidationError, ValidationErrorsBuilder } from "./error";
+import { buildKeyPath } from "./keyPath";
 
-describe("toErrorMap", () => {
-  describe("single result", () => {
-    it("ignores null and undefined values", () => {
-      expect(toErrorMap([{ field1: null, field2: undefined }])).toEqual(new Map());
-    });
+describe("ValidationError", () => {
+  it("can be created with a string reason", () => {
+    const error = new ValidationError({ keyPath: buildKeyPath("key1.subKey1"), reason: "reason" });
+    expect(error.key).toBe("key1");
+    expect(error.keyPath).toBe("key1.subKey1");
+    expect(error.message).toBe("reason");
+    expect(error.cause).toBeUndefined();
+  });
 
-    it("ignores empty strings", () => {
-      expect(toErrorMap([{ field1: "" }])).toEqual(new Map());
-    });
+  it("can be created with an error reason", () => {
+    const error = new ValidationError({ keyPath: buildKeyPath("key1.subKey1"), reason: new Error("reason") });
+    expect(error.key).toBe("key1");
+    expect(error.keyPath).toBe("key1.subKey1");
+    expect(error.message).toBe("reason");
+    expect(error.cause).toBeInstanceOf(Error);
+  });
+});
 
-    it("ignores empty arrays", () => {
-      expect(toErrorMap([{ field1: [] }])).toEqual(new Map());
-    });
+describe("ValidationErrorsBuilder", () => {
+  it("can be created", () => {
+    const builder = new ValidationErrorsBuilder<unknown>();
+    expect(builder.hasError).toBe(false);
+  });
 
-    it("works with a string", () => {
-      expect(toErrorMap([{ field1: "error" }])).toEqual(new Map([["field1", ["error"]]]));
-    });
-
-    it("works with an error", () => {
-      expect(toErrorMap([{ field1: new Error("error") }])).toEqual(new Map([["field1", ["error"]]]));
-    });
-
-    it("works with an array of strings", () => {
-      expect(toErrorMap([{ field1: ["error1", "error2"] }])).toEqual(new Map([["field1", ["error1", "error2"]]]));
-    });
-
-    it("works with an array of errors", () => {
-      expect(toErrorMap([{ field1: [new Error("error1"), new Error("error2")] }])).toEqual(
-        new Map([["field1", ["error1", "error2"]]])
-      );
-    });
-
-    it("works with an array of strings and errors", () => {
-      expect(toErrorMap([{ field1: ["error1", new Error("error2")] }])).toEqual(
-        new Map([["field1", ["error1", "error2"]]])
-      );
+  describe(".build", () => {
+    it("returns a frozen array", () => {
+      const builder = new ValidationErrorsBuilder<unknown>();
+      const errors = ValidationErrorsBuilder.build(builder);
+      expect(errors).toBeInstanceOf(Array);
+      expect(Object.isFrozen(errors)).toBe(true);
     });
   });
 
-  describe("multiple results", () => {
-    it("does not invalidate the result with null or undefined values", () => {
-      expect(toErrorMap([{ field1: "error" }, { field1: null }, { field1: undefined }])).toEqual(
-        new Map([["field1", ["error"]]])
-      );
+  describe("#invalidate", () => {
+    it("adds an error for the given key", () => {
+      const builder = new ValidationErrorsBuilder<{ key1: number; key2: number }>();
+      builder.invalidate("key1", "reason");
+      expect(builder.hasError).toBe(true);
+
+      const errors = ValidationErrorsBuilder.build(builder);
+      expect(errors).toEqual([new ValidationError({ keyPath: buildKeyPath("key1"), reason: "reason" })]);
     });
 
-    it("merges a string and an error", () => {
-      expect(toErrorMap([{ field1: "error" }, { field1: new Error("error2") }])).toEqual(
-        new Map([["field1", ["error", "error2"]]])
-      );
+    it("adds another error for the same key", () => {
+      const builder = new ValidationErrorsBuilder<{ key1: number; key2: number }>();
+      builder.invalidate("key1", "reason1");
+      builder.invalidate("key1", "reason2");
+      expect(builder.hasError).toBe(true);
+
+      const errors = ValidationErrorsBuilder.build(builder);
+      expect(errors).toEqual([
+        new ValidationError({ keyPath: buildKeyPath("key1"), reason: "reason1" }),
+        new ValidationError({ keyPath: buildKeyPath("key1"), reason: "reason2" }),
+      ]);
     });
 
-    it("merges non-arrays and arrays", () => {
-      expect(toErrorMap([{ field1: "error" }, { field1: ["error2", "error3"] }])).toEqual(
-        new Map([["field1", ["error", "error2", "error3"]]])
-      );
-    });
+    it("adds an error for a different key", () => {
+      const builder = new ValidationErrorsBuilder<{ key1: number; key2: number }>();
+      builder.invalidate("key1", "reasonA");
+      builder.invalidate("key2", "reasonB");
+      expect(builder.hasError).toBe(true);
 
-    it("merges an array of strings and an array of errors", () => {
-      expect(
-        toErrorMap([{ field1: ["error1", "error2"] }, { field1: [new Error("error3"), new Error("error4")] }])
-      ).toEqual(new Map([["field1", ["error1", "error2", "error3", "error4"]]]));
-    });
-
-    it("merges multiple fields", () => {
-      expect(toErrorMap([{ field1: "error1" }, { field1: "error3", field2: "error4" }])).toEqual(
-        new Map([
-          ["field1", ["error1", "error3"]],
-          ["field2", ["error4"]],
-        ])
-      );
+      const errors = ValidationErrorsBuilder.build(builder);
+      expect(errors).toEqual([
+        new ValidationError({ keyPath: buildKeyPath("key1"), reason: "reasonA" }),
+        new ValidationError({ keyPath: buildKeyPath("key2"), reason: "reasonB" }),
+      ]);
     });
   });
 });

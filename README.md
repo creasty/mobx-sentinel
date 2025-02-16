@@ -128,7 +128,7 @@ This library aims to solve these problems through a model-centric design that pr
 
 ```typescript
 import { action, observable, makeObservable } from "mobx";
-import { watch, makeValidatable } from "@form-model/validation";
+import { nested, makeValidatable } from "@form-model/validation";
 
 class Sample {
   @observable text: string = "";
@@ -140,23 +140,21 @@ class Sample {
   @observable multiOption: string[] = [];
 
   // Nested/dynamic objects can be tracked with the annotation.
-  @watch.nested @observable nested = new Other();
-  @watch.nested @observable array = [new Other()];
+  @nested @observable nested = new Other();
+  @nested @observable array = [new Other()];
 
   constructor() {
     makeObservable(this);
 
     // Validation is implemented by returning an object with error messages.
-    makeValidatable(this, () => {
-      return {
-        text: this.text === "" ? "Required" : null,
-        number: this.number === null ? "Required" : null,
-        date: this.date === null ? "Required" : null,
-        enum: this.enum === null ? "Required" : null,
-        option: this.option === null ? "Required" : null,
-        multiOption: this.multiOption.length === 0 ? "Required" : null,
-        array: this.array.length === 0 ? "Required" : null,
-      };
+    makeValidatable(this, (b) => {
+      if (!this.text) b.invalidate("text", "Required");
+      if (this.number === null) b.invalidate("number", "Required");
+      if (this.date === null) b.invalidate("date", "Required");
+      if (this.enum === null) b.invalidate("enum", "Required");
+      if (this.option === null) b.invalidate("option", "Required");
+      if (this.multiOption.length === 0) b.invalidate("multiOption", "Required");
+      if (this.array.length === 0) b.invalidate("array", "Required");
     });
   }
 
@@ -172,10 +170,8 @@ class Other {
   constructor() {
     makeObservable(this);
 
-    makeValidatable(this, () => {
-      return {
-        other: this.other === "" ? "Required" : !isValidFormat(this.other) ? "Invalid format" : null,
-      };
+    makeValidatable(this, (b) => {
+      if (!this.other) b.invalidate("other", "Required");
     });
   }
 }

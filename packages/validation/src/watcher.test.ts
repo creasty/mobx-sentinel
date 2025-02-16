@@ -1,5 +1,6 @@
 import { computed, makeObservable, observable, runInAction } from "mobx";
-import { Watcher, unwatch, watch } from "./watcher";
+import { Watcher, getInternal, unwatch, watch } from "./watcher";
+import { nested } from "./nested";
 
 describe("Watcher", () => {
   describe("constructor", () => {
@@ -37,6 +38,40 @@ describe("Watcher", () => {
     it("returns null when the target is not an object", () => {
       expect(Watcher.getSafe(null as any)).toBeNull();
       expect(Watcher.getSafe(1 as any)).toBeNull();
+    });
+  });
+
+  describe("#assumeChanged", () => {
+    it("sets changed to true without incrementing changedTick", () => {
+      const watcher = Watcher.get({});
+      expect(watcher.changedTick).toBe(0n);
+      expect(watcher.changed).toBe(false);
+      watcher.assumeChanged();
+      expect(watcher.changedTick).toBe(0n);
+      expect(watcher.changed).toBe(true);
+    });
+  });
+
+  describe("#reset", () => {
+    it("resets the state", () => {
+      const watcher = Watcher.get({});
+      const internal = getInternal(watcher);
+
+      watcher.assumeChanged();
+      expect(watcher.changed).toBe(true);
+
+      watcher.reset();
+      expect(watcher.changed).toBe(false);
+
+      internal.didChange("field1");
+      expect(watcher.changedTick).toBe(1n);
+      expect(watcher.changedKeys).toEqual(new Set(["field1"]));
+      expect(watcher.changed).toBe(true);
+
+      watcher.reset();
+      expect(watcher.changedTick).toBe(0n);
+      expect(watcher.changedKeys).toEqual(new Set());
+      expect(watcher.changed).toBe(false);
     });
   });
 });
@@ -494,17 +529,17 @@ describe("Annotations", () => {
     });
   });
 
-  describe("@watch.nested", () => {
+  describe("@nested", () => {
     describe("non-nested value", () => {
       class Sample {
-        @watch.nested @observable field1 = 1;
+        @nested @observable field1 = 1;
 
         constructor() {
           makeObservable(this);
         }
       }
 
-      test("#nested does not include the value", () => {
+      test("nested watchers are not created", () => {
         const sample = new Sample();
         const watcher = Watcher.get(sample);
         expect(watcher.nested.size).toBe(0);
@@ -513,20 +548,20 @@ describe("Annotations", () => {
 
     describe("object", () => {
       class Sample {
-        @watch.nested @observable field1 = { value: false };
-        @watch.nested field2 = observable({ value: false });
+        @nested @observable field1 = { value: false };
+        @nested field2 = observable({ value: false });
 
         constructor() {
           makeObservable(this);
         }
       }
 
-      test("#nested returns the nested objects", () => {
+      test("nested watchers are created", () => {
         const sample = new Sample();
         const watcher = Watcher.get(sample);
+        expect(watcher.nested.get("field1")).toBe(Watcher.get(sample.field1));
+        expect(watcher.nested.get("field2")).toBe(Watcher.get(sample.field2));
         expect(watcher.nested.size).toBe(2);
-        expect(watcher.nested.get("field1")?.value).toBe(sample.field1);
-        expect(watcher.nested.get("field2")?.value).toBe(sample.field2);
       });
 
       test("changes to an object are tracked", () => {
@@ -544,14 +579,14 @@ describe("Annotations", () => {
 
     describe("boxed observable", () => {
       class Sample {
-        @watch.nested field1 = observable.box({ value: false });
+        @nested field1 = observable.box({ value: false });
       }
 
-      test("#nested returns the nested objects", () => {
+      test("nested watchers are created", () => {
         const sample = new Sample();
         const watcher = Watcher.get(sample);
+        expect(watcher.nested.get("field1")).toBe(Watcher.get(sample.field1.get()));
         expect(watcher.nested.size).toBe(1);
-        expect(watcher.nested.get("field1")?.value).toBe(sample.field1.get());
       });
 
       test("assignments to a boxed observable field are tracked", () => {
@@ -577,20 +612,20 @@ describe("Annotations", () => {
 
     describe("array", () => {
       class Sample {
-        @watch.nested @observable field1 = [{ value: false }];
-        @watch.nested field2 = [observable({ value: false })];
+        @nested @observable field1 = [{ value: false }];
+        @nested field2 = [observable({ value: false })];
 
         constructor() {
           makeObservable(this);
         }
       }
 
-      test("#nested returns the nested objects", () => {
+      test("nested watchers are created", () => {
         const sample = new Sample();
         const watcher = Watcher.get(sample);
+        expect(watcher.nested.get("field1.0")).toBe(Watcher.get(sample.field1[0]));
+        expect(watcher.nested.get("field2.0")).toBe(Watcher.get(sample.field2[0]));
         expect(watcher.nested.size).toBe(2);
-        expect(watcher.nested.get("field1.0")?.value).toBe(sample.field1[0]);
-        expect(watcher.nested.get("field2.0")?.value).toBe(sample.field2[0]);
       });
 
       test("changes to array elements are tracked", () => {
@@ -602,32 +637,26 @@ describe("Annotations", () => {
           sample.field2[0].value = true;
         });
         expect(watcher.changedKeys).toEqual(new Set(["field1", "field2"]));
-        expect(watcher.changedKeyPaths).toEqual(
-          new Set(["field1", "field1.0", "field1.0.value", "field2", "field2.0", "field2.0.value"])
-        );
+        expect(watcher.changedKeyPaths).toEqual(new Set(["field1", "field1.0.value", "field2", "field2.0.value"]));
       });
     });
 
     describe("set", () => {
       class Sample {
-        @watch.nested @observable field1 = new Set([{ value: false }]);
-        @watch.nested field2 = new Set([observable({ value: false })]);
+        @nested @observable field1 = new Set([{ value: false }]);
+        @nested field2 = new Set([observable({ value: false })]);
 
         constructor() {
           makeObservable(this);
         }
       }
 
-      test("#nested returns the nested objects", () => {
+      test("nested watchers are created", () => {
         const sample = new Sample();
         const watcher = Watcher.get(sample);
+        expect(watcher.nested.get("field1.0")).toBe(Watcher.get(Array.from(sample.field1)[0]));
+        expect(watcher.nested.get("field2.0")).toBe(Watcher.get(Array.from(sample.field2)[0]));
         expect(watcher.nested.size).toBe(2);
-        for (const element of sample.field1) {
-          expect(watcher.nested.get("field1.0")?.value).toBe(element);
-        }
-        for (const element of sample.field2) {
-          expect(watcher.nested.get("field2.0")?.value).toBe(element);
-        }
       });
 
       test("changes to set elements are tracked", () => {
@@ -643,28 +672,26 @@ describe("Annotations", () => {
           }
         });
         expect(watcher.changedKeys).toEqual(new Set(["field1", "field2"]));
-        expect(watcher.changedKeyPaths).toEqual(
-          new Set(["field1", "field1.0", "field1.0.value", "field2", "field2.0", "field2.0.value"])
-        );
+        expect(watcher.changedKeyPaths).toEqual(new Set(["field1", "field1.0.value", "field2", "field2.0.value"]));
       });
     });
 
     describe("map", () => {
       class Sample {
-        @watch.nested @observable field1 = new Map([["key1", { value: false }]]);
-        @watch.nested field2 = new Map([["key1", observable({ value: false })]]);
+        @nested @observable field1 = new Map([["key1", { value: false }]]);
+        @nested field2 = new Map([["key1", observable({ value: false })]]);
 
         constructor() {
           makeObservable(this);
         }
       }
 
-      test("#nested returns the nested objects", () => {
+      test("nested watchers are created", () => {
         const sample = new Sample();
         const watcher = Watcher.get(sample);
+        expect(watcher.nested.get("field1.key1")).toBe(Watcher.get(sample.field1.get("key1")!));
+        expect(watcher.nested.get("field2.key1")).toBe(Watcher.get(sample.field2.get("key1")!));
         expect(watcher.nested.size).toBe(2);
-        expect(watcher.nested.get("field1.key1")?.value).toBe(sample.field1.get("key1"));
-        expect(watcher.nested.get("field2.key1")?.value).toBe(sample.field2.get("key1"));
       });
 
       test("changes to map elements are tracked", () => {
@@ -677,15 +704,15 @@ describe("Annotations", () => {
         });
         expect(watcher.changedKeys).toEqual(new Set(["field1", "field2"]));
         expect(watcher.changedKeyPaths).toEqual(
-          new Set(["field1", "field1.key1", "field1.key1.value", "field2", "field2.key1", "field2.key1.value"])
+          new Set(["field1", "field1.key1.value", "field2", "field2.key1.value"])
         );
       });
     });
 
     describe("class", () => {
       class Sample {
-        @watch.nested field1 = new Other();
-        @watch.nested @observable field2 = new Other();
+        @nested field1 = new Other();
+        @nested @observable field2 = new Other();
 
         constructor() {
           makeObservable(this);
@@ -700,12 +727,12 @@ describe("Annotations", () => {
         }
       }
 
-      test("#nested returns the nested objects", () => {
+      test("nested watchers are created", () => {
         const sample = new Sample();
         const watcher = Watcher.get(sample);
         expect(watcher.nested.size).toBe(2);
-        expect(watcher.nested.get("field1")?.value).toBe(sample.field1);
-        expect(watcher.nested.get("field2")?.value).toBe(sample.field2);
+        expect(watcher.nested.get("field1")).toBe(Watcher.get(sample.field1));
+        expect(watcher.nested.get("field2")).toBe(Watcher.get(sample.field2));
       });
 
       test("changes to a nested class are tracked", () => {
