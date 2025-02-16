@@ -221,7 +221,9 @@ export class Validator<T> {
             clearTimeout(timerId);
           }
           timerId = +setTimeout(fn, this.reactionDelayMs);
-          this.#reactionTimerIds.set(key, timerId);
+          runInAction(() => {
+            this.#reactionTimerIds.set(key, timerId);
+          });
         },
       }
     );
@@ -232,7 +234,9 @@ export class Validator<T> {
       const timerId = this.#reactionTimerIds.get(key);
       if (timerId) {
         clearTimeout(timerId);
-        this.#reactionTimerIds.delete(key);
+        runInAction(() => {
+          this.#reactionTimerIds.delete(key);
+        });
       }
     };
   }

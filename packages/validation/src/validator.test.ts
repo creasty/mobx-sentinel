@@ -53,7 +53,7 @@ function setupEnv(opt?: {
     });
   }
 
-  let reactionCounter = 0;
+  let reactionCounter = -1;
   if (opt?.reactiveTimeline || opt?.reactiveHandler) {
     autorun(() => {
       timeline.push(`reactionState: ${validator.reactionState}`);
@@ -62,6 +62,12 @@ function setupEnv(opt?: {
   if (opt?.reactiveHandler) {
     validator.addReactiveHandler((builder) => {
       reactionCounter++;
+      if (reactionCounter > 0) {
+        // reaction() guarantees that the handler is called once for its initialization.
+        timeline.push(`reaction occurred ${reactionCounter}`);
+      } else {
+        timeline.push(`reaction registered`);
+      }
       if (model.field1 < 0) {
         builder.invalidate("field1", "invalid");
       }
@@ -260,7 +266,97 @@ describe("Validator", () => {
     });
   });
 
-  describe.todo("Reactive validations", () => {});
+  describe("Reactive validations", () => {
+    it("does nothing when there are no handlers", () => {
+      const env = setupEnv();
+      runInAction(() => {
+        env.model.field1++;
+      });
+      expect(env.validator.reactionState).toBe(0);
+    });
+
+    it("does nothing when the changes are not related to the handler", () => {
+      const env = setupEnv({ reactiveHandler: true });
+      runInAction(() => {
+        env.model.field2++;
+      });
+      expect(env.validator.reactionState).toBe(0);
+      expect(env.timeline).toMatchInlineSnapshot(`
+        [
+          "reactionState: 0",
+          "reaction registered",
+        ]
+      `);
+    });
+
+    it("runs the handler when the changes are related to the handler", async () => {
+      const env = setupEnv({ reactiveHandler: true });
+      runInAction(() => {
+        env.model.field1++;
+      });
+      expect(env.validator.reactionState).toBe(1);
+      await env.waitForReactionState(0);
+      expect(env.timeline).toMatchInlineSnapshot(`
+        [
+          "reactionState: 0",
+          "reaction registered",
+          "reactionState: 1",
+          "reaction occurred 1",
+          "reactionState: 0",
+        ]
+      `);
+    });
+
+    it("keeps delaying the reaction when the changes are made sequentially", async () => {
+      const env = setupEnv({ reactiveHandler: true });
+      runInAction(() => {
+        env.model.field1++;
+      });
+      expect(env.validator.reactionState).toBe(1);
+      runInAction(() => {
+        env.model.field1++;
+      });
+      expect(env.validator.reactionState).toBe(1);
+      await env.waitForReactionState(0);
+      expect(env.timeline).toMatchInlineSnapshot(`
+        [
+          "reactionState: 0",
+          "reaction registered",
+          "reactionState: 1",
+          "reaction occurred 1",
+          "reactionState: 0",
+        ]
+      `);
+      expect(env.getReactionCount()).toBe(1);
+    });
+
+    it("updates the errors", async () => {
+      const env = setupEnv({ reactiveHandler: true });
+
+      expect(env.validator.errors).toEqual(new Map());
+      runInAction(() => {
+        env.model.field1 = -1;
+      });
+      await env.waitForReactionState(0);
+      expect(env.validator.errors).toEqual(new Map([["field1", ["invalid"]]]));
+    });
+
+    it("removes the errors when the condition is no longer met", async () => {
+      const env = setupEnv({ reactiveHandler: true });
+
+      expect(env.validator.errors).toEqual(new Map());
+      runInAction(() => {
+        env.model.field1 = -1;
+      });
+      await env.waitForReactionState(0);
+
+      runInAction(() => {
+        env.model.field1 = 0;
+      });
+      await env.waitForReactionState(0);
+      expect(env.validator.errors).toEqual(new Map());
+    });
+  });
 
   describe("Async validations", () => {
     describe("Watcher integration", () => {
@@ -522,4 +618,8 @@ describe("Validator", () => {
       });
     });
   });
+});
+
+describe.todo("Nested validations", () => {
+  // TODO
 });
