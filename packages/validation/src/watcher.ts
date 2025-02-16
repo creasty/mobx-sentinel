@@ -1,19 +1,6 @@
-import {
-  $mobx,
-  action,
-  computed,
-  isBoxedObservable,
-  isObservableArray,
-  isObservableMap,
-  isObservableObject,
-  isObservableSet,
-  makeObservable,
-  observable,
-  reaction,
-  runInAction,
-} from "mobx";
+import { action, computed, makeObservable, observable, reaction, runInAction } from "mobx";
 import { createPropertyLikeAnnotation, getAnnotationProcessor } from "./annotationProcessor";
-import type { ObservableObjectAdministration } from "mobx/dist/internal";
+import { getMobxObservableAnnotations, shallowReadValue, unwrapShallowContents } from "./mobx";
 
 enum WatchMode {
   /**
@@ -82,8 +69,8 @@ export class Watcher {
     string,
     () => Array<{
       value: any;
-      subKey?: string | symbol | number;
-      watcher: Watcher | null;
+      subKey: string | symbol | number | null;
+      watcher: Watcher;
     }>
   >();
 
@@ -157,13 +144,11 @@ export class Watcher {
     const result = new Set(this.#changedKeys);
     for (const [key, fn] of this.#nested) {
       for (const { subKey, watcher } of fn()) {
-        if (watcher) {
-          for (const changedKey of watcher.changedKeyPaths) {
-            if (typeof subKey === "string" || typeof subKey === "number") {
-              result.add(`${key}.${subKey}.${changedKey}`);
-            } else {
-              result.add(`${key}.${changedKey}`);
-            }
+        for (const changedKey of watcher.changedKeyPaths) {
+          if (typeof subKey === "string" || typeof subKey === "number") {
+            result.add(`${key}.${subKey}.${changedKey}`);
+          } else {
+            result.add(`${key}.${changedKey}`);
           }
         }
       }
@@ -219,76 +204,19 @@ export class Watcher {
     });
   }
 
-  /** Shallow read the value to be included in reactions */
-  #shallowReadValue(value: any) {
-    if (isBoxedObservable(value)) {
-      value = value.get();
-    }
-
-    if (isObservableArray(value)) {
-      return value.slice();
-    }
-    if (isObservableSet(value)) {
-      return new Set(value);
-    }
-    if (isObservableMap(value)) {
-      return new Map(value);
-    }
-
-    return value;
-  }
-
-  /** Process nested observables */
-  #processNestedValue<R>(value: any, map: (value: any, key?: string | symbol | number) => R) {
-    if (isBoxedObservable(value)) {
-      value = value.get();
-    }
-
-    if (Array.isArray(value) || isObservableArray(value)) {
-      return value.map((element, i) => map(element, i));
-    }
-    if (value instanceof Set || isObservableSet(value)) {
-      return Array.from(value.values(), (element, i) => map(element, i));
-    }
-    if (value instanceof Map || isObservableMap(value)) {
-      return Array.from(value.entries(), ([key, value]) => map(value, key));
-    }
-    if (typeof value === "object" && value) {
-      return [map(value)];
-    }
-
-    return [];
-  }
-
   /**
    * Process MobX's `@observable` and `@computed` annotations
-   *
-   * Also includes their variants such as `@observable.ref` and `@computed.struct`.
-   *
-   * It relies on the internal API, so it may break in future versions of MobX.\
-   * When making changes, please ensure that the internal API is still available by runtime assertions.
    */
   #processMobxAnnotations(target: object) {
-    if (!isObservableObject(target)) return;
-    const adm = (target as any)[$mobx] as ObservableObjectAdministration;
-
-    if (typeof adm !== "object" || !adm) return;
-    if (!("values_" in adm)) return;
-    const values = adm.values_;
-    if (!(values instanceof Map)) return;
-
-    for (const [key, value] of values) {
-      if (typeof key !== "string") continue; // symbol and number are intentionally left out
-      if (typeof value !== "object" || !value) continue;
-      if (!("get" in value && typeof value.get === "function")) continue;
-
+    for (const [key, value] of getMobxObservableAnnotations(target)) {
+      if (typeof key !== "string") continue; // symbol and number keys are not supported
       if (this.#processedKeys.has(key)) continue;
       this.#processedKeys.add(key);
 
-      const getValue = () => (key in target ? (target as any)[key] : value.get());
+      const getValue = () => (key in target ? (target as any)[key] : value());
 
       reaction(
-        () => this.#shallowReadValue(getValue()),
+        () => shallowReadValue(getValue()),
         () => this.#didChange(key)
       );
     }
@@ -304,7 +232,7 @@ export class Watcher {
     const watchAnnotations = processor.getPropertyLike(watchKey);
     if (watchAnnotations) {
       for (const [key, metadata] of watchAnnotations) {
-        if (typeof key !== "string") continue;
+        if (typeof key !== "string") continue; // symbol and number keys are not supported
         if (this.#processedKeys.has(key)) continue;
         this.#processedKeys.add(key);
 
@@ -324,22 +252,38 @@ export class Watcher {
         const getValue = () => (key in target ? (target as any)[key] : metadata.get?.());
 
         reaction(
-          () => (isShallow ? this.#shallowReadValue(getValue()) : getValue()),
+          () => (isShallow ? shallowReadValue(getValue()) : getValue()),
           () => this.#didChange(key)
         );
 
         if (isNested) {
           reaction(
-            () => this.#processNestedValue(getValue(), (v) => Watcher.getSafe(v)?.changed ?? false).some(Boolean),
+            () => {
+              let changed = false;
+              for (const [, value] of unwrapShallowContents(getValue())) {
+                if (Watcher.getSafe(value)?.changed) {
+                  changed = true;
+                  // Warning: Do not early break here.
+                  // We need to process all nested values to be reactive in future changes.
+                }
+              }
+              return changed;
+            },
             (changed) => changed && this.#didChange(key)
           );
-          this.#nested.set(key, () =>
-            this.#processNestedValue(getValue(), (v, k) => ({
-              value: v,
-              subKey: k,
-              watcher: Watcher.getSafe(v),
-            }))
-          );
+          this.#nested.set(key, () => {
+            const result = [];
+            for (const [subKey, value] of unwrapShallowContents(getValue())) {
+              const watcher = Watcher.getSafe(value);
+              if (!watcher) continue;
+              result.push({
+                value,
+                subKey,
+                watcher,
+              });
+            }
+            return result;
+          });
         }
       }
     }
@@ -355,7 +299,7 @@ export class Watcher {
     const unwatchAnnotations = processor.getPropertyLike(unwatchKey);
     if (unwatchAnnotations) {
       for (const [key] of unwatchAnnotations) {
-        if (typeof key !== "string") continue;
+        if (typeof key !== "string") continue; // symbol and number keys are not supported
         this.#processedKeys.add(key);
       }
     }
