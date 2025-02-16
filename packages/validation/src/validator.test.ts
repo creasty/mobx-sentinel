@@ -89,7 +89,7 @@ function setupEnv(opt?: {
       return vi.waitFor(() => expect(this.validator.jobState).toBe(state));
     },
     getReactionCount() {
-      return reactionCounter;
+      return Math.max(0, reactionCounter);
     },
     async waitForReactionState(state: number) {
       return vi.waitFor(() => expect(this.validator.reactionState).toBe(state));
@@ -424,7 +424,7 @@ describe("Validator", () => {
     });
 
     it("removes the handler by calling the returned function", async () => {
-      const env = setupEnv({});
+      const env = setupEnv();
       const dispose = env.validator.addReactiveHandler((b) => {
         void env.model.field1;
         b.invalidate("field1", "invalid");
@@ -442,6 +442,23 @@ describe("Validator", () => {
         env.model.field1++;
       });
       expect(env.validator.reactionState).toBe(0);
+    });
+
+    it("cancels the pending reactive validation when the handler is removed", async () => {
+      const env = setupEnv();
+      const dispose = env.validator.addReactiveHandler((b) => {
+        void env.model.field1;
+        b.invalidate("field1", "invalid");
+      });
+
+      runInAction(() => {
+        env.model.field1++;
+      });
+      expect(env.validator.reactionState).toBe(1);
+
+      dispose();
+      await env.waitForReactionState(0);
+      expect(env.getReactionCount()).toBe(0);
     });
   });
 

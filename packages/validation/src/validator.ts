@@ -210,6 +210,7 @@ export class Validator<T> {
    */
   addReactiveHandler(handler: Validator.ReactiveHandler<T>) {
     const key = Symbol();
+    let timerId: number | null = null;
 
     const dispose = reaction(
       () => {
@@ -228,13 +229,15 @@ export class Validator<T> {
       },
       {
         scheduler: (fn) => {
-          let timerId = this.#reactionTimerIds.get(key);
+          // NOTE: Reading timerId from this.#reactionTimerIds didn't work
+          // because it always returns undefined for some reason.
+          // To workaround this, we use a local variable.
           if (timerId) {
             clearTimeout(timerId);
           }
           timerId = +setTimeout(fn, this.reactionDelayMs);
           runInAction(() => {
-            this.#reactionTimerIds.set(key, timerId);
+            this.#reactionTimerIds.set(key, timerId!);
           });
         },
       }
