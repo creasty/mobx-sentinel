@@ -615,54 +615,6 @@ suite("Sub-forms", () => {
     });
   });
 
-  suite("Validation", () => {
-    test("when a sub-form becomes invalid, the parent form also becomes invalid", async () => {
-      const { model, form, sampleForm, waitForValidation } = setupEnv();
-
-      expect(sampleForm.isValid).toBe(true);
-      expect(form.isValid).toBe(true);
-
-      runInAction(() => {
-        model.sample.field = false;
-      });
-      await waitForValidation();
-
-      expect(sampleForm.isValid).toBe(false);
-      expect(form.isValid).toBe(false);
-    });
-
-    test("when a parent form becomes invalid, sub-forms remain unaffected", async () => {
-      const { model, form, sampleForm, waitForValidation } = setupEnv();
-
-      expect(sampleForm.isValid).toBe(true);
-      expect(form.isValid).toBe(true);
-
-      runInAction(() => {
-        model.field = false;
-      });
-      await waitForValidation();
-
-      expect(form.isValid).toBe(false);
-      expect(sampleForm.isValid).toBe(true);
-    });
-
-    test("count total invalid fields", async () => {
-      const { model, form, sampleForm, arrayForm0, waitForValidation } = setupEnv();
-
-      runInAction(() => {
-        model.field = false;
-        model.sample.field = false;
-        model.array[0].field = false;
-      });
-      await waitForValidation();
-
-      expect(form.invalidFieldCount).toBe(1);
-      expect(sampleForm.invalidFieldCount).toBe(1);
-      expect(arrayForm0.invalidFieldCount).toBe(1);
-      expect(form.invalidFieldPathCount).toBe(3);
-    });
-  });
-
   suite("Reporting errors", () => {
     test("when a new field is added after reportError is called, the error on the new field is not reported", async () => {
       const { form } = setupEnv();

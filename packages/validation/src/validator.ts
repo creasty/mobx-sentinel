@@ -74,6 +74,7 @@ export class Validator<T> {
     );
   }
 
+  /** Errors */
   @computed.struct
   get errors(): Validator.KeyPathErrorMap {
     const result = new Map<KeyPath, string[]>();
@@ -168,6 +169,7 @@ export class Validator<T> {
     return result;
   }
 
+  /** Reset the validator */
   @action
   reset() {
     this.#resetJobTimer();
@@ -182,6 +184,11 @@ export class Validator<T> {
     this.#errors.clear();
   }
 
+  /**
+   * Update the errors immediately
+   *
+   * @returns A function to remove the errors
+   */
   updateErrors(key: symbol, handler: Validator.InstantHandler<T>) {
     const builder = new ValidationErrorsBuilder();
     handler(builder);
@@ -196,6 +203,11 @@ export class Validator<T> {
     };
   }
 
+  /**
+   * Add a reactive handler
+   *
+   * @returns A function to remove the handler
+   */
   addReactiveHandler(handler: Validator.ReactiveHandler<T>) {
     const key = Symbol();
 
@@ -241,11 +253,19 @@ export class Validator<T> {
     };
   }
 
+  /**
+   * Add an async handler
+   *
+   * @returns A function to remove the handler
+   */
   addAsyncHandler(handler: Validator.AsyncHandler<T>) {
     this.#asyncHandlers.add(handler);
     return () => void this.#asyncHandlers.delete(handler);
   }
 
+  /**
+   * Request new async validation job to be executed
+   */
   request(opt?: {
     /** Force the validator to be executed immediately */
     force?: boolean;

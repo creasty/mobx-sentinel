@@ -1,5 +1,6 @@
 import { autorun, makeObservable, observable, runInAction } from "mobx";
 import { Validator, makeValidatable } from "./validator";
+import { nested } from "./nested";
 
 class Sample {
   @observable field1 = 0;
@@ -223,6 +224,67 @@ describe("Validator", () => {
     });
   });
 
+  describe("#isValid", () => {
+    it("returns true when there are no errors", () => {
+      const env = setupEnv();
+      expect(env.validator.isValid).toBe(true);
+    });
+
+    it("returns false when there are errors", () => {
+      const env = setupEnv();
+      const symbol = Symbol();
+      const dispose = env.validator.updateErrors(symbol, (builder) => {
+        builder.invalidate("field1", "invalid");
+      });
+      expect(env.validator.isValid).toBe(false);
+
+      dispose();
+      expect(env.validator.isValid).toBe(true);
+    });
+  });
+
+  describe("#invalidKeyCount", () => {
+    it("returns the number of invalid keys", () => {
+      const env = setupEnv();
+      const symbol = Symbol();
+
+      const dispose = env.validator.updateErrors(symbol, (builder) => {
+        builder.invalidate("field1", "invalid");
+      });
+      expect(env.validator.invalidKeyCount).toBe(1);
+
+      env.validator.updateErrors(symbol, (builder) => {
+        builder.invalidate("field1", "invalid");
+        builder.invalidate("field2", "invalid");
+      });
+      expect(env.validator.invalidKeyCount).toBe(2);
+
+      dispose();
+      expect(env.validator.invalidKeyCount).toBe(0);
+    });
+  });
+
+  describe("#invalidKeys", () => {
+    it("returns the set of invalid keys", () => {
+      const env = setupEnv();
+      const symbol = Symbol();
+
+      const dispose = env.validator.updateErrors(symbol, (builder) => {
+        builder.invalidate("field1", "invalid");
+      });
+      expect(env.validator.invalidKeys).toEqual(new Set(["field1"]));
+
+      env.validator.updateErrors(symbol, (builder) => {
+        builder.invalidate("field1", "invalid");
+        builder.invalidate("field2", "invalid");
+      });
+      expect(env.validator.invalidKeys).toEqual(new Set(["field1", "field2"]));
+
+      dispose();
+      expect(env.validator.invalidKeys).toEqual(new Set());
+    });
+  });
+
   describe("#reset", () => {
     it("resets the errors and states", async () => {
       const env = setupEnv();
@@ -247,6 +309,7 @@ describe("Validator", () => {
 
       env.validator.reset();
       await env.waitForReactionState(0);
+      expect(env.validator.isValidating).toBe(false);
     });
 
     it("cancels scheduled async validations", async () => {
@@ -255,6 +318,7 @@ describe("Validator", () => {
       env.request();
       env.validator.reset();
       await env.waitForJobState("idle");
+      expect(env.validator.isValidating).toBe(false);
 
       expect(env.timeline).toMatchInlineSnapshot(`
         [
@@ -295,7 +359,9 @@ describe("Validator", () => {
         env.model.field1++;
       });
       expect(env.validator.reactionState).toBe(1);
+      expect(env.validator.isValidating).toBe(true);
       await env.waitForReactionState(0);
+      expect(env.validator.isValidating).toBe(false);
       expect(env.timeline).toMatchInlineSnapshot(`
         [
           "reactionState: 0",
@@ -356,6 +422,27 @@ describe("Validator", () => {
       await env.waitForReactionState(0);
       expect(env.validator.errors).toEqual(new Map());
     });
+
+    it("removes the handler by calling the returned function", async () => {
+      const env = setupEnv({});
+      const dispose = env.validator.addReactiveHandler((b) => {
+        void env.model.field1;
+        b.invalidate("field1", "invalid");
+      });
+
+      runInAction(() => {
+        env.model.field1++;
+      });
+      expect(env.validator.reactionState).toBe(1);
+      await env.waitForReactionState(0);
+
+      dispose();
+
+      runInAction(() => {
+        env.model.field1++;
+      });
+      expect(env.validator.reactionState).toBe(0);
+    });
   });
 
   describe("Async validations", () => {
@@ -368,6 +455,21 @@ describe("Validator", () => {
           env.model.field1++;
         });
         expect(spy).toBeCalled();
+      });
+    });
+
+    describe("#addAsyncHandler", () => {
+      it("removes the handler by calling the returned function", async () => {
+        const env = setupEnv();
+
+        const dispose = env.validator.addAsyncHandler(async () => {});
+        env.request();
+        expect(env.validator.jobState).toBe("enqueued");
+        await env.waitForJobState("idle");
+
+        dispose();
+        env.request();
+        expect(env.validator.jobState).toBe("idle");
       });
     });
 
@@ -398,7 +500,9 @@ describe("Validator", () => {
         });
 
         env.request();
+        expect(env.validator.isValidating).toBe(true);
         await env.waitForJobState("idle");
+        expect(env.validator.isValidating).toBe(false);
         expect(env.timeline).toMatchInlineSnapshot(`
         [
           "jobState: idle",
@@ -415,7 +519,7 @@ describe("Validator", () => {
       `);
       });
 
-      it("handles errors in submit handlers", async () => {
+      it("handles errors in the handler", async () => {
         const env = setupEnv();
         const consoleSpy = vi.spyOn(console, "error").mockImplementation(() => {});
 
@@ -620,6 +724,112 @@ describe("Validator", () => {
   });
 });
 
-describe.todo("Nested validations", () => {
-  // TODO
+describe("Nested validations", () => {
+  class Sample {
+    @observable field = true;
+
+    constructor() {
+      makeObservable(this);
+
+      makeValidatable(this, (b) => {
+        if (!this.field) {
+          b.invalidate("field", "invalid");
+        }
+      });
+    }
+  }
+
+  class Nested {
+    @observable field = true;
+    @nested @observable sample = new Sample();
+    @nested @observable array = [new Sample()];
+
+    constructor() {
+      makeObservable(this);
+
+      makeValidatable(this, (b) => {
+        if (!this.field) {
+          b.invalidate("field", "invalid");
+        }
+      });
+    }
+  }
+
+  const setupEnv = () => {
+    const nested = new Nested();
+    const nestedValidator = Validator.get(nested);
+    const sampleValidator = Validator.get(nested.sample);
+    const arrayValidator0 = Validator.get(nested.array[0]);
+
+    return {
+      nested,
+      nestedValidator,
+      sampleValidator,
+      arrayValidator0,
+      async waitForValidation() {
+        await vi.waitFor(() => {
+          expect(nestedValidator.isValidating).toBe(false);
+          expect(sampleValidator.isValidating).toBe(false);
+          expect(arrayValidator0.isValidating).toBe(false);
+        });
+      },
+    };
+  };
+
+  test("when a nested validator becomes invalid, the parent validator also becomes invalid", async () => {
+    const { nested, nestedValidator, sampleValidator, waitForValidation } = setupEnv();
+
+    expect(sampleValidator.isValid).toBe(true);
+    expect(nestedValidator.isValid).toBe(true);
+
+    runInAction(() => {
+      nested.sample.field = false;
+    });
+    await waitForValidation();
+
+    expect(sampleValidator.isValid).toBe(false);
+    expect(sampleValidator.invalidKeys).toEqual(new Set(["field"]));
+    expect(sampleValidator.invalidKeyCount).toBe(1);
+
+    expect(nestedValidator.isValid).toBe(false);
+    expect(nestedValidator.invalidKeys).toEqual(new Set());
+    expect(nestedValidator.invalidKeyCount).toBe(0);
+    expect(nestedValidator.invalidKeyPaths).toEqual(new Set(["sample.field"]));
+    expect(nestedValidator.invalidKeyPathCount).toBe(1);
+  });
+
+  test("when a parent validator becomes invalid, nested validators remain unaffected", async () => {
+    const { nested, nestedValidator, sampleValidator, waitForValidation } = setupEnv();
+
+    expect(sampleValidator.isValid).toBe(true);
+    expect(nestedValidator.isValid).toBe(true);
+
+    runInAction(() => {
+      nested.field = false;
+    });
+    await waitForValidation();
+
+    expect(nestedValidator.isValid).toBe(false);
+    expect(nestedValidator.invalidKeys).toEqual(new Set(["field"]));
+    expect(nestedValidator.invalidKeyCount).toBe(1);
+
+    expect(sampleValidator.isValid).toBe(true);
+  });
+
+  test("count total invalid keys", async () => {
+    const { nested, nestedValidator, sampleValidator, arrayValidator0, waitForValidation } = setupEnv();
+
+    runInAction(() => {
+      nested.field = false;
+      nested.sample.field = false;
+      nested.array[0].field = false;
+    });
+    await waitForValidation();
+
+    expect(nestedValidator.invalidKeyCount).toBe(1);
+    expect(sampleValidator.invalidKeyCount).toBe(1);
+    expect(arrayValidator0.invalidKeyCount).toBe(1);
+    expect(nestedValidator.invalidKeyPathCount).toBe(3);
+    expect(nestedValidator.invalidKeyPaths).toEqual(new Set(["field", "sample.field", "array.0.field"]));
+  });
 });
