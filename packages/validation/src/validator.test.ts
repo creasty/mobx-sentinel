@@ -1,31 +1,48 @@
-import { autorun } from "mobx";
+import { autorun, makeObservable, observable, runInAction } from "mobx";
 import { Validator, makeValidatable } from "./validator";
 
-function setupEnv(opt?: { cleanHandlers?: boolean }) {
+class Sample {
+  @observable field1 = 0;
+  @observable field2 = 0;
+
+  constructor() {
+    makeObservable(this);
+  }
+}
+
+function setupEnv(opt?: {
+  asyncTimeline?: boolean;
+  asyncHandler?: boolean;
+  reactiveTimeline?: boolean;
+  reactiveHandler?: boolean;
+}) {
   const lag = {
     requestDelay: 90,
     scheduleDelay: 190,
     runTime: 140,
   };
 
-  const validator = Validator.get({ sample: false });
+  const model = new Sample();
+  const validator = Validator.get(model);
   validator.enqueueDelayMs = lag.requestDelay;
   validator.scheduleDelayMs = lag.scheduleDelay;
 
   const timeline: string[] = [];
-  autorun(() => {
-    timeline.push(`jobState: ${validator.jobState}`);
-  });
 
-  let counter = 0;
-  if (!opt?.cleanHandlers) {
+  let asyncCallCounter = 0;
+  if (opt?.asyncTimeline || opt?.asyncHandler) {
+    autorun(() => {
+      timeline.push(`jobState: ${validator.jobState}`);
+    });
+  }
+  if (opt?.asyncHandler) {
     validator.addAsyncHandler(async (builder, abortSignal) => {
-      const localCounter = ++counter;
+      const localCounter = ++asyncCallCounter;
       timeline.push(`job start ${localCounter}`);
       return new Promise((resolve) => {
         const timerId = setTimeout(() => {
           timeline.push(`job end ${localCounter}`);
-          builder.invalidate("sample", "invalid");
+          builder.invalidate("field1", "invalid");
           resolve();
         }, lag.runTime);
         abortSignal.onabort = () => {
@@ -36,17 +53,39 @@ function setupEnv(opt?: { cleanHandlers?: boolean }) {
     });
   }
 
+  let reactionCounter = 0;
+  if (opt?.reactiveTimeline || opt?.reactiveHandler) {
+    autorun(() => {
+      timeline.push(`reactionState: ${validator.reactionState}`);
+    });
+  }
+  if (opt?.reactiveHandler) {
+    validator.addReactiveHandler((builder) => {
+      reactionCounter++;
+      if (model.field1 < 0) {
+        builder.invalidate("field1", "invalid");
+      }
+    });
+  }
+
   return {
+    model,
     validator,
     timeline,
-    getCallCount() {
-      return counter;
+    getAsyncCallCount() {
+      return asyncCallCounter;
     },
     request(opt?: { force?: boolean }) {
       return validator.request({ force: !!opt?.force });
     },
-    async waitFor(jobState: Validator.JobState) {
-      return vi.waitFor(() => expect(this.validator.jobState).toBe(jobState));
+    async waitForJobState(state: Validator.JobState) {
+      return vi.waitFor(() => expect(this.validator.jobState).toBe(state));
+    },
+    getReactionCount() {
+      return reactionCounter;
+    },
+    async waitForReactionState(state: number) {
+      return vi.waitFor(() => expect(this.validator.reactionState).toBe(state));
     },
   };
 }
@@ -178,35 +217,93 @@ describe("Validator", () => {
     });
   });
 
-  describe("#request", () => {
-    it("does nothing when there are no handlers", () => {
-      const env = setupEnv({ cleanHandlers: true });
-      env.request();
-      expect(env.validator.jobState).toBe("idle");
+  describe("#reset", () => {
+    it("resets the errors and states", async () => {
+      const env = setupEnv();
+
+      const symbol = Symbol();
+      env.validator.updateErrors(symbol, (builder) => {
+        builder.invalidate("field1", "invalid1");
+      });
+      expect(env.validator.errors.size).toBe(1);
+
+      env.validator.reset();
+      expect(env.validator.errors.size).toBe(0);
     });
 
-    it("process validation handlers in parallel", async () => {
-      const env = setupEnv({ cleanHandlers: true });
+    it("cancels pending reactive validations", async () => {
+      const env = setupEnv({ reactiveHandler: true });
 
-      env.validator.addAsyncHandler(async () => {
-        env.timeline.push("validate 1 start");
-        await new Promise((resolve) => setTimeout(resolve, 50));
-        env.timeline.push("validate 1 end");
+      runInAction(() => {
+        env.model.field1++;
       });
-      env.validator.addAsyncHandler(async () => {
-        env.timeline.push("validate 2 start");
-        await new Promise((resolve) => setTimeout(resolve, 10));
-        env.timeline.push("validate 2 end");
-      });
-      env.validator.addAsyncHandler(async () => {
-        env.timeline.push("validate 3 start");
-        await new Promise((resolve) => setTimeout(resolve, 30));
-        env.timeline.push("validate 3 end");
-      });
+      expect(env.validator.reactionState).toBe(1);
+
+      env.validator.reset();
+      await env.waitForReactionState(0);
+    });
+
+    it("cancels scheduled async validations", async () => {
+      const env = setupEnv({ asyncHandler: true });
 
       env.request();
-      await env.waitFor("idle");
+      env.validator.reset();
+      await env.waitForJobState("idle");
+
       expect(env.timeline).toMatchInlineSnapshot(`
+        [
+          "jobState: idle",
+          "jobState: enqueued",
+          "jobState: idle",
+        ]
+      `);
+    });
+  });
+
+  describe.todo("Reactive validations", () => {});
+
+  describe("Async validations", () => {
+    describe("Watcher integration", () => {
+      test("When changes are detected, it calls request() method", async () => {
+        const env = setupEnv({ asyncHandler: true });
+        const spy = vi.spyOn(env.validator, "request");
+
+        runInAction(() => {
+          env.model.field1++;
+        });
+        expect(spy).toBeCalled();
+      });
+    });
+
+    describe("#request", () => {
+      it("does nothing when there are no handlers", () => {
+        const env = setupEnv();
+        env.request();
+        expect(env.validator.jobState).toBe("idle");
+      });
+
+      it("process validation handlers in parallel", async () => {
+        const env = setupEnv({ asyncTimeline: true });
+
+        env.validator.addAsyncHandler(async () => {
+          env.timeline.push("validate 1 start");
+          await new Promise((resolve) => setTimeout(resolve, 50));
+          env.timeline.push("validate 1 end");
+        });
+        env.validator.addAsyncHandler(async () => {
+          env.timeline.push("validate 2 start");
+          await new Promise((resolve) => setTimeout(resolve, 10));
+          env.timeline.push("validate 2 end");
+        });
+        env.validator.addAsyncHandler(async () => {
+          env.timeline.push("validate 3 start");
+          await new Promise((resolve) => setTimeout(resolve, 30));
+          env.timeline.push("validate 3 end");
+        });
+
+        env.request();
+        await env.waitForJobState("idle");
+        expect(env.timeline).toMatchInlineSnapshot(`
         [
           "jobState: idle",
           "jobState: enqueued",
@@ -220,146 +317,146 @@ describe("Validator", () => {
           "jobState: idle",
         ]
       `);
-    });
-
-    it("handles errors in submit handlers", async () => {
-      const env = setupEnv({ cleanHandlers: true });
-      const consoleSpy = vi.spyOn(console, "error").mockImplementation(() => {});
-
-      env.validator.addAsyncHandler(async () => {
-        throw new Error("Test error");
       });
 
-      env.request();
-      await env.waitFor("idle");
-      expect(consoleSpy).toHaveBeenCalled();
-    });
-
-    it("enqueues a new validation request", async () => {
-      const env = setupEnv();
-
-      expect(env.validator.jobState).toBe("idle");
-      env.request();
-      expect(env.validator.jobState).toBe("enqueued");
-      await env.waitFor("idle");
-
-      expect(env.getCallCount()).toBe(1);
-      expect(env.timeline).toMatchInlineSnapshot(`
-        [
-          "jobState: idle",
-          "jobState: enqueued",
-          "jobState: running",
-          "job start 1",
-          "job end 1",
-          "jobState: idle",
-        ]
-      `);
-    });
-
-    it("stays enqueued with a subsequent request when the previous request is still running", async () => {
-      const env = setupEnv();
-
-      // 1st request
-      env.request();
-      expect(env.validator.jobState).toBe("enqueued");
-
-      // 2nd request
-      env.request();
-      expect(env.validator.jobState).toBe("enqueued");
-      await env.waitFor("idle");
-
-      expect(env.getCallCount()).toBe(1);
-      expect(env.timeline).toMatchInlineSnapshot(`
-        [
-          "jobState: idle",
-          "jobState: enqueued",
-          "jobState: running",
-          "job start 1",
-          "job end 1",
-          "jobState: idle",
-        ]
-      `);
-    });
-
-    it("schedules a new validation request after the completion of the current running validation", async () => {
-      const env = setupEnv();
-
-      // 1st request
-      env.request();
-      expect(env.validator.jobState).toBe("enqueued");
-      await env.waitFor("running");
-
-      // 2nd request
-      env.request();
-      expect(env.validator.jobState).toBe("running");
-      await env.waitFor("scheduled");
-      expect(env.getCallCount()).toBe(1);
-      await env.waitFor("idle");
-
-      expect(env.getCallCount()).toBe(2);
-      expect(env.timeline).toMatchInlineSnapshot(`
-        [
-          "jobState: idle",
-          "jobState: enqueued",
-          "jobState: running",
-          "job start 1",
-          "job end 1",
-          "jobState: scheduled",
-          "jobState: running",
-          "job start 2",
-          "job end 2",
-          "jobState: idle",
-        ]
-      `);
-    });
-
-    it("stays scheduled with a subsequent request when a previous request is also scheduled", async () => {
-      const env = setupEnv();
-
-      // 1st request
-      env.request();
-      expect(env.validator.jobState).toBe("enqueued");
-      await env.waitFor("running");
-
-      // 2nd request
-      env.request();
-      expect(env.validator.jobState).toBe("running");
-      await env.waitFor("scheduled");
-      expect(env.getCallCount()).toBe(1);
-
-      // 3rd request
-      env.request();
-      expect(env.validator.jobState).toBe("scheduled");
-      expect(env.getCallCount()).toBe(1);
-      await env.waitFor("idle");
-
-      expect(env.getCallCount()).toBe(2);
-      expect(env.timeline).toMatchInlineSnapshot(`
-        [
-          "jobState: idle",
-          "jobState: enqueued",
-          "jobState: running",
-          "job start 1",
-          "job end 1",
-          "jobState: scheduled",
-          "jobState: running",
-          "job start 2",
-          "job end 2",
-          "jobState: idle",
-        ]
-      `);
-    });
-
-    describe("with a force option", () => {
-      it("runs immediately", async () => {
+      it("handles errors in submit handlers", async () => {
         const env = setupEnv();
+        const consoleSpy = vi.spyOn(console, "error").mockImplementation(() => {});
 
-        env.request({ force: true });
-        expect(env.validator.jobState).toBe("running");
-        await env.waitFor("idle");
+        env.validator.addAsyncHandler(async () => {
+          throw new Error("Test error");
+        });
 
-        expect(env.getCallCount()).toBe(1);
+        env.request();
+        await env.waitForJobState("idle");
+        expect(consoleSpy).toHaveBeenCalled();
+      });
+
+      it("enqueues a new validation request", async () => {
+        const env = setupEnv({ asyncHandler: true });
+
+        expect(env.validator.jobState).toBe("idle");
+        env.request();
+        expect(env.validator.jobState).toBe("enqueued");
+        await env.waitForJobState("idle");
+
+        expect(env.getAsyncCallCount()).toBe(1);
         expect(env.timeline).toMatchInlineSnapshot(`
+        [
+          "jobState: idle",
+          "jobState: enqueued",
+          "jobState: running",
+          "job start 1",
+          "job end 1",
+          "jobState: idle",
+        ]
+      `);
+      });
+
+      it("stays enqueued with a subsequent request when the previous request is still running", async () => {
+        const env = setupEnv({ asyncHandler: true });
+
+        // 1st request
+        env.request();
+        expect(env.validator.jobState).toBe("enqueued");
+
+        // 2nd request
+        env.request();
+        expect(env.validator.jobState).toBe("enqueued");
+        await env.waitForJobState("idle");
+
+        expect(env.getAsyncCallCount()).toBe(1);
+        expect(env.timeline).toMatchInlineSnapshot(`
+        [
+          "jobState: idle",
+          "jobState: enqueued",
+          "jobState: running",
+          "job start 1",
+          "job end 1",
+          "jobState: idle",
+        ]
+      `);
+      });
+
+      it("schedules a new validation request after the completion of the current running validation", async () => {
+        const env = setupEnv({ asyncHandler: true });
+
+        // 1st request
+        env.request();
+        expect(env.validator.jobState).toBe("enqueued");
+        await env.waitForJobState("running");
+
+        // 2nd request
+        env.request();
+        expect(env.validator.jobState).toBe("running");
+        await env.waitForJobState("scheduled");
+        expect(env.getAsyncCallCount()).toBe(1);
+        await env.waitForJobState("idle");
+
+        expect(env.getAsyncCallCount()).toBe(2);
+        expect(env.timeline).toMatchInlineSnapshot(`
+        [
+          "jobState: idle",
+          "jobState: enqueued",
+          "jobState: running",
+          "job start 1",
+          "job end 1",
+          "jobState: scheduled",
+          "jobState: running",
+          "job start 2",
+          "job end 2",
+          "jobState: idle",
+        ]
+      `);
+      });
+
+      it("stays scheduled with a subsequent request when a previous request is also scheduled", async () => {
+        const env = setupEnv({ asyncHandler: true });
+
+        // 1st request
+        env.request();
+        expect(env.validator.jobState).toBe("enqueued");
+        await env.waitForJobState("running");
+
+        // 2nd request
+        env.request();
+        expect(env.validator.jobState).toBe("running");
+        await env.waitForJobState("scheduled");
+        expect(env.getAsyncCallCount()).toBe(1);
+
+        // 3rd request
+        env.request();
+        expect(env.validator.jobState).toBe("scheduled");
+        expect(env.getAsyncCallCount()).toBe(1);
+        await env.waitForJobState("idle");
+
+        expect(env.getAsyncCallCount()).toBe(2);
+        expect(env.timeline).toMatchInlineSnapshot(`
+        [
+          "jobState: idle",
+          "jobState: enqueued",
+          "jobState: running",
+          "job start 1",
+          "job end 1",
+          "jobState: scheduled",
+          "jobState: running",
+          "job start 2",
+          "job end 2",
+          "jobState: idle",
+        ]
+      `);
+      });
+
+      describe("with a force option", () => {
+        it("runs immediately", async () => {
+          const env = setupEnv({ asyncHandler: true });
+
+          env.request({ force: true });
+          expect(env.validator.jobState).toBe("running");
+          await env.waitForJobState("idle");
+
+          expect(env.getAsyncCallCount()).toBe(1);
+          expect(env.timeline).toMatchInlineSnapshot(`
           [
             "jobState: idle",
             "jobState: running",
@@ -368,22 +465,22 @@ describe("Validator", () => {
             "jobState: idle",
           ]
         `);
-      });
+        });
 
-      it("cancels the enqueued request and runs a subsequent request immediately", async () => {
-        const env = setupEnv();
+        it("cancels the enqueued request and runs a subsequent request immediately", async () => {
+          const env = setupEnv({ asyncHandler: true });
 
-        // 1st request
-        env.request();
-        expect(env.validator.jobState).toBe("enqueued");
+          // 1st request
+          env.request();
+          expect(env.validator.jobState).toBe("enqueued");
 
-        // 2nd request - before the 1st request is run
-        env.request({ force: true });
-        expect(env.validator.jobState).toBe("running");
-        await env.waitFor("idle");
+          // 2nd request - before the 1st request is run
+          env.request({ force: true });
+          expect(env.validator.jobState).toBe("running");
+          await env.waitForJobState("idle");
 
-        expect(env.getCallCount()).toBe(1);
-        expect(env.timeline).toMatchInlineSnapshot(`
+          expect(env.getAsyncCallCount()).toBe(1);
+          expect(env.timeline).toMatchInlineSnapshot(`
           [
             "jobState: idle",
             "jobState: enqueued",
@@ -393,23 +490,23 @@ describe("Validator", () => {
             "jobState: idle",
           ]
         `);
-      });
+        });
 
-      it("cancels the current running validation and runs a subsequent request immediately", async () => {
-        const env = setupEnv();
+        it("cancels the current running validation and runs a subsequent request immediately", async () => {
+          const env = setupEnv({ asyncHandler: true });
 
-        // 1st request
-        env.request();
-        expect(env.validator.jobState).toBe("enqueued");
-        await env.waitFor("running");
+          // 1st request
+          env.request();
+          expect(env.validator.jobState).toBe("enqueued");
+          await env.waitForJobState("running");
 
-        // 2nd request - while the 1st request is running
-        env.request({ force: true });
-        expect(env.validator.jobState).toBe("running");
-        await env.waitFor("idle");
+          // 2nd request - while the 1st request is running
+          env.request({ force: true });
+          expect(env.validator.jobState).toBe("running");
+          await env.waitForJobState("idle");
 
-        expect(env.getCallCount()).toBe(2);
-        expect(env.timeline).toMatchInlineSnapshot(`
+          expect(env.getAsyncCallCount()).toBe(2);
+          expect(env.timeline).toMatchInlineSnapshot(`
           [
             "jobState: idle",
             "jobState: enqueued",
@@ -421,37 +518,8 @@ describe("Validator", () => {
             "jobState: idle",
           ]
         `);
+        });
       });
-    });
-  });
-
-  describe("#reset", () => {
-    it("resets the validation", async () => {
-      const env = setupEnv();
-
-      env.request();
-      await env.waitFor("idle");
-      expect(env.validator.errors.size).toBe(1);
-
-      env.validator.reset();
-      expect(env.validator.jobState).toBe("idle");
-      expect(env.validator.errors.size).toBe(0);
-    });
-
-    it("cancels the scheduled validation", async () => {
-      const env = setupEnv();
-
-      env.request();
-      env.validator.reset();
-      await env.waitFor("idle");
-
-      expect(env.timeline).toMatchInlineSnapshot(`
-        [
-          "jobState: idle",
-          "jobState: enqueued",
-          "jobState: idle",
-        ]
-      `);
     });
   });
 });

@@ -15,7 +15,6 @@ export function makeValidatable<T extends object>(target: T, handler: Validator.
 }
 
 export class Validator<T> {
-  readonly watcher: Watcher;
   readonly #errors = observable.map<symbol, ReadonlyArray<ValidationError>>([], { equals: comparer.structural });
   readonly #nestedFetchers = new Map<
     string,
@@ -73,12 +72,11 @@ export class Validator<T> {
     }
 
     this.#processNestedAnnotations(target);
-
     makeObservable(this);
-    this.watcher = Watcher.get(target);
 
+    const watcher = Watcher.get(target);
     reaction(
-      () => this.watcher.changedTick,
+      () => watcher.changedTick,
       () => this.request()
     );
   }
@@ -164,8 +162,19 @@ export class Validator<T> {
     return Object.freeze(result);
   }
 
+  /** State of the async validation */
   get jobState() {
     return this.#jobState.get();
+  }
+
+  /**
+   * State of the reactive validation
+   *
+   * The number of pending executions.
+   */
+  @computed
+  get reactionState() {
+    return this.#reactionTimerIds.size;
   }
 
   /** Whether the validator is computing errors */
