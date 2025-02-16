@@ -254,6 +254,17 @@ describe("Form", () => {
       expect(spy).toBeCalled();
     });
 
+    it("resets fields", () => {
+      const model = new SampleModel();
+      const form = Form.get(model);
+      const field = form.getField("field");
+      const spy = vi.spyOn(field, "reset");
+
+      form.reset();
+      expect(spy).toBeCalled();
+      expect(form.isDirty).toBe(false);
+    });
+
     it("resets sub-forms", () => {
       const model = new NestedModel();
       const form = Form.get(model);
