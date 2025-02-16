@@ -220,7 +220,7 @@ export class Watcher {
   }
 
   /** Shallow read the value to be included in reactions */
-  #shallowRead(value: any) {
+  #shallowReadValue(value: any) {
     if (isBoxedObservable(value)) {
       value = value.get();
     }
@@ -229,17 +229,17 @@ export class Watcher {
       return value.slice();
     }
     if (isObservableSet(value)) {
-      return new Set(value.values());
+      return new Set(value);
     }
     if (isObservableMap(value)) {
-      return new Map(value.entries());
+      return new Map(value);
     }
 
     return value;
   }
 
   /** Process nested observables */
-  #processNested<R>(value: any, map: (value: any, key?: string | symbol | number) => R) {
+  #processNestedValue<R>(value: any, map: (value: any, key?: string | symbol | number) => R) {
     if (isBoxedObservable(value)) {
       value = value.get();
     }
@@ -266,25 +266,19 @@ export class Watcher {
    * Also includes their variants such as `@observable.ref` and `@computed.struct`.
    *
    * It relies on the internal API, so it may break in future versions of MobX.\
-   * When making changes, please ensure that the internal API is still available by
-   * asserting the types at both compile-time and runtime.
+   * When making changes, please ensure that the internal API is still available by runtime assertions.
    */
   #processMobxAnnotations(target: object) {
     if (!isObservableObject(target)) return;
     const adm = (target as any)[$mobx] as ObservableObjectAdministration;
-    // Compile-time assertion
-    adm satisfies object;
-    adm?.values_ satisfies Map<string | symbol | number, { get: () => any }>;
 
-    // Runtime assertion
     if (typeof adm !== "object" || !adm) return;
     if (!("values_" in adm)) return;
     const values = adm.values_;
     if (!(values instanceof Map)) return;
 
     for (const [key, value] of values) {
-      // Runtime assertion
-      if (typeof key !== "string") continue;
+      if (typeof key !== "string") continue; // symbol and number are intentionally left out
       if (typeof value !== "object" || !value) continue;
       if (!("get" in value && typeof value.get === "function")) continue;
 
@@ -294,7 +288,7 @@ export class Watcher {
       const getValue = () => (key in target ? (target as any)[key] : value.get());
 
       reaction(
-        () => this.#shallowRead(getValue()),
+        () => this.#shallowReadValue(getValue()),
         () => this.#didChange(key)
       );
     }
@@ -319,30 +313,28 @@ export class Watcher {
         for (const data of metadata.data) {
           if (data === WatchMode.Nested) {
             isNested = true;
-            isShallow = true;
+            isShallow = true; // nested implies shallow
+            break;
           }
           if (data === WatchMode.Shallow) {
             isShallow = true;
-          }
-          if (isNested && isShallow) {
-            break;
           }
         }
 
         const getValue = () => (key in target ? (target as any)[key] : metadata.get?.());
 
         reaction(
-          () => (isShallow ? this.#shallowRead(getValue()) : getValue()),
+          () => (isShallow ? this.#shallowReadValue(getValue()) : getValue()),
           () => this.#didChange(key)
         );
 
         if (isNested) {
           reaction(
-            () => this.#processNested(getValue(), (v) => Watcher.getSafe(v)?.changed ?? false).some(Boolean),
+            () => this.#processNestedValue(getValue(), (v) => Watcher.getSafe(v)?.changed ?? false).some(Boolean),
             (changed) => changed && this.#didChange(key)
           );
           this.#nested.set(key, () =>
-            this.#processNested(getValue(), (v, k) => ({
+            this.#processNestedValue(getValue(), (v, k) => ({
               value: v,
               subKey: k,
               watcher: Watcher.getSafe(v),
