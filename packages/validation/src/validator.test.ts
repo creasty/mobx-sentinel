@@ -109,6 +109,75 @@ describe("Validator", () => {
     });
   });
 
+  describe("#updateErrors", () => {
+    it("does nothing when the handler returns no errors", () => {
+      const validator = Validator.get({ sample: false });
+      const symbol = Symbol();
+      validator.updateErrors(symbol, () => {});
+      expect(validator.errors).toEqual(new Map());
+    });
+
+    it("updates the errors instantly", () => {
+      const validator = Validator.get({ sample: false });
+      const symbol = Symbol();
+      validator.updateErrors(symbol, (builder) => {
+        builder.invalidate("sample", "invalid");
+      });
+      expect(validator.errors).toEqual(new Map([["sample", ["invalid"]]]));
+    });
+
+    it("removes the errors by calling the returned function", () => {
+      const validator = Validator.get({ sample: false });
+      const symbol = Symbol();
+      const dispose = validator.updateErrors(symbol, (builder) => {
+        builder.invalidate("sample", "invalid");
+      });
+      dispose();
+      expect(validator.errors).toEqual(new Map());
+    });
+
+    it("replaces the errors when called again with the same key", () => {
+      const validator = Validator.get({ sample: false });
+      const symbol = Symbol();
+      validator.updateErrors(symbol, (builder) => {
+        builder.invalidate("sample", "invalid1");
+      });
+      validator.updateErrors(symbol, (builder) => {
+        builder.invalidate("sample", "invalid2");
+      });
+      expect(validator.errors).toEqual(new Map([["sample", ["invalid2"]]]));
+    });
+
+    it("merges the errors of the different keys", () => {
+      const validator = Validator.get({ sample: false });
+      const symbol1 = Symbol();
+      const symbol2 = Symbol();
+      validator.updateErrors(symbol1, (builder) => {
+        builder.invalidate("sample", "invalid1");
+      });
+      validator.updateErrors(symbol2, (builder) => {
+        builder.invalidate("sample", "invalid2");
+      });
+      expect(validator.errors).toEqual(new Map([["sample", ["invalid1", "invalid2"]]]));
+    });
+
+    it("removes individual errors by calling the returned function", () => {
+      const validator = Validator.get({ sample: false });
+      const symbol1 = Symbol();
+      const symbol2 = Symbol();
+      const dispose1 = validator.updateErrors(symbol1, (builder) => {
+        builder.invalidate("sample", "invalid1");
+      });
+      const dispose2 = validator.updateErrors(symbol2, (builder) => {
+        builder.invalidate("sample", "invalid2");
+      });
+      dispose1();
+      expect(validator.errors).toEqual(new Map([["sample", ["invalid2"]]]));
+      dispose2();
+      expect(validator.errors).toEqual(new Map());
+    });
+  });
+
   describe("#request", () => {
     it("does nothing when there are no handlers", () => {
       const env = setupEnv({ cleanHandlers: true });

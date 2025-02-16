@@ -1,6 +1,13 @@
 import { action, computed, makeObservable } from "mobx";
 import { v4 as uuidV4 } from "uuid";
-import { Validator, Watcher } from "@form-model/validation";
+import {
+  KeyPath,
+  Validator,
+  Watcher,
+  buildKeyPath,
+  getNestedAnnotations,
+  unwrapShallowContents,
+} from "@form-model/validation";
 import { FormField } from "./field";
 import { FormBinding, FormBindingConstructor, FormBindingFunc, getSafeBindingName } from "./binding";
 import { FormConfig, globalConfig } from "./config";
@@ -20,6 +27,13 @@ export class Form<T> {
   readonly #submission = new Submission();
   readonly #fields = new Map<string, FormField>();
   readonly #bindings = new Map<string, FormBinding>();
+  readonly #nestedFetchers = new Map<
+    string,
+    () => Array<{
+      keyPath: KeyPath;
+      form: Form<any>;
+    }>
+  >();
 
   /** Extension fields for bindings */
   [k: `bind${Capitalize<string>}`]: unknown;
@@ -67,14 +81,9 @@ export class Form<T> {
 
     let instance = map.get(formKey);
     if (!instance) {
-      const delegate = getDelegation(subject);
-      const watcher = Watcher.get(subject);
-      const validator = Validator.get(subject);
       instance = new this<T>(internalToken, {
+        subject,
         formKey,
-        delegate,
-        watcher,
-        validator,
       });
       map.set(formKey, instance);
     }
@@ -103,20 +112,21 @@ export class Form<T> {
   private constructor(
     token: symbol,
     args: {
+      subject: T & object;
       formKey: symbol;
-      delegate?: FormDelegate;
-      watcher: Watcher;
-      validator: Validator<T>;
     }
   ) {
     if (token !== internalToken) {
       throw new Error("private constructor");
     }
-    makeObservable(this);
+
     this.#formKey = args.formKey;
-    this.#delegate = args.delegate;
-    this.watcher = args.watcher;
-    this.validator = args.validator;
+    this.#delegate = getDelegation(args.subject);
+    this.watcher = Watcher.get(args.subject);
+    this.validator = Validator.get(args.subject);
+    this.#processNestedAnnotations(args.subject);
+
+    makeObservable(this);
 
     this.#submission.addHandler("submit", async (abortSignal) => {
       const submit = this.#getDelegateByKey(FormDelegate.submit);
@@ -128,6 +138,24 @@ export class Form<T> {
         this.reset();
       }
     });
+  }
+
+  #processNestedAnnotations(target: object) {
+    for (const [key, getValue] of getNestedAnnotations(target)) {
+      this.#nestedFetchers.set(key, () => {
+        const result = [];
+        for (const [subKey, value] of unwrapShallowContents(getValue())) {
+          if (typeof subKey === "symbol") continue; // symbol keys are not supported
+          const form = Form.getSafe(value, this.#formKey);
+          if (!form) continue;
+          result.push({
+            keyPath: buildKeyPath(key, subKey),
+            form,
+          });
+        }
+        return result;
+      });
+    }
   }
 
   /**
@@ -204,15 +232,21 @@ export class Form<T> {
    * Forms are collected via `@nested` annotation.
    */
   @computed.struct
-  get subForms(): ReadonlySet<Form<any>> {
-    const forms = new Set<Form<any>>();
-
-    for (const { value } of getNestedAnnotations(this.watcher.nested)) {
-      const form = Form.getSafe(value, this.#formKey);
-      if (form) forms.add(form);
+  get subForms(): ReadonlyMap<KeyPath, Form<any>> {
+    const result = new Map<KeyPath, Form<any>>();
+    for (const [keyPath, form] of this.#nested()) {
+      result.set(keyPath, form);
     }
+    return result;
+  }
 
-    return forms;
+  /** Iterate over the nested watchers */
+  *#nested() {
+    for (const fn of this.#nestedFetchers.values()) {
+      for (const { keyPath, form } of fn()) {
+        yield [keyPath, form] as const;
+      }
+    }
   }
 
   /** Report error states on all fields and sub-forms */
@@ -221,7 +255,7 @@ export class Form<T> {
     for (const field of this.#fields.values()) {
       field.reportError();
     }
-    for (const form of this.subForms) {
+    for (const [, form] of this.#nested()) {
       form.reportError();
     }
   }
@@ -234,7 +268,7 @@ export class Form<T> {
     for (const field of this.#fields.values()) {
       field.reset();
     }
-    for (const form of this.subForms) {
+    for (const [, form] of this.#nested()) {
       form.reset();
     }
   }
@@ -285,7 +319,7 @@ export class Form<T> {
     if (!field) {
       field = new FormField({
         fieldName: String(fieldName),
-        formErrors: this.validator.errors,
+        validator: this.validator,
         getFinalizationDelayMs: () => this.config.intermediateValidationDelayMs,
       });
       this.#fields.set(fieldName, field);

@@ -2,10 +2,11 @@ import { makeObservable, observable } from "mobx";
 import { Form } from "./form";
 import { FormField } from "./field";
 import { FormDelegate } from "./delegation";
-import type { Validator } from "@form-model/validation";
+import { Validator } from "@form-model/validation";
 
 class SampleModel implements FormDelegate {
   @observable test = "test";
+  @observable other = "test";
 
   [FormDelegate.config]: FormDelegate.Config = {
     intermediateValidationDelayMs: 100,
@@ -19,17 +20,26 @@ class SampleModel implements FormDelegate {
 function setupEnv() {
   const model = new SampleModel();
   const form = Form.get(model);
-  const formErrors = observable.map<string, string[]>() satisfies Validator.KeyPathErrorMap;
   const field = new FormField({
     fieldName: "test",
-    formErrors,
+    validator: form.validator,
     getFinalizationDelayMs: () => form.config.intermediateValidationDelayMs,
   });
 
   const waitForDelay = (shift = 10) =>
     new Promise((resolve) => setTimeout(resolve, form.config.intermediateValidationDelayMs + shift));
 
-  return { model, formErrors, waitForDelay, field };
+  const errorGroupKey = Symbol();
+  const updateErrors = (handler: Validator.InstantHandler<SampleModel>) => {
+    form.validator.updateErrors(errorGroupKey, handler);
+  };
+
+  return {
+    model,
+    updateErrors,
+    waitForDelay,
+    field,
+  };
 }
 
 describe("FormField", () => {
@@ -51,17 +61,20 @@ describe("FormField", () => {
     });
 
     it("returns null if there is no errors for the field", () => {
-      const { field, formErrors } = setupEnv();
-      formErrors.set("someOtherField", ["otherError"]);
+      const { field, updateErrors } = setupEnv();
+      updateErrors((b) => b.invalidate("other", "otherError"));
       expect(field.errors).toBe(null);
     });
 
     it("returns the errors if there are errors for the field", () => {
-      const { field, formErrors } = setupEnv();
-      formErrors.set("test", ["error"]);
+      const { field, updateErrors } = setupEnv();
+      updateErrors((b) => b.invalidate("test", "error"));
       expect(field.errors).toEqual(["error"]);
-      formErrors.set("someOtherField", ["otherError"]);
-      expect(field.errors).toEqual(["error"]);
+      updateErrors((b) => {
+        b.invalidate("test", "error2");
+        b.invalidate("other", "otherError");
+      });
+      expect(field.errors).toEqual(["error2"]);
     });
   });
 
@@ -72,8 +85,8 @@ describe("FormField", () => {
     });
 
     it("returns true if there are errors", () => {
-      const { field, formErrors } = setupEnv();
-      formErrors.set("test", ["error"]);
+      const { field, updateErrors } = setupEnv();
+      updateErrors((b) => b.invalidate("test", "error"));
       expect(field.hasErrors).toBe(true);
     });
   });
@@ -85,14 +98,14 @@ describe("FormField", () => {
     });
 
     it("returns false if there are errors but they are not reported", () => {
-      const { field, formErrors } = setupEnv();
-      formErrors.set("test", ["error"]);
+      const { field, updateErrors } = setupEnv();
+      updateErrors((b) => b.invalidate("test", "error"));
       expect(field.hasReportedErrors).toBe(false);
     });
 
     it("returns true if there are errors and they are reported", () => {
-      const { field, formErrors } = setupEnv();
-      formErrors.set("test", ["error"]);
+      const { field, updateErrors } = setupEnv();
+      updateErrors((b) => b.invalidate("test", "error"));
       field.reportError();
       expect(field.hasReportedErrors).toBe(true);
     });

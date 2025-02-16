@@ -207,6 +207,20 @@ export class Validator<T> {
     this.#errors.clear();
   }
 
+  updateErrors(key: symbol, handler: Validator.InstantHandler<T>) {
+    const builder = new ValidationErrorsBuilder();
+    handler(builder);
+    const result = ValidationErrorsBuilder.build(builder);
+    if (result.length > 0) {
+      this.#errors.set(key, result);
+    } else {
+      this.#errors.delete(key);
+    }
+    return () => {
+      this.#errors.delete(key);
+    };
+  }
+
   addReactiveHandler(handler: Validator.ReactiveHandler<T>) {
     const key = Symbol();
 
@@ -217,6 +231,8 @@ export class Validator<T> {
         return ValidationErrorsBuilder.build(builder);
       },
       (result) => {
+        this.#reactionTimerIds.delete(key);
+
         if (result.length > 0) {
           this.#errors.set(key, result);
         } else {
@@ -360,4 +376,5 @@ export namespace Validator {
   export type JobState = "idle" | "enqueued" | "running" | "scheduled";
   export type AsyncHandler<T> = (builder: ValidationErrorsBuilder<T>, abortSignal: AbortSignal) => Promise<void>;
   export type ReactiveHandler<T> = (builder: ValidationErrorsBuilder<T>) => void;
+  export type InstantHandler<T> = (builder: ValidationErrorsBuilder<T>) => void;
 }
