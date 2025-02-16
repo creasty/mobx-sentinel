@@ -1,7 +1,7 @@
 import { action, computed, makeObservable, observable, reaction, runInAction } from "mobx";
 import { createPropertyLikeAnnotation, getAnnotationProcessor } from "./annotationProcessor";
 import { getMobxObservableAnnotations, shallowReadValue, unwrapShallowContents } from "./mobx";
-import { getNestedAnnotations } from "./nested";
+import { StandardNestedFetcher, getNestedAnnotations } from "./nested";
 import { KeyPath, buildKeyPath } from "./keyPath";
 
 enum WatchMode {
@@ -56,13 +56,7 @@ export class Watcher {
   readonly #changedTick = observable.box(0n);
   readonly #changedKeys = observable.set<string>();
   readonly #processedKeys = new Set<string>();
-  readonly #nestedFetchers = new Map<
-    string,
-    () => Array<{
-      keyPath: KeyPath;
-      watcher: Watcher;
-    }>
-  >();
+  readonly #nestedFetcher: StandardNestedFetcher<Watcher>;
 
   /**
    * Get a watcher for a target object
@@ -98,6 +92,7 @@ export class Watcher {
       throw new Error("private constructor");
     }
 
+    this.#nestedFetcher = new StandardNestedFetcher(target, (entry) => Watcher.getSafe(entry.data));
     this.#processNestedAnnotations(target);
     this.#processUnwatchAnnotations(target);
     this.#processWatchAnnotations(target);
@@ -133,9 +128,9 @@ export class Watcher {
   @computed.struct
   get changedKeyPaths(): ReadonlySet<string> {
     const result = new Set(this.#changedKeys);
-    for (const [keyPath, watcher] of this.#nested()) {
-      for (const changedKeyPath of watcher.changedKeyPaths) {
-        result.add(buildKeyPath(keyPath, changedKeyPath));
+    for (const entry of this.#nestedFetcher) {
+      for (const changedKeyPath of entry.data.changedKeyPaths) {
+        result.add(buildKeyPath(entry.keyPath, changedKeyPath));
       }
     }
     return result;
@@ -143,21 +138,12 @@ export class Watcher {
 
   /** Nested watchers */
   @computed.struct
-  get nested() {
+  get nested(): ReadonlyMap<KeyPath, Watcher> {
     const result = new Map<KeyPath, Watcher>();
-    for (const [keyPath, watcher] of this.#nested()) {
-      result.set(keyPath, watcher);
+    for (const entry of this.#nestedFetcher) {
+      result.set(entry.keyPath, entry.data);
     }
     return result;
-  }
-
-  /** Iterate over the nested watchers */
-  *#nested() {
-    for (const fn of this.#nestedFetchers.values()) {
-      for (const { keyPath, watcher } of fn()) {
-        yield [keyPath, watcher] as const;
-      }
-    }
   }
 
   /** Reset the changed keys */
@@ -167,8 +153,8 @@ export class Watcher {
     this.#changedTick.set(0n);
     this.#assumeChanged.set(false);
 
-    for (const [, watcher] of this.#nested()) {
-      watcher?.reset();
+    for (const entry of this.#nestedFetcher) {
+      entry.data.reset();
     }
   }
 
@@ -211,6 +197,7 @@ export class Watcher {
    */
   #processNestedAnnotations(target: object) {
     for (const [key, getValue] of getNestedAnnotations(target)) {
+      if (typeof key !== "string") continue; // symbol and number keys are not supported
       if (this.#processedKeys.has(key)) continue;
       this.#processedKeys.add(key);
 
@@ -232,19 +219,6 @@ export class Watcher {
         },
         (changed) => changed && this.#didChange(key)
       );
-      this.#nestedFetchers.set(key, () => {
-        const result = [];
-        for (const [subKey, value] of unwrapShallowContents(getValue())) {
-          if (typeof subKey === "symbol") continue; // symbol keys are not supported
-          const watcher = Watcher.getSafe(value);
-          if (!watcher) continue;
-          result.push({
-            keyPath: buildKeyPath(key, subKey),
-            watcher,
-          });
-        }
-        return result;
-      });
     }
   }
 

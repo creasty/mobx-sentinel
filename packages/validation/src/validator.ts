@@ -1,8 +1,7 @@
 import { action, comparer, computed, makeObservable, observable, reaction, runInAction } from "mobx";
 import { ValidationError, ValidationErrorsBuilder } from "./error";
 import { Watcher } from "./watcher";
-import { getNestedAnnotations } from "./nested";
-import { unwrapShallowContents } from "./mobx";
+import { StandardNestedFetcher } from "./nested";
 import { KeyPath, buildKeyPath } from "./keyPath";
 
 const validatorKey = Symbol("validator");
@@ -16,13 +15,7 @@ export function makeValidatable<T extends object>(target: T, handler: Validator.
 
 export class Validator<T> {
   readonly #errors = observable.map<symbol, ReadonlyArray<ValidationError>>([], { equals: comparer.structural });
-  readonly #nestedFetchers = new Map<
-    string,
-    () => Array<{
-      keyPath: KeyPath;
-      validator: Validator<any>;
-    }>
-  >();
+  readonly #nestedFetcher: StandardNestedFetcher<Validator<any>>;
 
   // Async handler
   enqueueDelayMs = 100;
@@ -71,7 +64,7 @@ export class Validator<T> {
       throw new Error("private constructor");
     }
 
-    this.#processNestedAnnotations(target);
+    this.#nestedFetcher = new StandardNestedFetcher(target, (entry) => Validator.getSafe(entry.data));
     makeObservable(this);
 
     const watcher = Watcher.get(target);
@@ -79,24 +72,6 @@ export class Validator<T> {
       () => watcher.changedTick,
       () => this.request()
     );
-  }
-
-  #processNestedAnnotations(target: object) {
-    for (const [key, getValue] of getNestedAnnotations(target)) {
-      this.#nestedFetchers.set(key, () => {
-        const result = [];
-        for (const [subKey, value] of unwrapShallowContents(getValue())) {
-          if (typeof subKey === "symbol") continue; // symbol keys are not supported
-          const validator = Validator.getSafe(value);
-          if (!validator) continue;
-          result.push({
-            keyPath: buildKeyPath(key, subKey),
-            validator,
-          });
-        }
-        return result;
-      });
-    }
   }
 
   @computed.struct
@@ -185,21 +160,12 @@ export class Validator<T> {
 
   /** Nested validators */
   @computed.struct
-  get nested() {
+  get nested(): ReadonlyMap<string, Validator<any>> {
     const result = new Map<string, Validator<any>>();
-    for (const [keyPath, validator] of this.#nested()) {
-      result.set(keyPath, validator);
+    for (const entry of this.#nestedFetcher) {
+      result.set(entry.keyPath, entry.data);
     }
     return result;
-  }
-
-  /** Iterate over the nested validators */
-  *#nested() {
-    for (const fn of this.#nestedFetchers.values()) {
-      for (const { keyPath, validator } of fn()) {
-        yield [keyPath, validator] as const;
-      }
-    }
   }
 
   @action

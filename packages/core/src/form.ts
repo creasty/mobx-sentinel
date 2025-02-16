@@ -1,13 +1,6 @@
 import { action, computed, makeObservable } from "mobx";
 import { v4 as uuidV4 } from "uuid";
-import {
-  KeyPath,
-  Validator,
-  Watcher,
-  buildKeyPath,
-  getNestedAnnotations,
-  unwrapShallowContents,
-} from "@form-model/validation";
+import { KeyPath, Validator, Watcher, StandardNestedFetcher } from "@form-model/validation";
 import { FormField } from "./field";
 import { FormBinding, FormBindingConstructor, FormBindingFunc, getSafeBindingName } from "./binding";
 import { FormConfig, globalConfig } from "./config";
@@ -27,13 +20,7 @@ export class Form<T> {
   readonly #submission = new Submission();
   readonly #fields = new Map<string, FormField>();
   readonly #bindings = new Map<string, FormBinding>();
-  readonly #nestedFetchers = new Map<
-    string,
-    () => Array<{
-      keyPath: KeyPath;
-      form: Form<any>;
-    }>
-  >();
+  readonly #nestedFetchers: StandardNestedFetcher<Form<any>>;
 
   /** Extension fields for bindings */
   [k: `bind${Capitalize<string>}`]: unknown;
@@ -124,7 +111,7 @@ export class Form<T> {
     this.#delegate = getDelegation(args.subject);
     this.watcher = Watcher.get(args.subject);
     this.validator = Validator.get(args.subject);
-    this.#processNestedAnnotations(args.subject);
+    this.#nestedFetchers = new StandardNestedFetcher(args.subject, (entry) => Form.getSafe(entry.data, this.#formKey));
 
     makeObservable(this);
 
@@ -138,24 +125,6 @@ export class Form<T> {
         this.reset();
       }
     });
-  }
-
-  #processNestedAnnotations(target: object) {
-    for (const [key, getValue] of getNestedAnnotations(target)) {
-      this.#nestedFetchers.set(key, () => {
-        const result = [];
-        for (const [subKey, value] of unwrapShallowContents(getValue())) {
-          if (typeof subKey === "symbol") continue; // symbol keys are not supported
-          const form = Form.getSafe(value, this.#formKey);
-          if (!form) continue;
-          result.push({
-            keyPath: buildKeyPath(key, subKey),
-            form,
-          });
-        }
-        return result;
-      });
-    }
   }
 
   /**
@@ -234,19 +203,10 @@ export class Form<T> {
   @computed.struct
   get subForms(): ReadonlyMap<KeyPath, Form<any>> {
     const result = new Map<KeyPath, Form<any>>();
-    for (const [keyPath, form] of this.#nested()) {
-      result.set(keyPath, form);
+    for (const entry of this.#nestedFetchers) {
+      result.set(entry.keyPath, entry.data);
     }
     return result;
-  }
-
-  /** Iterate over the nested watchers */
-  *#nested() {
-    for (const fn of this.#nestedFetchers.values()) {
-      for (const { keyPath, form } of fn()) {
-        yield [keyPath, form] as const;
-      }
-    }
   }
 
   /** Report error states on all fields and sub-forms */
@@ -255,8 +215,8 @@ export class Form<T> {
     for (const field of this.#fields.values()) {
       field.reportError();
     }
-    for (const [, form] of this.#nested()) {
-      form.reportError();
+    for (const entry of this.#nestedFetchers) {
+      entry.data.reportError();
     }
   }
 
@@ -268,8 +228,8 @@ export class Form<T> {
     for (const field of this.#fields.values()) {
       field.reset();
     }
-    for (const [, form] of this.#nested()) {
-      form.reset();
+    for (const entry of this.#nestedFetchers) {
+      entry.data.reset();
     }
   }
 
