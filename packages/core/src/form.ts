@@ -207,7 +207,7 @@ export class Form<T> {
   get subForms(): ReadonlySet<Form<any>> {
     const forms = new Set<Form<any>>();
 
-    for (const { value } of this.watcher.nested.values()) {
+    for (const { value } of getNestedAnnotations(this.watcher.nested)) {
       const form = Form.getSafe(value, this.#formKey);
       if (form) forms.add(form);
     }
