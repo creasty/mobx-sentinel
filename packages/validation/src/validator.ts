@@ -354,11 +354,7 @@ export class Validator<T> {
 
     runInAction(() => {
       if (builder.hasError) {
-        try {
-          this.#errors.set(defaultErrorGroupKey, ValidationErrorsBuilder.build(builder));
-        } catch (e) {
-          console.warn(e);
-        }
+        this.#errors.set(defaultErrorGroupKey, ValidationErrorsBuilder.build(builder));
       } else {
         this.#errors.delete(defaultErrorGroupKey);
       }
