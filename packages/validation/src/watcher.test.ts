@@ -1,5 +1,6 @@
 import { computed, makeObservable, observable, runInAction } from "mobx";
 import { Watcher, getInternal, unwatch, watch } from "./watcher";
+import { nested } from "./nested";
 
 describe("Watcher", () => {
   describe("constructor", () => {
@@ -528,10 +529,10 @@ describe("Annotations", () => {
     });
   });
 
-  describe("@watch.nested", () => {
+  describe("@nested", () => {
     describe("non-nested value", () => {
       class Sample {
-        @watch.nested @observable field1 = 1;
+        @nested @observable field1 = 1;
 
         constructor() {
           makeObservable(this);
@@ -547,8 +548,8 @@ describe("Annotations", () => {
 
     describe("object", () => {
       class Sample {
-        @watch.nested @observable field1 = { value: false };
-        @watch.nested field2 = observable({ value: false });
+        @nested @observable field1 = { value: false };
+        @nested field2 = observable({ value: false });
 
         constructor() {
           makeObservable(this);
@@ -578,7 +579,7 @@ describe("Annotations", () => {
 
     describe("boxed observable", () => {
       class Sample {
-        @watch.nested field1 = observable.box({ value: false });
+        @nested field1 = observable.box({ value: false });
       }
 
       test("#nested returns the nested objects", () => {
@@ -611,8 +612,8 @@ describe("Annotations", () => {
 
     describe("array", () => {
       class Sample {
-        @watch.nested @observable field1 = [{ value: false }];
-        @watch.nested field2 = [observable({ value: false })];
+        @nested @observable field1 = [{ value: false }];
+        @nested field2 = [observable({ value: false })];
 
         constructor() {
           makeObservable(this);
@@ -642,8 +643,8 @@ describe("Annotations", () => {
 
     describe("set", () => {
       class Sample {
-        @watch.nested @observable field1 = new Set([{ value: false }]);
-        @watch.nested field2 = new Set([observable({ value: false })]);
+        @nested @observable field1 = new Set([{ value: false }]);
+        @nested field2 = new Set([observable({ value: false })]);
 
         constructor() {
           makeObservable(this);
@@ -681,8 +682,8 @@ describe("Annotations", () => {
 
     describe("map", () => {
       class Sample {
-        @watch.nested @observable field1 = new Map([["key1", { value: false }]]);
-        @watch.nested field2 = new Map([["key1", observable({ value: false })]]);
+        @nested @observable field1 = new Map([["key1", { value: false }]]);
+        @nested field2 = new Map([["key1", observable({ value: false })]]);
 
         constructor() {
           makeObservable(this);
@@ -714,8 +715,8 @@ describe("Annotations", () => {
 
     describe("class", () => {
       class Sample {
-        @watch.nested field1 = new Other();
-        @watch.nested @observable field2 = new Other();
+        @nested field1 = new Other();
+        @nested @observable field2 = new Other();
 
         constructor() {
           makeObservable(this);

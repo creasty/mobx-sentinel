@@ -1,4 +1,4 @@
-import { makeValidatable, watch } from "@form-model/validation";
+import { makeValidatable, nested } from "@form-model/validation";
 import { autorun, makeObservable, observable, runInAction } from "mobx";
 import { Form, getInternal } from "./form";
 import { FormDelegate } from "./delegation";
@@ -41,8 +41,8 @@ describe("Form", () => {
 
   class NestedModel {
     @observable field = true;
-    @watch.nested @observable sample = new SampleModel();
-    @watch.nested @observable array = [new SampleModel()];
+    @nested @observable sample = new SampleModel();
+    @nested @observable array = [new SampleModel()];
 
     constructor() {
       makeObservable(this);
@@ -154,13 +154,13 @@ describe("Form", () => {
   });
 
   describe("#subForms", () => {
-    it("does not collect sub-forms from objects without @watch.nested", () => {
+    it("does not collect sub-forms from objects without @nested", () => {
       const model = new SampleModel();
       const form = Form.get(model);
       expect(form.subForms.size).toBe(0);
     });
 
-    it("collects sub-forms via @watch.nested", () => {
+    it("collects sub-forms via @nested", () => {
       const model = new NestedModel();
       const form = Form.get(model);
 
@@ -552,8 +552,8 @@ suite("Sub-forms", () => {
 
   class NestedModel {
     @observable field = true;
-    @watch.nested @observable sample = new SampleModel();
-    @watch.nested @observable array = [new SampleModel()];
+    @nested @observable sample = new SampleModel();
+    @nested @observable array = [new SampleModel()];
 
     constructor() {
       makeObservable(this);

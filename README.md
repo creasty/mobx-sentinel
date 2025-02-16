@@ -128,7 +128,7 @@ This library aims to solve these problems through a model-centric design that pr
 
 ```typescript
 import { action, observable, makeObservable } from "mobx";
-import { watch, makeValidatable } from "@form-model/validation";
+import { nested, makeValidatable } from "@form-model/validation";
 
 class Sample {
   @observable text: string = "";
@@ -140,8 +140,8 @@ class Sample {
   @observable multiOption: string[] = [];
 
   // Nested/dynamic objects can be tracked with the annotation.
-  @watch.nested @observable nested = new Other();
-  @watch.nested @observable array = [new Other()];
+  @nested @observable nested = new Other();
+  @nested @observable array = [new Other()];
 
   constructor() {
     makeObservable(this);

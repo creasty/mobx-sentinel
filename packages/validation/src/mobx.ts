@@ -83,7 +83,7 @@ export function* unwrapShallowContents(value: any): Generator<[key: string | sym
  */
 export function* getMobxObservableAnnotations(
   target: object
-): Generator<[key: string | symbol | number, value: () => any]> {
+): Generator<[key: string | symbol | number, getValue: () => any]> {
   if (!isObservableObject(target)) return;
   const adm = (target as any)[$mobx] as ObservableObjectAdministration;
 
@@ -96,6 +96,7 @@ export function* getMobxObservableAnnotations(
     if (typeof key !== "string" && typeof key !== "symbol" && typeof key !== "number") continue;
     if (typeof value !== "object" || !value) continue;
     if (!("get" in value && typeof value.get === "function")) continue;
-    yield [key, () => value.get()];
+    const getValue = () => (key in target ? (target as any)[key] : value.get());
+    yield [key, getValue];
   }
 }
