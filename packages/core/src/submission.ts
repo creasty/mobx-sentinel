@@ -3,7 +3,7 @@ import { observable, runInAction } from "mobx";
 export class Submission {
   readonly #isRunning = observable.box(false);
   readonly #handlers: {
-    readonly [K in keyof Submission.EventHandlers]: Set<Submission.EventHandlers[K]>;
+    readonly [K in keyof Submission.Handlers]: Set<Submission.Handlers[K]>;
   } = {
     willSubmit: new Set(),
     submit: new Set(),
@@ -15,7 +15,7 @@ export class Submission {
     return this.#isRunning.get();
   }
 
-  addHandler<K extends keyof Submission.EventHandlers>(event: K, handler: Submission.EventHandlers[K]) {
+  addHandler<K extends keyof Submission.Handlers>(event: K, handler: Submission.Handlers[K]) {
     this.#handlers[event].add(handler);
     return () => void this.#handlers[event].delete(handler);
   }
@@ -69,7 +69,7 @@ export class Submission {
 }
 
 export namespace Submission {
-  export type EventHandlers = {
+  export type Handlers = {
     willSubmit: () => void;
     submit: (abortSignal: AbortSignal) => Promise<boolean>;
     didSubmit: (succeed: boolean) => void;

@@ -266,11 +266,11 @@ export class Form<T> {
   }
 
   /**
-   * Subscribe to the form events.
+   * Add a handler to the form
    *
-   * @returns A function to unsubscribe from the event.
+   * @returns A function to remove the handler.
    */
-  addHandler<K extends keyof Form.EventHandlers<T>>(event: K, handler: Form.EventHandlers<T>[K]) {
+  addHandler<K extends keyof Form.Handlers<T>>(event: K, handler: Form.Handlers<T>[K]) {
     switch (event) {
       case "willSubmit":
       case "submit":
@@ -393,7 +393,7 @@ export class Form<T> {
 }
 
 export namespace Form {
-  export type EventHandlers<T> = Submission.EventHandlers & {
+  export type Handlers<T> = Submission.Handlers & {
     asyncValidate: Validator.AsyncHandler<T>;
     validate: Validator.ReactiveHandler<T>;
   };

@@ -85,7 +85,7 @@ describe("InputBinding", () => {
     const field = new FormField({
       fieldName: "test",
       validator: form.validator,
-      getFinalizationDelayMs: () => form.config.intermediateValidationDelayMs,
+      getFinalizationDelayMs: () => form.config.autoFinalizationDelayMs,
     });
     const binding = new InputBinding(field, {
       getter: () => "",

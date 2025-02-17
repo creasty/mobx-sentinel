@@ -47,7 +47,7 @@ describe("CheckBoxBinding", () => {
     const field = new FormField({
       fieldName: "test",
       validator: form.validator,
-      getFinalizationDelayMs: () => form.config.intermediateValidationDelayMs,
+      getFinalizationDelayMs: () => form.config.autoFinalizationDelayMs,
     });
     const binding = new CheckBoxBinding(field, {
       getter: () => false,
