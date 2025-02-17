@@ -3,33 +3,40 @@ import { observable, runInAction } from "mobx";
 /** Form configuration */
 export type FormConfig = {
   /**
-   * Delay validation. [milliseconds]
+   * Delay reactive validation. [milliseconds]
    *
    * @default 100
    */
-  validationDelayMs: number;
+  reactiveValidationDelayMs: number;
   /**
-   * Delay subsequent validation. [milliseconds]
+   * Delay async validation. [milliseconds]
+   *
+   * @default 100
+   */
+  asyncValidationEnqueueDelayMs: number;
+  /**
+   * Delay subsequent async validation. [milliseconds]
    *
    * When requesting a new validation while the previous validation is running,
    * this delay is applied to the new validation.
    *
    * @default 300
    */
-  subsequentValidationDelayMs: number;
+  asyncValidationScheduleDelayMs: number;
   /**
-   * Delay validation when a field value is intermediate (partial input). [in milliseconds]
+   * Automatically finalize the form when the input is intermediate (partial input). [in milliseconds]
    *
    * @default 3000
    */
-  intermediateValidationDelayMs: number;
+  autoFinalizationDelayMs: number;
 };
 
 /** Default configuration */
 export const defaultConfig: Readonly<FormConfig> = Object.freeze({
-  validationDelayMs: 100,
-  subsequentValidationDelayMs: 300,
-  intermediateValidationDelayMs: 3000,
+  reactiveValidationDelayMs: 100,
+  asyncValidationEnqueueDelayMs: 100,
+  asyncValidationScheduleDelayMs: 300,
+  autoFinalizationDelayMs: 3000,
 });
 
 /** Global configuration */

@@ -1,6 +1,6 @@
 import { createPropertyLikeAnnotation, getAnnotationProcessor } from "./annotationProcessor";
 import { KeyPath, buildKeyPath } from "./keyPath";
-import { unwrapShallowContents } from "./mobx";
+import { unwrapShallowContents } from "./mobx-utils";
 
 const nestedKey = Symbol("nested");
 

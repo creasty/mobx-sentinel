@@ -8,9 +8,18 @@ const validatorKey = Symbol("validator");
 const internalToken = Symbol("validator.internal");
 const defaultErrorGroupKey = Symbol("validator.defaultErrorGroupKey");
 
+/**
+ * Make a target object validatable
+ *
+ * It's just a shorthand of `Validator.get(target).addReactiveHandler(handler)`.
+ *
+ * If you're using `make(Auto)Observable`, make sure to call `makeValidatable`
+ * after `make(Auto)Observable`.
+ *
+ * @returns A function to remove the handler
+ */
 export function makeValidatable<T extends object>(target: T, handler: Validator.ReactiveHandler<T>) {
-  const validator = Validator.get(target);
-  validator.addReactiveHandler(handler);
+  return Validator.get(target).addReactiveHandler(handler);
 }
 
 export class Validator<T> {

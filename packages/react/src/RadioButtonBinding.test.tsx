@@ -79,8 +79,8 @@ describe("RadioButtonBinding", () => {
     const form = Form.get(model);
     const field = new FormField({
       fieldName: "test",
-      formErrors: new Map(),
-      getFinalizationDelayMs: () => form.config.intermediateValidationDelayMs,
+      validator: form.validator,
+      getFinalizationDelayMs: () => form.config.autoFinalizationDelayMs,
     });
     const binding = new RadioButtonBinding(field, {
       getter: () => null,

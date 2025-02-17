@@ -1,16 +1,11 @@
 import { makeObservable, observable } from "mobx";
 import { Form } from "./form";
 import { FormField } from "./field";
-import { FormDelegate } from "./delegation";
 import { Validator } from "@form-model/validation";
 
-class SampleModel implements FormDelegate {
+class SampleModel {
   @observable test = "test";
   @observable other = "test";
-
-  [FormDelegate.config]: FormDelegate.Config = {
-    intermediateValidationDelayMs: 100,
-  };
 
   constructor() {
     makeObservable(this);
@@ -23,11 +18,10 @@ function setupEnv() {
   const field = new FormField({
     fieldName: "test",
     validator: form.validator,
-    getFinalizationDelayMs: () => form.config.intermediateValidationDelayMs,
+    getFinalizationDelayMs: () => 100,
   });
 
-  const waitForDelay = (shift = 10) =>
-    new Promise((resolve) => setTimeout(resolve, form.config.intermediateValidationDelayMs + shift));
+  const waitForDelay = (shift = 10) => new Promise((resolve) => setTimeout(resolve, 100 + shift));
 
   const errorGroupKey = Symbol();
   const updateErrors = (handler: Validator.InstantHandler<SampleModel>) => {

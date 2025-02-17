@@ -1,10 +1,9 @@
-import { action, computed, makeObservable } from "mobx";
+import { action, computed, makeObservable, observable, reaction } from "mobx";
 import { v4 as uuidV4 } from "uuid";
 import { KeyPath, Validator, Watcher, StandardNestedFetcher } from "@form-model/validation";
 import { FormField } from "./field";
 import { FormBinding, FormBindingConstructor, FormBindingFunc, getSafeBindingName } from "./binding";
 import { FormConfig, globalConfig } from "./config";
-import { FormDelegate, getDelegation } from "./delegation";
 import { Submission } from "./submission";
 
 const registry = new WeakMap<object, Map<symbol, Form<any>>>();
@@ -13,7 +12,6 @@ const internalToken = Symbol("form.internalToken");
 
 export class Form<T> {
   readonly id = uuidV4();
-  readonly #delegate?: FormDelegate;
   readonly #formKey: symbol;
   readonly watcher: Watcher;
   readonly validator: Validator<T>;
@@ -21,6 +19,7 @@ export class Form<T> {
   readonly #fields = new Map<string, FormField>();
   readonly #bindings = new Map<string, FormBinding>();
   readonly #nestedFetchers: StandardNestedFetcher<Form<any>>;
+  readonly #localConfig = observable.box<Partial<FormConfig>>({});
 
   /** Extension fields for bindings */
   [k: `bind${Capitalize<string>}`]: unknown;
@@ -108,50 +107,62 @@ export class Form<T> {
     }
 
     this.#formKey = args.formKey;
-    this.#delegate = getDelegation(args.subject);
     this.watcher = Watcher.get(args.subject);
     this.validator = Validator.get(args.subject);
     this.#nestedFetchers = new StandardNestedFetcher(args.subject, (entry) => Form.getSafe(entry.data, this.#formKey));
 
     makeObservable(this);
 
-    this.#submission.addHandler("submit", async (abortSignal) => {
-      const submit = this.#getDelegateByKey(FormDelegate.submit);
-      if (!submit) return true;
-      return await submit(abortSignal);
-    });
     this.#submission.addHandler("didSubmit", (succeed) => {
       if (succeed) {
         this.reset();
       }
     });
+
+    reaction(
+      () => this.config.reactiveValidationDelayMs,
+      (delay) => (this.validator.reactionDelayMs = delay),
+      { fireImmediately: true }
+    );
+    reaction(
+      () => this.config.asyncValidationEnqueueDelayMs,
+      (delay) => (this.validator.enqueueDelayMs = delay),
+      { fireImmediately: true }
+    );
+    reaction(
+      () => this.config.asyncValidationScheduleDelayMs,
+      (delay) => (this.validator.scheduleDelayMs = delay),
+      { fireImmediately: true }
+    );
   }
 
   /**
-   * Get the delegate value by key.
+   * The configuration of the form
    *
-   * Returns an object, or a method that is bound to the delegate.
+   * This is a computed value that combines the global configuration and the local configuration.
    */
-  #getDelegateByKey<K extends symbol & keyof FormDelegate>(key: K): FormDelegate[K] | undefined {
-    const delegate = this.#delegate;
-    if (!delegate) return;
-
-    const value = delegate[key];
-    if (!value) return;
-
-    if (typeof value === "function") {
-      return value.bind(delegate) as any;
-    }
-    return value;
-  }
-
-  @computed
+  @computed.struct
   get config(): Readonly<FormConfig> {
     return {
       ...globalConfig,
-      ...this.#getDelegateByKey(FormDelegate.config),
+      ...this.#localConfig.get(),
     };
   }
+
+  /** Configure the form locally */
+  @action.bound
+  configure: {
+    /** Override the global configuration locally */
+    (config: Partial<Readonly<FormConfig>>): void;
+    /** Reset to the global configuration */
+    (reset: true): void;
+  } = (arg0) => {
+    if (typeof arg0 === "object") {
+      Object.assign(this.#localConfig.get(), arg0);
+    } else {
+      this.#localConfig.set({});
+    }
+  };
 
   /** Whether the form is dirty (including sub-forms) */
   get isDirty() {
@@ -255,18 +266,20 @@ export class Form<T> {
   }
 
   /**
-   * Subscribe to the form events.
+   * Add a handler to the form
    *
-   * @returns A function to unsubscribe from the event.
+   * @returns A function to remove the handler.
    */
-  addHandler<K extends keyof Form.EventHandlers<T>>(event: K, handler: Form.EventHandlers<T>[K]) {
+  addHandler<K extends keyof Form.Handlers<T>>(event: K, handler: Form.Handlers<T>[K]) {
     switch (event) {
       case "willSubmit":
       case "submit":
       case "didSubmit":
         return this.#submission.addHandler(event, handler as any);
-      case "validate":
+      case "asyncValidate":
         return this.validator.addAsyncHandler(handler as any);
+      case "validate":
+        return this.validator.addReactiveHandler(handler as any);
       default:
         event satisfies never;
         throw new Error(`Invalid event: ${event}`);
@@ -280,7 +293,7 @@ export class Form<T> {
       field = new FormField({
         fieldName: String(fieldName),
         validator: this.validator,
-        getFinalizationDelayMs: () => this.config.intermediateValidationDelayMs,
+        getFinalizationDelayMs: () => this.config.autoFinalizationDelayMs,
       });
       this.#fields.set(fieldName, field);
     }
@@ -380,8 +393,9 @@ export class Form<T> {
 }
 
 export namespace Form {
-  export type EventHandlers<T> = Submission.EventHandlers & {
-    validate: Validator.AsyncHandler<T>;
+  export type Handlers<T> = Submission.Handlers & {
+    asyncValidate: Validator.AsyncHandler<T>;
+    validate: Validator.ReactiveHandler<T>;
   };
 }
 

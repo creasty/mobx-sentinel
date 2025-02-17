@@ -139,14 +139,14 @@ class Sample {
   @observable option: string | null = null;
   @observable multiOption: string[] = [];
 
-  // Nested/dynamic objects can be tracked with the annotation.
+  // Nested/dynamic objects can be tracked with @nested annotation
   @nested @observable nested = new Other();
   @nested @observable array = [new Other()];
 
   constructor() {
     makeObservable(this);
 
-    // Validation is implemented by returning an object with error messages.
+    // Validation is implemented here
     makeValidatable(this, (b) => {
       if (!this.text) b.invalidate("text", "Required");
       if (this.number === null) b.invalidate("number", "Required");
@@ -184,22 +184,20 @@ class Other {
 ```tsx
 import { observer } from "mobx-react-lite";
 import { Form } from "@form-model/core";
-import { useFormEvent } from "@form-model/react";
+import { useFormHandler } from "@form-model/react";
 import "@form-model/react/dist/extension"; // Makes .bindTextInput() and other bind methods available.
 
 const SampleForm: React.FC<{ model: Sample }> = observer(({ model }) => {
   const form = Form.get(model);
 
-  useFormEvent(form, "submit", async (abortSignal) => {
+  useFormHandler(form, "submit", async (abortSignal) => {
     // TODO: Serialize the model and send the data to a server
     return true;
   });
 
-  // Optional:
-  // useFormEvent(form, "validate", async (abortSignal) => {
-  //   return {
-  //     // Extend validation rules here.
-  //   };
+  // [Optional] Extend validation rules here
+  // useFormHandler(form, "validate", async (builder) => {
+  //   ...
   // });
 
   return (

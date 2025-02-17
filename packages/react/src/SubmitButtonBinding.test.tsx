@@ -3,31 +3,14 @@ import "@testing-library/jest-dom";
 import { act, render, screen } from "@testing-library/react";
 import { userEvent } from "@testing-library/user-event";
 import { makeObservable } from "mobx";
-import { Form, FormDelegate } from "@form-model/core";
+import { Form } from "@form-model/core";
 import "./extension";
 import { observer } from "mobx-react-lite";
 import { SubmitButtonBinding } from "./SubmitButtonBinding";
 
-class SampleModel implements FormDelegate {
+class SampleModel {
   constructor() {
     makeObservable(this);
-  }
-
-  async [FormDelegate.submit]() {
-    return this.submitDeferred.promise;
-  }
-
-  private submitDeferred = (() => {
-    let resolve = (): void => void 0;
-    const promise = new Promise<boolean>((_resolve) => {
-      resolve = () => _resolve(true);
-    });
-    return { promise, resolve };
-  })();
-
-  async completeSubmit() {
-    this.submitDeferred.resolve();
-    return this.submitDeferred.promise;
   }
 }
 
@@ -95,6 +78,13 @@ suite("bindSubmitButton", () => {
   const setupEnv = () => {
     const model = new SampleModel();
 
+    const form = Form.get(model);
+    let resolve = (): void => void 0;
+    const promise = new Promise<boolean>((_resolve) => {
+      resolve = () => _resolve(true);
+    });
+    form.addHandler("submit", () => promise);
+
     render(<SampleComponent model={model} />);
     const button = screen.getByLabelText("submit") as HTMLButtonElement;
 
@@ -107,6 +97,10 @@ suite("bindSubmitButton", () => {
       },
       async hoverButton() {
         await userEvent.hover(button);
+      },
+      async completeSubmit() {
+        resolve();
+        return promise;
       },
     };
   };
@@ -131,7 +125,7 @@ suite("bindSubmitButton", () => {
     expect(env.button).toBeDisabled();
 
     await act(async () => {
-      await env.model.completeSubmit();
+      await env.completeSubmit();
     });
 
     expect(env.form.isSubmitting).toBe(false);

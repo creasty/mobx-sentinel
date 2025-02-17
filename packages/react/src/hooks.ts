@@ -14,18 +14,18 @@ export function useFormAutoReset(form: Form<any>) {
 }
 
 /**
- * Subscribe to the form events.
+ * Add a handler to the form.
  *
- * It automatically unsubscribes when the component is unmounted.
+ * It automatically removes the handler when the component is unmounted.
  *
  * @param form The form instance.
- * @param event The event to subscribe to.
- * @param handler The event handler.
+ * @param event The event of the handler.
+ * @param handler The handler.
  */
-export function useFormEvent<T extends object, Event extends keyof Form.EventHandlers<T>>(
+export function useFormHandler<T extends object, Event extends keyof Form.Handlers<T>>(
   form: Form<T>,
   event: Event,
-  handler: Form.EventHandlers<T>[Event]
+  handler: Form.Handlers<T>[NoInfer<Event>]
 ) {
   const handlerRef = useRef(handler);
   handlerRef.current = handler;

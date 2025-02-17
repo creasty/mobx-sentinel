@@ -28,21 +28,27 @@ describe("configureForm", () => {
   });
 
   it("returns the new config if a non-empty object is provided", () => {
-    expect(configureForm({ validationDelayMs: 999 })).toEqual({ ...defaultConfig, validationDelayMs: 999 });
-    expect(configureForm({ subsequentValidationDelayMs: 888 })).toEqual({
+    expect(configureForm({ reactiveValidationDelayMs: 999 })).toEqual({
       ...defaultConfig,
-      validationDelayMs: 999,
-      subsequentValidationDelayMs: 888,
+      reactiveValidationDelayMs: 999,
+    });
+    expect(configureForm({ asyncValidationEnqueueDelayMs: 888 })).toEqual({
+      ...defaultConfig,
+      reactiveValidationDelayMs: 999,
+      asyncValidationEnqueueDelayMs: 888,
     });
     expect(configureForm({})).toEqual({
       ...defaultConfig,
-      validationDelayMs: 999,
-      subsequentValidationDelayMs: 888,
+      reactiveValidationDelayMs: 999,
+      asyncValidationEnqueueDelayMs: 888,
     });
   });
 
   it("returns the default config if true is provided", () => {
-    expect(configureForm({ validationDelayMs: 999 })).toEqual({ ...defaultConfig, validationDelayMs: 999 });
+    expect(configureForm({ reactiveValidationDelayMs: 999 })).toEqual({
+      ...defaultConfig,
+      reactiveValidationDelayMs: 999,
+    });
     expect(configureForm(true)).toEqual(defaultConfig);
   });
 
@@ -52,15 +58,15 @@ describe("configureForm", () => {
       timeline.push({ ...globalConfig });
     });
 
-    configureForm({ validationDelayMs: 999 });
-    configureForm({ subsequentValidationDelayMs: 888 });
+    configureForm({ reactiveValidationDelayMs: 999 });
+    configureForm({ asyncValidationEnqueueDelayMs: 888 });
     configureForm({});
     configureForm(true);
 
     expect(timeline).toEqual([
       defaultConfig,
-      { ...defaultConfig, validationDelayMs: 999 },
-      { ...defaultConfig, validationDelayMs: 999, subsequentValidationDelayMs: 888 },
+      { ...defaultConfig, reactiveValidationDelayMs: 999 },
+      { ...defaultConfig, reactiveValidationDelayMs: 999, asyncValidationEnqueueDelayMs: 888 },
       defaultConfig,
     ]);
   });

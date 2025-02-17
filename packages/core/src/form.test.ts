@@ -1,7 +1,6 @@
 import { KeyPath, makeValidatable, nested } from "@form-model/validation";
 import { autorun, makeObservable, observable, runInAction } from "mobx";
 import { Form, getInternal } from "./form";
-import { FormDelegate } from "./delegation";
 import {
   SampleConfigurableFieldBinding,
   SampleConfigurableFormBinding,
@@ -10,6 +9,7 @@ import {
   SampleFormBinding,
   SampleMultiFieldBinding,
 } from "./binding.test";
+import { defaultConfig, FormConfig } from "./config";
 
 describe("Form", () => {
   class EmptyModel {}
@@ -25,16 +25,6 @@ describe("Form", () => {
         if (!this.field) {
           b.invalidate("field", "invalid");
         }
-      });
-    }
-
-    async [FormDelegate.submit](signal: AbortSignal) {
-      return new Promise<boolean>((resolve) => {
-        const timerId = setTimeout(() => resolve(true), 100);
-        signal.addEventListener("abort", () => {
-          clearTimeout(timerId);
-          resolve(false);
-        });
       });
     }
   }
@@ -153,6 +143,62 @@ describe("Form", () => {
     });
   });
 
+  describe("#config, #configure", () => {
+    it("returns the global configuration by default", () => {
+      const model = new SampleModel();
+      const form = Form.get(model);
+      expect(form.config).toEqual(defaultConfig);
+    });
+
+    it("returns the local configuration", () => {
+      const model = new SampleModel();
+      const form = Form.get(model);
+      form.configure({ reactiveValidationDelayMs: 999 });
+      expect(form.config).toEqual({ ...defaultConfig, reactiveValidationDelayMs: 999 });
+    });
+
+    it("resets the local configuration to the global configuration", () => {
+      const model = new SampleModel();
+      const form = Form.get(model);
+      form.configure({ reactiveValidationDelayMs: 999 });
+      expect(form.config).toEqual({ ...defaultConfig, reactiveValidationDelayMs: 999 });
+      form.configure(true);
+      expect(form.config).toEqual(defaultConfig);
+    });
+
+    it("updates the config reactively", () => {
+      const model = new SampleModel();
+      const form = Form.get(model);
+      const timeline: FormConfig[] = [];
+      autorun(() => timeline.push(form.config));
+      form.configure({ reactiveValidationDelayMs: 999 });
+      expect(timeline).toEqual([defaultConfig, { ...defaultConfig, reactiveValidationDelayMs: 999 }]);
+    });
+
+    describe("synchronizations", () => {
+      it("updates the validator's reactionDelayMs", () => {
+        const model = new SampleModel();
+        const form = Form.get(model);
+        form.configure({ reactiveValidationDelayMs: 999 });
+        expect(form.validator.reactionDelayMs).toBe(999);
+      });
+
+      it("updates the validator's enqueueDelayMs", () => {
+        const model = new SampleModel();
+        const form = Form.get(model);
+        form.configure({ asyncValidationEnqueueDelayMs: 888 });
+        expect(form.validator.enqueueDelayMs).toBe(888);
+      });
+
+      it("updates the validator's scheduleDelayMs", () => {
+        const model = new SampleModel();
+        const form = Form.get(model);
+        form.configure({ asyncValidationScheduleDelayMs: 777 });
+        expect(form.validator.scheduleDelayMs).toBe(777);
+      });
+    });
+  });
+
   describe("#subForms", () => {
     it("does not collect sub-forms from objects without @nested", () => {
       const model = new SampleModel();
@@ -205,7 +251,7 @@ describe("Form", () => {
     it("returns false when the validation is scheduled", () => {
       const model = new SampleModel();
       const form = Form.get(model);
-      form.addHandler("validate", async () => void 0);
+      form.addHandler("asyncValidate", async () => void 0);
 
       form.markAsDirty();
       expect(form.canSubmit).toBe(true);
@@ -331,15 +377,6 @@ describe("Form", () => {
       await form.submit({ force: true });
       expect(spy).toBeCalled();
     });
-
-    it("calls FormDelegate.submit when implemented", async () => {
-      const model = new SampleModel();
-      const spy = vi.spyOn(model, FormDelegate.submit);
-      const form = Form.get(model);
-      form.markAsDirty();
-      await form.submit();
-      expect(spy).toBeCalled();
-    });
   });
 
   describe("#validate", () => {
@@ -353,7 +390,7 @@ describe("Form", () => {
   });
 
   describe("#addHandler", () => {
-    it("adds a handler to the submission event", () => {
+    it("adds a submit handler", () => {
       const model = new SampleModel();
       const form = Form.get(model);
       const internal = getInternal(form);
@@ -364,11 +401,19 @@ describe("Form", () => {
       expect(spy).toBeCalledTimes(3);
     });
 
-    it("adds a handler to the validation event", () => {
+    it("adds an async validation handler", () => {
       const model = new SampleModel();
       const form = Form.get(model);
       const spy = vi.spyOn(form.validator, "addAsyncHandler");
-      expect(form.addHandler("validate", async () => void 0)).toBeInstanceOf(Function);
+      expect(form.addHandler("asyncValidate", async () => void 0)).toBeInstanceOf(Function);
+      expect(spy).toBeCalledTimes(1);
+    });
+
+    it("adds a reactive validation handler", () => {
+      const model = new SampleModel();
+      const form = Form.get(model);
+      const spy = vi.spyOn(form.validator, "addReactiveHandler");
+      expect(form.addHandler("validate", () => void 0)).toBeInstanceOf(Function);
       expect(spy).toBeCalledTimes(1);
     });
 
