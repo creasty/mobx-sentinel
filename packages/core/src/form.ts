@@ -1,4 +1,4 @@
-import { action, computed, makeObservable } from "mobx";
+import { action, computed, makeObservable, observable, reaction } from "mobx";
 import { v4 as uuidV4 } from "uuid";
 import { KeyPath, Validator, Watcher, StandardNestedFetcher } from "@form-model/validation";
 import { FormField } from "./field";
@@ -19,6 +19,7 @@ export class Form<T> {
   readonly #fields = new Map<string, FormField>();
   readonly #bindings = new Map<string, FormBinding>();
   readonly #nestedFetchers: StandardNestedFetcher<Form<any>>;
+  readonly #localConfig = observable.box<Partial<FormConfig>>({});
 
   /** Extension fields for bindings */
   [k: `bind${Capitalize<string>}`]: unknown;
@@ -117,14 +118,51 @@ export class Form<T> {
         this.reset();
       }
     });
+
+    reaction(
+      () => this.config.reactiveValidationDelayMs,
+      (delay) => (this.validator.reactionDelayMs = delay),
+      { fireImmediately: true }
+    );
+    reaction(
+      () => this.config.asyncValidationEnqueueDelayMs,
+      (delay) => (this.validator.enqueueDelayMs = delay),
+      { fireImmediately: true }
+    );
+    reaction(
+      () => this.config.asyncValidationScheduleDelayMs,
+      (delay) => (this.validator.scheduleDelayMs = delay),
+      { fireImmediately: true }
+    );
   }
 
+  /**
+   * The configuration of the form
+   *
+   * This is a computed value that combines the global configuration and the local configuration.
+   */
   @computed.struct
   get config(): Readonly<FormConfig> {
     return {
       ...globalConfig,
+      ...this.#localConfig.get(),
     };
   }
+
+  /** Configure the form locally */
+  @action.bound
+  configure: {
+    /** Override the global configuration locally */
+    (config: Partial<Readonly<FormConfig>>): void;
+    /** Reset to the global configuration */
+    (reset: true): void;
+  } = (arg0) => {
+    if (typeof arg0 === "object") {
+      Object.assign(this.#localConfig.get(), arg0);
+    } else {
+      this.#localConfig.set({});
+    }
+  };
 
   /** Whether the form is dirty (including sub-forms) */
   get isDirty() {
@@ -255,7 +293,7 @@ export class Form<T> {
       field = new FormField({
         fieldName: String(fieldName),
         validator: this.validator,
-        getFinalizationDelayMs: () => this.config.intermediateValidationDelayMs,
+        getFinalizationDelayMs: () => this.config.autoFinalizationDelayMs,
       });
       this.#fields.set(fieldName, field);
     }

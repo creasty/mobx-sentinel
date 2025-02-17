@@ -9,6 +9,7 @@ import {
   SampleFormBinding,
   SampleMultiFieldBinding,
 } from "./binding.test";
+import { defaultConfig, FormConfig } from "./config";
 
 describe("Form", () => {
   class EmptyModel {}
@@ -139,6 +140,62 @@ describe("Form", () => {
       Form.dispose(model, key);
       expect(Form.get(model, key)).not.toBe(formWithKey); // New instance is created
       expect(Form.get(model)).toBe(form); // Instances with different keys are not disposed
+    });
+  });
+
+  describe("#config, #configure", () => {
+    it("returns the global configuration by default", () => {
+      const model = new SampleModel();
+      const form = Form.get(model);
+      expect(form.config).toEqual(defaultConfig);
+    });
+
+    it("returns the local configuration", () => {
+      const model = new SampleModel();
+      const form = Form.get(model);
+      form.configure({ reactiveValidationDelayMs: 999 });
+      expect(form.config).toEqual({ ...defaultConfig, reactiveValidationDelayMs: 999 });
+    });
+
+    it("resets the local configuration to the global configuration", () => {
+      const model = new SampleModel();
+      const form = Form.get(model);
+      form.configure({ reactiveValidationDelayMs: 999 });
+      expect(form.config).toEqual({ ...defaultConfig, reactiveValidationDelayMs: 999 });
+      form.configure(true);
+      expect(form.config).toEqual(defaultConfig);
+    });
+
+    it("updates the config reactively", () => {
+      const model = new SampleModel();
+      const form = Form.get(model);
+      const timeline: FormConfig[] = [];
+      autorun(() => timeline.push(form.config));
+      form.configure({ reactiveValidationDelayMs: 999 });
+      expect(timeline).toEqual([defaultConfig, { ...defaultConfig, reactiveValidationDelayMs: 999 }]);
+    });
+
+    describe("synchronizations", () => {
+      it("updates the validator's reactionDelayMs", () => {
+        const model = new SampleModel();
+        const form = Form.get(model);
+        form.configure({ reactiveValidationDelayMs: 999 });
+        expect(form.validator.reactionDelayMs).toBe(999);
+      });
+
+      it("updates the validator's enqueueDelayMs", () => {
+        const model = new SampleModel();
+        const form = Form.get(model);
+        form.configure({ asyncValidationEnqueueDelayMs: 888 });
+        expect(form.validator.enqueueDelayMs).toBe(888);
+      });
+
+      it("updates the validator's scheduleDelayMs", () => {
+        const model = new SampleModel();
+        const form = Form.get(model);
+        form.configure({ asyncValidationScheduleDelayMs: 777 });
+        expect(form.validator.scheduleDelayMs).toBe(777);
+      });
     });
   });
 
