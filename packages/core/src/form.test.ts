@@ -205,7 +205,7 @@ describe("Form", () => {
     it("returns false when the validation is scheduled", () => {
       const model = new SampleModel();
       const form = Form.get(model);
-      form.addHandler("validate", async () => void 0);
+      form.addHandler("asyncValidate", async () => void 0);
 
       form.markAsDirty();
       expect(form.canSubmit).toBe(true);
@@ -353,7 +353,7 @@ describe("Form", () => {
   });
 
   describe("#addHandler", () => {
-    it("adds a handler to the submission event", () => {
+    it("adds a submit handler", () => {
       const model = new SampleModel();
       const form = Form.get(model);
       const internal = getInternal(form);
@@ -364,11 +364,19 @@ describe("Form", () => {
       expect(spy).toBeCalledTimes(3);
     });
 
-    it("adds a handler to the validation event", () => {
+    it("adds an async validation handler", () => {
       const model = new SampleModel();
       const form = Form.get(model);
       const spy = vi.spyOn(form.validator, "addAsyncHandler");
-      expect(form.addHandler("validate", async () => void 0)).toBeInstanceOf(Function);
+      expect(form.addHandler("asyncValidate", async () => void 0)).toBeInstanceOf(Function);
+      expect(spy).toBeCalledTimes(1);
+    });
+
+    it("adds a reactive validation handler", () => {
+      const model = new SampleModel();
+      const form = Form.get(model);
+      const spy = vi.spyOn(form.validator, "addReactiveHandler");
+      expect(form.addHandler("validate", () => void 0)).toBeInstanceOf(Function);
       expect(spy).toBeCalledTimes(1);
     });
 
