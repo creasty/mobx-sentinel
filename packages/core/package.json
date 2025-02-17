@@ -30,11 +30,11 @@
     "build": "tsup"
   },
   "dependencies": {
+    "@form-model/validation": "workspace:*",
     "mobx": "^6.12.3",
     "uuid": "^11.0.4"
   },
   "devDependencies": {
-    "@form-model/validation": "workspace:*",
     "@types/node": "^22.10.2",
     "@vitest/coverage-v8": "^2.1.8",
     "tsup": "^8.3.5",
