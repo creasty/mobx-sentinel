@@ -84,7 +84,7 @@ describe("SelectBoxBinding", () => {
     const form = Form.get(model);
     const field = new FormField({
       fieldName: "test",
-      formErrors: new Map(),
+      validator: form.validator,
       getFinalizationDelayMs: () => form.config.intermediateValidationDelayMs,
     });
     const binding = new SelectBoxBinding(field, {
