@@ -79,7 +79,8 @@ export class Validator<T> {
     const watcher = Watcher.get(target);
     reaction(
       () => watcher.changedTick,
-      () => this.request()
+      () => this.request(),
+      { fireImmediately: true }
     );
   }
 
@@ -237,6 +238,7 @@ export class Validator<T> {
         }
       },
       {
+        fireImmediately: true,
         scheduler: (fn) => {
           // NOTE: Reading timerId from this.#reactionTimerIds didn't work
           // because it always returns undefined for some reason.
