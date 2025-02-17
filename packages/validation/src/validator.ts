@@ -79,8 +79,7 @@ export class Validator<T> {
     const watcher = Watcher.get(target);
     reaction(
       () => watcher.changedTick,
-      () => this.request(),
-      { fireImmediately: true }
+      () => this.request()
     );
   }
 
@@ -218,7 +217,7 @@ export class Validator<T> {
    *
    * @returns A function to remove the handler
    */
-  addReactiveHandler(handler: Validator.ReactiveHandler<T>) {
+  addReactiveHandler(handler: Validator.ReactiveHandler<T>, opt?: Validator.HandlerOptions) {
     const key = Symbol();
     let timerId: number | null = null;
 
@@ -238,7 +237,7 @@ export class Validator<T> {
         }
       },
       {
-        fireImmediately: true,
+        fireImmediately: opt?.initialRun ?? true,
         scheduler: (fn) => {
           // NOTE: Reading timerId from this.#reactionTimerIds didn't work
           // because it always returns undefined for some reason.
@@ -254,7 +253,7 @@ export class Validator<T> {
       }
     );
 
-    return () => {
+    return (): void => {
       dispose();
 
       const timerId = this.#reactionTimerIds.get(key);
@@ -272,9 +271,10 @@ export class Validator<T> {
    *
    * @returns A function to remove the handler
    */
-  addAsyncHandler(handler: Validator.AsyncHandler<T>) {
+  addAsyncHandler(handler: Validator.AsyncHandler<T>, opt?: Validator.HandlerOptions) {
     this.#asyncHandlers.add(handler);
-    return () => void this.#asyncHandlers.delete(handler);
+    if (opt?.initialRun ?? true) this.request(); // TODO: Run only newly added handler
+    return (): void => void this.#asyncHandlers.delete(handler);
   }
 
   /**
@@ -386,4 +386,11 @@ export namespace Validator {
   export type AsyncHandler<T> = (builder: ValidationErrorsBuilder<T>, abortSignal: AbortSignal) => Promise<void>;
   export type ReactiveHandler<T> = (builder: ValidationErrorsBuilder<T>) => void;
   export type InstantHandler<T> = (builder: ValidationErrorsBuilder<T>) => void;
+  export type HandlerOptions = {
+    /**
+     * Whether to run the handler immediately
+     * @default true
+     */
+    initialRun?: boolean;
+  };
 }
