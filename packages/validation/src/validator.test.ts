@@ -37,21 +37,24 @@ function setupEnv(opt?: {
     });
   }
   if (opt?.asyncHandler) {
-    validator.addAsyncHandler(async (builder, abortSignal) => {
-      const localCounter = ++asyncCallCounter;
-      timeline.push(`job start ${localCounter}`);
-      return new Promise((resolve) => {
-        const timerId = setTimeout(() => {
-          timeline.push(`job end ${localCounter}`);
-          builder.invalidate("field1", "invalid");
-          resolve();
-        }, lag.runTime);
-        abortSignal.onabort = () => {
-          clearTimeout(timerId);
-          timeline.push(`job aborted ${localCounter}`);
-        };
-      });
-    });
+    validator.addAsyncHandler(
+      async (builder, abortSignal) => {
+        const localCounter = ++asyncCallCounter;
+        timeline.push(`job start ${localCounter}`);
+        return new Promise((resolve) => {
+          const timerId = setTimeout(() => {
+            timeline.push(`job end ${localCounter}`);
+            builder.invalidate("field1", "invalid");
+            resolve();
+          }, lag.runTime);
+          abortSignal.onabort = () => {
+            clearTimeout(timerId);
+            timeline.push(`job aborted ${localCounter}`);
+          };
+        });
+      },
+      { initialRun: false }
+    );
   }
 
   let reactionCounter = -1;
@@ -61,18 +64,21 @@ function setupEnv(opt?: {
     });
   }
   if (opt?.reactiveHandler) {
-    validator.addReactiveHandler((builder) => {
-      reactionCounter++;
-      if (reactionCounter > 0) {
-        // reaction() guarantees that the handler is called once for its initialization.
-        timeline.push(`reaction occurred ${reactionCounter}`);
-      } else {
-        timeline.push(`reaction registered`);
-      }
-      if (model.field1 < 0) {
-        builder.invalidate("field1", "invalid");
-      }
-    });
+    validator.addReactiveHandler(
+      (builder) => {
+        reactionCounter++;
+        if (reactionCounter > 0) {
+          // reaction() guarantees that the handler is called once for its initialization.
+          timeline.push(`reaction occurred ${reactionCounter}`);
+        } else {
+          timeline.push(`reaction registered`);
+        }
+        if (model.field1 < 0) {
+          builder.invalidate("field1", "invalid");
+        }
+      },
+      { initialRun: false }
+    );
   }
 
   return {
@@ -460,6 +466,27 @@ describe("Validator", () => {
       await env.waitForReactionState(0);
       expect(env.getReactionCount()).toBe(0);
     });
+
+    it("runs the handler immediately", async () => {
+      const env = setupEnv();
+      env.validator.addReactiveHandler((b) => {
+        b.invalidate("field1", "invalid");
+      });
+      expect(env.validator.reactionState).toBe(0);
+      expect(env.validator.errors).toEqual(new Map([["field1", ["invalid"]]]));
+    });
+
+    it("does not run the handler when the initialRun option is false", () => {
+      const env = setupEnv();
+      env.validator.addReactiveHandler(
+        (b) => {
+          b.invalidate("field1", "invalid");
+        },
+        { initialRun: false }
+      );
+      expect(env.validator.reactionState).toBe(0);
+      expect(env.validator.errors).toEqual(new Map());
+    });
   });
 
   describe("Async validations", () => {
@@ -486,6 +513,19 @@ describe("Validator", () => {
 
         dispose();
         env.request();
+        expect(env.validator.jobState).toBe("idle");
+      });
+
+      it("runs the handler immediately", async () => {
+        const env = setupEnv();
+        env.validator.addAsyncHandler(async () => {});
+        expect(env.validator.jobState).toBe("enqueued");
+        await env.waitForJobState("idle");
+      });
+
+      it("does not run the handler when the initialRun option is false", async () => {
+        const env = setupEnv();
+        env.validator.addAsyncHandler(async () => {}, { initialRun: false });
         expect(env.validator.jobState).toBe("idle");
       });
     });

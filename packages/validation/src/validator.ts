@@ -79,8 +79,7 @@ export class Validator<T> {
     const watcher = Watcher.get(target);
     reaction(
       () => watcher.changedTick,
-      () => this.request(),
-      { fireImmediately: true }
+      () => this.request()
     );
   }
 
@@ -218,7 +217,16 @@ export class Validator<T> {
    *
    * @returns A function to remove the handler
    */
-  addReactiveHandler(handler: Validator.ReactiveHandler<T>) {
+  addReactiveHandler(
+    handler: Validator.ReactiveHandler<T>,
+    opt?: {
+      /**
+       * Whether to run the handler immediately
+       * @default true
+       */
+      initialRun?: boolean;
+    }
+  ) {
     const key = Symbol();
     let timerId: number | null = null;
 
@@ -238,7 +246,7 @@ export class Validator<T> {
         }
       },
       {
-        fireImmediately: true,
+        fireImmediately: opt?.initialRun ?? true,
         scheduler: (fn) => {
           // NOTE: Reading timerId from this.#reactionTimerIds didn't work
           // because it always returns undefined for some reason.
@@ -272,8 +280,18 @@ export class Validator<T> {
    *
    * @returns A function to remove the handler
    */
-  addAsyncHandler(handler: Validator.AsyncHandler<T>) {
+  addAsyncHandler(
+    handler: Validator.AsyncHandler<T>,
+    opt?: {
+      /**
+       * Whether to run the handler immediately
+       * @default true
+       */
+      initialRun?: boolean;
+    }
+  ) {
     this.#asyncHandlers.add(handler);
+    if (opt?.initialRun ?? true) this.request(); // TODO: Run only newly added handler
     return () => void this.#asyncHandlers.delete(handler);
   }
 
