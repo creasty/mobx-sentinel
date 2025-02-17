@@ -17,7 +17,7 @@ export class Submission {
 
   addHandler<K extends keyof Submission.Handlers>(event: K, handler: Submission.Handlers[K]) {
     this.#handlers[event].add(handler);
-    return () => void this.#handlers[event].delete(handler);
+    return (): void => void this.#handlers[event].delete(handler);
   }
 
   async exec() {

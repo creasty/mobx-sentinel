@@ -251,7 +251,7 @@ describe("Form", () => {
     it("returns false when the validation is scheduled", () => {
       const model = new SampleModel();
       const form = Form.get(model);
-      form.addHandler("asyncValidate", async () => void 0);
+      form.addHandler("asyncValidate", async () => void 0, { initialRun: false });
 
       form.markAsDirty();
       expect(form.canSubmit).toBe(true);

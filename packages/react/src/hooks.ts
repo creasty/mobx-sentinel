@@ -25,10 +25,12 @@ export function useFormAutoReset(form: Form<any>) {
 export function useFormHandler<T extends object, Event extends keyof Form.Handlers<T>>(
   form: Form<T>,
   event: Event,
-  handler: Form.Handlers<T>[NoInfer<Event>]
+  handler: Form.Handlers<T>[NoInfer<Event>],
+  options?: Form.HandlerOptions[NoInfer<Event>]
 ) {
   const handlerRef = useRef(handler);
   handlerRef.current = handler;
+  const optionsRef = useRef(options);
 
-  useEffect(() => form.addHandler(event, handlerRef.current), [form, event]);
+  useEffect(() => form.addHandler(event, handlerRef.current, optionsRef.current), [form, event]);
 }
