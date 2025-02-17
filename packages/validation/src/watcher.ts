@@ -172,6 +172,17 @@ export class Watcher {
   #didChange(key: string) {
     runInAction(() => {
       this.#changedKeys.add(key);
+      this.#incrementChangedTick();
+    });
+  }
+
+  /**
+   * Increment the changed tick
+   *
+   * For when a key or key path is changed.
+   */
+  #incrementChangedTick() {
+    runInAction(() => {
       this.#changedTick.set(this.#changedTick.get() + 1n);
     });
   }
@@ -217,7 +228,7 @@ export class Watcher {
           }
           return changed;
         },
-        (changed) => changed && this.#didChange(key)
+        (changed) => changed && this.#incrementChangedTick()
       );
     }
   }
