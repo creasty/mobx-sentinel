@@ -47,6 +47,9 @@ importers:
 
   packages/core:
     dependencies:
+      '@form-model/validation':
+        specifier: workspace:*
+        version: link:../validation
       mobx:
         specifier: ^6.12.3
         version: 6.12.3
@@ -54,9 +57,6 @@ importers:
         specifier: ^11.0.4
         version: 11.0.4
     devDependencies:
-      '@form-model/validation':
-        specifier: workspace:*
-        version: link:../validation
       '@types/node':
         specifier: ^22.10.2
         version: 22.10.2
