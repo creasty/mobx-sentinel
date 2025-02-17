@@ -1,6 +1,6 @@
 import { action, computed, makeObservable, observable, reaction, runInAction } from "mobx";
 import { createPropertyLikeAnnotation, getAnnotationProcessor } from "./annotationProcessor";
-import { getMobxObservableAnnotations, shallowReadValue, unwrapShallowContents } from "./mobx";
+import { getMobxObservableAnnotations, shallowReadValue, unwrapShallowContents } from "./mobx-utils";
 import { StandardNestedFetcher, getNestedAnnotations } from "./nested";
 import { KeyPath, buildKeyPath } from "./keyPath";
 
