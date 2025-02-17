@@ -265,8 +265,10 @@ export class Form<T> {
       case "submit":
       case "didSubmit":
         return this.#submission.addHandler(event, handler as any);
-      case "validate":
+      case "asyncValidate":
         return this.validator.addAsyncHandler(handler as any);
+      case "validate":
+        return this.validator.addReactiveHandler(handler as any);
       default:
         event satisfies never;
         throw new Error(`Invalid event: ${event}`);
@@ -381,7 +383,8 @@ export class Form<T> {
 
 export namespace Form {
   export type EventHandlers<T> = Submission.EventHandlers & {
-    validate: Validator.AsyncHandler<T>;
+    asyncValidate: Validator.AsyncHandler<T>;
+    validate: Validator.ReactiveHandler<T>;
   };
 }
 

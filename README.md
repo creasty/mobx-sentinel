@@ -139,14 +139,14 @@ class Sample {
   @observable option: string | null = null;
   @observable multiOption: string[] = [];
 
-  // Nested/dynamic objects can be tracked with the annotation.
+  // Nested/dynamic objects can be tracked with @nested annotation
   @nested @observable nested = new Other();
   @nested @observable array = [new Other()];
 
   constructor() {
     makeObservable(this);
 
-    // Validation is implemented by returning an object with error messages.
+    // Validation is implemented here
     makeValidatable(this, (b) => {
       if (!this.text) b.invalidate("text", "Required");
       if (this.number === null) b.invalidate("number", "Required");
@@ -195,11 +195,9 @@ const SampleForm: React.FC<{ model: Sample }> = observer(({ model }) => {
     return true;
   });
 
-  // Optional:
-  // useFormEvent(form, "validate", async (abortSignal) => {
-  //   return {
-  //     // Extend validation rules here.
-  //   };
+  // [Optional] Extend validation rules here
+  // useFormEvent(form, "validate", async (builder) => {
+  //   ...
   // });
 
   return (
