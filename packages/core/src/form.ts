@@ -4,7 +4,6 @@ import { KeyPath, Validator, Watcher, StandardNestedFetcher } from "@form-model/
 import { FormField } from "./field";
 import { FormBinding, FormBindingConstructor, FormBindingFunc, getSafeBindingName } from "./binding";
 import { FormConfig, globalConfig } from "./config";
-import { FormDelegate, getDelegation } from "./delegation";
 import { Submission } from "./submission";
 
 const registry = new WeakMap<object, Map<symbol, Form<any>>>();
@@ -13,7 +12,6 @@ const internalToken = Symbol("form.internalToken");
 
 export class Form<T> {
   readonly id = uuidV4();
-  readonly #delegate?: FormDelegate;
   readonly #formKey: symbol;
   readonly watcher: Watcher;
   readonly validator: Validator<T>;
@@ -108,18 +106,12 @@ export class Form<T> {
     }
 
     this.#formKey = args.formKey;
-    this.#delegate = getDelegation(args.subject);
     this.watcher = Watcher.get(args.subject);
     this.validator = Validator.get(args.subject);
     this.#nestedFetchers = new StandardNestedFetcher(args.subject, (entry) => Form.getSafe(entry.data, this.#formKey));
 
     makeObservable(this);
 
-    this.#submission.addHandler("submit", async (abortSignal) => {
-      const submit = this.#getDelegateByKey(FormDelegate.submit);
-      if (!submit) return true;
-      return await submit(abortSignal);
-    });
     this.#submission.addHandler("didSubmit", (succeed) => {
       if (succeed) {
         this.reset();
@@ -127,29 +119,10 @@ export class Form<T> {
     });
   }
 
-  /**
-   * Get the delegate value by key.
-   *
-   * Returns an object, or a method that is bound to the delegate.
-   */
-  #getDelegateByKey<K extends symbol & keyof FormDelegate>(key: K): FormDelegate[K] | undefined {
-    const delegate = this.#delegate;
-    if (!delegate) return;
-
-    const value = delegate[key];
-    if (!value) return;
-
-    if (typeof value === "function") {
-      return value.bind(delegate) as any;
-    }
-    return value;
-  }
-
-  @computed
+  @computed.struct
   get config(): Readonly<FormConfig> {
     return {
       ...globalConfig,
-      ...this.#getDelegateByKey(FormDelegate.config),
     };
   }
 

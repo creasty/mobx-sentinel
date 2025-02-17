@@ -1,7 +1,6 @@
 import { KeyPath, makeValidatable, nested } from "@form-model/validation";
 import { autorun, makeObservable, observable, runInAction } from "mobx";
 import { Form, getInternal } from "./form";
-import { FormDelegate } from "./delegation";
 import {
   SampleConfigurableFieldBinding,
   SampleConfigurableFormBinding,
@@ -25,16 +24,6 @@ describe("Form", () => {
         if (!this.field) {
           b.invalidate("field", "invalid");
         }
-      });
-    }
-
-    async [FormDelegate.submit](signal: AbortSignal) {
-      return new Promise<boolean>((resolve) => {
-        const timerId = setTimeout(() => resolve(true), 100);
-        signal.addEventListener("abort", () => {
-          clearTimeout(timerId);
-          resolve(false);
-        });
       });
     }
   }
@@ -329,15 +318,6 @@ describe("Form", () => {
       const internal = getInternal(form);
       const spy = vi.spyOn(internal.submission, "exec");
       await form.submit({ force: true });
-      expect(spy).toBeCalled();
-    });
-
-    it("calls FormDelegate.submit when implemented", async () => {
-      const model = new SampleModel();
-      const spy = vi.spyOn(model, FormDelegate.submit);
-      const form = Form.get(model);
-      form.markAsDirty();
-      await form.submit();
       expect(spy).toBeCalled();
     });
   });
