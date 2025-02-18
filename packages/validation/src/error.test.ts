@@ -1,5 +1,5 @@
-import { ValidationError, ValidationErrorsBuilder } from "./error";
-import { buildKeyPath } from "./keyPath";
+import { ValidationError, ValidationErrorMapBuilder } from "./error";
+import { buildKeyPath, KeyPathMultiMap } from "./keyPath";
 
 describe("ValidationError", () => {
   it("can be created with a string reason", () => {
@@ -19,55 +19,64 @@ describe("ValidationError", () => {
   });
 });
 
-describe("ValidationErrorsBuilder", () => {
+describe("ValidationErrorMapBuilder", () => {
   it("can be created", () => {
-    const builder = new ValidationErrorsBuilder<unknown>();
+    const builder = new ValidationErrorMapBuilder<unknown>();
     expect(builder.hasError).toBe(false);
   });
 
   describe(".build", () => {
     it("returns a frozen array", () => {
-      const builder = new ValidationErrorsBuilder<unknown>();
-      const errors = ValidationErrorsBuilder.build(builder);
-      expect(errors).toBeInstanceOf(Array);
-      expect(Object.isFrozen(errors)).toBe(true);
+      const builder = new ValidationErrorMapBuilder<unknown>();
+      const result = ValidationErrorMapBuilder.build(builder);
+      expect(result).toBeInstanceOf(KeyPathMultiMap);
+      expect(Object.isFrozen(result)).toBe(true);
     });
   });
 
   describe("#invalidate", () => {
     it("adds an error for the given key", () => {
-      const builder = new ValidationErrorsBuilder<{ key1: number; key2: number }>();
+      const builder = new ValidationErrorMapBuilder<{ key1: number; key2: number }>();
       builder.invalidate("key1", "reason");
       expect(builder.hasError).toBe(true);
 
-      const errors = ValidationErrorsBuilder.build(builder);
-      expect(errors).toEqual([new ValidationError({ keyPath: buildKeyPath("key1"), reason: "reason" })]);
+      const result = ValidationErrorMapBuilder.build(builder);
+      expect(result.size).toEqual(1);
+      expect(result.get(buildKeyPath("key1"))).toEqual(
+        new Set([new ValidationError({ keyPath: buildKeyPath("key1"), reason: "reason" })])
+      );
     });
 
     it("adds another error for the same key", () => {
-      const builder = new ValidationErrorsBuilder<{ key1: number; key2: number }>();
+      const builder = new ValidationErrorMapBuilder<{ key1: number; key2: number }>();
       builder.invalidate("key1", "reason1");
       builder.invalidate("key1", "reason2");
       expect(builder.hasError).toBe(true);
 
-      const errors = ValidationErrorsBuilder.build(builder);
-      expect(errors).toEqual([
-        new ValidationError({ keyPath: buildKeyPath("key1"), reason: "reason1" }),
-        new ValidationError({ keyPath: buildKeyPath("key1"), reason: "reason2" }),
-      ]);
+      const result = ValidationErrorMapBuilder.build(builder);
+      expect(result.size).toEqual(1);
+      expect(result.get(buildKeyPath("key1"))).toEqual(
+        new Set([
+          new ValidationError({ keyPath: buildKeyPath("key1"), reason: "reason1" }),
+          new ValidationError({ keyPath: buildKeyPath("key1"), reason: "reason2" }),
+        ])
+      );
     });
 
     it("adds an error for a different key", () => {
-      const builder = new ValidationErrorsBuilder<{ key1: number; key2: number }>();
+      const builder = new ValidationErrorMapBuilder<{ key1: number; key2: number }>();
       builder.invalidate("key1", "reasonA");
       builder.invalidate("key2", "reasonB");
       expect(builder.hasError).toBe(true);
 
-      const errors = ValidationErrorsBuilder.build(builder);
-      expect(errors).toEqual([
-        new ValidationError({ keyPath: buildKeyPath("key1"), reason: "reasonA" }),
-        new ValidationError({ keyPath: buildKeyPath("key2"), reason: "reasonB" }),
-      ]);
+      const result = ValidationErrorMapBuilder.build(builder);
+      expect(result.size).toEqual(2);
+      expect(result.get(buildKeyPath("key1"))).toEqual(
+        new Set([new ValidationError({ keyPath: buildKeyPath("key1"), reason: "reasonA" })])
+      );
+      expect(result.get(buildKeyPath("key2"))).toEqual(
+        new Set([new ValidationError({ keyPath: buildKeyPath("key2"), reason: "reasonB" })])
+      );
     });
   });
 });

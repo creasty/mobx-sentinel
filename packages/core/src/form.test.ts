@@ -572,9 +572,9 @@ describe("Form", () => {
       });
       await vi.waitFor(() => expect(form.isValidating).toBe(false));
 
-      expect(form.getError("field")).toEqual(null);
+      expect(form.getError("field")).toEqual(new Set());
       field.reportError();
-      expect(form.getError("field")).toEqual(["invalid"]);
+      expect(form.getError("field")).toEqual(new Set(["invalid"]));
     });
 
     it("returns the error messages for a field when includePreReported is true", async () => {
@@ -588,7 +588,7 @@ describe("Form", () => {
       await vi.waitFor(() => expect(form.isValidating).toBe(false));
 
       field.reportError();
-      expect(form.getError("field", true)).toEqual(["invalid"]);
+      expect(form.getError("field", true)).toEqual(new Set(["invalid"]));
     });
   });
 });

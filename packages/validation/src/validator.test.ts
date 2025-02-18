@@ -1,6 +1,7 @@
 import { autorun, makeObservable, observable, runInAction } from "mobx";
 import { Validator, makeValidatable } from "./validator";
 import { nested } from "./nested";
+import { KeyPath, KeyPathSelf } from "./keyPath";
 
 class Sample {
   @observable field1 = 0;
@@ -103,6 +104,19 @@ function setupEnv(opt?: {
   };
 }
 
+function getAllErrors(validator: Validator<any>) {
+  const result = new Map<KeyPath, Array<string>>();
+  for (const [keyPath, error] of validator.findErrors(KeyPathSelf)) {
+    let errors = result.get(keyPath);
+    if (!errors) {
+      errors = [];
+      result.set(keyPath, errors);
+    }
+    errors.push(error.message);
+  }
+  return result;
+}
+
 describe("makeValidatable", () => {
   it("throws an error when a non-object is given", () => {
     expect(() => {
@@ -166,7 +180,7 @@ describe("Validator", () => {
       const validator = Validator.get({ sample: false });
       const symbol = Symbol();
       validator.updateErrors(symbol, () => {});
-      expect(validator.errors).toEqual(new Map());
+      expect(getAllErrors(validator)).toEqual(new Map());
     });
 
     it("updates the errors instantly", () => {
@@ -175,7 +189,7 @@ describe("Validator", () => {
       validator.updateErrors(symbol, (builder) => {
         builder.invalidate("sample", "invalid");
       });
-      expect(validator.errors).toEqual(new Map([["sample", ["invalid"]]]));
+      expect(getAllErrors(validator)).toEqual(new Map([["sample", ["invalid"]]]));
     });
 
     it("removes the errors by calling the returned function", () => {
@@ -185,7 +199,7 @@ describe("Validator", () => {
         builder.invalidate("sample", "invalid");
       });
       dispose();
-      expect(validator.errors).toEqual(new Map());
+      expect(getAllErrors(validator)).toEqual(new Map());
     });
 
     it("replaces the errors when called again with the same key", () => {
@@ -197,7 +211,7 @@ describe("Validator", () => {
       validator.updateErrors(symbol, (builder) => {
         builder.invalidate("sample", "invalid2");
       });
-      expect(validator.errors).toEqual(new Map([["sample", ["invalid2"]]]));
+      expect(getAllErrors(validator)).toEqual(new Map([["sample", ["invalid2"]]]));
     });
 
     it("merges the errors of the different keys", () => {
@@ -210,7 +224,7 @@ describe("Validator", () => {
       validator.updateErrors(symbol2, (builder) => {
         builder.invalidate("sample", "invalid2");
       });
-      expect(validator.errors).toEqual(new Map([["sample", ["invalid1", "invalid2"]]]));
+      expect(getAllErrors(validator)).toEqual(new Map([["sample", ["invalid1", "invalid2"]]]));
     });
 
     it("removes individual errors by calling the returned function", () => {
@@ -224,9 +238,9 @@ describe("Validator", () => {
         builder.invalidate("sample", "invalid2");
       });
       dispose1();
-      expect(validator.errors).toEqual(new Map([["sample", ["invalid2"]]]));
+      expect(getAllErrors(validator)).toEqual(new Map([["sample", ["invalid2"]]]));
       dispose2();
-      expect(validator.errors).toEqual(new Map());
+      expect(getAllErrors(validator)).toEqual(new Map());
     });
   });
 
@@ -299,10 +313,10 @@ describe("Validator", () => {
       env.validator.updateErrors(symbol, (builder) => {
         builder.invalidate("field1", "invalid1");
       });
-      expect(env.validator.errors.size).toBe(1);
+      expect(env.validator.invalidKeyPathCount).toBe(1);
 
       env.validator.reset();
-      expect(env.validator.errors.size).toBe(0);
+      expect(env.validator.invalidKeyPathCount).toBe(0);
     });
 
     it("cancels pending reactive validations", async () => {
@@ -405,18 +419,18 @@ describe("Validator", () => {
     it("updates the errors", async () => {
       const env = setupEnv({ reactiveHandler: true });
 
-      expect(env.validator.errors).toEqual(new Map());
+      expect(getAllErrors(env.validator)).toEqual(new Map());
       runInAction(() => {
         env.model.field1 = -1;
       });
       await env.waitForReactionState(0);
-      expect(env.validator.errors).toEqual(new Map([["field1", ["invalid"]]]));
+      expect(getAllErrors(env.validator)).toEqual(new Map([["field1", ["invalid"]]]));
     });
 
     it("removes the errors when the condition is no longer met", async () => {
       const env = setupEnv({ reactiveHandler: true });
 
-      expect(env.validator.errors).toEqual(new Map());
+      expect(getAllErrors(env.validator)).toEqual(new Map());
       runInAction(() => {
         env.model.field1 = -1;
       });
@@ -426,7 +440,7 @@ describe("Validator", () => {
         env.model.field1 = 0;
       });
       await env.waitForReactionState(0);
-      expect(env.validator.errors).toEqual(new Map());
+      expect(getAllErrors(env.validator)).toEqual(new Map());
     });
 
     it("removes the handler by calling the returned function", async () => {
@@ -473,7 +487,7 @@ describe("Validator", () => {
         b.invalidate("field1", "invalid");
       });
       expect(env.validator.reactionState).toBe(0);
-      expect(env.validator.errors).toEqual(new Map([["field1", ["invalid"]]]));
+      expect(getAllErrors(env.validator)).toEqual(new Map([["field1", ["invalid"]]]));
     });
 
     it("does not run the handler when the initialRun option is false", () => {
@@ -485,7 +499,7 @@ describe("Validator", () => {
         { initialRun: false }
       );
       expect(env.validator.reactionState).toBe(0);
-      expect(env.validator.errors).toEqual(new Map());
+      expect(getAllErrors(env.validator)).toEqual(new Map());
     });
   });
 

@@ -1,5 +1,6 @@
 import { makeObservable, observable } from "mobx";
 import { getNestedAnnotations, nested, StandardNestedFetcher } from "./nested";
+import { KeyPath } from "./keyPath";
 
 const symbolKey1 = Symbol("key1");
 
@@ -118,56 +119,56 @@ describe("StandardNestedFetcher", () => {
     const sample = new Sample();
     const fetcher = new StandardNestedFetcher(sample, (entry) => entry.data);
 
-    const map = new Map<string, any>();
+    const map = new Map<KeyPath, any>();
     for (const entry of fetcher) {
       map.set(entry.keyPath, entry.data);
     }
 
     expect(map.size).toBe(36);
 
-    expect(map.get("number1")).toEqual(sample.number1);
-    expect(map.get("object1")).toEqual(sample.object1);
-    expect(map.get("other1")).toEqual(sample.other1);
-    expect(map.get("array1.0")).toEqual(sample.array1[0]);
-    expect(map.get("array2.0")).toEqual(sample.array2[0]);
-    expect(map.get("otherArray1.0")).toEqual(sample.otherArray1[0]);
-    expect(map.get("set1.0")).toEqual(Array.from(sample.set1)[0]);
-    expect(map.get("set2.0")).toEqual(Array.from(sample.set2)[0]);
-    expect(map.get("otherSet1.0")).toEqual(Array.from(sample.otherSet1)[0]);
-    expect(map.get("map1.key1")).toEqual(sample.map1.get("key1"));
-    expect(map.get("map2.key1")).toEqual(sample.map2.get("key1"));
-    expect(map.get("otherMap1.key1")).toEqual(sample.otherMap1.get("key1"));
+    expect(map.get("number1" as KeyPath)).toEqual(sample.number1);
+    expect(map.get("object1" as KeyPath)).toEqual(sample.object1);
+    expect(map.get("other1" as KeyPath)).toEqual(sample.other1);
+    expect(map.get("array1.0" as KeyPath)).toEqual(sample.array1[0]);
+    expect(map.get("array2.0" as KeyPath)).toEqual(sample.array2[0]);
+    expect(map.get("otherArray1.0" as KeyPath)).toEqual(sample.otherArray1[0]);
+    expect(map.get("set1.0" as KeyPath)).toEqual(Array.from(sample.set1)[0]);
+    expect(map.get("set2.0" as KeyPath)).toEqual(Array.from(sample.set2)[0]);
+    expect(map.get("otherSet1.0" as KeyPath)).toEqual(Array.from(sample.otherSet1)[0]);
+    expect(map.get("map1.key1" as KeyPath)).toEqual(sample.map1.get("key1"));
+    expect(map.get("map2.key1" as KeyPath)).toEqual(sample.map2.get("key1"));
+    expect(map.get("otherMap1.key1" as KeyPath)).toEqual(sample.otherMap1.get("key1"));
 
-    expect(map.get("boxedNumber1")).toEqual(sample.boxedNumber1.get());
-    expect(map.get("boxedObject1")).toEqual(sample.boxedObject1.get());
-    expect(map.get("boxedOther1")).toEqual(sample.boxedOther1.get());
-    expect(map.get("boxedArray1.0")).toEqual(sample.boxedArray1.get()[0]);
-    expect(map.get("boxedArray2.0")).toEqual(sample.boxedArray2.get()[0]);
-    expect(map.get("boxedOtherArray1.0")).toEqual(sample.boxedOtherArray1.get()[0]);
-    expect(map.get("boxedSet1.0")).toEqual(Array.from(sample.boxedSet1.get())[0]);
-    expect(map.get("boxedSet2.0")).toEqual(Array.from(sample.boxedSet2.get())[0]);
-    expect(map.get("boxedOtherSet1.0")).toEqual(Array.from(sample.boxedOtherSet1.get())[0]);
-    expect(map.get("boxedMap1.key1")).toEqual(sample.boxedMap1.get().get("key1"));
-    expect(map.get("boxedMap2.key1")).toEqual(sample.boxedMap2.get().get("key1"));
-    expect(map.get("boxedOtherMap1.key1")).toEqual(sample.boxedOtherMap1.get().get("key1"));
+    expect(map.get("boxedNumber1" as KeyPath)).toEqual(sample.boxedNumber1.get());
+    expect(map.get("boxedObject1" as KeyPath)).toEqual(sample.boxedObject1.get());
+    expect(map.get("boxedOther1" as KeyPath)).toEqual(sample.boxedOther1.get());
+    expect(map.get("boxedArray1.0" as KeyPath)).toEqual(sample.boxedArray1.get()[0]);
+    expect(map.get("boxedArray2.0" as KeyPath)).toEqual(sample.boxedArray2.get()[0]);
+    expect(map.get("boxedOtherArray1.0" as KeyPath)).toEqual(sample.boxedOtherArray1.get()[0]);
+    expect(map.get("boxedSet1.0" as KeyPath)).toEqual(Array.from(sample.boxedSet1.get())[0]);
+    expect(map.get("boxedSet2.0" as KeyPath)).toEqual(Array.from(sample.boxedSet2.get())[0]);
+    expect(map.get("boxedOtherSet1.0" as KeyPath)).toEqual(Array.from(sample.boxedOtherSet1.get())[0]);
+    expect(map.get("boxedMap1.key1" as KeyPath)).toEqual(sample.boxedMap1.get().get("key1"));
+    expect(map.get("boxedMap2.key1" as KeyPath)).toEqual(sample.boxedMap2.get().get("key1"));
+    expect(map.get("boxedOtherMap1.key1" as KeyPath)).toEqual(sample.boxedOtherMap1.get().get("key1"));
 
-    expect(map.get("refObject1")).toEqual(sample.refObject1);
-    expect(map.get("refOther1")).toEqual(sample.refOther1);
-    expect(map.get("refArray1.0")).toEqual(sample.refArray1[0]);
-    expect(map.get("refOtherArray1.0")).toEqual(sample.refOtherArray1[0]);
-    expect(map.get("refSet1.0")).toEqual(Array.from(sample.refSet1)[0]);
-    expect(map.get("refSet2.0")).toEqual(Array.from(sample.refSet2)[0]);
-    expect(map.get("refOtherSet1.0")).toEqual(Array.from(sample.refOtherSet1)[0]);
-    expect(map.get("refMap1.key1")).toEqual(sample.refMap1.get("key1"));
-    expect(map.get("refMap2.key1")).toEqual(sample.refMap2.get("key1"));
-    expect(map.get("refOtherMap1.key1")).toEqual(sample.refOtherMap1.get("key1"));
+    expect(map.get("refObject1" as KeyPath)).toEqual(sample.refObject1);
+    expect(map.get("refOther1" as KeyPath)).toEqual(sample.refOther1);
+    expect(map.get("refArray1.0" as KeyPath)).toEqual(sample.refArray1[0]);
+    expect(map.get("refOtherArray1.0" as KeyPath)).toEqual(sample.refOtherArray1[0]);
+    expect(map.get("refSet1.0" as KeyPath)).toEqual(Array.from(sample.refSet1)[0]);
+    expect(map.get("refSet2.0" as KeyPath)).toEqual(Array.from(sample.refSet2)[0]);
+    expect(map.get("refOtherSet1.0" as KeyPath)).toEqual(Array.from(sample.refOtherSet1)[0]);
+    expect(map.get("refMap1.key1" as KeyPath)).toEqual(sample.refMap1.get("key1"));
+    expect(map.get("refMap2.key1" as KeyPath)).toEqual(sample.refMap2.get("key1"));
+    expect(map.get("refOtherMap1.key1" as KeyPath)).toEqual(sample.refOtherMap1.get("key1"));
   });
 
   it("ignores null data", () => {
     const sample = new Sample();
     const fetcher = new StandardNestedFetcher(sample, (entry) => (entry.data instanceof Other ? entry.data : null));
 
-    const map = new Map<string, any>();
+    const map = new Map<KeyPath, any>();
     for (const entry of fetcher) {
       map.set(entry.keyPath, entry.data);
     }

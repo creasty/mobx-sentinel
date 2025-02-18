@@ -1,6 +1,6 @@
 import { action, computed, makeObservable, observable } from "mobx";
 import { v4 as uuidV4 } from "uuid";
-import type { Validator } from "@form-model/validation";
+import { buildKeyPath, type Validator } from "@form-model/validation";
 
 export class FormField {
   readonly id = uuidV4();
@@ -43,12 +43,12 @@ export class FormField {
 
   @computed.struct
   get errors() {
-    return this.#validator.errors.get(this.fieldName) ?? null;
+    return this.#validator.getErrorMessages(buildKeyPath(this.fieldName)) ?? null;
   }
 
   @computed
   get hasErrors() {
-    return !!this.errors;
+    return this.errors.size > 0;
   }
 
   @computed

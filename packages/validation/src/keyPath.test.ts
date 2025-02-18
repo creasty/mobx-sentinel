@@ -1,13 +1,48 @@
-import { buildKeyPath, KeyPath, KeyPathMultiMap } from "./keyPath";
+import {
+  buildKeyPath,
+  getKeyPathAncestors,
+  getRelativeKeyPath,
+  isKeyPathSelf,
+  KeyPath,
+  KeyPathMultiMap,
+  KeyPathComponent,
+  KeyPathSelf,
+  getParentKeyOfKeyPath,
+} from "./keyPath";
 
-describe("KeyPath", () => {
+describe("KeyPathComponent", () => {
   test("being a branded type", () => {
-    expectTypeOf<KeyPath>().toMatchTypeOf<string>();
-    expectTypeOf<string>().not.toMatchTypeOf<KeyPath>();
+    expectTypeOf<KeyPathComponent>().toMatchTypeOf<string>();
+    expectTypeOf<string>().not.toMatchTypeOf<KeyPathComponent>();
+  });
+});
+
+describe("KeyPathSelf", () => {
+  test("being a branded type", () => {
+    expectTypeOf<KeyPathSelf>().toMatchTypeOf<symbol>();
+    expectTypeOf<symbol>().not.toMatchTypeOf<KeyPathSelf>();
+  });
+
+  describe("isKeyPathSelf", () => {
+    it("returns true if the key path is a self path", () => {
+      expect(isKeyPathSelf(KeyPathSelf)).toBe(true);
+    });
+
+    it("returns false if the key path is not a self path", () => {
+      expect(isKeyPathSelf("a" as KeyPath)).toBe(false);
+    });
+
+    it("returns true if the key path is an empty string", () => {
+      expect(isKeyPathSelf("" as KeyPath)).toBe(true);
+    });
   });
 });
 
 describe("buildKeyPath", () => {
+  it("returns a self path if no keys are provided", () => {
+    expect(buildKeyPath()).toBe(KeyPathSelf);
+  });
+
   it("builds a key path with strings", () => {
     expect(buildKeyPath("a", "b", "c")).toBe("a.b.c");
   });
@@ -16,12 +51,95 @@ describe("buildKeyPath", () => {
     expect(buildKeyPath("a", 0, "c")).toBe("a.0.c");
   });
 
+  it("builds a key path with self paths", () => {
+    expect(buildKeyPath(KeyPathSelf)).toBe(KeyPathSelf);
+  });
+
   it("ignores nulls", () => {
     expect(buildKeyPath("a", null, "c", null)).toBe("a.c");
   });
 
   it("ignores empty strings", () => {
     expect(buildKeyPath("a", "", "c", "")).toBe("a.c");
+  });
+
+  it("ignores self paths", () => {
+    expect(buildKeyPath("a", KeyPathSelf, "c", KeyPathSelf)).toBe("a.c");
+  });
+});
+
+describe("getParentKeyOfKeyPath", () => {
+  it("returns the parent key of a key path", () => {
+    expect(getParentKeyOfKeyPath("a.b.c" as KeyPath)).toBe("a");
+    expect(getParentKeyOfKeyPath("a" as KeyPath)).toBe("a");
+  });
+
+  it("returns a self path if the key path is a self path", () => {
+    expect(getParentKeyOfKeyPath(KeyPathSelf)).toBe(KeyPathSelf);
+  });
+
+  it("returns a self path if the key path is empty", () => {
+    expect(getParentKeyOfKeyPath("" as KeyPath)).toBe(KeyPathSelf);
+  });
+});
+
+describe("getRelativeKeyPath", () => {
+  it("returns the relative key path", () => {
+    expect(getRelativeKeyPath("a.b.c" as KeyPath, "a.b" as KeyPath)).toBe("c");
+  });
+
+  it("returns null if the key path is not a child of the prefix key path", () => {
+    expect(getRelativeKeyPath("a.b.c" as KeyPath, "a.c" as KeyPath)).toBeNull();
+  });
+
+  it("considers path delimiter when checking if key path is a child of prefix", () => {
+    expect(getRelativeKeyPath("aa" as KeyPath, "a" as KeyPath)).toBeNull();
+    expect(getRelativeKeyPath("a.bb" as KeyPath, "a.b" as KeyPath)).toBeNull();
+  });
+
+  it("returns a self path if the prefix key path is the same as the key path", () => {
+    expect(getRelativeKeyPath("a.b.c" as KeyPath, "a.b.c" as KeyPath)).toBe(KeyPathSelf);
+  });
+
+  it("returns a self path if the key path is a self path", () => {
+    expect(getRelativeKeyPath(KeyPathSelf, "a.b.c" as KeyPath)).toBe(KeyPathSelf);
+  });
+
+  it("returns a self path if the key path is empty", () => {
+    expect(getRelativeKeyPath("" as KeyPath, "a.b.c" as KeyPath)).toBe(KeyPathSelf);
+  });
+
+  it("returns the original key path if the prefix key path is a self path", () => {
+    expect(getRelativeKeyPath("a.b.c" as KeyPath, KeyPathSelf)).toBe("a.b.c");
+  });
+
+  it("returns the original key path if the prefix key path is empty", () => {
+    expect(getRelativeKeyPath("a.b.c" as KeyPath, "" as KeyPath)).toBe("a.b.c");
+  });
+});
+
+describe("getKeyPathAncestors", () => {
+  it("includes the key path itself when includeSelf is true", () => {
+    expect(Array.from(getKeyPathAncestors("a.b.c" as KeyPath))).toEqual(["a.b.c", "a.b", "a"]);
+  });
+
+  it("does not include the key path itself when includeSelf is false", () => {
+    expect(Array.from(getKeyPathAncestors("a.b.c" as KeyPath, false))).toEqual(["a.b", "a"]);
+  });
+
+  it("returns a self path if the key path is a single-level key path", () => {
+    expect(Array.from(getKeyPathAncestors("a" as KeyPath))).toEqual(["a"]);
+    expect(Array.from(getKeyPathAncestors("a" as KeyPath, false))).toEqual([]);
+  });
+
+  it("returns a self path if the key path is a self path", () => {
+    expect(Array.from(getKeyPathAncestors(KeyPathSelf))).toEqual([KeyPathSelf]);
+    expect(Array.from(getKeyPathAncestors(KeyPathSelf, false))).toEqual([]);
+  });
+
+  it("returns a self path if the key path is empty", () => {
+    expect(Array.from(getKeyPathAncestors("" as KeyPath))).toEqual([KeyPathSelf]);
+    expect(Array.from(getKeyPathAncestors("" as KeyPath, false))).toEqual([]);
   });
 });
 
@@ -127,18 +245,36 @@ describe("KeyPathMultiMap", () => {
     });
   });
 
-  describe("iteration", () => {
-    it("iterates over all unique values", () => {
+  describe("iterator", () => {
+    it("iterates over all values", () => {
       const map = new KeyPathMultiMap<string>();
       map.set("a.b" as KeyPath, "value1");
       map.set("x.y" as KeyPath, "value2");
-      map.set("p.q" as KeyPath, "value1"); // Duplicate value
+      map.set("p.q" as KeyPath, "value1");
 
       const entries = Array.from(map);
       expect(entries).toEqual([
         ["a.b" as KeyPath, "value1"],
         ["x.y" as KeyPath, "value2"],
+        ["p.q" as KeyPath, "value1"],
       ]);
+    });
+  });
+
+  describe("#toImmutable", () => {
+    it("creates an immutable version of the map", () => {
+      const map = new KeyPathMultiMap<string>();
+      map.set("a.b" as KeyPath, "value1");
+
+      const immutable = map.toImmutable();
+      expect(immutable).toBe(map);
+
+      expect(Object.isFrozen(map)).toBe(true);
+      expect(map.get("a.b" as KeyPath)).toEqual(new Set(["value1"]));
+
+      expect(() => map.set("a.b" as KeyPath, "value2")).toThrow(/frozen/);
+      expect(() => map.delete("a.b" as KeyPath)).toThrow(/frozen/);
+      expect(map.get("a.b" as KeyPath)).toEqual(new Set(["value1"]));
     });
   });
 });

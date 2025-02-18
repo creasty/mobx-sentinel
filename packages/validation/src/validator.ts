@@ -1,8 +1,16 @@
 import { action, comparer, computed, makeObservable, observable, reaction, runInAction } from "mobx";
-import { ValidationError, ValidationErrorsBuilder } from "./error";
+import { ValidationError, ValidationErrorMapBuilder } from "./error";
 import { Watcher } from "./watcher";
 import { StandardNestedFetcher } from "./nested";
-import { KeyPath, buildKeyPath } from "./keyPath";
+import {
+  KeyPath,
+  KeyPathSelf,
+  ReadonlyKeyPathMultiMap,
+  buildKeyPath,
+  getKeyPathAncestors,
+  getRelativeKeyPath,
+  isKeyPathSelf,
+} from "./keyPath";
 
 const validatorKey = Symbol("validator");
 const internalToken = Symbol("validator.internal");
@@ -27,7 +35,9 @@ export function makeValidatable<T extends object>(
 }
 
 export class Validator<T> {
-  readonly #errors = observable.map<symbol, ReadonlyArray<ValidationError>>([], { equals: comparer.structural });
+  readonly #errors = observable.map<symbol, ReadonlyKeyPathMultiMap<ValidationError>>([], {
+    equals: comparer.structural,
+  });
   readonly #nestedFetcher: StandardNestedFetcher<Validator<any>>;
 
   // Async validation
@@ -87,23 +97,6 @@ export class Validator<T> {
     );
   }
 
-  /** Errors */
-  @computed.struct
-  get errors(): Validator.KeyPathErrorMap {
-    const result = new Map<KeyPath, string[]>();
-    for (const errors of this.#errors.values()) {
-      for (const error of errors) {
-        let list = result.get(error.keyPath);
-        if (!list) {
-          list = [];
-          result.set(error.keyPath, list);
-        }
-        list.push(error.message);
-      }
-    }
-    return result;
-  }
-
   /** Whether no errors are found */
   @computed
   get isValid() {
@@ -117,12 +110,12 @@ export class Validator<T> {
   }
 
   /** The number of invalid keys */
-  @computed
-  get invalidKeys(): ReadonlySet<string> {
-    const seenKeys = new Set<string>();
+  @computed.struct
+  get invalidKeys(): ReadonlySet<KeyPath> {
+    const seenKeys = new Set<KeyPath>();
     for (const errors of this.#errors.values()) {
-      for (const error of errors) {
-        seenKeys.add(error.key);
+      for (const [, error] of errors) {
+        seenKeys.add(buildKeyPath(error.key));
       }
     }
     return Object.freeze(seenKeys);
@@ -135,20 +128,61 @@ export class Validator<T> {
   }
 
   /** The number of invalid key paths */
-  @computed
-  get invalidKeyPaths(): ReadonlySet<string> {
-    const result = new Set<string>();
+  @computed.struct
+  get invalidKeyPaths(): ReadonlySet<KeyPath> {
+    const result = new Set<KeyPath>();
     for (const errors of this.#errors.values()) {
-      for (const error of errors) {
-        result.add(error.keyPath);
+      for (const [keyPath] of errors) {
+        result.add(keyPath);
       }
     }
     for (const [keyPath, validator] of this.nested) {
-      for (const changedKeyPath of validator.invalidKeyPaths) {
-        result.add(buildKeyPath(keyPath, changedKeyPath));
+      for (const relativeKeyPath of validator.invalidKeyPaths) {
+        result.add(buildKeyPath(keyPath, relativeKeyPath));
       }
     }
     return Object.freeze(result);
+  }
+
+  /** Get error messages for a key path */
+  getErrorMessages(keyPath: KeyPath, prefixMatch = false) {
+    const result = new Set<string>();
+    for (const [, error] of this.findErrors(keyPath, prefixMatch)) {
+      result.add(error.message);
+    }
+    return result;
+  }
+
+  /** Find errors for a key path */
+  *findErrors(searchKeyPath: KeyPath, prefixMatch = false): Generator<[keyPath: KeyPath, error: ValidationError]> {
+    if (isKeyPathSelf(searchKeyPath)) {
+      for (const errors of this.#errors.values()) {
+        for (const [keyPath, error] of errors) {
+          yield [keyPath, error];
+        }
+      }
+      for (const [keyPath, validator] of this.nested) {
+        for (const [relativeKeyPath, error] of validator.findErrors(KeyPathSelf, prefixMatch)) {
+          yield [buildKeyPath(keyPath, relativeKeyPath), error];
+        }
+      }
+    } else {
+      for (const errors of this.#errors.values()) {
+        const iter = prefixMatch ? errors.findPrefix(searchKeyPath) : errors.findExact(searchKeyPath);
+        for (const error of iter) {
+          yield [error.keyPath, error];
+        }
+      }
+      for (const ancestorKeyPath of getKeyPathAncestors(searchKeyPath, false)) {
+        const validator = this.nested.get(ancestorKeyPath);
+        if (!validator) continue;
+        const parentKeyPath = getRelativeKeyPath(searchKeyPath, ancestorKeyPath);
+        if (!parentKeyPath) continue;
+        for (const [relativeKeyPath, error] of validator.findErrors(parentKeyPath, prefixMatch)) {
+          yield [buildKeyPath(ancestorKeyPath, relativeKeyPath), error];
+        }
+      }
+    }
   }
 
   /** State of the async validation */
@@ -174,8 +208,8 @@ export class Validator<T> {
 
   /** Nested validators */
   @computed.struct
-  get nested(): ReadonlyMap<string, Validator<any>> {
-    const result = new Map<string, Validator<any>>();
+  get nested(): ReadonlyMap<KeyPath, Validator<any>> {
+    const result = new Map<KeyPath, Validator<any>>();
     for (const entry of this.#nestedFetcher) {
       result.set(entry.keyPath, entry.data);
     }
@@ -203,10 +237,10 @@ export class Validator<T> {
    * @returns A function to remove the errors
    */
   updateErrors(key: symbol, handler: Validator.InstantHandler<T>) {
-    const builder = new ValidationErrorsBuilder();
+    const builder = new ValidationErrorMapBuilder();
     handler(builder);
-    const result = ValidationErrorsBuilder.build(builder);
-    if (result.length > 0) {
+    const result = ValidationErrorMapBuilder.build(builder);
+    if (result.size > 0) {
       this.#errors.set(key, result);
     } else {
       this.#errors.delete(key);
@@ -227,14 +261,14 @@ export class Validator<T> {
 
     const dispose = reaction(
       () => {
-        const builder = new ValidationErrorsBuilder();
+        const builder = new ValidationErrorMapBuilder();
         handler(builder);
-        return ValidationErrorsBuilder.build(builder);
+        return ValidationErrorMapBuilder.build(builder);
       },
       (result) => {
         this.#reactionTimerIds.delete(key);
 
-        if (result.length > 0) {
+        if (result.size > 0) {
           this.#errors.set(key, result);
         } else {
           this.#errors.delete(key);
@@ -355,7 +389,7 @@ export class Validator<T> {
       this.#jobState.set("running");
     });
 
-    const builder = new ValidationErrorsBuilder();
+    const builder = new ValidationErrorMapBuilder();
     try {
       const promises = [];
       for (const handler of this.#asyncHandlers) {
@@ -369,7 +403,7 @@ export class Validator<T> {
 
     runInAction(() => {
       if (builder.hasError) {
-        this.#errors.set(defaultErrorGroupKey, ValidationErrorsBuilder.build(builder));
+        this.#errors.set(defaultErrorGroupKey, ValidationErrorMapBuilder.build(builder));
       } else {
         this.#errors.delete(defaultErrorGroupKey);
       }
@@ -387,9 +421,9 @@ export class Validator<T> {
 export namespace Validator {
   export type KeyPathErrorMap = ReadonlyMap<string, ReadonlyArray<string>>;
   export type JobState = "idle" | "enqueued" | "running" | "scheduled";
-  export type AsyncHandler<T> = (builder: ValidationErrorsBuilder<T>, abortSignal: AbortSignal) => Promise<void>;
-  export type ReactiveHandler<T> = (builder: ValidationErrorsBuilder<T>) => void;
-  export type InstantHandler<T> = (builder: ValidationErrorsBuilder<T>) => void;
+  export type AsyncHandler<T> = (builder: ValidationErrorMapBuilder<T>, abortSignal: AbortSignal) => Promise<void>;
+  export type ReactiveHandler<T> = (builder: ValidationErrorMapBuilder<T>) => void;
+  export type InstantHandler<T> = (builder: ValidationErrorMapBuilder<T>) => void;
   export type HandlerOptions = {
     /**
      * Whether to run the handler immediately
