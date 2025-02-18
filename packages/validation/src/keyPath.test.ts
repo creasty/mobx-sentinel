@@ -245,6 +245,35 @@ describe("KeyPathMultiMap", () => {
     });
   });
 
+  describe("#size", () => {
+    it("returns the number of key paths", () => {
+      const map = new KeyPathMultiMap<string>();
+      map.set("a.b" as KeyPath, "value1");
+      map.set("x.y" as KeyPath, "value2");
+      map.set("p.q" as KeyPath, "value1");
+      expect(map.size).toBe(3);
+    });
+  });
+
+  describe("#has", () => {
+    it("returns true if the key path exists", () => {
+      const map = new KeyPathMultiMap<string>();
+      map.set("a.b" as KeyPath, "value1");
+      expect(map.has("a.b" as KeyPath)).toBe(true);
+    });
+
+    it("returns false if the key path does not exist", () => {
+      const map = new KeyPathMultiMap<string>();
+      expect(map.has("a.b" as KeyPath)).toBe(false);
+    });
+
+    it("returns true if the key path exists with prefixMatch", () => {
+      const map = new KeyPathMultiMap<string>();
+      map.set("a.b" as KeyPath, "value1");
+      expect(map.has("a" as KeyPath, true)).toBe(true);
+    });
+  });
+
   describe("iterator", () => {
     it("iterates over all values", () => {
       const map = new KeyPathMultiMap<string>();

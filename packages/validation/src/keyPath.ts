@@ -109,8 +109,14 @@ export class KeyPathMultiMap<T> implements ReadonlyKeyPathMultiMap<T> {
   }
 
   /** Whether the map contains a key path */
-  has(keyPath: KeyPath) {
-    return this.#map.has(keyPath);
+  has(keyPath: KeyPath, prefixMatch = false) {
+    if (this.#map.has(keyPath)) {
+      return true;
+    }
+    if (prefixMatch) {
+      return this.#prefixMap.has(keyPath);
+    }
+    return false;
   }
 
   /** Find exact matches for a key path */
