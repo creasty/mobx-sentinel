@@ -244,7 +244,7 @@ describe("Validator", () => {
     });
   });
 
-  describe("#findErrors", () => {
+  describe("#findErrors, #getErrorMessages", () => {
     class Sample {
       a1 = false;
       b1 = false;
@@ -274,32 +274,32 @@ describe("Validator", () => {
       const vNested1Array2 = Validator.get(object.nested1.array2[0]);
 
       validator.updateErrors(Symbol(), (builder) => {
-        builder.invalidate("a1", "invalid1");
-        builder.invalidate("b1", "invalid1");
-        builder.invalidate("nested1", "invalid1");
-        builder.invalidate("array1", "invalid1");
+        builder.invalidate("a1", "invalid1 at a1");
+        builder.invalidate("b1", "invalid1 at b1");
+        builder.invalidate("nested1", "invalid1 at nested1");
+        builder.invalidate("array1", "invalid1 at array1");
       });
       vNested1.updateErrors(Symbol(), (builder) => {
-        builder.invalidate("a2", "invalid2");
-        builder.invalidate("b2", "invalid2");
-        builder.invalidate("nested2", "invalid2");
-        builder.invalidate("array2", "invalid2");
+        builder.invalidate("a2", "invalid2 at nested1.a2");
+        builder.invalidate("b2", "invalid2 at nested1.b2");
+        builder.invalidate("nested2", "invalid2 at nested1.nested2");
+        builder.invalidate("array2", "invalid2 at nested1.array2");
       });
       vNested2.updateErrors(Symbol(), (builder) => {
-        builder.invalidate("a3", "invalid3");
-        builder.invalidate("b3", "invalid3");
+        builder.invalidate("a3", "invalid3 at nested1.nested2.a3");
+        builder.invalidate("b3", "invalid3 at nested1.nested2.b3");
       });
       vArray1.updateErrors(Symbol(), (builder) => {
-        builder.invalidate("a2", "invalid4");
-        builder.invalidate("b2", "invalid4");
+        builder.invalidate("a2", "invalid4 at array1.0.a2");
+        builder.invalidate("b2", "invalid4 at array1.0.b2");
       });
       vArray2.updateErrors(Symbol(), (builder) => {
-        builder.invalidate("a3", "invalid5");
-        builder.invalidate("b3", "invalid5");
+        builder.invalidate("a3", "invalid5 at array1.0.array2.0.a3");
+        builder.invalidate("b3", "invalid5 at array1.0.array2.0.b3");
       });
       vNested1Array2.updateErrors(Symbol(), (builder) => {
-        builder.invalidate("a3", "invalid6");
-        builder.invalidate("b3", "invalid6");
+        builder.invalidate("a3", "invalid6 at nested1.array2.0.a3");
+        builder.invalidate("b3", "invalid6 at nested1.array2.0.b3");
       });
       return { validator };
     };
@@ -309,11 +309,14 @@ describe("Validator", () => {
         const env = setupEnv();
         expect(buildErrorMap(env.validator.findErrors(KeyPathSelf))).toEqual(
           new Map([
-            ["a1", ["invalid1"]],
-            ["b1", ["invalid1"]],
-            ["nested1", ["invalid1"]],
-            ["array1", ["invalid1"]],
+            ["a1", ["invalid1 at a1"]],
+            ["b1", ["invalid1 at b1"]],
+            ["nested1", ["invalid1 at nested1"]],
+            ["array1", ["invalid1 at array1"]],
           ])
+        );
+        expect(env.validator.getErrorMessages(KeyPathSelf)).toEqual(
+          new Set(["invalid1 at a1", "invalid1 at b1", "invalid1 at nested1", "invalid1 at array1"])
         );
       });
 
@@ -321,22 +324,42 @@ describe("Validator", () => {
         const env = setupEnv();
         expect(buildErrorMap(env.validator.findErrors(KeyPathSelf, true))).toEqual(
           new Map([
-            ["a1", ["invalid1"]],
-            ["b1", ["invalid1"]],
-            ["array1", ["invalid1"]],
-            ["array1.0.a2", ["invalid4"]],
-            ["array1.0.b2", ["invalid4"]],
-            ["array1.0.array2.0.a3", ["invalid5"]],
-            ["array1.0.array2.0.b3", ["invalid5"]],
-            ["nested1", ["invalid1"]],
-            ["nested1.a2", ["invalid2"]],
-            ["nested1.b2", ["invalid2"]],
-            ["nested1.nested2", ["invalid2"]],
-            ["nested1.nested2.a3", ["invalid3"]],
-            ["nested1.nested2.b3", ["invalid3"]],
-            ["nested1.array2", ["invalid2"]],
-            ["nested1.array2.0.a3", ["invalid6"]],
-            ["nested1.array2.0.b3", ["invalid6"]],
+            ["a1", ["invalid1 at a1"]],
+            ["b1", ["invalid1 at b1"]],
+            ["array1", ["invalid1 at array1"]],
+            ["array1.0.a2", ["invalid4 at array1.0.a2"]],
+            ["array1.0.b2", ["invalid4 at array1.0.b2"]],
+            ["array1.0.array2.0.a3", ["invalid5 at array1.0.array2.0.a3"]],
+            ["array1.0.array2.0.b3", ["invalid5 at array1.0.array2.0.b3"]],
+            ["nested1", ["invalid1 at nested1"]],
+            ["nested1.a2", ["invalid2 at nested1.a2"]],
+            ["nested1.b2", ["invalid2 at nested1.b2"]],
+            ["nested1.nested2", ["invalid2 at nested1.nested2"]],
+            ["nested1.nested2.a3", ["invalid3 at nested1.nested2.a3"]],
+            ["nested1.nested2.b3", ["invalid3 at nested1.nested2.b3"]],
+            ["nested1.array2", ["invalid2 at nested1.array2"]],
+            ["nested1.array2.0.a3", ["invalid6 at nested1.array2.0.a3"]],
+            ["nested1.array2.0.b3", ["invalid6 at nested1.array2.0.b3"]],
+          ])
+        );
+        expect(env.validator.getErrorMessages(KeyPathSelf, true)).toEqual(
+          new Set([
+            "invalid1 at a1",
+            "invalid1 at b1",
+            "invalid1 at array1",
+            "invalid4 at array1.0.a2",
+            "invalid4 at array1.0.b2",
+            "invalid5 at array1.0.array2.0.a3",
+            "invalid5 at array1.0.array2.0.b3",
+            "invalid1 at nested1",
+            "invalid2 at nested1.a2",
+            "invalid2 at nested1.b2",
+            "invalid2 at nested1.nested2",
+            "invalid3 at nested1.nested2.a3",
+            "invalid3 at nested1.nested2.b3",
+            "invalid2 at nested1.array2",
+            "invalid6 at nested1.array2.0.a3",
+            "invalid6 at nested1.array2.0.b3",
           ])
         );
       });
@@ -347,21 +370,38 @@ describe("Validator", () => {
         const env = setupEnv();
         expect(buildErrorMap(env.validator.findErrors("nested1" as KeyPath))).toEqual(
           new Map([
-            ["nested1", ["invalid1"]],
-            ["nested1.a2", ["invalid2"]],
-            ["nested1.b2", ["invalid2"]],
-            ["nested1.nested2", ["invalid2"]],
-            ["nested1.array2", ["invalid2"]],
+            ["nested1", ["invalid1 at nested1"]],
+            ["nested1.a2", ["invalid2 at nested1.a2"]],
+            ["nested1.b2", ["invalid2 at nested1.b2"]],
+            ["nested1.nested2", ["invalid2 at nested1.nested2"]],
+            ["nested1.array2", ["invalid2 at nested1.array2"]],
           ])
         );
-        expect(buildErrorMap(env.validator.findErrors("nested1.array2" as KeyPath))).toEqual(
-          new Map([["nested1.array2", ["invalid2"]]])
+        expect(env.validator.getErrorMessages("nested1" as KeyPath)).toEqual(
+          new Set([
+            "invalid1 at nested1",
+            "invalid2 at nested1.a2",
+            "invalid2 at nested1.b2",
+            "invalid2 at nested1.nested2",
+            "invalid2 at nested1.array2",
+          ])
         );
+
+        expect(buildErrorMap(env.validator.findErrors("nested1.array2" as KeyPath))).toEqual(
+          new Map([["nested1.array2", ["invalid2 at nested1.array2"]]])
+        );
+        expect(env.validator.getErrorMessages("nested1.array2" as KeyPath)).toEqual(
+          new Set(["invalid2 at nested1.array2"])
+        );
+
         expect(buildErrorMap(env.validator.findErrors("nested1.array2.0" as KeyPath))).toEqual(
           new Map([
-            ["nested1.array2.0.a3", ["invalid6"]],
-            ["nested1.array2.0.b3", ["invalid6"]],
+            ["nested1.array2.0.a3", ["invalid6 at nested1.array2.0.a3"]],
+            ["nested1.array2.0.b3", ["invalid6 at nested1.array2.0.b3"]],
           ])
+        );
+        expect(env.validator.getErrorMessages("nested1.array2.0" as KeyPath)).toEqual(
+          new Set(["invalid6 at nested1.array2.0.a3", "invalid6 at nested1.array2.0.b3"])
         );
       });
 
@@ -369,23 +409,39 @@ describe("Validator", () => {
         const env = setupEnv();
         expect(buildErrorMap(env.validator.findErrors("nested1" as KeyPath, true))).toEqual(
           new Map([
-            ["nested1", ["invalid1"]],
-            ["nested1.a2", ["invalid2"]],
-            ["nested1.b2", ["invalid2"]],
-            ["nested1.nested2", ["invalid2"]],
-            ["nested1.nested2.a3", ["invalid3"]],
-            ["nested1.nested2.b3", ["invalid3"]],
-            ["nested1.array2", ["invalid2"]],
-            ["nested1.array2.0.a3", ["invalid6"]],
-            ["nested1.array2.0.b3", ["invalid6"]],
+            ["nested1", ["invalid1 at nested1"]],
+            ["nested1.a2", ["invalid2 at nested1.a2"]],
+            ["nested1.b2", ["invalid2 at nested1.b2"]],
+            ["nested1.nested2", ["invalid2 at nested1.nested2"]],
+            ["nested1.nested2.a3", ["invalid3 at nested1.nested2.a3"]],
+            ["nested1.nested2.b3", ["invalid3 at nested1.nested2.b3"]],
+            ["nested1.array2", ["invalid2 at nested1.array2"]],
+            ["nested1.array2.0.a3", ["invalid6 at nested1.array2.0.a3"]],
+            ["nested1.array2.0.b3", ["invalid6 at nested1.array2.0.b3"]],
+          ])
+        );
+        expect(env.validator.getErrorMessages("nested1" as KeyPath, true)).toEqual(
+          new Set([
+            "invalid1 at nested1",
+            "invalid2 at nested1.a2",
+            "invalid2 at nested1.b2",
+            "invalid2 at nested1.nested2",
+            "invalid3 at nested1.nested2.a3",
+            "invalid3 at nested1.nested2.b3",
+            "invalid2 at nested1.array2",
+            "invalid6 at nested1.array2.0.a3",
+            "invalid6 at nested1.array2.0.b3",
           ])
         );
         expect(buildErrorMap(env.validator.findErrors("nested1.array2" as KeyPath, true))).toEqual(
           new Map([
-            ["nested1.array2", ["invalid2"]],
-            ["nested1.array2.0.a3", ["invalid6"]],
-            ["nested1.array2.0.b3", ["invalid6"]],
+            ["nested1.array2", ["invalid2 at nested1.array2"]],
+            ["nested1.array2.0.a3", ["invalid6 at nested1.array2.0.a3"]],
+            ["nested1.array2.0.b3", ["invalid6 at nested1.array2.0.b3"]],
           ])
+        );
+        expect(env.validator.getErrorMessages("nested1.array2" as KeyPath, true)).toEqual(
+          new Set(["invalid2 at nested1.array2", "invalid6 at nested1.array2.0.a3", "invalid6 at nested1.array2.0.b3"])
         );
       });
     });

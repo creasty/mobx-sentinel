@@ -178,7 +178,9 @@ export class Validator<T> {
       ancestorLoop: for (const ancestorKeyPath of getKeyPathAncestors(searchKeyPath, true)) {
         for (const entry of this.#nestedFetcher.getForKey(ancestorKeyPath)) {
           const childKeyPath =
-            entry.key !== entry.keyPath && prefixMatch ? KeyPathSelf : getRelativeKeyPath(searchKeyPath, entry.keyPath);
+            prefixMatch && entry.key !== entry.keyPath && getRelativeKeyPath(entry.keyPath, entry.key)
+              ? KeyPathSelf
+              : getRelativeKeyPath(searchKeyPath, entry.keyPath);
           if (!childKeyPath) continue;
           for (const [relativeKeyPath, error] of entry.data.findErrors(childKeyPath, prefixMatch)) {
             yield [buildKeyPath(entry.keyPath, relativeKeyPath), error];
