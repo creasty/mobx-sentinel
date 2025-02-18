@@ -47,6 +47,7 @@ export class FormField {
   @computed
   get isErrorReported() {
     if (!this.#isErrorReported.get()) return false;
+    if (this.#validator.isValidating) return false;
     return this.hasErrors;
   }
 
