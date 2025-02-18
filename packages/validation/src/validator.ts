@@ -18,15 +18,19 @@ const defaultErrorGroupKey = Symbol("validator.defaultErrorGroupKey");
  *
  * @returns A function to remove the handler
  */
-export function makeValidatable<T extends object>(target: T, handler: Validator.ReactiveHandler<T>) {
-  return Validator.get(target).addReactiveHandler(handler);
+export function makeValidatable<T extends object>(
+  target: T,
+  handler: Validator.ReactiveHandler<T>,
+  opt?: Validator.HandlerOptions
+) {
+  return Validator.get(target).addReactiveHandler(handler, opt);
 }
 
 export class Validator<T> {
   readonly #errors = observable.map<symbol, ReadonlyArray<ValidationError>>([], { equals: comparer.structural });
   readonly #nestedFetcher: StandardNestedFetcher<Validator<any>>;
 
-  // Async handler
+  // Async validation
   enqueueDelayMs = 100;
   scheduleDelayMs = 300;
   readonly #asyncHandlers = new Set<Validator.AsyncHandler<T>>();
@@ -35,7 +39,7 @@ export class Validator<T> {
   #jobTimerId: number | null = null;
   #abortCtrl: AbortController | null = null;
 
-  // Reactive handler
+  // Reactive validation
   reactionDelayMs = 100;
   readonly #reactionTimerIds = observable.map<symbol, number>();
 
