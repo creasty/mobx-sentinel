@@ -42,6 +42,12 @@ describe("Watcher", () => {
     });
   });
 
+  describe(".isWatching", () => {
+    it("returns true when watching is enabled", () => {
+      expect(Watcher.isWatching).toBe(true);
+    });
+  });
+
   describe("#assumeChanged", () => {
     it("sets changed to true without incrementing changedTick", () => {
       const watcher = Watcher.get({});
@@ -74,6 +80,73 @@ describe("Watcher", () => {
       expect(watcher.changedKeys).toEqual(new Set());
       expect(watcher.changed).toBe(false);
     });
+  });
+});
+
+describe("unwatch()", () => {
+  it("disables watching in the function", () => {
+    expect(Watcher.isWatching).toBe(true);
+    unwatch(() => {
+      expect(Watcher.isWatching).toBe(false);
+    });
+    expect(Watcher.isWatching).toBe(true);
+  });
+
+  it("handles nested unwatch() calls properly", () => {
+    expect(Watcher.isWatching).toBe(true);
+    unwatch(() => {
+      expect(Watcher.isWatching).toBe(false);
+      unwatch(() => {
+        expect(Watcher.isWatching).toBe(false);
+      });
+      expect(Watcher.isWatching).toBe(false);
+    });
+    expect(Watcher.isWatching).toBe(true);
+  });
+
+  it("runs the function without changes being detected by Watcher", () => {
+    const object = observable({ value: 0 });
+    const watcher = Watcher.get(object);
+    const internal = getInternal(watcher);
+
+    unwatch(() => {
+      watcher.assumeChanged();
+    });
+    expect(watcher.changed).toBe(false);
+
+    unwatch(() => {
+      internal.didChange("value" as KeyPath);
+    });
+    expect(watcher.changed).toBe(false);
+
+    // Inner transaction
+    unwatch(() => {
+      runInAction(() => {
+        object.value++;
+      });
+    });
+    expect(watcher.changed).toBe(false);
+  });
+
+  it("works when unwatch() function has outer transactions", () => {
+    const object = observable({ value: 0, other: 0 });
+    const watcher = Watcher.get(object);
+
+    runInAction(() => {
+      unwatch(() => {
+        object.value++;
+      });
+    });
+    expect(watcher.changed).toBe(false);
+
+    runInAction(() => {
+      unwatch(() => {
+        object.value++;
+      });
+      object.other++;
+    });
+    expect(watcher.changed).toBe(true);
+    expect(watcher.changedKeys).toEqual(new Set(["other"])); // "value" is not included
   });
 });
 
