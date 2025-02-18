@@ -54,7 +54,7 @@ const internalToken = Symbol("watcher.internal");
 export class Watcher {
   readonly #assumeChanged = observable.box(false);
   readonly #changedTick = observable.box(0n);
-  readonly #changedKeys = observable.set<string>();
+  readonly #changedKeys = observable.set<KeyPath>();
   readonly #processedKeys = new Set<string>();
   readonly #nestedFetcher: StandardNestedFetcher<Watcher>;
 
@@ -120,13 +120,13 @@ export class Watcher {
 
   /** The keys that have changed */
   @computed.struct
-  get changedKeys(): ReadonlySet<string> {
+  get changedKeys(): ReadonlySet<KeyPath> {
     return new Set(this.#changedKeys);
   }
 
   /** The key paths that have changed, including nested objects */
   @computed.struct
-  get changedKeyPaths(): ReadonlySet<string> {
+  get changedKeyPaths(): ReadonlySet<KeyPath> {
     const result = new Set(this.#changedKeys);
     for (const entry of this.#nestedFetcher) {
       for (const changedKeyPath of entry.data.changedKeyPaths) {
@@ -169,7 +169,7 @@ export class Watcher {
   }
 
   /** Mark a key as changed */
-  #didChange(key: string) {
+  #didChange(key: KeyPath) {
     runInAction(() => {
       this.#changedKeys.add(key);
       this.#incrementChangedTick();
@@ -198,7 +198,7 @@ export class Watcher {
 
       reaction(
         () => shallowReadValue(getValue()),
-        () => this.#didChange(key)
+        () => this.#didChange(buildKeyPath(key))
       );
     }
   }
@@ -214,7 +214,7 @@ export class Watcher {
 
       reaction(
         () => shallowReadValue(getValue()),
-        () => this.#didChange(key)
+        () => this.#didChange(buildKeyPath(key))
       );
       reaction(
         () => {
@@ -254,7 +254,7 @@ export class Watcher {
 
       reaction(
         () => (isShallow ? shallowReadValue(getValue()) : getValue()),
-        () => this.#didChange(key)
+        () => this.#didChange(buildKeyPath(key))
       );
     }
   }

@@ -1,5 +1,5 @@
 import { createPropertyLikeAnnotation, getAnnotationProcessor } from "./annotationProcessor";
-import { KeyPath, buildKeyPath } from "./keyPath";
+import { KeyPath, KeyPathSelf, KeyPathComponent, buildKeyPath } from "./keyPath";
 import { unwrapShallowContents } from "./mobx-utils";
 
 const nestedKey = Symbol("nested");
@@ -31,7 +31,8 @@ export function* getNestedAnnotations(target: object): Generator<[key: string | 
  * Annotation keys that are symbols are ignored.
  */
 export class StandardNestedFetcher<T extends object> implements Iterable<StandardNestedFetcher.Entry<T>> {
-  readonly #fetchers = new Map<string, () => ReadonlyArray<StandardNestedFetcher.Entry<T>>>();
+  readonly #transform: (entry: StandardNestedFetcher.Entry<any>) => T | null;
+  readonly #fetchers = new Map<KeyPathComponent | KeyPathSelf, () => Generator<StandardNestedFetcher.Entry<T>>>();
 
   /**
    * @param target - The target object
@@ -39,23 +40,28 @@ export class StandardNestedFetcher<T extends object> implements Iterable<Standar
    *   If the function returns `null`, the entry is ignored.
    */
   constructor(target: object, transform: (entry: StandardNestedFetcher.Entry<any>) => T | null) {
+    this.#transform = transform;
+
     for (const [key, getValue] of getNestedAnnotations(target)) {
       if (typeof key !== "string") continue; // symbol keys are not supported
-
-      const fetcher = () => {
-        const result: Array<StandardNestedFetcher.Entry<T>> = [];
-        for (const [subKey, value] of unwrapShallowContents(getValue())) {
-          if (typeof subKey === "symbol") continue; // symbol keys are not supported
-          const keyPath = buildKeyPath(key, subKey);
-          const data = transform({ key, keyPath, data: value }) ?? null;
-          if (data === null) continue;
-          result.push({ key, keyPath, data });
-        }
-        return result;
-      };
-
-      this.#fetchers.set(key, fetcher);
+      const keyPath = buildKeyPath(key);
+      this.#fetchers.set(keyPath, this.#createFetcher(keyPath, getValue));
     }
+  }
+
+  #createFetcher(key: KeyPath, getValue: () => any) {
+    // eslint-disable-next-line @typescript-eslint/no-this-alias
+    const that = this;
+    function* fetcher() {
+      for (const [subKey, value] of unwrapShallowContents(getValue())) {
+        if (typeof subKey === "symbol") continue; // symbol keys are not supported
+        const keyPath = buildKeyPath(key, subKey);
+        const data = that.#transform({ key, keyPath, data: value }) ?? null;
+        if (data === null) continue;
+        yield { key, keyPath, data };
+      }
+    }
+    return fetcher;
   }
 
   *[Symbol.iterator]() {
@@ -65,13 +71,21 @@ export class StandardNestedFetcher<T extends object> implements Iterable<Standar
       }
     }
   }
+
+  *getForKey(keyPath: KeyPathComponent | KeyPathSelf) {
+    const fetcher = this.#fetchers.get(keyPath);
+    if (!fetcher) return;
+    for (const entry of fetcher()) {
+      yield entry;
+    }
+  }
 }
 
 export namespace StandardNestedFetcher {
   /** Nested entry */
   export type Entry<T extends object> = {
     /** Name of the field that has the nested annotation */
-    readonly key: string;
+    readonly key: KeyPathComponent | KeyPathSelf;
     /** Key path to the nested entry */
     readonly keyPath: KeyPath;
     /** Data */

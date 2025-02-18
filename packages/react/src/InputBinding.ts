@@ -159,6 +159,12 @@ export class InputBinding implements FormBinding {
     this.config.onFocus?.(e);
   };
 
+  @computed
+  get errorMessages() {
+    if (!this.field.hasReportedErrors) return null;
+    return Array.from(this.field.errors).join(", ") || null;
+  }
+
   get props() {
     return {
       type: this.type,
@@ -168,7 +174,7 @@ export class InputBinding implements FormBinding {
       onFocus: this.onFocus,
       onBlur: this.onBlur,
       "aria-invalid": this.field.hasReportedErrors,
-      "aria-errormessage": this.field.hasReportedErrors ? this.field.errors?.join(", ") : undefined,
+      "aria-errormessage": this.errorMessages ?? undefined,
     } satisfies InputBinding.Attrs;
   }
 }

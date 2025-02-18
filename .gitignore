@@ -4,3 +4,4 @@ node_modules
 coverage
 .turbo
 docs
+tsconfig.vitest-temp.json

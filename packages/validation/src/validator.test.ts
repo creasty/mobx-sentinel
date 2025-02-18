@@ -1,6 +1,7 @@
 import { autorun, makeObservable, observable, runInAction } from "mobx";
 import { Validator, makeValidatable } from "./validator";
 import { nested } from "./nested";
+import { KeyPath, KeyPathSelf } from "./keyPath";
 
 class Sample {
   @observable field1 = 0;
@@ -103,6 +104,19 @@ function setupEnv(opt?: {
   };
 }
 
+function buildErrorMap(iter: ReturnType<Validator<any>["findErrors"]>) {
+  const result = new Map<KeyPath, Array<string>>();
+  for (const [keyPath, error] of iter) {
+    let errors = result.get(keyPath);
+    if (!errors) {
+      errors = [];
+      result.set(keyPath, errors);
+    }
+    errors.push(error.message);
+  }
+  return result;
+}
+
 describe("makeValidatable", () => {
   it("throws an error when a non-object is given", () => {
     expect(() => {
@@ -166,7 +180,7 @@ describe("Validator", () => {
       const validator = Validator.get({ sample: false });
       const symbol = Symbol();
       validator.updateErrors(symbol, () => {});
-      expect(validator.errors).toEqual(new Map());
+      expect(buildErrorMap(validator.findErrors(KeyPathSelf))).toEqual(new Map());
     });
 
     it("updates the errors instantly", () => {
@@ -175,7 +189,7 @@ describe("Validator", () => {
       validator.updateErrors(symbol, (builder) => {
         builder.invalidate("sample", "invalid");
       });
-      expect(validator.errors).toEqual(new Map([["sample", ["invalid"]]]));
+      expect(buildErrorMap(validator.findErrors(KeyPathSelf))).toEqual(new Map([["sample", ["invalid"]]]));
     });
 
     it("removes the errors by calling the returned function", () => {
@@ -185,7 +199,7 @@ describe("Validator", () => {
         builder.invalidate("sample", "invalid");
       });
       dispose();
-      expect(validator.errors).toEqual(new Map());
+      expect(buildErrorMap(validator.findErrors(KeyPathSelf))).toEqual(new Map());
     });
 
     it("replaces the errors when called again with the same key", () => {
@@ -197,7 +211,7 @@ describe("Validator", () => {
       validator.updateErrors(symbol, (builder) => {
         builder.invalidate("sample", "invalid2");
       });
-      expect(validator.errors).toEqual(new Map([["sample", ["invalid2"]]]));
+      expect(buildErrorMap(validator.findErrors(KeyPathSelf))).toEqual(new Map([["sample", ["invalid2"]]]));
     });
 
     it("merges the errors of the different keys", () => {
@@ -210,7 +224,7 @@ describe("Validator", () => {
       validator.updateErrors(symbol2, (builder) => {
         builder.invalidate("sample", "invalid2");
       });
-      expect(validator.errors).toEqual(new Map([["sample", ["invalid1", "invalid2"]]]));
+      expect(buildErrorMap(validator.findErrors(KeyPathSelf))).toEqual(new Map([["sample", ["invalid1", "invalid2"]]]));
     });
 
     it("removes individual errors by calling the returned function", () => {
@@ -224,9 +238,212 @@ describe("Validator", () => {
         builder.invalidate("sample", "invalid2");
       });
       dispose1();
-      expect(validator.errors).toEqual(new Map([["sample", ["invalid2"]]]));
+      expect(buildErrorMap(validator.findErrors(KeyPathSelf))).toEqual(new Map([["sample", ["invalid2"]]]));
       dispose2();
-      expect(validator.errors).toEqual(new Map());
+      expect(buildErrorMap(validator.findErrors(KeyPathSelf))).toEqual(new Map());
+    });
+  });
+
+  describe("#findErrors, #getErrorMessages", () => {
+    class Sample {
+      a1 = false;
+      b1 = false;
+      @nested nested1 = new Nested1();
+      @nested array1 = [new Nested1()];
+    }
+
+    class Nested1 {
+      a2 = false;
+      b2 = false;
+      @nested nested2 = new Nested2();
+      @nested array2 = [new Nested2()];
+    }
+
+    class Nested2 {
+      a3 = false;
+      b3 = false;
+    }
+
+    const setupEnv = () => {
+      const object = new Sample();
+      const validator = Validator.get(object);
+      const vNested1 = Validator.get(object.nested1);
+      const vNested2 = Validator.get(object.nested1.nested2);
+      const vArray1 = Validator.get(object.array1[0]);
+      const vArray2 = Validator.get(object.array1[0].array2[0]);
+      const vNested1Array2 = Validator.get(object.nested1.array2[0]);
+
+      validator.updateErrors(Symbol(), (builder) => {
+        builder.invalidate("a1", "invalid1 at a1");
+        builder.invalidate("b1", "invalid1 at b1");
+        builder.invalidate("nested1", "invalid1 at nested1");
+        builder.invalidate("array1", "invalid1 at array1");
+      });
+      vNested1.updateErrors(Symbol(), (builder) => {
+        builder.invalidate("a2", "invalid2 at nested1.a2");
+        builder.invalidate("b2", "invalid2 at nested1.b2");
+        builder.invalidate("nested2", "invalid2 at nested1.nested2");
+        builder.invalidate("array2", "invalid2 at nested1.array2");
+      });
+      vNested2.updateErrors(Symbol(), (builder) => {
+        builder.invalidate("a3", "invalid3 at nested1.nested2.a3");
+        builder.invalidate("b3", "invalid3 at nested1.nested2.b3");
+      });
+      vArray1.updateErrors(Symbol(), (builder) => {
+        builder.invalidate("a2", "invalid4 at array1.0.a2");
+        builder.invalidate("b2", "invalid4 at array1.0.b2");
+      });
+      vArray2.updateErrors(Symbol(), (builder) => {
+        builder.invalidate("a3", "invalid5 at array1.0.array2.0.a3");
+        builder.invalidate("b3", "invalid5 at array1.0.array2.0.b3");
+      });
+      vNested1Array2.updateErrors(Symbol(), (builder) => {
+        builder.invalidate("a3", "invalid6 at nested1.array2.0.a3");
+        builder.invalidate("b3", "invalid6 at nested1.array2.0.b3");
+      });
+      return { validator };
+    };
+
+    describe("Search with a self path", () => {
+      it("returns own errors", () => {
+        const env = setupEnv();
+        expect(buildErrorMap(env.validator.findErrors(KeyPathSelf))).toEqual(
+          new Map([
+            ["a1", ["invalid1 at a1"]],
+            ["b1", ["invalid1 at b1"]],
+            ["nested1", ["invalid1 at nested1"]],
+            ["array1", ["invalid1 at array1"]],
+          ])
+        );
+        expect(env.validator.getErrorMessages(KeyPathSelf)).toEqual(
+          new Set(["invalid1 at a1", "invalid1 at b1", "invalid1 at nested1", "invalid1 at array1"])
+        );
+      });
+
+      it("returns all errors with prefix match", () => {
+        const env = setupEnv();
+        expect(buildErrorMap(env.validator.findErrors(KeyPathSelf, true))).toEqual(
+          new Map([
+            ["a1", ["invalid1 at a1"]],
+            ["b1", ["invalid1 at b1"]],
+            ["array1", ["invalid1 at array1"]],
+            ["array1.0.a2", ["invalid4 at array1.0.a2"]],
+            ["array1.0.b2", ["invalid4 at array1.0.b2"]],
+            ["array1.0.array2.0.a3", ["invalid5 at array1.0.array2.0.a3"]],
+            ["array1.0.array2.0.b3", ["invalid5 at array1.0.array2.0.b3"]],
+            ["nested1", ["invalid1 at nested1"]],
+            ["nested1.a2", ["invalid2 at nested1.a2"]],
+            ["nested1.b2", ["invalid2 at nested1.b2"]],
+            ["nested1.nested2", ["invalid2 at nested1.nested2"]],
+            ["nested1.nested2.a3", ["invalid3 at nested1.nested2.a3"]],
+            ["nested1.nested2.b3", ["invalid3 at nested1.nested2.b3"]],
+            ["nested1.array2", ["invalid2 at nested1.array2"]],
+            ["nested1.array2.0.a3", ["invalid6 at nested1.array2.0.a3"]],
+            ["nested1.array2.0.b3", ["invalid6 at nested1.array2.0.b3"]],
+          ])
+        );
+        expect(env.validator.getErrorMessages(KeyPathSelf, true)).toEqual(
+          new Set([
+            "invalid1 at a1",
+            "invalid1 at b1",
+            "invalid1 at array1",
+            "invalid4 at array1.0.a2",
+            "invalid4 at array1.0.b2",
+            "invalid5 at array1.0.array2.0.a3",
+            "invalid5 at array1.0.array2.0.b3",
+            "invalid1 at nested1",
+            "invalid2 at nested1.a2",
+            "invalid2 at nested1.b2",
+            "invalid2 at nested1.nested2",
+            "invalid3 at nested1.nested2.a3",
+            "invalid3 at nested1.nested2.b3",
+            "invalid2 at nested1.array2",
+            "invalid6 at nested1.array2.0.a3",
+            "invalid6 at nested1.array2.0.b3",
+          ])
+        );
+      });
+    });
+
+    describe("Search for a specific path", () => {
+      it("returns errors for the specific path", () => {
+        const env = setupEnv();
+        expect(buildErrorMap(env.validator.findErrors("nested1" as KeyPath))).toEqual(
+          new Map([
+            ["nested1", ["invalid1 at nested1"]],
+            ["nested1.a2", ["invalid2 at nested1.a2"]],
+            ["nested1.b2", ["invalid2 at nested1.b2"]],
+            ["nested1.nested2", ["invalid2 at nested1.nested2"]],
+            ["nested1.array2", ["invalid2 at nested1.array2"]],
+          ])
+        );
+        expect(env.validator.getErrorMessages("nested1" as KeyPath)).toEqual(
+          new Set([
+            "invalid1 at nested1",
+            "invalid2 at nested1.a2",
+            "invalid2 at nested1.b2",
+            "invalid2 at nested1.nested2",
+            "invalid2 at nested1.array2",
+          ])
+        );
+
+        expect(buildErrorMap(env.validator.findErrors("nested1.array2" as KeyPath))).toEqual(
+          new Map([["nested1.array2", ["invalid2 at nested1.array2"]]])
+        );
+        expect(env.validator.getErrorMessages("nested1.array2" as KeyPath)).toEqual(
+          new Set(["invalid2 at nested1.array2"])
+        );
+
+        expect(buildErrorMap(env.validator.findErrors("nested1.array2.0" as KeyPath))).toEqual(
+          new Map([
+            ["nested1.array2.0.a3", ["invalid6 at nested1.array2.0.a3"]],
+            ["nested1.array2.0.b3", ["invalid6 at nested1.array2.0.b3"]],
+          ])
+        );
+        expect(env.validator.getErrorMessages("nested1.array2.0" as KeyPath)).toEqual(
+          new Set(["invalid6 at nested1.array2.0.a3", "invalid6 at nested1.array2.0.b3"])
+        );
+      });
+
+      it("returns all errors for the specific path with prefix match", () => {
+        const env = setupEnv();
+        expect(buildErrorMap(env.validator.findErrors("nested1" as KeyPath, true))).toEqual(
+          new Map([
+            ["nested1", ["invalid1 at nested1"]],
+            ["nested1.a2", ["invalid2 at nested1.a2"]],
+            ["nested1.b2", ["invalid2 at nested1.b2"]],
+            ["nested1.nested2", ["invalid2 at nested1.nested2"]],
+            ["nested1.nested2.a3", ["invalid3 at nested1.nested2.a3"]],
+            ["nested1.nested2.b3", ["invalid3 at nested1.nested2.b3"]],
+            ["nested1.array2", ["invalid2 at nested1.array2"]],
+            ["nested1.array2.0.a3", ["invalid6 at nested1.array2.0.a3"]],
+            ["nested1.array2.0.b3", ["invalid6 at nested1.array2.0.b3"]],
+          ])
+        );
+        expect(env.validator.getErrorMessages("nested1" as KeyPath, true)).toEqual(
+          new Set([
+            "invalid1 at nested1",
+            "invalid2 at nested1.a2",
+            "invalid2 at nested1.b2",
+            "invalid2 at nested1.nested2",
+            "invalid3 at nested1.nested2.a3",
+            "invalid3 at nested1.nested2.b3",
+            "invalid2 at nested1.array2",
+            "invalid6 at nested1.array2.0.a3",
+            "invalid6 at nested1.array2.0.b3",
+          ])
+        );
+        expect(buildErrorMap(env.validator.findErrors("nested1.array2" as KeyPath, true))).toEqual(
+          new Map([
+            ["nested1.array2", ["invalid2 at nested1.array2"]],
+            ["nested1.array2.0.a3", ["invalid6 at nested1.array2.0.a3"]],
+            ["nested1.array2.0.b3", ["invalid6 at nested1.array2.0.b3"]],
+          ])
+        );
+        expect(env.validator.getErrorMessages("nested1.array2" as KeyPath, true)).toEqual(
+          new Set(["invalid2 at nested1.array2", "invalid6 at nested1.array2.0.a3", "invalid6 at nested1.array2.0.b3"])
+        );
+      });
     });
   });
 
@@ -299,10 +516,10 @@ describe("Validator", () => {
       env.validator.updateErrors(symbol, (builder) => {
         builder.invalidate("field1", "invalid1");
       });
-      expect(env.validator.errors.size).toBe(1);
+      expect(env.validator.invalidKeyPathCount).toBe(1);
 
       env.validator.reset();
-      expect(env.validator.errors.size).toBe(0);
+      expect(env.validator.invalidKeyPathCount).toBe(0);
     });
 
     it("cancels pending reactive validations", async () => {
@@ -405,18 +622,18 @@ describe("Validator", () => {
     it("updates the errors", async () => {
       const env = setupEnv({ reactiveHandler: true });
 
-      expect(env.validator.errors).toEqual(new Map());
+      expect(buildErrorMap(env.validator.findErrors(KeyPathSelf))).toEqual(new Map());
       runInAction(() => {
         env.model.field1 = -1;
       });
       await env.waitForReactionState(0);
-      expect(env.validator.errors).toEqual(new Map([["field1", ["invalid"]]]));
+      expect(buildErrorMap(env.validator.findErrors(KeyPathSelf))).toEqual(new Map([["field1", ["invalid"]]]));
     });
 
     it("removes the errors when the condition is no longer met", async () => {
       const env = setupEnv({ reactiveHandler: true });
 
-      expect(env.validator.errors).toEqual(new Map());
+      expect(buildErrorMap(env.validator.findErrors(KeyPathSelf))).toEqual(new Map());
       runInAction(() => {
         env.model.field1 = -1;
       });
@@ -426,7 +643,7 @@ describe("Validator", () => {
         env.model.field1 = 0;
       });
       await env.waitForReactionState(0);
-      expect(env.validator.errors).toEqual(new Map());
+      expect(buildErrorMap(env.validator.findErrors(KeyPathSelf))).toEqual(new Map());
     });
 
     it("removes the handler by calling the returned function", async () => {
@@ -473,7 +690,7 @@ describe("Validator", () => {
         b.invalidate("field1", "invalid");
       });
       expect(env.validator.reactionState).toBe(0);
-      expect(env.validator.errors).toEqual(new Map([["field1", ["invalid"]]]));
+      expect(buildErrorMap(env.validator.findErrors(KeyPathSelf))).toEqual(new Map([["field1", ["invalid"]]]));
     });
 
     it("does not run the handler when the initialRun option is false", () => {
@@ -485,7 +702,7 @@ describe("Validator", () => {
         { initialRun: false }
       );
       expect(env.validator.reactionState).toBe(0);
-      expect(env.validator.errors).toEqual(new Map());
+      expect(buildErrorMap(env.validator.findErrors(KeyPathSelf))).toEqual(new Map());
     });
   });
 

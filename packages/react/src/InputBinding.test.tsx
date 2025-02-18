@@ -83,7 +83,7 @@ describe("InputBinding", () => {
     const model = new SampleModel();
     const form = Form.get(model);
     const field = new FormField({
-      fieldName: "test",
+      fieldName: "string",
       validator: form.validator,
       getFinalizationDelayMs: () => form.config.autoFinalizationDelayMs,
     });
@@ -177,6 +177,26 @@ describe("InputBinding", () => {
       env.binding.config.onBlur = callback;
       env.binding.onBlur(env.fakeEvent());
       expect(callback).toBeCalledWith(env.fakeEvent());
+    });
+  });
+
+  describe("errorMessages", () => {
+    it("returns null if no errors", () => {
+      const env = setupEnv();
+      expect(env.binding.errorMessages).toBeNull();
+      env.field.reportError();
+      expect(env.binding.errorMessages).toBeNull();
+    });
+
+    it("returns the error messages if errors are reported", () => {
+      const env = setupEnv();
+      env.form.validator.updateErrors(Symbol(), (builder) => {
+        builder.invalidate("string", "invalid1");
+        builder.invalidate("string", "invalid2");
+      });
+      expect(env.binding.errorMessages).toBeNull();
+      env.field.reportError();
+      expect(env.binding.errorMessages).toEqual("invalid1, invalid2");
     });
   });
 });

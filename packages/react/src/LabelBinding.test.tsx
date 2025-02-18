@@ -48,7 +48,7 @@ describe("LabelBinding", () => {
     const model = new SampleModel();
     const form = Form.get(model);
     const field = new FormField({
-      fieldName: "test",
+      fieldName: "field1",
       validator: form.validator,
       getFinalizationDelayMs: () => form.config.autoFinalizationDelayMs,
     });
@@ -72,6 +72,26 @@ describe("LabelBinding", () => {
       const env = setupEnv();
       env.binding.config.htmlFor = "somethingElse";
       expect(env.binding.props.htmlFor).toBe("somethingElse");
+    });
+  });
+
+  describe("firstErrorMessage", () => {
+    it("returns null if no errors", () => {
+      const env = setupEnv();
+      expect(env.binding.firstErrorMessage).toBeNull();
+      env.field.reportError();
+      expect(env.binding.firstErrorMessage).toBeNull();
+    });
+
+    it("returns the error messages if errors are reported", () => {
+      const env = setupEnv();
+      env.form.validator.updateErrors(Symbol(), (builder) => {
+        builder.invalidate("field1", "invalid1");
+        builder.invalidate("field1", "invalid2");
+      });
+      expect(env.binding.firstErrorMessage).toBeNull();
+      env.field.reportError();
+      expect(env.binding.firstErrorMessage).toEqual("invalid1");
     });
   });
 });

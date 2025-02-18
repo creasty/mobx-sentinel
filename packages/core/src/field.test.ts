@@ -49,26 +49,26 @@ describe("FormField", () => {
   });
 
   describe("#errors", () => {
-    it("returns null if there are no errors at all", () => {
+    it("returns an empty set if there are no errors at all", () => {
       const { field } = setupEnv();
-      expect(field.errors).toBe(null);
+      expect(field.errors).toEqual(new Set());
     });
 
-    it("returns null if there is no errors for the field", () => {
+    it("returns an empty set if there is no errors for the field", () => {
       const { field, updateErrors } = setupEnv();
       updateErrors((b) => b.invalidate("other", "otherError"));
-      expect(field.errors).toBe(null);
+      expect(field.errors).toEqual(new Set());
     });
 
     it("returns the errors if there are errors for the field", () => {
       const { field, updateErrors } = setupEnv();
       updateErrors((b) => b.invalidate("test", "error"));
-      expect(field.errors).toEqual(["error"]);
+      expect(field.errors).toEqual(new Set(["error"]));
       updateErrors((b) => {
         b.invalidate("test", "error2");
         b.invalidate("other", "otherError");
       });
-      expect(field.errors).toEqual(["error2"]);
+      expect(field.errors).toEqual(new Set(["error2"]));
     });
   });
 

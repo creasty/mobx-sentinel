@@ -1,14 +1,21 @@
-import { KeyPath } from "./keyPath";
+import {
+  buildKeyPath,
+  getParentKeyOfKeyPath,
+  KeyPath,
+  KeyPathComponent,
+  KeyPathMultiMap,
+  KeyPathSelf,
+} from "./keyPath";
 
 export class ValidationError extends Error {
-  readonly key: string;
+  readonly key: KeyPathComponent | KeyPathSelf;
   readonly keyPath: KeyPath;
   readonly message: string;
   readonly cause?: Error;
 
   constructor(args: { keyPath: KeyPath; reason: string | Error }) {
     super();
-    this.key = args.keyPath.split(".", 1)[0];
+    this.key = getParentKeyOfKeyPath(args.keyPath);
     this.keyPath = args.keyPath;
     this.message = args.reason instanceof Error ? args.reason.message : args.reason;
     this.cause = args.reason instanceof Error ? args.reason : undefined;
@@ -17,30 +24,32 @@ export class ValidationError extends Error {
 
 const buildToken = Symbol("ValidationErrorsBuilder.build");
 
-export class ValidationErrorsBuilder<T> {
-  readonly #errors: ValidationError[] = [];
+export class ValidationErrorMapBuilder<T> {
+  readonly #map = new KeyPathMultiMap<ValidationError>();
 
   /**
    * @internal
    * @ignore
    */
-  static build(instance: ValidationErrorsBuilder<any>) {
+  static build(instance: ValidationErrorMapBuilder<any>) {
     return instance[buildToken]();
   }
 
   invalidate(key: keyof T & string, reason: string | Error) {
-    this.#errors.push(new ValidationError({ keyPath: key as KeyPath, reason }));
+    const keyPath = buildKeyPath(key);
+    const error = new ValidationError({ keyPath, reason });
+    this.#map.set(keyPath, error);
   }
 
   get hasError() {
-    return this.#errors.length > 0;
+    return this.#map.size > 0;
   }
 
   /**
    * @internal
    * @ignore
    */
-  [buildToken](): ReadonlyArray<ValidationError> {
-    return Object.freeze(this.#errors);
+  [buildToken]() {
+    return this.#map.toImmutable();
   }
 }

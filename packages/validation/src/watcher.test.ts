@@ -64,7 +64,7 @@ describe("Watcher", () => {
       watcher.reset();
       expect(watcher.changed).toBe(false);
 
-      internal.didChange("field1");
+      internal.didChange("field1" as KeyPath);
       expect(watcher.changedTick).toBe(1n);
       expect(watcher.changedKeys).toEqual(new Set(["field1"]));
       expect(watcher.changed).toBe(true);

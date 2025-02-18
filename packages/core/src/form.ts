@@ -371,7 +371,7 @@ export class Form<T> {
     const field = this.getField(fieldName);
 
     if (!includePreReported && !field.isErrorReported) {
-      return null;
+      return new Set();
     }
 
     // Reading errors from FormField#errors is computed,
