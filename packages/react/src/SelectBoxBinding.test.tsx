@@ -83,7 +83,7 @@ describe("SelectBoxBinding", () => {
     const model = new SampleModel();
     const form = Form.get(model);
     const field = new FormField({
-      fieldName: "test",
+      fieldName: "single",
       validator: form.validator,
       getFinalizationDelayMs: () => form.config.autoFinalizationDelayMs,
     });
@@ -145,6 +145,26 @@ describe("SelectBoxBinding", () => {
       env.binding.config.onFocus = callback;
       env.binding.onFocus(env.fakeEvent());
       expect(callback).toBeCalledWith(env.fakeEvent());
+    });
+  });
+
+  describe("errorMessages", () => {
+    it("returns null if no errors", () => {
+      const env = setupEnv();
+      expect(env.binding.errorMessages).toBeNull();
+      env.field.reportError();
+      expect(env.binding.errorMessages).toBeNull();
+    });
+
+    it("returns the error messages if errors are reported", () => {
+      const env = setupEnv();
+      env.form.validator.updateErrors(Symbol(), (builder) => {
+        builder.invalidate("single", "invalid1");
+        builder.invalidate("single", "invalid2");
+      });
+      expect(env.binding.errorMessages).toBeNull();
+      env.field.reportError();
+      expect(env.binding.errorMessages).toEqual("invalid1, invalid2");
     });
   });
 });

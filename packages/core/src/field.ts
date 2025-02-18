@@ -42,8 +42,8 @@ export class FormField {
   }
 
   @computed.struct
-  get errors() {
-    return this.#validator.getErrorMessages(buildKeyPath(this.fieldName)) ?? null;
+  get errors(): ReadonlySet<string> {
+    return this.#validator.getErrorMessages(buildKeyPath(this.fieldName));
   }
 
   @computed
