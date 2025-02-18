@@ -1,8 +1,11 @@
-import { action, computed, makeObservable, observable, reaction, runInAction } from "mobx";
+import { action, autorun, computed, makeObservable, observable, reaction, runInAction, transaction } from "mobx";
 import { createPropertyLikeAnnotation, getAnnotationProcessor } from "./annotationProcessor";
 import { getMobxObservableAnnotations, shallowReadValue, unwrapShallowContents } from "./mobx-utils";
 import { StandardNestedFetcher, getNestedAnnotations } from "./nested";
 import { KeyPath, buildKeyPath } from "./keyPath";
+
+/** Global state for controlling whether watching is enabled */
+let isWatching = true;
 
 enum WatchMode {
   /**
@@ -10,31 +13,50 @@ enum WatchMode {
    *
    * Akin to `@observable.ref`.
    */
-  Ref,
+  Ref = "@watch.ref",
   /**
    * Watch shallow changes
    *
    * Akin to `@observable.shallow`?
    */
-  Shallow,
+  Shallow = "@watch",
 }
 
 const watchKey = Symbol("watch");
-const unwatchKey = Symbol("unwatch");
-
 const createWatch = createPropertyLikeAnnotation(watchKey, () => WatchMode.Shallow);
 const createWatchRef = createPropertyLikeAnnotation(watchKey, () => WatchMode.Ref);
+const unwatchKey = Symbol("unwatch");
+const createUnwatch = createPropertyLikeAnnotation(unwatchKey, () => true);
+
+function unwatchRunner(action: () => void): void {
+  transaction(() => {
+    const prev = isWatching;
+    isWatching = false;
+    try {
+      action();
+    } finally {
+      autorun(() => {
+        isWatching = prev;
+      });
+    }
+  });
+}
 
 /**
  * Annotation for watching changes to a property and a getter
  *
- * `@observable` and `@computed` (and their variants) are automatically assumed to be `@watched`,\
- * unless `@unwatch` or `@unwatch.ref` specified.
+ * - `@observable` and `@computed` (and their variants) are automatically assumed to be `@watched`,\
+ *    unless `@unwatch` or `@unwatch.ref` is specified.
+ * - `@nested` (and its variants) are considered `@watched` unless `@unwatch` is specified.
+ * - If `@watch` and `@watch.ref` are specified for the same key (in the same inheritance chain),\
+ *   the last annotation prevails.
  */
 export const watch = Object.freeze(
   Object.assign(createWatch, {
     /**
      * Annotation for watching only assignments to a property and a getter
+     *
+     * It has no effect when combined with `@nested`.
      */
     ref: createWatchRef,
   })
@@ -43,9 +65,23 @@ export const watch = Object.freeze(
 /**
  * Annotation for unwatching changes to a property and a getter
  *
- * Combine with `@observable` or `@computed` to stop watching changes.
+ * When used as an annotation:
+ * - Combine with `@observable`, `@computed` or `@nested` (and their variants) to stop watching changes.
+ * - You cannot re-enable watching once `@unwatch` is specified.
+ *
+ * When used as a function:
+ * - Runs a piece of code without changes being detected by Watcher.
+ *   ```typescript
+ *   unwatch(action(() => (model.field = "value")));
+ *   runInAction(() => unwatch(() => (model.field = "value")));
+ *   ```
  */
-export const unwatch = createPropertyLikeAnnotation(unwatchKey, () => true);
+export const unwatch: typeof unwatchRunner & typeof createUnwatch = (...args: any[]) => {
+  if (args.length === 1 && typeof args[0] === "function") {
+    return unwatchRunner(args[0]);
+  }
+  return createUnwatch(...(args as Parameters<typeof createUnwatch>));
+};
 
 const watcherKey = Symbol("watcher");
 const internalToken = Symbol("watcher.internal");
@@ -87,14 +123,19 @@ export class Watcher {
     return watcher;
   }
 
+  /** Whether Watcher is enabled in the current transaction */
+  static get isWatching() {
+    return isWatching;
+  }
+
   private constructor(token: symbol, target: object) {
     if (token !== internalToken) {
       throw new Error("private constructor");
     }
 
     this.#nestedFetcher = new StandardNestedFetcher(target, (entry) => Watcher.getSafe(entry.data));
-    this.#processNestedAnnotations(target);
     this.#processUnwatchAnnotations(target);
+    this.#processNestedAnnotations(target);
     this.#processWatchAnnotations(target);
     this.#processMobxAnnotations(target);
 
@@ -165,11 +206,13 @@ export class Watcher {
    */
   @action
   assumeChanged() {
+    if (!isWatching) return;
     this.#assumeChanged.set(true);
   }
 
   /** Mark a key as changed */
   #didChange(key: KeyPath) {
+    if (!isWatching) return;
     runInAction(() => {
       this.#changedKeys.add(key);
       this.#incrementChangedTick();
@@ -182,6 +225,7 @@ export class Watcher {
    * For when a key or key path is changed.
    */
   #incrementChangedTick() {
+    if (!isWatching) return;
     runInAction(() => {
       this.#changedTick.set(this.#changedTick.get() + 1n);
     });
@@ -248,8 +292,7 @@ export class Watcher {
       if (this.#processedKeys.has(key)) continue;
       this.#processedKeys.add(key);
 
-      const isShallow = metadata.data.includes(WatchMode.Shallow);
-
+      const isShallow = metadata.data.at(-1) === WatchMode.Shallow; // Last annotation prevails
       const getValue = () => (key in target ? (target as any)[key] : metadata.get?.());
 
       reaction(
