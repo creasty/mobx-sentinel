@@ -38,22 +38,31 @@ export class FormField {
   get isChanged() {
     return !!this.#changeType.get();
   }
-  /** Whether the error states has been reported */
+
+  /**
+   * Whether the error states has been reported
+   *
+   * Check this value to determine if errors should be displayed.
+   */
   @computed
   get isErrorReported() {
-    return this.#isErrorReported.get() && this.hasErrors;
+    if (!this.#isErrorReported.get()) return false;
+    return this.hasErrors;
   }
 
+  /** Errors of the field */
   @computed.struct
   get errors(): ReadonlySet<string> {
     return this.#validator.getErrorMessages(buildKeyPath(this.fieldName));
   }
 
+  /** Whether the field has errors */
   @computed
   get hasErrors() {
     return this.errors.size > 0;
   }
 
+  /** Reset the field to its initial state */
   @action
   reset() {
     this.#changeType.set(null);
@@ -62,11 +71,13 @@ export class FormField {
     this.#cancelFinalizeChangeWithDelay();
   }
 
+  /** Mark the field as touched (usually triggered by onFocus) */
   @action
   markAsTouched() {
     this.#isTouched.set(true);
   }
 
+  /** Mark the field as changed (usually triggered by onChange) */
   @action
   markAsChanged(type: FormField.ChangeType = "final") {
     this.#changeType.set(type);
@@ -74,7 +85,7 @@ export class FormField {
     switch (type) {
       case "final": {
         this.#cancelFinalizeChangeWithDelay();
-        this.#isErrorReported.set(true);
+        this.reportError();
         break;
       }
       case "intermediate": {
@@ -84,11 +95,13 @@ export class FormField {
     }
   }
 
+  /** Report the errors of the field */
   @action
   reportError() {
     this.#isErrorReported.set(true);
   }
 
+  /** Finalize the intermediate change if needed (usually triggered by onBlur) */
   finalizeChangeIfNeeded() {
     this.#cancelFinalizeChangeWithDelay();
     if (this.isIntermediate) {
