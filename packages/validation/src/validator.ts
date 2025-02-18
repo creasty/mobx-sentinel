@@ -161,9 +161,11 @@ export class Validator<T> {
           yield [keyPath, error];
         }
       }
-      for (const [keyPath, validator] of this.nested) {
-        for (const [relativeKeyPath, error] of validator.findErrors(KeyPathSelf, prefixMatch)) {
-          yield [buildKeyPath(keyPath, relativeKeyPath), error];
+      if (prefixMatch) {
+        for (const [keyPath, validator] of this.nested) {
+          for (const [relativeKeyPath, error] of validator.findErrors(KeyPathSelf, prefixMatch)) {
+            yield [buildKeyPath(keyPath, relativeKeyPath), error];
+          }
         }
       }
     } else {
@@ -173,13 +175,15 @@ export class Validator<T> {
           yield [error.keyPath, error];
         }
       }
-      for (const ancestorKeyPath of getKeyPathAncestors(searchKeyPath, false)) {
-        const validator = this.nested.get(ancestorKeyPath);
-        if (!validator) continue;
-        const parentKeyPath = getRelativeKeyPath(searchKeyPath, ancestorKeyPath);
-        if (!parentKeyPath) continue;
-        for (const [relativeKeyPath, error] of validator.findErrors(parentKeyPath, prefixMatch)) {
-          yield [buildKeyPath(ancestorKeyPath, relativeKeyPath), error];
+      ancestorLoop: for (const ancestorKeyPath of getKeyPathAncestors(searchKeyPath, true)) {
+        for (const entry of this.#nestedFetcher.getForKey(ancestorKeyPath)) {
+          const childKeyPath =
+            entry.key !== entry.keyPath && prefixMatch ? KeyPathSelf : getRelativeKeyPath(searchKeyPath, entry.keyPath);
+          if (!childKeyPath) continue;
+          for (const [relativeKeyPath, error] of entry.data.findErrors(childKeyPath, prefixMatch)) {
+            yield [buildKeyPath(entry.keyPath, relativeKeyPath), error];
+          }
+          break ancestorLoop;
         }
       }
     }
