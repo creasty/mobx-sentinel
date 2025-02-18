@@ -4,6 +4,8 @@ export { Validator, makeValidatable } from "./validator";
 export type { ValidationError, ValidationErrorMapBuilder as ValidationErrorsBuilder } from "./error";
 export {
   KeyPath,
+  KeyPathComponent,
+  KeyPathSelf,
   buildKeyPath,
   getRelativeKeyPath,
   getParentKeyOfKeyPath,

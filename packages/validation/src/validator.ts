@@ -144,7 +144,7 @@ export class Validator<T> {
     return Object.freeze(result);
   }
 
-  /** Get error messages for a key path */
+  /** Get error messages for the key path */
   getErrorMessages(keyPath: KeyPath, prefixMatch = false) {
     const result = new Set<string>();
     for (const [, error] of this.findErrors(keyPath, prefixMatch)) {
@@ -153,7 +153,15 @@ export class Validator<T> {
     return result;
   }
 
-  /** Find errors for a key path */
+  /** Check if the validator has errors for the key path */
+  hasErrors(keyPath: KeyPath, prefixMatch = false) {
+    for (const _ of this.findErrors(keyPath, prefixMatch)) {
+      return true;
+    }
+    return false;
+  }
+
+  /** Find errors for the key path */
   *findErrors(searchKeyPath: KeyPath, prefixMatch = false): Generator<[keyPath: KeyPath, error: ValidationError]> {
     if (isKeyPathSelf(searchKeyPath)) {
       for (const errors of this.#errors.values()) {

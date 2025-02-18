@@ -561,34 +561,86 @@ describe("Form", () => {
     });
   });
 
-  describe("#getError", () => {
-    it("returns the error messages for a field", async () => {
+  describe("#getErrors", () => {
+    it("returns the error messages for a field", () => {
       const model = new SampleModel();
       const form = Form.get(model);
       const field = form.getField("field");
 
-      runInAction(() => {
-        model.field = false;
+      form.validator.updateErrors(Symbol(), (b) => {
+        b.invalidate("field", "invalid");
+        b.invalidate("otherField", "otherInvalid");
       });
-      await vi.waitFor(() => expect(form.isValidating).toBe(false));
 
-      expect(form.getError("field")).toEqual(new Set());
+      expect(form.getErrors("field")).toEqual(new Set());
       field.reportError();
-      expect(form.getError("field")).toEqual(new Set(["invalid"]));
+      expect(form.getErrors("field")).toEqual(new Set(["invalid"]));
     });
 
-    it("returns the error messages for a field when includePreReported is true", async () => {
+    it("returns the error messages for a field when includePreReported is true", () => {
       const model = new SampleModel();
       const form = Form.get(model);
       const field = form.getField("field");
 
-      runInAction(() => {
-        model.field = false;
+      form.validator.updateErrors(Symbol(), (b) => {
+        b.invalidate("field", "invalid");
+        b.invalidate("otherField", "otherInvalid");
       });
-      await vi.waitFor(() => expect(form.isValidating).toBe(false));
 
       field.reportError();
-      expect(form.getError("field", true)).toEqual(new Set(["invalid"]));
+      expect(form.getErrors("field", true)).toEqual(new Set(["invalid"]));
+    });
+  });
+
+  describe("#getAllErrors", () => {
+    it("returns all error messages for the form", () => {
+      const model = new NestedModel();
+      const form = Form.get(model);
+      const sampleForm = Form.get(model.sample);
+      const arrayForm0 = Form.get(model.array[0]);
+
+      form.validator.updateErrors(Symbol(), (b) => {
+        b.invalidate("field", "invalid at field");
+        b.invalidate("sample", "invalid at sample");
+        b.invalidate("array", "invalid at array");
+      });
+      sampleForm.validator.updateErrors(Symbol(), (b) => {
+        b.invalidate("field", "invalid at sample.field");
+      });
+      arrayForm0.validator.updateErrors(Symbol(), (b) => {
+        b.invalidate("field", "invalid at array.0.field");
+      });
+
+      expect(form.getAllErrors()).toEqual(
+        new Set([
+          "invalid at array",
+          "invalid at field",
+          "invalid at sample",
+          "invalid at sample.field",
+          "invalid at array.0.field",
+        ])
+      );
+    });
+
+    it("returns all error messages for the specific field", () => {
+      const model = new NestedModel();
+      const form = Form.get(model);
+      const sampleForm = Form.get(model.sample);
+      const arrayForm0 = Form.get(model.array[0]);
+
+      form.validator.updateErrors(Symbol(), (b) => {
+        b.invalidate("field", "invalid at field");
+        b.invalidate("sample", "invalid at sample");
+        b.invalidate("array", "invalid at array");
+      });
+      sampleForm.validator.updateErrors(Symbol(), (b) => {
+        b.invalidate("field", "invalid at sample.field");
+      });
+      arrayForm0.validator.updateErrors(Symbol(), (b) => {
+        b.invalidate("field", "invalid at array.0.field");
+      });
+
+      expect(form.getAllErrors("array")).toEqual(new Set(["invalid at array", "invalid at array.0.field"]));
     });
   });
 });

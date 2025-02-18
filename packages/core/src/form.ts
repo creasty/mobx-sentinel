@@ -1,6 +1,6 @@
 import { action, computed, makeObservable, observable, reaction } from "mobx";
 import { v4 as uuidV4 } from "uuid";
-import { KeyPath, Validator, Watcher, StandardNestedFetcher } from "@form-model/validation";
+import { KeyPath, Validator, Watcher, StandardNestedFetcher, buildKeyPath, KeyPathSelf } from "@form-model/validation";
 import { FormField } from "./field";
 import { FormBinding, FormBindingConstructor, FormBindingFunc, getSafeBindingName } from "./binding";
 import { FormConfig, globalConfig } from "./config";
@@ -366,8 +366,13 @@ export class Form<T> {
     return this.#bindToForm(args[0], args[1]);
   };
 
-  /** Get the error messages for a field */
-  getError(fieldName: FormField.Name<T>, includePreReported = false) {
+  /**
+   * Get the error messages for a field
+   *
+   * @param fieldName - The field name to get errors for.
+   * @param includePreReported - Whether to include errors that are yet to be reported.
+   */
+  getErrors(fieldName: FormField.Name<T>, includePreReported = false): ReadonlySet<string> {
     const field = this.getField(fieldName);
 
     if (!includePreReported && !field.isErrorReported) {
@@ -377,6 +382,15 @@ export class Form<T> {
     // Reading errors from FormField#errors is computed,
     // so notifications only trigger when the error of the specific field changes
     return field.errors;
+  }
+
+  /**
+   * Get all error messages for the form
+   *
+   * @param fieldName - The field name to get errors for. If omitted, all errors are returned.
+   */
+  getAllErrors(fieldName?: FormField.Name<T>) {
+    return this.validator.getErrorMessages(fieldName ? buildKeyPath(fieldName) : KeyPathSelf, true);
   }
 
   /** @internal @ignore */
