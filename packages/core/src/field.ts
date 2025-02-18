@@ -2,6 +2,8 @@ import { action, computed, makeObservable, observable } from "mobx";
 import { v4 as uuidV4 } from "uuid";
 import { buildKeyPath, type Validator } from "@form-model/validation";
 
+const internalToken = Symbol("formField.internal");
+
 export class FormField {
   readonly id = uuidV4();
   readonly fieldName: string;
@@ -37,8 +39,9 @@ export class FormField {
     return !!this.#changeType.get();
   }
   /** Whether the error states has been reported */
+  @computed
   get isErrorReported() {
-    return this.#isErrorReported.get();
+    return this.#isErrorReported.get() && this.hasErrors;
   }
 
   @computed.struct
@@ -49,11 +52,6 @@ export class FormField {
   @computed
   get hasErrors() {
     return this.errors.size > 0;
-  }
-
-  @computed
-  get hasReportedErrors() {
-    return this.isErrorReported && this.hasErrors;
   }
 
   @action
@@ -111,6 +109,13 @@ export class FormField {
       this.#timerId = null;
     }
   }
+
+  /** @ignore @internal */
+  [internalToken]() {
+    return {
+      isErrorReported: this.#isErrorReported,
+    };
+  }
 }
 
 export namespace FormField {
@@ -125,4 +130,9 @@ export namespace FormField {
    * - "intermediate" - The input is incomplete and does not yet conform to the expected format.
    */
   export type ChangeType = "final" | "intermediate";
+}
+
+/** @ignore @internal */
+export function debugFormField(field: FormField) {
+  return field[internalToken]();
 }

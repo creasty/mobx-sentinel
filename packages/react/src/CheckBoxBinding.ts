@@ -47,7 +47,7 @@ export class CheckBoxBinding implements FormBinding {
 
   @computed
   get errorMessages() {
-    if (!this.field.hasReportedErrors) return null;
+    if (!this.field.isErrorReported) return null;
     return Array.from(this.field.errors).join(", ") || null;
   }
 
@@ -58,7 +58,7 @@ export class CheckBoxBinding implements FormBinding {
       checked: this.checked,
       onChange: this.onChange,
       onFocus: this.onFocus,
-      "aria-invalid": this.field.hasReportedErrors,
+      "aria-invalid": this.field.isErrorReported,
       "aria-errormessage": this.errorMessages ?? undefined,
     } satisfies CheckBoxBinding.Attrs;
   }

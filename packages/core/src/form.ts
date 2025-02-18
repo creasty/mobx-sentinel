@@ -379,14 +379,7 @@ export class Form<T> {
     return field.errors;
   }
 
-  /**
-   * Get the internal properties of the form.
-   *
-   * For internal testing purposes only.
-   *
-   * @internal
-   * @ignore
-   */
+  /** @internal @ignore */
   [internalToken]() {
     return {
       fields: this.#fields,
@@ -410,7 +403,7 @@ export namespace Form {
   };
 }
 
-/** @internal */
-export function getInternal<T>(form: Form<T>) {
+/** @internal @ignore */
+export function debugForm<T>(form: Form<T>) {
   return form[internalToken]();
 }

@@ -27,7 +27,7 @@ export class LabelBinding implements FormBinding {
   @computed
   get firstErrorMessage() {
     for (const field of this.fields) {
-      if (!field.hasReportedErrors) continue;
+      if (!field.isErrorReported) continue;
       for (const error of field.errors) {
         return error;
       }

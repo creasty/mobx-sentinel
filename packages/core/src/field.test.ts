@@ -1,6 +1,6 @@
 import { makeObservable, observable } from "mobx";
 import { Form } from "./form";
-import { FormField } from "./field";
+import { debugFormField, FormField } from "./field";
 import { Validator } from "@form-model/validation";
 
 class SampleModel {
@@ -48,6 +48,23 @@ describe("FormField", () => {
     expect(field.isErrorReported).toBe(false);
   });
 
+  describe("#reportError", () => {
+    it("marks the field as reported", () => {
+      const { field, updateErrors } = setupEnv();
+      const internal = debugFormField(field);
+      field.reportError();
+      expect(field.isTouched).toBe(false);
+      expect(field.isIntermediate).toBe(false);
+      expect(field.isChanged).toBe(false);
+      expect(field.isErrorReported).toBe(false);
+      expect(internal.isErrorReported.get()).toBe(true);
+
+      updateErrors((b) => b.invalidate("test", "error"));
+      expect(field.isErrorReported).toBe(true);
+      expect(internal.isErrorReported.get()).toBe(true);
+    });
+  });
+
   describe("#errors", () => {
     it("returns an empty set if there are no errors at all", () => {
       const { field } = setupEnv();
@@ -85,23 +102,23 @@ describe("FormField", () => {
     });
   });
 
-  describe("#hasReportedErrors", () => {
+  describe("#isErrorReported", () => {
     it("returns false if there are no errors", () => {
       const { field } = setupEnv();
-      expect(field.hasReportedErrors).toBe(false);
+      expect(field.isErrorReported).toBe(false);
     });
 
     it("returns false if there are errors but they are not reported", () => {
       const { field, updateErrors } = setupEnv();
       updateErrors((b) => b.invalidate("test", "error"));
-      expect(field.hasReportedErrors).toBe(false);
+      expect(field.isErrorReported).toBe(false);
     });
 
     it("returns true if there are errors and they are reported", () => {
       const { field, updateErrors } = setupEnv();
       updateErrors((b) => b.invalidate("test", "error"));
       field.reportError();
-      expect(field.hasReportedErrors).toBe(true);
+      expect(field.isErrorReported).toBe(true);
     });
   });
 
@@ -119,7 +136,10 @@ describe("FormField", () => {
   describe("#markAsChanged", () => {
     describe("final", () => {
       it("marks the field as changed and reports error instantly", () => {
-        const { field } = setupEnv();
+        const { field, updateErrors } = setupEnv();
+
+        updateErrors((b) => b.invalidate("test", "error"));
+
         field.markAsChanged("final");
         expect(field.isTouched).toBe(false);
         expect(field.isIntermediate).toBe(false);
@@ -130,8 +150,10 @@ describe("FormField", () => {
 
     describe("intermediate", () => {
       it("marks the field as 'intermediately' changed and calls finalizeChangeIfNeeded() after a delay", async () => {
-        const { field, waitForDelay } = setupEnv();
+        const { field, waitForDelay, updateErrors } = setupEnv();
         const spy = vi.spyOn(field, "finalizeChangeIfNeeded");
+
+        updateErrors((b) => b.invalidate("test", "error"));
 
         field.markAsChanged("intermediate");
         expect(spy).toBeCalledTimes(0);
@@ -146,8 +168,10 @@ describe("FormField", () => {
       });
 
       it("prolongs the delay when changes are made again", async () => {
-        const { field, waitForDelay } = setupEnv();
+        const { field, waitForDelay, updateErrors } = setupEnv();
         const spy = vi.spyOn(field, "finalizeChangeIfNeeded");
+
+        updateErrors((b) => b.invalidate("test", "error"));
 
         field.markAsChanged("intermediate");
         await waitForDelay(-10);
@@ -162,8 +186,10 @@ describe("FormField", () => {
       });
 
       it("cancels the delay with markAsChanged(final)", async () => {
-        const { field, waitForDelay } = setupEnv();
+        const { field, waitForDelay, updateErrors } = setupEnv();
         const spy = vi.spyOn(field, "finalizeChangeIfNeeded");
+
+        updateErrors((b) => b.invalidate("test", "error"));
 
         field.markAsChanged("intermediate");
         field.markAsChanged("final");
@@ -216,20 +242,10 @@ describe("FormField", () => {
     });
   });
 
-  describe("#reportError", () => {
-    it("marks the field as reported", () => {
-      const { field } = setupEnv();
-      field.reportError();
-      expect(field.isTouched).toBe(false);
-      expect(field.isIntermediate).toBe(false);
-      expect(field.isChanged).toBe(false);
-      expect(field.isErrorReported).toBe(true);
-    });
-  });
-
   describe("#reset", () => {
     it("resets the field", () => {
       const { field } = setupEnv();
+      const internal = debugFormField(field);
 
       field.markAsTouched();
       field.markAsChanged("intermediate");
@@ -241,6 +257,7 @@ describe("FormField", () => {
       expect(field.isIntermediate).toBe(false);
       expect(field.isChanged).toBe(false);
       expect(field.isErrorReported).toBe(false);
+      expect(internal.isErrorReported.get()).toBe(false);
     });
   });
 });
