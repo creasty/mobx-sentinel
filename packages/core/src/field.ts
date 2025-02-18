@@ -60,7 +60,7 @@ export class FormField {
   /** Whether the field has errors */
   @computed
   get hasErrors() {
-    return this.errors.size > 0;
+    return this.#validator.hasErrors(buildKeyPath(this.fieldName));
   }
 
   /** Reset the field to its initial state */
