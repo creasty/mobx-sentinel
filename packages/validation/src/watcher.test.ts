@@ -1,5 +1,5 @@
 import { computed, makeObservable, observable, runInAction } from "mobx";
-import { Watcher, getInternal, unwatch, watch } from "./watcher";
+import { Watcher, debugWatcher, unwatch, watch } from "./watcher";
 import { nested } from "./nested";
 import { KeyPath } from "./keyPath";
 
@@ -62,7 +62,7 @@ describe("Watcher", () => {
   describe("#reset", () => {
     it("resets the state", () => {
       const watcher = Watcher.get({});
-      const internal = getInternal(watcher);
+      const internal = debugWatcher(watcher);
 
       watcher.assumeChanged();
       expect(watcher.changed).toBe(true);
@@ -107,7 +107,7 @@ describe("unwatch()", () => {
   it("runs the function without changes being detected by Watcher", () => {
     const object = observable({ value: 0 });
     const watcher = Watcher.get(object);
-    const internal = getInternal(watcher);
+    const internal = debugWatcher(watcher);
 
     unwatch(() => {
       watcher.assumeChanged();

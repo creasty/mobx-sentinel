@@ -2,6 +2,8 @@ import { action, computed, makeObservable, observable } from "mobx";
 import { v4 as uuidV4 } from "uuid";
 import { buildKeyPath, type Validator } from "@form-model/validation";
 
+const internalToken = Symbol("formField.internal");
+
 export class FormField {
   readonly id = uuidV4();
   readonly fieldName: string;
@@ -36,26 +38,32 @@ export class FormField {
   get isChanged() {
     return !!this.#changeType.get();
   }
-  /** Whether the error states has been reported */
+
+  /**
+   * Whether the error states has been reported
+   *
+   * Check this value to determine if errors should be displayed.
+   */
+  @computed
   get isErrorReported() {
-    return this.#isErrorReported.get();
+    if (!this.#isErrorReported.get()) return false;
+    if (this.#validator.isValidating) return false;
+    return this.hasErrors;
   }
 
+  /** Errors of the field */
   @computed.struct
   get errors(): ReadonlySet<string> {
     return this.#validator.getErrorMessages(buildKeyPath(this.fieldName));
   }
 
+  /** Whether the field has errors */
   @computed
   get hasErrors() {
     return this.errors.size > 0;
   }
 
-  @computed
-  get hasReportedErrors() {
-    return this.isErrorReported && this.hasErrors;
-  }
-
+  /** Reset the field to its initial state */
   @action
   reset() {
     this.#changeType.set(null);
@@ -64,11 +72,13 @@ export class FormField {
     this.#cancelFinalizeChangeWithDelay();
   }
 
+  /** Mark the field as touched (usually triggered by onFocus) */
   @action
   markAsTouched() {
     this.#isTouched.set(true);
   }
 
+  /** Mark the field as changed (usually triggered by onChange) */
   @action
   markAsChanged(type: FormField.ChangeType = "final") {
     this.#changeType.set(type);
@@ -76,7 +86,7 @@ export class FormField {
     switch (type) {
       case "final": {
         this.#cancelFinalizeChangeWithDelay();
-        this.#isErrorReported.set(true);
+        this.reportError();
         break;
       }
       case "intermediate": {
@@ -86,11 +96,13 @@ export class FormField {
     }
   }
 
+  /** Report the errors of the field */
   @action
   reportError() {
     this.#isErrorReported.set(true);
   }
 
+  /** Finalize the intermediate change if needed (usually triggered by onBlur) */
   finalizeChangeIfNeeded() {
     this.#cancelFinalizeChangeWithDelay();
     if (this.isIntermediate) {
@@ -111,6 +123,13 @@ export class FormField {
       this.#timerId = null;
     }
   }
+
+  /** @ignore @internal */
+  [internalToken]() {
+    return {
+      isErrorReported: this.#isErrorReported,
+    };
+  }
 }
 
 export namespace FormField {
@@ -125,4 +144,9 @@ export namespace FormField {
    * - "intermediate" - The input is incomplete and does not yet conform to the expected format.
    */
   export type ChangeType = "final" | "intermediate";
+}
+
+/** @ignore @internal */
+export function debugFormField(field: FormField) {
+  return field[internalToken]();
 }

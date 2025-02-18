@@ -161,7 +161,7 @@ export class InputBinding implements FormBinding {
 
   @computed
   get errorMessages() {
-    if (!this.field.hasReportedErrors) return null;
+    if (!this.field.isErrorReported) return null;
     return Array.from(this.field.errors).join(", ") || null;
   }
 
@@ -173,7 +173,7 @@ export class InputBinding implements FormBinding {
       onChange: this.onChange,
       onFocus: this.onFocus,
       onBlur: this.onBlur,
-      "aria-invalid": this.field.hasReportedErrors,
+      "aria-invalid": this.field.isErrorReported,
       "aria-errormessage": this.errorMessages ?? undefined,
     } satisfies InputBinding.Attrs;
   }

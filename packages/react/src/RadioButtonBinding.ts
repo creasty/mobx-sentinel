@@ -45,7 +45,7 @@ export class RadioButtonBinding implements FormBinding {
 
   @computed
   get errorMessages() {
-    if (!this.field.hasReportedErrors) return null;
+    if (!this.field.isErrorReported) return null;
     return Array.from(this.field.errors).join(", ") || null;
   }
 
@@ -72,7 +72,7 @@ export class RadioButtonBinding implements FormBinding {
       checked: this.value === value,
       onChange: this.onChange,
       onFocus: this.onFocus,
-      "aria-invalid": this.field.hasReportedErrors,
+      "aria-invalid": this.field.isErrorReported,
       "aria-errormessage": this.errorMessages ?? undefined,
     } satisfies RadioButtonBinding.Attrs;
   };

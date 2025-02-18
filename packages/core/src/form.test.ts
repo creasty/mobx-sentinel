@@ -1,6 +1,6 @@
 import { KeyPath, makeValidatable, nested } from "@form-model/validation";
 import { autorun, makeObservable, observable, runInAction } from "mobx";
-import { Form, getInternal } from "./form";
+import { Form, debugForm } from "./form";
 import {
   SampleConfigurableFieldBinding,
   SampleConfigurableFormBinding,
@@ -353,7 +353,7 @@ describe("Form", () => {
     it("does not call Submission#exec when the form is not dirty", async () => {
       const model = new EmptyModel();
       const form = Form.get(model);
-      const internal = getInternal(form);
+      const internal = debugForm(form);
       const spy = vi.spyOn(internal.submission, "exec");
       await form.submit();
       expect(spy).not.toBeCalled();
@@ -362,7 +362,7 @@ describe("Form", () => {
     it("calls Submission#exec when the form is dirty", async () => {
       const model = new EmptyModel();
       const form = Form.get(model);
-      const internal = getInternal(form);
+      const internal = debugForm(form);
       const spy = vi.spyOn(internal.submission, "exec");
       form.markAsDirty();
       await form.submit();
@@ -372,7 +372,7 @@ describe("Form", () => {
     it("calls Submission#exec when the force option is true", async () => {
       const model = new EmptyModel();
       const form = Form.get(model);
-      const internal = getInternal(form);
+      const internal = debugForm(form);
       const spy = vi.spyOn(internal.submission, "exec");
       await form.submit({ force: true });
       expect(spy).toBeCalled();
@@ -393,7 +393,7 @@ describe("Form", () => {
     it("adds a submit handler", () => {
       const model = new SampleModel();
       const form = Form.get(model);
-      const internal = getInternal(form);
+      const internal = debugForm(form);
       const spy = vi.spyOn(internal.submission, "addHandler");
       expect(form.addHandler("willSubmit", () => void 0)).toBeInstanceOf(Function);
       expect(form.addHandler("submit", async () => false)).toBeInstanceOf(Function);
@@ -675,7 +675,14 @@ suite("Sub-forms", () => {
     test("when a new field is added after reportError is called, the error on the new field is not reported", async () => {
       const { form } = setupEnv();
 
+      // Add errors
+      form.validator.updateErrors(Symbol(), (b) => {
+        b.invalidate("field", "error");
+        b.invalidate("sample", "error");
+      });
+
       const field1 = form.getField("field");
+
       expect(field1.isErrorReported).toEqual(false);
       form.reportError();
       expect(field1.isErrorReported).toEqual(true);
@@ -686,6 +693,17 @@ suite("Sub-forms", () => {
 
     test("reporting errors on sub-forms does not affect the parent form", async () => {
       const { form, sampleForm, arrayForm0 } = setupEnv();
+
+      // Add errors
+      form.validator.updateErrors(Symbol(), (b) => {
+        b.invalidate("field", "error");
+      });
+      sampleForm.validator.updateErrors(Symbol(), (b) => {
+        b.invalidate("field", "error");
+      });
+      arrayForm0.validator.updateErrors(Symbol(), (b) => {
+        b.invalidate("field", "error");
+      });
 
       // Touch fields to initialize them
       const field1 = form.getField("field");
@@ -704,6 +722,14 @@ suite("Sub-forms", () => {
     test("when a new sub-form is added after reportError is called, the error on the new form is not reported", async () => {
       const { model, form, arrayForm0 } = setupEnv();
 
+      // Add errors
+      form.validator.updateErrors(Symbol(), (b) => {
+        b.invalidate("field", "error");
+      });
+      arrayForm0.validator.updateErrors(Symbol(), (b) => {
+        b.invalidate("field", "error");
+      });
+
       // Touch fields to initialize them
       const field1 = form.getField("field");
       const field2 = arrayForm0.getField("field");
@@ -716,6 +742,9 @@ suite("Sub-forms", () => {
         model.array.push(new SampleModel());
       });
       const arrayForm1 = Form.get(model.array[1]);
+      arrayForm1.validator.updateErrors(Symbol(), (b) => {
+        b.invalidate("field", "error");
+      });
       const field3 = arrayForm1.getField("field");
 
       expect(field1.isErrorReported).toEqual(true);

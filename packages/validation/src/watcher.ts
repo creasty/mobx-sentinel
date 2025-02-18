@@ -318,14 +318,7 @@ export class Watcher {
     }
   }
 
-  /**
-   * Get the internal properties of the watcher.
-   *
-   * For internal testing purposes only.
-   *
-   * @internal
-   * @ignore
-   */
+  /** @ignore @internal */
   [internalToken]() {
     return {
       didChange: this.#didChange.bind(this),
@@ -333,7 +326,7 @@ export class Watcher {
   }
 }
 
-/** @internal */
-export function getInternal(watcher: Watcher) {
+/** @ignore @internal */
+export function debugWatcher(watcher: Watcher) {
   return watcher[internalToken]();
 }
