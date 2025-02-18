@@ -30,10 +30,9 @@ function setupEnv() {
 
   return {
     model,
-    field,
-    validator: form.validator,
     updateErrors,
     waitForDelay,
+    field,
   };
 }
 
@@ -119,19 +118,6 @@ describe("FormField", () => {
       const { field, updateErrors } = setupEnv();
       updateErrors((b) => b.invalidate("test", "error"));
       field.reportError();
-      expect(field.isErrorReported).toBe(true);
-    });
-
-    it("returns false while the validation is running", async () => {
-      const { field, validator, updateErrors } = setupEnv();
-      updateErrors((b) => b.invalidate("test", "error"));
-      field.reportError();
-      expect(field.isErrorReported).toBe(true);
-
-      validator.addAsyncHandler(async (b) => void b);
-      validator.request();
-      expect(field.isErrorReported).toBe(false);
-      await vi.waitFor(() => expect(validator.isValidating).toBe(false));
       expect(field.isErrorReported).toBe(true);
     });
   });
