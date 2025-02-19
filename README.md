@@ -77,6 +77,14 @@ This library aims to solve these problems through a model-centric design that pr
 - `──` Solid lines indicate reactive, unidirectional relationships.
 - `━━` Heavy lines indicate reactive, bidirectional relationships.
 
+**Key points:**
+
+- No module directly updates your model.
+- Watcher and Validator observe your model, and Form and FormField utilize them.
+- Form has no reactive dependencies on FormField/FormBinding.
+  - State synchronization is only broadcast from Form to FormField.
+- Core package can be used as a standalone library.
+
 ```mermaid
 graph TB
 
@@ -107,7 +115,7 @@ subgraph form package
   Form -.-> |manages| FormBinding["&lt;&lt;interface&gt;&gt;<br>FormBinding"]
   %%FormBinding -.-> |references| Form & FormField
   Form ==> Watcher
-  Form & FormField ==> Validator
+  FormField & Form  ==> Validator
   Form -.-> |uses| StandardNestedFetcher
   Form --> |delegates| Submission["Submission<br>(internal)"]
 end
@@ -131,19 +139,17 @@ end
 
 Use with `mobx`.
 
-- Tracks nested and dynamic (array) models
-  - `@nested` annotation provides a way to track nested models.
-  - Allowing Watcher, Validator, and even Form to integrate features that concern multiple models.
-- Detects changes in models automatically
-  - All `@observable` and `@computed` properties are automatically watched by default.
-  - `@watch` annotation is for where `@observable` decorator is not applicable. e.g., `@watch readonly #private = observable.box(0)`
-  - `@unwatch` annotation and `unwatch(() => ...)` are for where you want to make changes without being detected.
-- Reactive validation
-  - `reaction()`-based validation with debouncing. (re-evaluates on change)
+- `StandardNestedFetcher` provides a simple API for retrieving nested models.
+  - `@nested` annotation is processed by `StandardNestedFetcher` to track nested models.
+  - `StandardNestedFetcher` allows other modules (even your own code) to integrate nested models into their logic.
+- `Watcher` detects changes in models automatically.
+  - All `@observable` and `@computed` annotations are automatically watched by default.
+  - `@watch` annotation can be used where `@observable` is not applicable, e.g. on private fields: `@watch readonly #private = observable.box(0)`
+  - `@unwatch` annotation and `unwatch(() => ...)` function disable change detection when you need to modify values silently.
+- `Validator` and `makeValidatable` provides model validation with automatic re-evaluation.
   - Composable from multiple sources.
-- Asynchronous validation
-  - `Watcher` API backed async validation with smart job scheduling. (re-runs on change)
-  - Composable from multiple sources.
+  - Reactive validation: `reaction()` based validation with debouncing.
+  - Asynchronous validation: `Watcher` powered async validation with smart job scheduling.
   - Cancellable with [AbortSignal](https://developer.mozilla.org/en-US/docs/Web/API/AbortSignal).
 
 ### `form` — Form and bindings
@@ -242,9 +248,7 @@ class Sample {
     this.array.push(new Other());
   }
 }
-```
 
-```typescript
 class Other {
   @observable other: string = "";
 
@@ -255,6 +259,25 @@ class Other {
       if (!this.other) b.invalidate("other", "Required");
     });
   }
+}
+```
+
+```typescript
+const model = new Sample();
+
+const watcher = Watcher.get(model);
+const validator = Validator.get(model);
+
+// do something with the model...
+
+watcher.changed //=> true
+watcher.changedKeyPaths //=> new Set(["text", ..., "nested.other", "array.0.other"])
+
+validator.isValid //=> false
+validator.invalidKeyPaths //=> new Set(["text", ..., "nested.other", "array.0.other"])
+
+for (const [keyPath, error] of validator.findErrors(KeyPathSelf, true)) {
+  console.log(keyPath, error);
 }
 ```
 
