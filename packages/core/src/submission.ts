@@ -11,15 +11,18 @@ export class Submission {
   };
   #abortCtrl: AbortController | null = null;
 
+  /** Whether the submission is running */
   get isRunning() {
     return this.#isRunning.get();
   }
 
+  /** Add a handler for the specific event */
   addHandler<K extends keyof Submission.Handlers>(event: K, handler: Submission.Handlers[K]) {
     this.#handlers[event].add(handler);
     return (): void => void this.#handlers[event].delete(handler);
   }
 
+  /** Execute the submission */
   async exec() {
     this.#abortCtrl?.abort();
     const abortCtrl = new AbortController();

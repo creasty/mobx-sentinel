@@ -433,11 +433,15 @@ export class Validator<T> {
 }
 
 export namespace Validator {
-  export type KeyPathErrorMap = ReadonlyMap<string, ReadonlyArray<string>>;
+  /** State of the async validation */
   export type JobState = "idle" | "enqueued" | "running" | "scheduled";
+  /** Async handler */
   export type AsyncHandler<T> = (builder: ValidationErrorMapBuilder<T>, abortSignal: AbortSignal) => Promise<void>;
+  /** Reactive handler */
   export type ReactiveHandler<T> = (builder: ValidationErrorMapBuilder<T>) => void;
+  /** Instant handler */
   export type InstantHandler<T> = (builder: ValidationErrorMapBuilder<T>) => void;
+  /** Handler options */
   export type HandlerOptions = {
     /**
      * Whether to run the handler immediately
