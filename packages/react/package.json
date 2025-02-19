@@ -1,7 +1,7 @@
 {
-  "name": "@form-model/react",
+  "name": "@mobx-sentinel/react",
   "description": "MobX + Model x Form",
-  "version": "0.0.7",
+  "version": "0.1.0",
   "author": "creasty <yuki@creasty.com>",
   "license": "MIT",
   "homepage": "https://github.com/creasty/form-model",
@@ -42,7 +42,7 @@
     "build": "tsup"
   },
   "dependencies": {
-    "@form-model/core": "workspace:*",
+    "@mobx-sentinel/form": "workspace:*",
     "mobx": "^6.12.3",
     "mobx-react-lite": "^4.0.7",
     "react": "^18.0.0",

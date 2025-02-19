@@ -1,4 +1,4 @@
-import { Form } from "@form-model/core";
+import { Form } from "@mobx-sentinel/form";
 import { useEffect, useRef } from "react";
 
 /**

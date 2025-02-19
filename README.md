@@ -124,10 +124,10 @@ end
 
 ### `core` — Core functionality like Watcher and Validator
 
-<pre><code>npm install --save <b>@form-model/core</b></code></pre>
+<pre><code>npm install --save <b>@mobx-sentinel/form</b></code></pre>
 
-[![npm version](https://badge.fury.io/js/@form-model%2Fcore.svg)](https://www.npmjs.com/package/@form-model/core)
-[![npm size](https://badgen.net/bundlephobia/min/@form-model/core)](https://bundlephobia.com/package/@form-model/core)
+[![npm version](https://badge.fury.io/js/@form-model%2Fcore.svg)](https://www.npmjs.com/package/@mobx-sentinel/form)
+[![npm size](https://badgen.net/bundlephobia/min/@mobx-sentinel/form)](https://bundlephobia.com/package/@mobx-sentinel/form)
 
 Use with `mobx`.
 
@@ -169,10 +169,10 @@ Use with `mobx`.
 
 ### `react` — Standard bindings and hooks for React
 
-<pre><code>npm install --save <b>@form-model/react</b></code></pre>
+<pre><code>npm install --save <b>@mobx-sentinel/react</b></code></pre>
 
-[![npm version](https://badge.fury.io/js/@form-model%2Freact.svg)](https://www.npmjs.com/package/@form-model/react)
-[![npm size](https://badgen.net/bundlephobia/min/@form-model/react)](https://bundlephobia.com/package/@form-model/react)
+[![npm version](https://badge.fury.io/js/@form-model%2Freact.svg)](https://www.npmjs.com/package/@mobx-sentinel/react)
+[![npm size](https://badgen.net/bundlephobia/min/@mobx-sentinel/react)](https://bundlephobia.com/package/@mobx-sentinel/react)
 
 Use with `mobx-react-lite`.
 
@@ -207,7 +207,7 @@ Use with `mobx-react-lite`.
 
 ```typescript
 import { action, observable, makeObservable } from "mobx";
-import { nested, makeValidatable } from "@form-model/validation";
+import { nested, makeValidatable } from "@mobx-sentinel/core";
 
 class Sample {
   @observable text: string = "";
@@ -262,9 +262,9 @@ class Other {
 
 ```tsx
 import { observer } from "mobx-react-lite";
-import { Form } from "@form-model/core";
-import { useFormHandler } from "@form-model/react";
-import "@form-model/react/dist/extension"; // Makes .bindTextInput() and other bind methods available.
+import { Form } from "@mobx-sentinel/form";
+import { useFormHandler } from "@mobx-sentinel/react";
+import "@mobx-sentinel/react/dist/extension"; // Makes .bindTextInput() and other bind methods available.
 
 const SampleForm: React.FC<{ model: Sample }> = observer(({ model }) => {
   const form = Form.get(model);
