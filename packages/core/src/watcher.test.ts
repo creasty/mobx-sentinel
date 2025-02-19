@@ -104,6 +104,19 @@ describe("unwatch()", () => {
     expect(Watcher.isWatching).toBe(true);
   });
 
+  it("unwatch() ends when the current transaction completes", () => {
+    runInAction(() => {
+      unwatch(() => {
+        expect(Watcher.isWatching).toBe(false);
+      });
+      expect(Watcher.isWatching).toBe(false); // Doesn't become true until the current transaction completes
+      unwatch(() => {
+        expect(Watcher.isWatching).toBe(false);
+      });
+    });
+    expect(Watcher.isWatching).toBe(true);
+  });
+
   it("runs the function without changes being detected by Watcher", () => {
     const object = observable({ value: 0 });
     const watcher = Watcher.get(object);
