@@ -1,7 +1,7 @@
-# form-model
+# mobx-sentinel
 
-[![push](https://github.com/creasty/form-model/actions/workflows/push.yml/badge.svg)](https://github.com/creasty/form-model/actions/workflows/push.yml)
-[![codecov](https://codecov.io/gh/creasty/form-model/graph/badge.svg?token=K6D0I95Y91)](https://codecov.io/gh/creasty/form-model)
+[![push](https://github.com/creasty/mobx-sentinel/actions/workflows/push.yml/badge.svg)](https://github.com/creasty/mobx-sentinel/actions/workflows/push.yml)
+[![codecov](https://codecov.io/gh/creasty/mobx-sentinel/graph/badge.svg?token=K6D0I95Y91)](https://codecov.io/gh/creasty/mobx-sentinel)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
 > [!CAUTION]
@@ -126,7 +126,7 @@ end
 
 <pre><code>npm install --save <b>@mobx-sentinel/form</b></code></pre>
 
-[![npm version](https://badge.fury.io/js/@form-model%2Fcore.svg)](https://www.npmjs.com/package/@mobx-sentinel/form)
+[![npm version](https://badge.fury.io/js/@mobx-sentinel%2Fcore.svg)](https://www.npmjs.com/package/@mobx-sentinel/form)
 [![npm size](https://badgen.net/bundlephobia/min/@mobx-sentinel/form)](https://bundlephobia.com/package/@mobx-sentinel/form)
 
 Use with `mobx`.
@@ -148,10 +148,10 @@ Use with `mobx`.
 
 ### `form` — Form and bindings
 
-<pre><code>npm install --save <b>@form-model/form</b></code></pre>
+<pre><code>npm install --save <b>@mobx-sentinel/form</b></code></pre>
 
-[![npm version](https://badge.fury.io/js/@form-model%2Fform.svg)](https://www.npmjs.com/package/@form-model/form)
-[![npm size](https://badgen.net/bundlephobia/min/@form-model/form)](https://bundlephobia.com/package/@form-model/form)
+[![npm version](https://badge.fury.io/js/@mobx-sentinel%2Fform.svg)](https://www.npmjs.com/package/@mobx-sentinel/form)
+[![npm size](https://badgen.net/bundlephobia/min/@mobx-sentinel/form)](https://bundlephobia.com/package/@mobx-sentinel/form)
 
 Use with `mobx`.
 
@@ -171,7 +171,7 @@ Use with `mobx`.
 
 <pre><code>npm install --save <b>@mobx-sentinel/react</b></code></pre>
 
-[![npm version](https://badge.fury.io/js/@form-model%2Freact.svg)](https://www.npmjs.com/package/@mobx-sentinel/react)
+[![npm version](https://badge.fury.io/js/@mobx-sentinel%2Freact.svg)](https://www.npmjs.com/package/@mobx-sentinel/react)
 [![npm size](https://badgen.net/bundlephobia/min/@mobx-sentinel/react)](https://bundlephobia.com/package/@mobx-sentinel/react)
 
 Use with `mobx-react-lite`.
@@ -461,7 +461,7 @@ Criteria:
 
 ## Milestones
 
-Check out https://github.com/creasty/form-model/milestones
+Check out https://github.com/creasty/mobx-sentinel/milestones
 
 ## License
 

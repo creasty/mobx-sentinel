@@ -1,6 +1,6 @@
 {
   "private": true,
-  "name": "form-model",
+  "name": "mobx-sentinel",
   "version": "0.0.1",
   "author": "creasty <yuki@creasty.com>",
   "license": "MIT",

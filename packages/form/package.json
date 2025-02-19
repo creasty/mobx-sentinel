@@ -4,13 +4,13 @@
   "version": "0.1.0",
   "author": "creasty <yuki@creasty.com>",
   "license": "MIT",
-  "homepage": "https://github.com/creasty/form-model",
+  "homepage": "https://github.com/creasty/mobx-sentinel",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/creasty/form-model.git"
+    "url": "git+https://github.com/creasty/mobx-sentinel.git"
   },
   "bugs": {
-    "url": "https://github.com/creasty/form-model/issues"
+    "url": "https://github.com/creasty/mobx-sentinel/issues"
   },
   "keywords": [
     "mobx",
