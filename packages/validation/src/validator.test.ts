@@ -244,7 +244,7 @@ describe("Validator", () => {
     });
   });
 
-  describe("#findErrors, #getErrorMessages, #hasErrors", () => {
+  describe("#findErrors, #getErrorMessages, #hasErrors, #firstErrorMessage", () => {
     class Sample {
       a1 = false;
       b1 = false;
@@ -306,6 +306,18 @@ describe("Validator", () => {
 
       return { validator };
     };
+
+    describe("#firstErrorMessage", () => {
+      it("returns null when there are no errors", () => {
+        const env = setupEnv({ clean: true });
+        expect(env.validator.firstErrorMessage).toBeNull();
+      });
+
+      it("returns the first error message", () => {
+        const env = setupEnv();
+        expect(env.validator.firstErrorMessage).toBe("invalid1 at a1");
+      });
+    });
 
     describe("Search with a self path", () => {
       it("returns an empty iterator when there are no errors", () => {

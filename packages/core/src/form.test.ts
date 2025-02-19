@@ -643,6 +643,19 @@ describe("Form", () => {
       expect(form.getAllErrors("array")).toEqual(new Set(["invalid at array", "invalid at array.0.field"]));
     });
   });
+
+  describe("#firstErrorMessage", () => {
+    it("returns the first error message", () => {
+      const model = new NestedModel();
+      const form = Form.get(model);
+      form.validator.updateErrors(Symbol(), (b) => {
+        b.invalidate("field", "invalid at field");
+        b.invalidate("sample", "invalid at sample");
+        b.invalidate("array", "invalid at array");
+      });
+      expect(form.firstErrorMessage).toBe("invalid at field");
+    });
+  });
 });
 
 suite("Sub-forms", () => {

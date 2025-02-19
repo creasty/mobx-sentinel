@@ -144,6 +144,15 @@ export class Validator<T> {
     return Object.freeze(result);
   }
 
+  /** Get the first error message (including nested objects) */
+  @computed
+  get firstErrorMessage() {
+    for (const [, error] of this.findErrors(KeyPathSelf, true)) {
+      return error.message;
+    }
+    return null;
+  }
+
   /** Get error messages for the key path */
   getErrorMessages(keyPath: KeyPath, prefixMatch = false) {
     const result = new Set<string>();
