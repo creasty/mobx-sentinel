@@ -4,9 +4,6 @@ import { getMobxObservableAnnotations, shallowReadValue, unwrapShallowContents }
 import { StandardNestedFetcher, getNestedAnnotations } from "./nested";
 import { KeyPath, buildKeyPath } from "./keyPath";
 
-/** Global state for controlling whether watching is enabled */
-let isWatching = true;
-
 enum WatchMode {
   /**
    * Watch only reassignments
@@ -28,16 +25,15 @@ const createWatchRef = createPropertyLikeAnnotation(watchKey, () => WatchMode.Re
 const unwatchKey = Symbol("unwatch");
 const createUnwatch = createPropertyLikeAnnotation(unwatchKey, () => true);
 
-function unwatchRunner(action: () => void): void {
+/** Global state for controlling whether watching is enabled */
+let unwatchStackCount = 0;
+function runInUnwatch(action: () => void): void {
   transaction(() => {
-    const prev = isWatching;
-    isWatching = false;
+    ++unwatchStackCount;
     try {
       action();
     } finally {
-      autorun(() => {
-        isWatching = prev;
-      });
+      autorun(() => --unwatchStackCount);
     }
   });
 }
@@ -72,13 +68,25 @@ export const watch = Object.freeze(
  * When used as a function:
  * - Runs a piece of code without changes being detected by Watcher.
  *   ```typescript
- *   unwatch(action(() => (model.field = "value")));
- *   runInAction(() => unwatch(() => (model.field = "value")));
+ *   unwatch(() => (model.field = "value"));
+ *   ```
+ * - Warning: When used inside a transaction, it only becomes 'watching' when the outermost transaction completes.
+ *   ```typescript
+ *   runInAction(() => {
+ *     unwatch(() => {
+ *       // isWatching === false
+ *     });
+ *     // isWatching === FALSE <-- already in a transaction
+ *     unwatch(() => {
+ *       // isWatching === false
+ *     });
+ *   });
+ *   // isWatching === TRUE
  *   ```
  */
-export const unwatch: typeof unwatchRunner & typeof createUnwatch = (...args: any[]) => {
+export const unwatch: typeof runInUnwatch & typeof createUnwatch = (...args: any[]) => {
   if (args.length === 1 && typeof args[0] === "function") {
-    return unwatchRunner(args[0]);
+    return runInUnwatch(args[0]);
   }
   return createUnwatch(...(args as Parameters<typeof createUnwatch>));
 };
@@ -125,7 +133,7 @@ export class Watcher {
 
   /** Whether Watcher is enabled in the current transaction */
   static get isWatching() {
-    return isWatching;
+    return unwatchStackCount === 0;
   }
 
   private constructor(token: symbol, target: object) {
@@ -205,13 +213,13 @@ export class Watcher {
    */
   @action
   assumeChanged() {
-    if (!isWatching) return;
+    if (!Watcher.isWatching) return;
     this.#assumeChanged.set(true);
   }
 
   /** Mark a key as changed */
   #didChange(key: KeyPath) {
-    if (!isWatching) return;
+    if (!Watcher.isWatching) return;
     runInAction(() => {
       this.#changedKeys.add(key);
       this.#incrementChangedTick();
@@ -224,7 +232,7 @@ export class Watcher {
    * For when a key or key path is changed.
    */
   #incrementChangedTick() {
-    if (!isWatching) return;
+    if (!Watcher.isWatching) return;
     runInAction(() => {
       this.#changedTick.set(this.#changedTick.get() + 1n);
     });
