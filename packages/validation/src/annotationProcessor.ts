@@ -12,6 +12,7 @@ export class AnnotationProcessor {
     >
   >();
 
+  /** Register a property like annotation */
   registerPropertyLike(
     annotationKey: symbol,
     args: {
@@ -35,10 +36,12 @@ export class AnnotationProcessor {
     propertyMetadata.data.push(args.data);
   }
 
+  /** Get all registered property like annotations */
   getPropertyLike(annotationKey: symbol) {
     return this.#propertyLike.get(annotationKey);
   }
 
+  /** Clone the annotation processor */
   clone() {
     const clone = new AnnotationProcessor();
     for (const [annotationKey, properties] of this.#propertyLike) {
@@ -83,10 +86,12 @@ function createStored(target: object, clone: boolean) {
   return s.processor;
 }
 
+/** Get the annotation processor for the target */
 export function getAnnotationProcessor(target: object) {
   return getStored(target).processor;
 }
 
+/** Create a property like annotation */
 export function createPropertyLikeAnnotation<T extends object, Data>(
   annotationKey: symbol,
   getData: (propertyKey: string | symbol) => Data

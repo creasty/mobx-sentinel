@@ -1,7 +1,10 @@
 /** Branded type for key paths */
 export type KeyPath = KeyPathComponent | KeyPathSelf;
+/** Branded type for key path components */
 export type KeyPathComponent = string & { __brand: "KeyPathComponent" };
+/** Branded type for a self-referencing key path */
 export type KeyPathSelf = symbol & { __brand: "KeyPathSelf" };
+/** Self path symbol */
 export const KeyPathSelf = Symbol("self") as KeyPathSelf;
 
 /**
@@ -52,7 +55,7 @@ export function getRelativeKeyPath(keyPath: KeyPath, prefixKeyPath: KeyPath) {
  *
  * @returns The parent key or a self path if the key path is a self path
  */
-export function getParentKeyOfKeyPath(keyPath: KeyPath): KeyPathComponent | KeyPathSelf {
+export function getParentKeyOfKeyPath(keyPath: KeyPath): KeyPath {
   if (isKeyPathSelf(keyPath)) return KeyPathSelf;
   const [parentKey] = keyPath.split(".", 1);
   return (parentKey as KeyPathComponent) || KeyPathSelf;

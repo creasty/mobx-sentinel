@@ -393,6 +393,12 @@ export class Form<T> {
     return this.validator.getErrorMessages(fieldName ? buildKeyPath(fieldName) : KeyPathSelf, true);
   }
 
+  /** The first error message (including nested objects) */
+  @computed
+  get firstErrorMessage() {
+    return this.validator.firstErrorMessage;
+  }
+
   /** @internal @ignore */
   [internalToken]() {
     return {

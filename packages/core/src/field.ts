@@ -7,7 +7,7 @@ const internalToken = Symbol("formField.internal");
 export class FormField {
   readonly id = uuidV4();
   readonly fieldName: string;
-  readonly #validator: Validator<any>;
+  readonly validator: Validator<any>;
   readonly #getFinalizationDelayMs: () => number;
   readonly #isTouched = observable.box(false);
   readonly #changeType = observable.box<FormField.ChangeType | null>(null);
@@ -17,7 +17,7 @@ export class FormField {
   constructor(args: { fieldName: string; validator: Validator<any>; getFinalizationDelayMs: () => number }) {
     makeObservable(this);
     this.fieldName = args.fieldName;
-    this.#validator = args.validator;
+    this.validator = args.validator;
     this.#getFinalizationDelayMs = args.getFinalizationDelayMs;
   }
 
@@ -50,16 +50,20 @@ export class FormField {
     return this.hasErrors;
   }
 
-  /** Errors of the field */
+  /**
+   * Error messages for the field
+   *
+   * Regardless of {@link isErrorReported}, this value is always up-to-date.
+   */
   @computed.struct
   get errors(): ReadonlySet<string> {
-    return this.#validator.getErrorMessages(buildKeyPath(this.fieldName));
+    return this.validator.getErrorMessages(buildKeyPath(this.fieldName));
   }
 
   /** Whether the field has errors */
   @computed
   get hasErrors() {
-    return this.#validator.hasErrors(buildKeyPath(this.fieldName));
+    return this.validator.hasErrors(buildKeyPath(this.fieldName));
   }
 
   /** Reset the field to its initial state */
@@ -123,7 +127,7 @@ export class FormField {
     }
   }
 
-  /** @ignore @internal */
+  /** @internal @ignore */
   [internalToken]() {
     return {
       isErrorReported: this.#isErrorReported,
@@ -132,8 +136,11 @@ export class FormField {
 }
 
 export namespace FormField {
+  /** Strict field name */
   export type NameStrict<T> = keyof T & string;
+  /** Augmented field name with an arbitrary suffix followed by a colon */
   export type NameAugmented<T> = `${NameStrict<T>}:${string}`;
+  /** Field name */
   export type Name<T> = NameStrict<T> | NameAugmented<T>;
 
   /**
@@ -145,7 +152,7 @@ export namespace FormField {
   export type ChangeType = "final" | "intermediate";
 }
 
-/** @ignore @internal */
+/** @internal @ignore */
 export function debugFormField(field: FormField) {
   return field[internalToken]();
 }

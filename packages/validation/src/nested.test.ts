@@ -1,6 +1,6 @@
 import { makeObservable, observable } from "mobx";
 import { getNestedAnnotations, nested, StandardNestedFetcher } from "./nested";
-import { KeyPath, KeyPathComponent } from "./keyPath";
+import { KeyPath } from "./keyPath";
 
 const symbolKey1 = Symbol("key1");
 
@@ -197,7 +197,7 @@ describe("StandardNestedFetcher", () => {
   it("returns nested entries for a given key", () => {
     const sample = new Sample();
     const fetcher = new StandardNestedFetcher(sample, (entry) => entry.data);
-    const entries = fetcher.getForKey("other1" as KeyPathComponent);
+    const entries = fetcher.getForKey("other1" as KeyPath);
     expect(Array.from(entries)).toEqual([{ key: "other1", keyPath: "other1", data: sample.other1 }]);
   });
 });
