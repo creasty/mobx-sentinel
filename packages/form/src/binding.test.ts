@@ -6,8 +6,8 @@ import {
   FormBindingFuncExtension,
   getSafeBindingName,
 } from "./binding";
-import { Form } from "./Form";
-import { FormField } from "./FormField";
+import { Form } from "./form";
+import { FormField } from "./field";
 
 export class SampleFormBinding implements FormBinding {
   readonly id = uuidV4();

@@ -1,25 +1,25 @@
-import { action, computed, makeObservable, observable } from "mobx";
+import { action, computed, makeObservable, observable, reaction } from "mobx";
 import { v4 as uuidV4 } from "uuid";
-import { FormField } from "./FormField";
+import { KeyPath, Validator, Watcher, StandardNestedFetcher, buildKeyPath, KeyPathSelf } from "@mobx-sentinel/core";
+import { FormField } from "./field";
 import { FormBinding, FormBindingConstructor, FormBindingFunc, getSafeBindingName } from "./binding";
 import { FormConfig, globalConfig } from "./config";
-import { Validation } from "./validation";
-import { FormDelegate, getDelegation, isConnectableObject } from "./delegation";
 import { Submission } from "./submission";
 
 const registry = new WeakMap<object, Map<symbol, Form<any>>>();
-const defaultFormKey = Symbol("Form.defaultFormKey");
-const internalToken = Symbol("Form.internalToken");
+const defaultFormKey = Symbol("form.defaultFormKey");
+const internalToken = Symbol("form.internalToken");
 
 export class Form<T> {
   readonly id = uuidV4();
-  readonly #delegate?: FormDelegate<T>;
   readonly #formKey: symbol;
-  readonly #validation = new Validation();
+  readonly watcher: Watcher;
+  readonly validator: Validator<T>;
   readonly #submission = new Submission();
-  readonly #isDirty = observable.box(false);
   readonly #fields = new Map<string, FormField>();
   readonly #bindings = new Map<string, FormBinding>();
+  readonly #nestedFetchers: StandardNestedFetcher<Form<any>>;
+  readonly #localConfig = observable.box<Partial<FormConfig>>({});
 
   /** Extension fields for bindings */
   [k: `bind${Capitalize<string>}`]: unknown;
@@ -36,8 +36,27 @@ export class Form<T> {
    * @param subject The subject to associate with the form
    * @param formKey The key to associate with the form.
    *   If you need to associate multiple forms with the same subject, use different keys.
+   *
+   * @throws TypeError when the subject is not an object.
    */
   static get<T extends object>(subject: T, formKey?: symbol): Form<T> {
+    const form = this.getSafe(subject, formKey);
+    if (!form) {
+      throw new TypeError("subject: Expected an object");
+    }
+    return form;
+  }
+
+  /**
+   * Get the form instance for a subject.
+   *
+   * Same as {@link Form.get} but returns null instead of throwing an error.
+   */
+  static getSafe<T extends object>(subject: T, formKey?: symbol): Form<T> | null {
+    if (!subject || typeof subject !== "object") {
+      return null;
+    }
+
     formKey ??= defaultFormKey;
 
     let map = registry.get(subject);
@@ -48,8 +67,10 @@ export class Form<T> {
 
     let instance = map.get(formKey);
     if (!instance) {
-      const delegate = getDelegation(subject);
-      instance = new Form<T>(internalToken, { formKey, delegate });
+      instance = new this<T>(internalToken, {
+        subject,
+        formKey,
+      });
       map.set(formKey, instance);
     }
     return instance;
@@ -77,58 +98,95 @@ export class Form<T> {
   private constructor(
     token: symbol,
     args: {
+      subject: T & object;
       formKey: symbol;
-      delegate?: FormDelegate<T>;
     }
   ) {
     if (token !== internalToken) {
-      throw new Error("Instantiate Form via Form.get() instead");
+      throw new Error("private constructor");
     }
-    makeObservable(this);
-    this.#formKey = args.formKey;
-    this.#delegate = args.delegate;
 
-    this.#validation.addHandler(async (abortSignal) => {
-      const validate = this.#getDelegateByKey(FormDelegate.validate);
-      if (!validate) return {};
-      return await validate(abortSignal);
-    });
-    this.#submission.addHandler("submit", async (abortSignal) => {
-      const submit = this.#getDelegateByKey(FormDelegate.submit);
-      if (!submit) return true;
-      return await submit(abortSignal);
-    });
+    this.#formKey = args.formKey;
+    this.watcher = Watcher.get(args.subject);
+    this.validator = Validator.get(args.subject);
+    this.#nestedFetchers = new StandardNestedFetcher(args.subject, (entry) => Form.getSafe(entry.data, this.#formKey));
+
+    makeObservable(this);
+
     this.#submission.addHandler("didSubmit", (succeed) => {
       if (succeed) {
         this.reset();
       }
     });
+
+    reaction(
+      () => this.config.reactiveValidationDelayMs,
+      (delay) => (this.validator.reactionDelayMs = delay),
+      { fireImmediately: true }
+    );
+    reaction(
+      () => this.config.asyncValidationEnqueueDelayMs,
+      (delay) => (this.validator.enqueueDelayMs = delay),
+      { fireImmediately: true }
+    );
+    reaction(
+      () => this.config.asyncValidationScheduleDelayMs,
+      (delay) => (this.validator.scheduleDelayMs = delay),
+      { fireImmediately: true }
+    );
   }
 
   /**
-   * Get the delegate value by key.
+   * The configuration of the form
    *
-   * Returns an object, or a method that is bound to the delegate.
+   * This is a computed value that combines the global configuration and the local configuration.
    */
-  #getDelegateByKey<K extends symbol & keyof FormDelegate<T>>(key: K): FormDelegate<T>[K] | undefined {
-    const delegate = this.#delegate;
-    if (!delegate) return;
-
-    const value = delegate[key];
-    if (!value) return;
-
-    if (typeof value === "function") {
-      return value.bind(delegate) as any;
-    }
-    return value;
-  }
-
-  @computed
+  @computed.struct
   get config(): Readonly<FormConfig> {
     return {
       ...globalConfig,
-      ...this.#getDelegateByKey(FormDelegate.config),
+      ...this.#localConfig.get(),
     };
+  }
+
+  /** Configure the form locally */
+  @action.bound
+  configure: {
+    /** Override the global configuration locally */
+    (config: Partial<Readonly<FormConfig>>): void;
+    /** Reset to the global configuration */
+    (reset: true): void;
+  } = (arg0) => {
+    if (typeof arg0 === "object") {
+      Object.assign(this.#localConfig.get(), arg0);
+    } else {
+      this.#localConfig.set({});
+    }
+  };
+
+  /** Whether the form is dirty (including sub-forms) */
+  get isDirty() {
+    return this.watcher.changed;
+  }
+
+  /** Whether the form is valid (including sub-forms) */
+  get isValid() {
+    return this.validator.isValid;
+  }
+
+  /** The number of invalid fields */
+  get invalidFieldCount() {
+    return this.validator.invalidKeyCount;
+  }
+
+  /** The number of total invalid field paths (counts invalid fields in sub-forms) */
+  get invalidFieldPathCount() {
+    return this.validator.invalidKeyPathCount;
+  }
+
+  /** Whether the form is in validator state */
+  get isValidating() {
+    return this.validator.isValidating;
   }
 
   /** Whether the form is in submitting state */
@@ -136,136 +194,60 @@ export class Form<T> {
     return this.#submission.isRunning;
   }
 
-  /** Whether the form is in validation state */
+  /** Whether the form is busy (submitting or validating) */
   @computed
-  get isValidating() {
-    return this.#validation.state !== "idle";
+  get isBusy() {
+    return this.isSubmitting || this.isValidating;
   }
 
   /** Whether the form can be submitted */
   @computed
   get canSubmit() {
-    return !this.isSubmitting && !this.isValidating && this.isValid && this.isDirty;
-  }
-
-  /** Whether the form is valid (including sub-forms) */
-  get isValid() {
-    return this.invalidFieldCount === 0 && this.invalidSubFormCount === 0;
-  }
-
-  /** Whether the form is dirty (including sub-forms) */
-  @computed
-  get isDirty() {
-    return this.#isDirty.get() || this.dirtySubFormCount > 0;
-  }
-
-  /**
-   * The number of invalid fields
-   *
-   * Note that this does not include the number of invalid fields of sub-forms.
-   */
-  @computed
-  get invalidFieldCount() {
-    return this.#validation.errors.size;
-  }
-
-  /**
-   * The number of total invalid fields (including sub-forms)
-   */
-  @computed
-  get totalInvalidFieldCount() {
-    let count = this.invalidFieldCount;
-    for (const form of this.subForms) {
-      count += form.totalInvalidFieldCount;
-    }
-    return count;
+    return !this.isBusy && this.isValid && this.isDirty;
   }
 
   /**
    * Sub-forms within the form.
    *
-   * Forms are collected from the {@link FormDelegate.connect}.
+   * Forms are collected via `@nested` annotation.
    */
   @computed.struct
-  get subForms(): ReadonlySet<Form<unknown>> {
-    const forms = new Set<Form<unknown>>();
-
-    const connect = this.#getDelegateByKey(FormDelegate.connect);
-    if (connect) {
-      for (const object of connect()) {
-        if (!object) continue;
-        const items = Array.isArray(object) ? object : [object];
-        for (const item of items) {
-          if (!isConnectableObject(item)) continue;
-          const form = Form.get(item, this.#formKey);
-          forms.add(form);
-        }
-      }
+  get subForms(): ReadonlyMap<KeyPath, Form<any>> {
+    const result = new Map<KeyPath, Form<any>>();
+    for (const entry of this.#nestedFetchers) {
+      result.set(entry.keyPath, entry.data);
     }
-
-    return forms;
-  }
-
-  /**
-   * The number of invalid sub-forms
-   *
-   * Note that this is not the number of fields.
-   */
-  @computed
-  get invalidSubFormCount() {
-    let count = 0;
-    for (const form of this.subForms) {
-      count += form.isValid ? 0 : 1;
-    }
-    return count;
-  }
-
-  /**
-   * The number of dirty sub-forms
-   *
-   * Note that this is not the number of fields.
-   */
-  @computed
-  get dirtySubFormCount() {
-    let count = 0;
-    for (const form of this.subForms) {
-      count += form.isDirty ? 1 : 0;
-    }
-    return count;
+    return result;
   }
 
   /** Report error states on all fields and sub-forms */
   @action
   reportError() {
-    if (!this.#validation.hasRun) {
-      // FIXME: This is a workaround
-      this.validate({ force: true });
-    }
     for (const field of this.#fields.values()) {
       field.reportError();
     }
-    for (const form of this.subForms) {
-      form.reportError();
+    for (const entry of this.#nestedFetchers) {
+      entry.data.reportError();
     }
   }
 
   /** Reset the form's state */
   @action
   reset() {
-    this.#isDirty.set(false);
-    this.#validation.reset();
+    this.validator.reset();
+    this.watcher.reset();
     for (const field of this.#fields.values()) {
       field.reset();
     }
-    for (const form of this.subForms) {
-      form.reset();
+    for (const entry of this.#nestedFetchers) {
+      entry.data.reset();
     }
   }
 
   /** Mark the form as dirty */
   @action
   markAsDirty() {
-    this.#isDirty.set(true);
+    this.watcher.assumeChanged();
   }
 
   /**
@@ -279,30 +261,29 @@ export class Form<T> {
   }
 
   /** Validate the form */
-  validate(args?: {
-    /** Force the validation to be executed immediately */
-    force?: boolean;
-  }) {
-    this.#validation.request({
-      force: !!args?.force,
-      enqueueDelayMs: this.config.validationDelayMs,
-      scheduleDelayMs: this.config.subsequentValidationDelayMs,
-    });
+  validate(...args: Parameters<Validator<T>["request"]>) {
+    this.validator.request(...args);
   }
 
   /**
-   * Subscribe to the form events.
+   * Add a handler to the form
    *
-   * @returns A function to unsubscribe from the event.
+   * @returns A function to remove the handler.
    */
-  addHandler<K extends keyof Form.EventHandlers<T>>(event: K, handler: Form.EventHandlers<T>[K]) {
+  addHandler<K extends keyof Form.Handlers<T>>(
+    event: K,
+    handler: Form.Handlers<T>[NoInfer<K>],
+    options?: Form.HandlerOptions[NoInfer<K>]
+  ) {
     switch (event) {
       case "willSubmit":
       case "submit":
       case "didSubmit":
         return this.#submission.addHandler(event, handler as any);
+      case "asyncValidate":
+        return this.validator.addAsyncHandler(handler as any, options);
       case "validate":
-        return this.#validation.addHandler(handler as any);
+        return this.validator.addReactiveHandler(handler as any, options);
       default:
         event satisfies never;
         throw new Error(`Invalid event: ${event}`);
@@ -314,9 +295,9 @@ export class Form<T> {
     let field = this.#fields.get(fieldName);
     if (!field) {
       field = new FormField({
-        form: this,
-        formErrors: this.#validation.errors,
         fieldName: String(fieldName),
+        validator: this.validator,
+        getFinalizationDelayMs: () => this.config.autoFinalizationDelayMs,
       });
       this.#fields.set(fieldName, field);
     }
@@ -385,12 +366,17 @@ export class Form<T> {
     return this.#bindToForm(args[0], args[1]);
   };
 
-  /** Get the error messages for a field */
-  getError(fieldName: FormField.Name<T>, includePreReported = false) {
+  /**
+   * Get the error messages for a field
+   *
+   * @param fieldName - The field name to get errors for.
+   * @param includePreReported - Whether to include errors that are yet to be reported.
+   */
+  getErrors(fieldName: FormField.Name<T>, includePreReported = false): ReadonlySet<string> {
     const field = this.getField(fieldName);
 
     if (!includePreReported && !field.isErrorReported) {
-      return null;
+      return new Set();
     }
 
     // Reading errors from FormField#errors is computed,
@@ -399,30 +385,45 @@ export class Form<T> {
   }
 
   /**
-   * Get the internal properties of the form.
+   * Get all error messages for the form
    *
-   * For internal testing purposes only.
-   *
-   * @internal
-   * @ignore
+   * @param fieldName - The field name to get errors for. If omitted, all errors are returned.
    */
+  getAllErrors(fieldName?: FormField.Name<T>) {
+    return this.validator.getErrorMessages(fieldName ? buildKeyPath(fieldName) : KeyPathSelf, true);
+  }
+
+  /** The first error message (including nested objects) */
+  @computed
+  get firstErrorMessage() {
+    return this.validator.firstErrorMessage;
+  }
+
+  /** @internal @ignore */
   [internalToken]() {
     return {
       fields: this.#fields,
       bindings: this.#bindings,
-      validation: this.#validation,
       submission: this.#submission,
     };
   }
 }
 
 export namespace Form {
-  export type EventHandlers<T> = Submission.EventHandlers & {
-    validate: Validation.Handler<T>;
+  export type Handlers<T> = Submission.Handlers & {
+    asyncValidate: Validator.AsyncHandler<T>;
+    validate: Validator.ReactiveHandler<T>;
+  };
+  export type HandlerOptions = {
+    willSubmit: never;
+    submit: never;
+    didSubmit: never;
+    asyncValidate: Validator.HandlerOptions;
+    validate: Validator.HandlerOptions;
   };
 }
 
-/** @internal */
-export function getInternal<T>(form: Form<T>) {
+/** @internal @ignore */
+export function debugForm<T>(form: Form<T>) {
   return form[internalToken]();
 }

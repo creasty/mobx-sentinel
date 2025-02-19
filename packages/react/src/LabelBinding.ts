@@ -1,4 +1,4 @@
-import { FormBinding, FormField } from "@form-model/core";
+import { FormBinding, FormField } from "@mobx-sentinel/form";
 import { makeObservable, computed } from "mobx";
 
 export namespace LabelBinding {
@@ -27,17 +27,19 @@ export class LabelBinding implements FormBinding {
   @computed
   get firstErrorMessage() {
     for (const field of this.fields) {
-      if (field.hasReportedErrors && field.errors) {
-        return field.errors.at(0);
+      if (!field.isErrorReported) continue;
+      for (const error of field.errors) {
+        return error;
       }
     }
+    return null;
   }
 
   get props() {
     return {
       htmlFor: this.config.htmlFor ?? this.firstFieldId,
       "aria-invalid": !!this.firstErrorMessage,
-      "aria-errormessage": this.firstErrorMessage,
+      "aria-errormessage": this.firstErrorMessage ?? undefined,
     } satisfies LabelBinding.Attrs;
   }
 }

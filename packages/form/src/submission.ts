@@ -3,7 +3,7 @@ import { observable, runInAction } from "mobx";
 export class Submission {
   readonly #isRunning = observable.box(false);
   readonly #handlers: {
-    readonly [K in keyof Submission.EventHandlers]: Set<Submission.EventHandlers[K]>;
+    readonly [K in keyof Submission.Handlers]: Set<Submission.Handlers[K]>;
   } = {
     willSubmit: new Set(),
     submit: new Set(),
@@ -11,15 +11,18 @@ export class Submission {
   };
   #abortCtrl: AbortController | null = null;
 
+  /** Whether the submission is running */
   get isRunning() {
     return this.#isRunning.get();
   }
 
-  addHandler<K extends keyof Submission.EventHandlers>(event: K, handler: Submission.EventHandlers[K]) {
+  /** Add a handler for the specific event */
+  addHandler<K extends keyof Submission.Handlers>(event: K, handler: Submission.Handlers[K]) {
     this.#handlers[event].add(handler);
-    return () => void this.#handlers[event].delete(handler);
+    return (): void => void this.#handlers[event].delete(handler);
   }
 
+  /** Execute the submission */
   async exec() {
     this.#abortCtrl?.abort();
     const abortCtrl = new AbortController();
@@ -40,8 +43,8 @@ export class Submission {
     let succeed = true;
     try {
       for (const handler of this.#handlers.submit) {
+        // Serialized
         if (!(await handler(abortCtrl.signal))) {
-          // Serialized
           succeed = false;
           break;
         }
@@ -69,7 +72,7 @@ export class Submission {
 }
 
 export namespace Submission {
-  export type EventHandlers = {
+  export type Handlers = {
     willSubmit: () => void;
     submit: (abortSignal: AbortSignal) => Promise<boolean>;
     didSubmit: (succeed: boolean) => void;

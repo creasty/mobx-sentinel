@@ -3,10 +3,10 @@ import "@testing-library/jest-dom";
 import { act, render, screen } from "@testing-library/react";
 import { userEvent } from "@testing-library/user-event";
 import { makeObservable, observable } from "mobx";
-import { Form } from "@form-model/core";
+import { Form } from "@mobx-sentinel/form";
 import "./extension";
 import { observer } from "mobx-react-lite";
-import { useFormAutoReset, useFormEvent } from "./hooks";
+import { useFormAutoReset, useFormHandler } from "./hooks";
 
 class SampleModel {
   @observable field = "hello";
@@ -35,7 +35,7 @@ const SampleComponent: React.FC<{ model: SampleModel; submitHandler: () => void 
 
     useFormAutoReset(form);
 
-    useFormEvent(form, "submit", async () => {
+    useFormHandler(form, "submit", async () => {
       submitHandler();
       return true;
     });
@@ -76,8 +76,8 @@ describe("useFormAutoReset", () => {
   });
 });
 
-describe("useFormEvent", () => {
-  test("subscribes to the form event", async () => {
+describe("useFormHandler", () => {
+  test("adds a handler to the form", async () => {
     const env = setupEnv();
 
     await env.mount();
@@ -88,7 +88,7 @@ describe("useFormEvent", () => {
     expect(env.spy).toBeCalledTimes(1);
   });
 
-  test("unsubscribes from the form event when unmounted", async () => {
+  test("removes the handler when unmounted", async () => {
     const env = setupEnv();
 
     await env.mount();

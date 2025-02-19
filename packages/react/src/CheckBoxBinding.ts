@@ -1,4 +1,4 @@
-import { FormBinding, FormField } from "@form-model/core";
+import { FormBinding, FormField } from "@mobx-sentinel/form";
 import { makeObservable, computed, action } from "mobx";
 
 export namespace CheckBoxBinding {
@@ -37,7 +37,6 @@ export class CheckBoxBinding implements FormBinding {
   onChange: CheckBoxBinding.AttrsRequired["onChange"] = (e) => {
     this.config.setter(e.currentTarget.checked);
     this.field.markAsChanged();
-    this.field.validate();
     this.config.onChange?.(e);
   };
 
@@ -46,6 +45,12 @@ export class CheckBoxBinding implements FormBinding {
     this.config.onFocus?.(e);
   };
 
+  @computed
+  get errorMessages() {
+    if (!this.field.isErrorReported) return null;
+    return Array.from(this.field.errors).join(", ") || null;
+  }
+
   get props() {
     return {
       type: "checkbox",
@@ -53,8 +58,8 @@ export class CheckBoxBinding implements FormBinding {
       checked: this.checked,
       onChange: this.onChange,
       onFocus: this.onFocus,
-      "aria-invalid": this.field.hasReportedErrors,
-      "aria-errormessage": this.field.hasReportedErrors ? this.field.errors?.join(", ") : undefined,
+      "aria-invalid": this.field.isErrorReported,
+      "aria-errormessage": this.errorMessages ?? undefined,
     } satisfies CheckBoxBinding.Attrs;
   }
 }

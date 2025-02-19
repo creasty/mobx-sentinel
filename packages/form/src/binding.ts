@@ -1,5 +1,5 @@
-import type { Form } from "./Form";
-import type { FormField } from "./FormField";
+import type { Form } from "./form";
+import type { FormField } from "./field";
 import { v4 as uuidV4 } from "uuid";
 
 type ConfigOf<T> = T extends new (form: Form<any>, config: infer Config) => FormBinding

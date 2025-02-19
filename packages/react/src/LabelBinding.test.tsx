@@ -3,7 +3,7 @@ import "@testing-library/jest-dom";
 import { render, screen } from "@testing-library/react";
 import { userEvent } from "@testing-library/user-event";
 import { makeObservable, observable } from "mobx";
-import { Form, FormField } from "@form-model/core";
+import { Form, FormField } from "@mobx-sentinel/form";
 import "./extension";
 import { observer } from "mobx-react-lite";
 import { LabelBinding } from "./LabelBinding";
@@ -48,9 +48,9 @@ describe("LabelBinding", () => {
     const model = new SampleModel();
     const form = Form.get(model);
     const field = new FormField({
-      form,
-      formErrors: new Map(),
-      fieldName: "test",
+      fieldName: "field1",
+      validator: form.validator,
+      getFinalizationDelayMs: () => form.config.autoFinalizationDelayMs,
     });
     const binding = new LabelBinding([field], {});
 
@@ -72,6 +72,26 @@ describe("LabelBinding", () => {
       const env = setupEnv();
       env.binding.config.htmlFor = "somethingElse";
       expect(env.binding.props.htmlFor).toBe("somethingElse");
+    });
+  });
+
+  describe("firstErrorMessage", () => {
+    it("returns null if no errors", () => {
+      const env = setupEnv();
+      expect(env.binding.firstErrorMessage).toBeNull();
+      env.field.reportError();
+      expect(env.binding.firstErrorMessage).toBeNull();
+    });
+
+    it("returns the error messages if errors are reported", () => {
+      const env = setupEnv();
+      env.form.validator.updateErrors(Symbol(), (builder) => {
+        builder.invalidate("field1", "invalid1");
+        builder.invalidate("field1", "invalid2");
+      });
+      expect(env.binding.firstErrorMessage).toBeNull();
+      env.field.reportError();
+      expect(env.binding.firstErrorMessage).toEqual("invalid1");
     });
   });
 });

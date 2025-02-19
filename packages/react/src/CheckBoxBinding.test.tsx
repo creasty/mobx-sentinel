@@ -3,7 +3,7 @@ import "@testing-library/jest-dom";
 import { render, screen } from "@testing-library/react";
 import { userEvent } from "@testing-library/user-event";
 import { makeObservable, observable } from "mobx";
-import { Form, FormField } from "@form-model/core";
+import { Form, FormField } from "@mobx-sentinel/form";
 import "./extension";
 import { observer } from "mobx-react-lite";
 import { CheckBoxBinding } from "./CheckBoxBinding";
@@ -45,9 +45,9 @@ describe("CheckBoxBinding", () => {
     const model = new SampleModel();
     const form = Form.get(model);
     const field = new FormField({
-      form,
-      formErrors: new Map(),
-      fieldName: "test",
+      fieldName: "boolean",
+      validator: form.validator,
+      getFinalizationDelayMs: () => form.config.autoFinalizationDelayMs,
     });
     const binding = new CheckBoxBinding(field, {
       getter: () => false,
@@ -107,6 +107,26 @@ describe("CheckBoxBinding", () => {
       env.binding.config.onFocus = callback;
       env.binding.onFocus(env.fakeEvent());
       expect(callback).toBeCalledWith(env.fakeEvent());
+    });
+  });
+
+  describe("errorMessages", () => {
+    it("returns null if no errors", () => {
+      const env = setupEnv();
+      expect(env.binding.errorMessages).toBeNull();
+      env.field.reportError();
+      expect(env.binding.errorMessages).toBeNull();
+    });
+
+    it("returns the error messages if errors are reported", () => {
+      const env = setupEnv();
+      env.form.validator.updateErrors(Symbol(), (builder) => {
+        builder.invalidate("boolean", "invalid1");
+        builder.invalidate("boolean", "invalid2");
+      });
+      expect(env.binding.errorMessages).toBeNull();
+      env.field.reportError();
+      expect(env.binding.errorMessages).toEqual("invalid1, invalid2");
     });
   });
 });

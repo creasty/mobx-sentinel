@@ -1,4 +1,4 @@
-import { Form, FormBindingFuncExtension } from "@form-model/core";
+import { Form, FormBindingFuncExtension } from "@mobx-sentinel/form";
 import { CheckBoxBinding } from "./CheckBoxBinding";
 import { InputBinding } from "./InputBinding";
 import { RadioButtonBinding } from "./RadioButtonBinding";
@@ -8,7 +8,7 @@ import { LabelBinding } from "./LabelBinding";
 
 export {};
 
-declare module "@form-model/core" {
+declare module "@mobx-sentinel/form" {
   export interface Form<T> {
     /**
      * Bind the input field to the form.

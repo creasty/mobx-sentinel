@@ -1,4 +1,4 @@
-import { FormBinding, FormField } from "@form-model/core";
+import { FormBinding, FormField } from "@mobx-sentinel/form";
 import { makeObservable, computed, action } from "mobx";
 
 export namespace RadioButtonBinding {
@@ -35,7 +35,6 @@ export class RadioButtonBinding implements FormBinding {
     if (!e.currentTarget.checked) return;
     this.config.setter(e.currentTarget.value);
     this.field.markAsChanged();
-    this.field.validate();
     this.config.onChange?.(e);
   };
 
@@ -43,6 +42,12 @@ export class RadioButtonBinding implements FormBinding {
     this.field.markAsTouched();
     this.config.onFocus?.(e);
   };
+
+  @computed
+  get errorMessages() {
+    if (!this.field.isErrorReported) return null;
+    return Array.from(this.field.errors).join(", ") || null;
+  }
 
   props = (
     /** Value of the radio button */
@@ -67,8 +72,8 @@ export class RadioButtonBinding implements FormBinding {
       checked: this.value === value,
       onChange: this.onChange,
       onFocus: this.onFocus,
-      "aria-invalid": this.field.hasReportedErrors,
-      "aria-errormessage": this.field.hasReportedErrors ? this.field.errors?.join(", ") : undefined,
+      "aria-invalid": this.field.isErrorReported,
+      "aria-errormessage": this.errorMessages ?? undefined,
     } satisfies RadioButtonBinding.Attrs;
   };
 }

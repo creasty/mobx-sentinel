@@ -1,6 +1,6 @@
+import { KeyPath, makeValidatable, nested } from "@mobx-sentinel/core";
 import { autorun, makeObservable, observable, runInAction } from "mobx";
-import { Form, getInternal } from "./Form";
-import { FormDelegate } from "./delegation";
+import { Form, debugForm } from "./form";
 import {
   SampleConfigurableFieldBinding,
   SampleConfigurableFormBinding,
@@ -9,50 +9,54 @@ import {
   SampleFormBinding,
   SampleMultiFieldBinding,
 } from "./binding.test";
+import { defaultConfig, FormConfig } from "./config";
 
 describe("Form", () => {
   class EmptyModel {}
 
-  class SampleModel implements FormDelegate<SampleModel> {
+  class SampleModel {
     @observable field = true;
     @observable otherField = true;
 
     constructor() {
       makeObservable(this);
-    }
 
-    async [FormDelegate.validate]() {
-      return {
-        field: this.field ? null : "invalid",
-      };
-    }
-
-    async [FormDelegate.submit](signal: AbortSignal) {
-      return new Promise<boolean>((resolve) => {
-        const timerId = setTimeout(() => resolve(true), 100);
-        signal.addEventListener("abort", () => {
-          clearTimeout(timerId);
-          resolve(false);
-        });
+      makeValidatable(this, (b) => {
+        if (!this.field) {
+          b.invalidate("field", "invalid");
+        }
       });
     }
   }
 
-  class NestedModel implements FormDelegate<NestedModel> {
+  class NestedModel {
     @observable field = true;
-    @observable sample = new SampleModel();
-    @observable array = [new SampleModel()];
+    @nested @observable sample = new SampleModel();
+    @nested @observable array = [new SampleModel()];
 
     constructor() {
       makeObservable(this);
     }
-
-    [FormDelegate.connect]() {
-      return [this.sample, this.array];
-    }
   }
 
+  describe("constructor", () => {
+    it("throws an error when attempted to be instantiated directly", () => {
+      expect(() => {
+        new (Form as any)();
+      }).toThrowError(/private constructor/);
+    });
+  });
+
   describe(".get", () => {
+    it("throws an error when a non-object is given", () => {
+      expect(() => {
+        Form.get(null as any);
+      }).toThrowError(/Expected an object/);
+      expect(() => {
+        Form.get(1 as any);
+      }).toThrowError(/Expected an object/);
+    });
+
     it("returns the same instance for the same subject", () => {
       const model = new SampleModel();
       const form1 = Form.get(model);
@@ -94,9 +98,9 @@ describe("Form", () => {
       const sampleForm = Form.get(model.sample);
       const arrayForm = Form.get(model.array[0]);
 
+      expect(form.subForms.get("sample" as KeyPath)).toBe(sampleForm);
+      expect(form.subForms.get("array.0" as KeyPath)).toBe(arrayForm);
       expect(form.subForms.size).toBe(2);
-      expect(form.subForms).toContain(sampleForm);
-      expect(form.subForms).toContain(arrayForm);
     });
 
     it("retrieves instances of sub-forms with a specified key", () => {
@@ -107,9 +111,16 @@ describe("Form", () => {
       const sampleForm = Form.get(model.sample, key);
       const arrayForm = Form.get(model.array[0], key);
 
+      expect(form.subForms.get("sample" as KeyPath)).toBe(sampleForm);
+      expect(form.subForms.get("array.0" as KeyPath)).toBe(arrayForm);
       expect(form.subForms.size).toBe(2);
-      expect(form.subForms).toContain(sampleForm);
-      expect(form.subForms).toContain(arrayForm);
+    });
+  });
+
+  describe(".getSafe", () => {
+    it("returns null when the subject is not an object", () => {
+      expect(Form.getSafe(null as any)).toBeNull();
+      expect(Form.getSafe(1 as any)).toBeNull();
     });
   });
 
@@ -132,18 +143,75 @@ describe("Form", () => {
     });
   });
 
+  describe("#config, #configure", () => {
+    it("returns the global configuration by default", () => {
+      const model = new SampleModel();
+      const form = Form.get(model);
+      expect(form.config).toEqual(defaultConfig);
+    });
+
+    it("returns the local configuration", () => {
+      const model = new SampleModel();
+      const form = Form.get(model);
+      form.configure({ reactiveValidationDelayMs: 999 });
+      expect(form.config).toEqual({ ...defaultConfig, reactiveValidationDelayMs: 999 });
+    });
+
+    it("resets the local configuration to the global configuration", () => {
+      const model = new SampleModel();
+      const form = Form.get(model);
+      form.configure({ reactiveValidationDelayMs: 999 });
+      expect(form.config).toEqual({ ...defaultConfig, reactiveValidationDelayMs: 999 });
+      form.configure(true);
+      expect(form.config).toEqual(defaultConfig);
+    });
+
+    it("updates the config reactively", () => {
+      const model = new SampleModel();
+      const form = Form.get(model);
+      const timeline: FormConfig[] = [];
+      autorun(() => timeline.push(form.config));
+      form.configure({ reactiveValidationDelayMs: 999 });
+      expect(timeline).toEqual([defaultConfig, { ...defaultConfig, reactiveValidationDelayMs: 999 }]);
+    });
+
+    describe("synchronizations", () => {
+      it("updates the validator's reactionDelayMs", () => {
+        const model = new SampleModel();
+        const form = Form.get(model);
+        form.configure({ reactiveValidationDelayMs: 999 });
+        expect(form.validator.reactionDelayMs).toBe(999);
+      });
+
+      it("updates the validator's enqueueDelayMs", () => {
+        const model = new SampleModel();
+        const form = Form.get(model);
+        form.configure({ asyncValidationEnqueueDelayMs: 888 });
+        expect(form.validator.enqueueDelayMs).toBe(888);
+      });
+
+      it("updates the validator's scheduleDelayMs", () => {
+        const model = new SampleModel();
+        const form = Form.get(model);
+        form.configure({ asyncValidationScheduleDelayMs: 777 });
+        expect(form.validator.scheduleDelayMs).toBe(777);
+      });
+    });
+  });
+
   describe("#subForms", () => {
-    it("does not collect sub-forms from objects that do not implement FormDelegate.connect", () => {
+    it("does not collect sub-forms from objects without @nested", () => {
       const model = new SampleModel();
       const form = Form.get(model);
       expect(form.subForms.size).toBe(0);
     });
 
-    it("collects sub-forms via the delegate", () => {
+    it("collects sub-forms via @nested", () => {
       const model = new NestedModel();
       const form = Form.get(model);
 
-      expect(form.subForms).toEqual(new Set([Form.get(model.sample), Form.get(model.array[0])]));
+      expect(form.subForms.get("sample" as KeyPath)).toBe(Form.get(model.sample));
+      expect(form.subForms.get("array.0" as KeyPath)).toBe(Form.get(model.array[0]));
     });
 
     it("updates sub-forms reactively", () => {
@@ -183,6 +251,7 @@ describe("Form", () => {
     it("returns false when the validation is scheduled", () => {
       const model = new SampleModel();
       const form = Form.get(model);
+      form.addHandler("asyncValidate", async () => void 0, { initialRun: false });
 
       form.markAsDirty();
       expect(form.canSubmit).toBe(true);
@@ -210,6 +279,35 @@ describe("Form", () => {
       form.markAsDirty();
       expect(form.isDirty).toBe(true);
       form.reset();
+      expect(form.isDirty).toBe(false);
+    });
+
+    it("resets the watcher", () => {
+      const model = new SampleModel();
+      const form = Form.get(model);
+      const spy = vi.spyOn(form.watcher, "reset");
+
+      form.reset();
+      expect(spy).toBeCalled();
+    });
+
+    it("resets the validator", () => {
+      const model = new SampleModel();
+      const form = Form.get(model);
+      const spy = vi.spyOn(form.validator, "reset");
+
+      form.reset();
+      expect(spy).toBeCalled();
+    });
+
+    it("resets fields", () => {
+      const model = new SampleModel();
+      const form = Form.get(model);
+      const field = form.getField("field");
+      const spy = vi.spyOn(field, "reset");
+
+      form.reset();
+      expect(spy).toBeCalled();
       expect(form.isDirty).toBe(false);
     });
 
@@ -249,30 +347,13 @@ describe("Form", () => {
       expect(spy1).toBeCalled();
       expect(spy2).toBeCalled();
     });
-
-    it("triggers validate with the force option when the validation has never run", async () => {
-      const model = new SampleModel();
-      const form = Form.get(model);
-      const spy = vi.spyOn(form, "validate");
-      const internal = getInternal(form);
-
-      expect(internal.validation.hasRun).toBe(false);
-      form.reportError();
-      expect(spy).toBeCalledWith({ force: true });
-
-      await vi.waitFor(() => expect(form.isValidating).toBe(false));
-      expect(internal.validation.hasRun).toBe(true);
-
-      form.reportError(); // Doesn't trigger a new validation
-      expect(spy).toBeCalledTimes(1);
-    });
   });
 
   describe("#submit", () => {
     it("does not call Submission#exec when the form is not dirty", async () => {
       const model = new EmptyModel();
       const form = Form.get(model);
-      const internal = getInternal(form);
+      const internal = debugForm(form);
       const spy = vi.spyOn(internal.submission, "exec");
       await form.submit();
       expect(spy).not.toBeCalled();
@@ -281,7 +362,7 @@ describe("Form", () => {
     it("calls Submission#exec when the form is dirty", async () => {
       const model = new EmptyModel();
       const form = Form.get(model);
-      const internal = getInternal(form);
+      const internal = debugForm(form);
       const spy = vi.spyOn(internal.submission, "exec");
       form.markAsDirty();
       await form.submit();
@@ -291,18 +372,9 @@ describe("Form", () => {
     it("calls Submission#exec when the force option is true", async () => {
       const model = new EmptyModel();
       const form = Form.get(model);
-      const internal = getInternal(form);
+      const internal = debugForm(form);
       const spy = vi.spyOn(internal.submission, "exec");
       await form.submit({ force: true });
-      expect(spy).toBeCalled();
-    });
-
-    it("calls FormDelegate.submit when implemented", async () => {
-      const model = new SampleModel();
-      const spy = vi.spyOn(model, FormDelegate.submit);
-      const form = Form.get(model);
-      form.markAsDirty();
-      await form.submit();
       expect(spy).toBeCalled();
     });
   });
@@ -311,27 +383,17 @@ describe("Form", () => {
     it("calls Validation#request", async () => {
       const model = new EmptyModel();
       const form = Form.get(model);
-      const internal = getInternal(form);
-      const spy = vi.spyOn(internal.validation, "request");
+      const spy = vi.spyOn(form.validator, "request");
       form.validate();
-      expect(spy).toBeCalled();
-    });
-
-    it("calls FormDelegate.validate when implemented", async () => {
-      const model = new SampleModel();
-      const spy = vi.spyOn(model, FormDelegate.validate);
-      const form = Form.get(model);
-      form.validate();
-      await vi.waitFor(() => expect(form.isValidating).toBe(false));
       expect(spy).toBeCalled();
     });
   });
 
   describe("#addHandler", () => {
-    it("adds a handler to the submission event", () => {
+    it("adds a submit handler", () => {
       const model = new SampleModel();
       const form = Form.get(model);
-      const internal = getInternal(form);
+      const internal = debugForm(form);
       const spy = vi.spyOn(internal.submission, "addHandler");
       expect(form.addHandler("willSubmit", () => void 0)).toBeInstanceOf(Function);
       expect(form.addHandler("submit", async () => false)).toBeInstanceOf(Function);
@@ -339,12 +401,19 @@ describe("Form", () => {
       expect(spy).toBeCalledTimes(3);
     });
 
-    it("adds a handler to the validation event", () => {
+    it("adds an async validation handler", () => {
       const model = new SampleModel();
       const form = Form.get(model);
-      const internal = getInternal(form);
-      const spy = vi.spyOn(internal.validation, "addHandler");
-      expect(form.addHandler("validate", async () => ({}))).toBeInstanceOf(Function);
+      const spy = vi.spyOn(form.validator, "addAsyncHandler");
+      expect(form.addHandler("asyncValidate", async () => void 0)).toBeInstanceOf(Function);
+      expect(spy).toBeCalledTimes(1);
+    });
+
+    it("adds a reactive validation handler", () => {
+      const model = new SampleModel();
+      const form = Form.get(model);
+      const spy = vi.spyOn(form.validator, "addReactiveHandler");
+      expect(form.addHandler("validate", () => void 0)).toBeInstanceOf(Function);
       expect(spy).toBeCalledTimes(1);
     });
 
@@ -492,72 +561,131 @@ describe("Form", () => {
     });
   });
 
-  describe("#getError", () => {
-    it("returns the error messages for a field", async () => {
+  describe("#getErrors", () => {
+    it("returns the error messages for a field", () => {
       const model = new SampleModel();
       const form = Form.get(model);
       const field = form.getField("field");
 
-      runInAction(() => {
-        model.field = false;
-        form.validate();
+      form.validator.updateErrors(Symbol(), (b) => {
+        b.invalidate("field", "invalid");
+        b.invalidate("otherField", "otherInvalid");
       });
-      await vi.waitFor(() => expect(form.isValidating).toBe(false));
 
-      expect(form.getError("field")).toEqual(null);
+      expect(form.getErrors("field")).toEqual(new Set());
       field.reportError();
-      expect(form.getError("field")).toEqual(["invalid"]);
+      expect(form.getErrors("field")).toEqual(new Set(["invalid"]));
     });
 
-    it("returns the error messages for a field when includePreReported is true", async () => {
+    it("returns the error messages for a field when includePreReported is true", () => {
       const model = new SampleModel();
       const form = Form.get(model);
       const field = form.getField("field");
 
-      runInAction(() => {
-        model.field = false;
-        form.validate();
+      form.validator.updateErrors(Symbol(), (b) => {
+        b.invalidate("field", "invalid");
+        b.invalidate("otherField", "otherInvalid");
       });
-      await vi.waitFor(() => expect(form.isValidating).toBe(false));
 
       field.reportError();
-      expect(form.getError("field", true)).toEqual(["invalid"]);
+      expect(form.getErrors("field", true)).toEqual(new Set(["invalid"]));
+    });
+  });
+
+  describe("#getAllErrors", () => {
+    it("returns all error messages for the form", () => {
+      const model = new NestedModel();
+      const form = Form.get(model);
+      const sampleForm = Form.get(model.sample);
+      const arrayForm0 = Form.get(model.array[0]);
+
+      form.validator.updateErrors(Symbol(), (b) => {
+        b.invalidate("field", "invalid at field");
+        b.invalidate("sample", "invalid at sample");
+        b.invalidate("array", "invalid at array");
+      });
+      sampleForm.validator.updateErrors(Symbol(), (b) => {
+        b.invalidate("field", "invalid at sample.field");
+      });
+      arrayForm0.validator.updateErrors(Symbol(), (b) => {
+        b.invalidate("field", "invalid at array.0.field");
+      });
+
+      expect(form.getAllErrors()).toEqual(
+        new Set([
+          "invalid at array",
+          "invalid at field",
+          "invalid at sample",
+          "invalid at sample.field",
+          "invalid at array.0.field",
+        ])
+      );
+    });
+
+    it("returns all error messages for the specific field", () => {
+      const model = new NestedModel();
+      const form = Form.get(model);
+      const sampleForm = Form.get(model.sample);
+      const arrayForm0 = Form.get(model.array[0]);
+
+      form.validator.updateErrors(Symbol(), (b) => {
+        b.invalidate("field", "invalid at field");
+        b.invalidate("sample", "invalid at sample");
+        b.invalidate("array", "invalid at array");
+      });
+      sampleForm.validator.updateErrors(Symbol(), (b) => {
+        b.invalidate("field", "invalid at sample.field");
+      });
+      arrayForm0.validator.updateErrors(Symbol(), (b) => {
+        b.invalidate("field", "invalid at array.0.field");
+      });
+
+      expect(form.getAllErrors("array")).toEqual(new Set(["invalid at array", "invalid at array.0.field"]));
+    });
+  });
+
+  describe("#firstErrorMessage", () => {
+    it("returns the first error message", () => {
+      const model = new NestedModel();
+      const form = Form.get(model);
+      form.validator.updateErrors(Symbol(), (b) => {
+        b.invalidate("field", "invalid at field");
+        b.invalidate("sample", "invalid at sample");
+        b.invalidate("array", "invalid at array");
+      });
+      expect(form.firstErrorMessage).toBe("invalid at field");
     });
   });
 });
 
 suite("Sub-forms", () => {
-  class SampleModel implements FormDelegate<SampleModel> {
+  class SampleModel {
     @observable field = true;
 
     constructor() {
       makeObservable(this);
-    }
 
-    async [FormDelegate.validate]() {
-      return {
-        field: this.field ? null : "invalid",
-      };
+      makeValidatable(this, (b) => {
+        if (!this.field) {
+          b.invalidate("field", "invalid");
+        }
+      });
     }
   }
 
-  class NestedModel implements FormDelegate<NestedModel> {
+  class NestedModel {
     @observable field = true;
-    @observable sample = new SampleModel();
-    @observable array = [new SampleModel()];
+    @nested @observable sample = new SampleModel();
+    @nested @observable array = [new SampleModel()];
 
     constructor() {
       makeObservable(this);
-    }
 
-    async [FormDelegate.validate]() {
-      return {
-        field: this.field ? null : "invalid",
-      };
-    }
-
-    [FormDelegate.connect]() {
-      return [this.sample, this.array];
+      makeValidatable(this, (b) => {
+        if (!this.field) {
+          b.invalidate("field", "invalid");
+        }
+      });
     }
   }
 
@@ -608,64 +736,18 @@ suite("Sub-forms", () => {
     });
   });
 
-  suite("Validation", () => {
-    test("when a sub-form becomes invalid, the parent form also becomes invalid", async () => {
-      const { model, form, sampleForm, waitForValidation } = setupEnv();
-
-      expect(sampleForm.isValid).toBe(true);
-      expect(form.isValid).toBe(true);
-
-      runInAction(() => {
-        model.sample.field = false;
-      });
-      sampleForm.validate();
-      await waitForValidation();
-
-      expect(sampleForm.isValid).toBe(false);
-      expect(form.isValid).toBe(false);
-    });
-
-    test("when a parent form becomes invalid, sub-forms remain unaffected", async () => {
-      const { model, form, sampleForm, waitForValidation } = setupEnv();
-
-      expect(sampleForm.isValid).toBe(true);
-      expect(form.isValid).toBe(true);
-
-      runInAction(() => {
-        model.field = false;
-      });
-      form.validate();
-      await waitForValidation();
-
-      expect(form.isValid).toBe(false);
-      expect(sampleForm.isValid).toBe(true);
-    });
-
-    test("count total invalid fields", async () => {
-      const { model, form, sampleForm, arrayForm0, waitForValidation } = setupEnv();
-
-      runInAction(() => {
-        model.field = false;
-        model.sample.field = false;
-        model.array[0].field = false;
-      });
-      form.validate();
-      sampleForm.validate();
-      arrayForm0.validate();
-      await waitForValidation();
-
-      expect(form.invalidFieldCount).toBe(1);
-      expect(sampleForm.invalidFieldCount).toBe(1);
-      expect(arrayForm0.invalidFieldCount).toBe(1);
-      expect(form.totalInvalidFieldCount).toBe(3);
-    });
-  });
-
   suite("Reporting errors", () => {
     test("when a new field is added after reportError is called, the error on the new field is not reported", async () => {
       const { form } = setupEnv();
 
+      // Add errors
+      form.validator.updateErrors(Symbol(), (b) => {
+        b.invalidate("field", "error");
+        b.invalidate("sample", "error");
+      });
+
       const field1 = form.getField("field");
+
       expect(field1.isErrorReported).toEqual(false);
       form.reportError();
       expect(field1.isErrorReported).toEqual(true);
@@ -676,6 +758,17 @@ suite("Sub-forms", () => {
 
     test("reporting errors on sub-forms does not affect the parent form", async () => {
       const { form, sampleForm, arrayForm0 } = setupEnv();
+
+      // Add errors
+      form.validator.updateErrors(Symbol(), (b) => {
+        b.invalidate("field", "error");
+      });
+      sampleForm.validator.updateErrors(Symbol(), (b) => {
+        b.invalidate("field", "error");
+      });
+      arrayForm0.validator.updateErrors(Symbol(), (b) => {
+        b.invalidate("field", "error");
+      });
 
       // Touch fields to initialize them
       const field1 = form.getField("field");
@@ -694,6 +787,14 @@ suite("Sub-forms", () => {
     test("when a new sub-form is added after reportError is called, the error on the new form is not reported", async () => {
       const { model, form, arrayForm0 } = setupEnv();
 
+      // Add errors
+      form.validator.updateErrors(Symbol(), (b) => {
+        b.invalidate("field", "error");
+      });
+      arrayForm0.validator.updateErrors(Symbol(), (b) => {
+        b.invalidate("field", "error");
+      });
+
       // Touch fields to initialize them
       const field1 = form.getField("field");
       const field2 = arrayForm0.getField("field");
@@ -706,6 +807,9 @@ suite("Sub-forms", () => {
         model.array.push(new SampleModel());
       });
       const arrayForm1 = Form.get(model.array[1]);
+      arrayForm1.validator.updateErrors(Symbol(), (b) => {
+        b.invalidate("field", "error");
+      });
       const field3 = arrayForm1.getField("field");
 
       expect(field1.isErrorReported).toEqual(true);

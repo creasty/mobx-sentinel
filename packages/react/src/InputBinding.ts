@@ -1,4 +1,4 @@
-import { FormBinding, FormField } from "@form-model/core";
+import { FormBinding, FormField } from "@mobx-sentinel/form";
 import { makeObservable, computed, action } from "mobx";
 
 export namespace InputBinding {
@@ -146,12 +146,11 @@ export class InputBinding implements FormBinding {
         break;
     }
     this.field.markAsChanged("intermediate");
-    this.field.validateWithDelay();
     this.config.onChange?.(e);
   };
 
   onBlur: InputBinding.AttrsRequired["onBlur"] = (e) => {
-    this.field.validate();
+    this.field.finalizeChangeIfNeeded();
     this.config.onBlur?.(e);
   };
 
@@ -159,6 +158,12 @@ export class InputBinding implements FormBinding {
     this.field.markAsTouched();
     this.config.onFocus?.(e);
   };
+
+  @computed
+  get errorMessages() {
+    if (!this.field.isErrorReported) return null;
+    return Array.from(this.field.errors).join(", ") || null;
+  }
 
   get props() {
     return {
@@ -168,8 +173,8 @@ export class InputBinding implements FormBinding {
       onChange: this.onChange,
       onFocus: this.onFocus,
       onBlur: this.onBlur,
-      "aria-invalid": this.field.hasReportedErrors,
-      "aria-errormessage": this.field.hasReportedErrors ? this.field.errors?.join(", ") : undefined,
+      "aria-invalid": this.field.isErrorReported,
+      "aria-errormessage": this.errorMessages ?? undefined,
     } satisfies InputBinding.Attrs;
   }
 }
