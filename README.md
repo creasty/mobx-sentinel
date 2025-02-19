@@ -124,10 +124,10 @@ end
 
 ### `core` — Core functionality like Watcher and Validator
 
-<pre><code>npm install --save <b>@mobx-sentinel/form</b></code></pre>
+<pre><code>npm install --save <b>@mobx-sentinel/core</b></code></pre>
 
-[![npm version](https://badge.fury.io/js/@mobx-sentinel%2Fcore.svg)](https://www.npmjs.com/package/@mobx-sentinel/form)
-[![npm size](https://badgen.net/bundlephobia/min/@mobx-sentinel/form)](https://bundlephobia.com/package/@mobx-sentinel/form)
+[![npm version](https://badge.fury.io/js/@mobx-sentinel%2Fcore.svg)](https://www.npmjs.com/package/@mobx-sentinel/core)
+[![npm size](https://badgen.net/bundlephobia/min/@mobx-sentinel/core)](https://bundlephobia.com/package/@mobx-sentinel/core)
 
 Use with `mobx`.
 
