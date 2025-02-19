@@ -1,6 +1,6 @@
 import { action, computed, makeObservable, observable } from "mobx";
 import { v4 as uuidV4 } from "uuid";
-import { buildKeyPath, type Validator } from "@form-model/validation";
+import { buildKeyPath, type Validator } from "@mobx-sentinel/core";
 
 const internalToken = Symbol("formField.internal");
 

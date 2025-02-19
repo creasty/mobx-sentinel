@@ -47,9 +47,31 @@ importers:
 
   packages/core:
     dependencies:
-      '@form-model/validation':
+      mobx:
+        specifier: ^6.12.3
+        version: 6.12.3
+    devDependencies:
+      '@types/node':
+        specifier: ^22.10.2
+        version: 22.10.2
+      '@vitest/coverage-v8':
+        specifier: ^2.1.8
+        version: 2.1.8(vitest@2.1.8(@types/node@22.10.2)(jsdom@25.0.1))
+      tsup:
+        specifier: ^8.3.5
+        version: 8.3.5(postcss@8.4.49)(typescript@5.5.2)(yaml@2.6.1)
+      typescript:
+        specifier: ^5.5.0
+        version: 5.5.2
+      vitest:
+        specifier: ^2.1.8
+        version: 2.1.8(@types/node@22.10.2)(jsdom@25.0.1)
+
+  packages/form:
+    dependencies:
+      '@mobx-sentinel/core':
         specifier: workspace:*
-        version: link:../validation
+        version: link:../core
       mobx:
         specifier: ^6.12.3
         version: 6.12.3
@@ -75,9 +97,9 @@ importers:
 
   packages/react:
     dependencies:
-      '@form-model/core':
+      '@mobx-sentinel/form':
         specifier: workspace:*
-        version: link:../core
+        version: link:../form
       mobx:
         specifier: ^6.12.3
         version: 6.12.3
@@ -115,28 +137,6 @@ importers:
       jsdom:
         specifier: ^25.0.1
         version: 25.0.1
-      tsup:
-        specifier: ^8.3.5
-        version: 8.3.5(postcss@8.4.49)(typescript@5.5.2)(yaml@2.6.1)
-      typescript:
-        specifier: ^5.5.0
-        version: 5.5.2
-      vitest:
-        specifier: ^2.1.8
-        version: 2.1.8(@types/node@22.10.2)(jsdom@25.0.1)
-
-  packages/validation:
-    dependencies:
-      mobx:
-        specifier: ^6.12.3
-        version: 6.12.3
-    devDependencies:
-      '@types/node':
-        specifier: ^22.10.2
-        version: 22.10.2
-      '@vitest/coverage-v8':
-        specifier: ^2.1.8
-        version: 2.1.8(vitest@2.1.8(@types/node@22.10.2)(jsdom@25.0.1))
       tsup:
         specifier: ^8.3.5
         version: 8.3.5(postcss@8.4.49)(typescript@5.5.2)(yaml@2.6.1)

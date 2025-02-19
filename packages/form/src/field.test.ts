@@ -1,7 +1,7 @@
 import { makeObservable, observable } from "mobx";
 import { Form } from "./form";
 import { debugFormField, FormField } from "./field";
-import { Validator } from "@form-model/validation";
+import { Validator } from "@mobx-sentinel/core";
 
 class SampleModel {
   @observable test = "test";

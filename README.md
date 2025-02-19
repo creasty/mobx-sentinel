@@ -1,19 +1,19 @@
-# form-model
+# mobx-sentinel
 
-[![push](https://github.com/creasty/form-model/actions/workflows/push.yml/badge.svg)](https://github.com/creasty/form-model/actions/workflows/push.yml)
-[![codecov](https://codecov.io/gh/creasty/form-model/graph/badge.svg?token=K6D0I95Y91)](https://codecov.io/gh/creasty/form-model)
+[![push](https://github.com/creasty/mobx-sentinel/actions/workflows/push.yml/badge.svg)](https://github.com/creasty/mobx-sentinel/actions/workflows/push.yml)
+[![codecov](https://codecov.io/gh/creasty/mobx-sentinel/graph/badge.svg?token=K6D0I95Y91)](https://codecov.io/gh/creasty/mobx-sentinel)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
 > [!CAUTION]
 > This library is currently in the early stage of development. User interface is subject to change without notice.
 
-A TypeScript form management library designed to work seamlessly with MobX domain models, providing a clean separation between form state management and domain logic while offering type-safe form bindings for React applications.
+A TypeScript library for non-intrusive model enhancement in MobX applications. It provides model change detection, validation, and form integration capabilities while maintaining the purity of your domain models. Think of it as a sentinel that watches and augments your models without contaminating them.
 
 ## Motivation
 
-TL;DR: This library provides a model-centric form management solution for MobX applications. Unlike other form libraries that focus on data serialization, it's designed to work with domain models (classes) while properly separating form state management from business logic. It offers type-safe bindings and smart error handling to create a better developer and user experience.
+TL;DR: This library provides non-intrusive change detection and validation capabilities for domain models, with form management being one of its applications. Unlike other libraries that focus on data serialization or require models to implement specific interfaces, it's designed to work with plain classes while properly separating concerns.
 
-<details><summary>Read more (English)</summary>
+<details><summary>Read more on form management (English)</summary>
 
 In the projects I'm involved with, we deal with complex domains and promote building domain models on the frontend using MobX.<br>
 We needed a solution that could work with forms while assuming business logic for how data should be displayed and updated exists as class implementations.<br>
@@ -41,7 +41,7 @@ This library aims to solve these problems through a model-centric design that pr
 
 </details>
 
-<details><summary>Read more (Japanese)</summary>
+<details><summary>Read more on form management (Japanese)</summary>
 
 私が関わっているプロジェクトでは複雑なドメインを扱っており、フロントエンドでも MobX を用いてドメインモデルを作り込むことを推進している。<br>
 データがどのように表示・更新されるべきかというビジネスロジックがクラス実装として存在する前提で、それをフォームでも使えるようにするソリューションを求めていた。<br>
@@ -124,10 +124,10 @@ end
 
 ### `core` — Core functionality like Watcher and Validator
 
-<pre><code>npm install --save <b>@form-model/core</b></code></pre>
+<pre><code>npm install --save <b>@mobx-sentinel/form</b></code></pre>
 
-[![npm version](https://badge.fury.io/js/@form-model%2Fcore.svg)](https://www.npmjs.com/package/@form-model/core)
-[![npm size](https://badgen.net/bundlephobia/min/@form-model/core)](https://bundlephobia.com/package/@form-model/core)
+[![npm version](https://badge.fury.io/js/@mobx-sentinel%2Fcore.svg)](https://www.npmjs.com/package/@mobx-sentinel/form)
+[![npm size](https://badgen.net/bundlephobia/min/@mobx-sentinel/form)](https://bundlephobia.com/package/@mobx-sentinel/form)
 
 Use with `mobx`.
 
@@ -148,10 +148,10 @@ Use with `mobx`.
 
 ### `form` — Form and bindings
 
-<pre><code>npm install --save <b>@form-model/form</b></code></pre>
+<pre><code>npm install --save <b>@mobx-sentinel/form</b></code></pre>
 
-[![npm version](https://badge.fury.io/js/@form-model%2Fform.svg)](https://www.npmjs.com/package/@form-model/form)
-[![npm size](https://badgen.net/bundlephobia/min/@form-model/form)](https://bundlephobia.com/package/@form-model/form)
+[![npm version](https://badge.fury.io/js/@mobx-sentinel%2Fform.svg)](https://www.npmjs.com/package/@mobx-sentinel/form)
+[![npm size](https://badgen.net/bundlephobia/min/@mobx-sentinel/form)](https://bundlephobia.com/package/@mobx-sentinel/form)
 
 Use with `mobx`.
 
@@ -169,10 +169,10 @@ Use with `mobx`.
 
 ### `react` — Standard bindings and hooks for React
 
-<pre><code>npm install --save <b>@form-model/react</b></code></pre>
+<pre><code>npm install --save <b>@mobx-sentinel/react</b></code></pre>
 
-[![npm version](https://badge.fury.io/js/@form-model%2Freact.svg)](https://www.npmjs.com/package/@form-model/react)
-[![npm size](https://badgen.net/bundlephobia/min/@form-model/react)](https://bundlephobia.com/package/@form-model/react)
+[![npm version](https://badge.fury.io/js/@mobx-sentinel%2Freact.svg)](https://www.npmjs.com/package/@mobx-sentinel/react)
+[![npm size](https://badgen.net/bundlephobia/min/@mobx-sentinel/react)](https://bundlephobia.com/package/@mobx-sentinel/react)
 
 Use with `mobx-react-lite`.
 
@@ -207,7 +207,7 @@ Use with `mobx-react-lite`.
 
 ```typescript
 import { action, observable, makeObservable } from "mobx";
-import { nested, makeValidatable } from "@form-model/validation";
+import { nested, makeValidatable } from "@mobx-sentinel/core";
 
 class Sample {
   @observable text: string = "";
@@ -262,9 +262,9 @@ class Other {
 
 ```tsx
 import { observer } from "mobx-react-lite";
-import { Form } from "@form-model/core";
-import { useFormHandler } from "@form-model/react";
-import "@form-model/react/dist/extension"; // Makes .bindTextInput() and other bind methods available.
+import { Form } from "@mobx-sentinel/form";
+import { useFormHandler } from "@mobx-sentinel/react";
+import "@mobx-sentinel/react/dist/extension"; // Makes .bindTextInput() and other bind methods available.
 
 const SampleForm: React.FC<{ model: Sample }> = observer(({ model }) => {
   const form = Form.get(model);
@@ -461,7 +461,7 @@ Criteria:
 
 ## Milestones
 
-Check out https://github.com/creasty/form-model/milestones
+Check out https://github.com/creasty/mobx-sentinel/milestones
 
 ## License
 

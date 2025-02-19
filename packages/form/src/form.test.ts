@@ -1,4 +1,4 @@
-import { KeyPath, makeValidatable, nested } from "@form-model/validation";
+import { KeyPath, makeValidatable, nested } from "@mobx-sentinel/core";
 import { autorun, makeObservable, observable, runInAction } from "mobx";
 import { Form, debugForm } from "./form";
 import {

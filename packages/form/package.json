@@ -1,16 +1,16 @@
 {
-  "name": "@form-model/validation",
-  "description": "MobX + Model x Form",
-  "version": "0.0.4",
+  "name": "@mobx-sentinel/form",
+  "description": "A TypeScript library for non-intrusive model enhancement in MobX applications. Provides model change detection, validation, and form integration capabilities while maintaining the purity of domain models.",
+  "version": "0.1.0",
   "author": "creasty <yuki@creasty.com>",
   "license": "MIT",
-  "homepage": "https://github.com/creasty/form-model",
+  "homepage": "https://github.com/creasty/mobx-sentinel",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/creasty/form-model.git"
+    "url": "git+https://github.com/creasty/mobx-sentinel.git"
   },
   "bugs": {
-    "url": "https://github.com/creasty/form-model/issues"
+    "url": "https://github.com/creasty/mobx-sentinel/issues"
   },
   "keywords": [
     "mobx",
@@ -30,7 +30,9 @@
     "build": "tsup"
   },
   "dependencies": {
-    "mobx": "^6.12.3"
+    "@mobx-sentinel/core": "workspace:*",
+    "mobx": "^6.12.3",
+    "uuid": "^11.0.4"
   },
   "devDependencies": {
     "@types/node": "^22.10.2",
