@@ -9,23 +9,7 @@
 
 A TypeScript form management library designed to work seamlessly with MobX domain models, providing a clean separation between form state management and domain logic while offering type-safe form bindings for React applications.
 
-## Packages
-
-<pre><code>npm install --save <b>@form-model/core</b></code></pre>
-
-[![npm version](https://badge.fury.io/js/@form-model%2Fcore.svg)](https://www.npmjs.com/package/@form-model/core)
-[![npm size](https://badgen.net/bundlephobia/min/@form-model/core)](https://bundlephobia.com/package/@form-model/core)
-
-Use with `mobx`.
-
-<pre><code>npm install --save <b>@form-model/react</b></code></pre>
-
-[![npm version](https://badge.fury.io/js/@form-model%2Freact.svg)](https://www.npmjs.com/package/@form-model/react)
-[![npm size](https://badgen.net/bundlephobia/min/@form-model/react)](https://bundlephobia.com/package/@form-model/react)
-
-Use with `mobx-react-lite`.
-
-## Premises / Motivation
+## Motivation
 
 TL;DR: This library provides a model-centric form management solution for MobX applications. Unlike other form libraries that focus on data serialization, it's designed to work with domain models (classes) while properly separating form state management from business logic. It offers type-safe bindings and smart error handling to create a better developer and user experience.
 
@@ -85,6 +69,116 @@ This library aims to solve these problems through a model-centric design that pr
 
 </details>
 
+## Packages
+
+<details><summary>Architecture</summary>
+
+- `┈┈` Dashed lines indicate non-reactive, unidirectional relationships.
+- `──` Solid lines indicate reactive, unidirectional relationships.
+- `━━` Heavy lines indicate reactive, bidirectional relationships.
+
+```mermaid
+graph TB
+
+%%subgraph external
+%%  Object((Object))
+%%end
+
+subgraph core package
+  nested(["@nested"])
+  StandardNestedFetcher -.-> |retrieves| nested
+  %%StandardNestedFetcher -.-> |reads| Object
+
+  watch(["@watch, @watch.ref, @unwatch"])
+  Watcher -.-> |retrieves| watch
+  Watcher -.-> |uses| StandardNestedFetcher
+  %%Watcher --> |observes| Object
+
+  Validator
+  Validator --> |observes| Watcher
+  Validator -.-> |uses| StandardNestedFetcher
+  %%Validator --> |observes| Object
+
+  watch & Watcher & nested & StandardNestedFetcher -.-> |uses| AnnotationProcessor["AnnotationProcessor<br>(internal)"]
+end
+
+subgraph form package
+  Form -.-> |manages/updates| FormField
+  Form -.-> |manages| FormBinding["&lt;&lt;interface&gt;&gt;<br>FormBinding"]
+  %%FormBinding -.-> |references| Form & FormField
+  Form ==> Watcher
+  Form & FormField ==> Validator
+  Form -.-> |uses| StandardNestedFetcher
+  Form --> |delegates| Submission["Submission<br>(internal)"]
+end
+
+subgraph react package
+  Hooks --> |updates| Form
+
+  Bindings -.-> |implements| FormBinding
+  Bindings ==> Form & FormField
+end
+```
+
+</details>
+
+### `core` — Core functionality like Watcher and Validator
+
+<pre><code>npm install --save <b>@form-model/core</b></code></pre>
+
+[![npm version](https://badge.fury.io/js/@form-model%2Fcore.svg)](https://www.npmjs.com/package/@form-model/core)
+[![npm size](https://badgen.net/bundlephobia/min/@form-model/core)](https://bundlephobia.com/package/@form-model/core)
+
+Use with `mobx`.
+
+- Tracks nested and dynamic (array) models
+  - `@nested` annotation provides a way to track nested models.
+  - Allowing Watcher, Validator, and even Form to integrate features that concern multiple models.
+- Detects changes in models automatically
+  - All `@observable` and `@computed` properties are automatically watched by default.
+  - `@watch` annotation is for where `@observable` decorator is not applicable. e.g., `@watch readonly #private = observable.box(0)`
+  - `@unwatch` annotation and `unwatch(() => ...)` are for where you want to make changes without being detected.
+- Reactive validation
+  - `reaction()`-based validation with debouncing. (re-evaluates on change)
+  - Composable from multiple sources.
+- Asynchronous validation
+  - `Watcher` API backed async validation with smart job scheduling. (re-runs on change)
+  - Composable from multiple sources.
+  - Cancellable with [AbortSignal](https://developer.mozilla.org/en-US/docs/Web/API/AbortSignal).
+
+### `form` — Form and bindings
+
+<pre><code>npm install --save <b>@form-model/form</b></code></pre>
+
+[![npm version](https://badge.fury.io/js/@form-model%2Fform.svg)](https://www.npmjs.com/package/@form-model/form)
+[![npm size](https://badgen.net/bundlephobia/min/@form-model/form)](https://bundlephobia.com/package/@form-model/form)
+
+Use with `mobx`.
+
+- Asynchronous submission
+  - Composable from multiple sources.
+  - Cancellable with [AbortSignal](https://developer.mozilla.org/en-US/docs/Web/API/AbortSignal).
+- Nested and dynamic (array) forms
+  - Works by mutating models directly.
+  - Forms are created independently; they don't need to be aware of each other.
+- Custom bindings
+  - Flexible and easy-to-create.
+  - Most cases can be implemented in less than 50 lines.
+- Smart error reporting
+  - Original validation strategy for a supreme user experience.
+
+### `react` — Standard bindings and hooks for React
+
+<pre><code>npm install --save <b>@form-model/react</b></code></pre>
+
+[![npm version](https://badge.fury.io/js/@form-model%2Freact.svg)](https://www.npmjs.com/package/@form-model/react)
+[![npm size](https://badgen.net/bundlephobia/min/@form-model/react)](https://bundlephobia.com/package/@form-model/react)
+
+Use with `mobx-react-lite`.
+
+- React hooks that automatically handle component lifecycle under the hood.
+- Standard bindings for most common form elements.
+
 ## Design principles
 
 - Model first
@@ -105,26 +199,11 @@ This library aims to solve these problems through a model-centric design that pr
   - Maximizes use of TypeScript's type system for error detection and code completion
   - Improves development productivity
 
-## Features
-
-- Asynchronous submission and validation
-  - Composable from multiple sources.
-  - Cancellable with [AbortSignal](https://developer.mozilla.org/en-US/docs/Web/API/AbortSignal).
-- Nested and dynamic (array) forms
-  - Works by mutating models directly.
-  - Forms are created independently; they don't need to be aware of each other.
-- Custom bindings
-  - Flexible and easy-to-create.
-  - Most cases can be implemented in less than 50 lines.
-- React integration
-  - React hooks that automatically handle component lifecycle under the hood.
-  - Standard bindings for most common form elements.
-- Smart error reporting
-  - Original validation strategy for a supreme user experience.
-
 ---
 
-## Overview — Model
+## Overview
+
+### Model-side
 
 ```typescript
 import { action, observable, makeObservable } from "mobx";
@@ -146,7 +225,7 @@ class Sample {
   constructor() {
     makeObservable(this);
 
-    // Validation is implemented here
+    // 'Reactive validation' is implemented here
     makeValidatable(this, (b) => {
       if (!this.text) b.invalidate("text", "Required");
       if (this.number === null) b.invalidate("number", "Required");
@@ -163,7 +242,9 @@ class Sample {
     this.array.push(new Other());
   }
 }
+```
 
+```typescript
 class Other {
   @observable other: string = "";
 
@@ -177,9 +258,7 @@ class Other {
 }
 ```
 
-</details>
-
-## Overview — React
+### UI-side
 
 ```tsx
 import { observer } from "mobx-react-lite";
@@ -195,28 +274,19 @@ const SampleForm: React.FC<{ model: Sample }> = observer(({ model }) => {
     return true;
   });
 
-  // [Optional] Extend validation rules here
-  // useFormHandler(form, "validate", async (builder) => {
+  // [Optional] You can add extra validation rules here.
+  // useFormHandler(form, "validate", (builder) => {
   //   ...
   // });
 
   return (
     <form>
-      <label {...form.bindLabel(["text"])}>Text input</label>
-      <input
-        {...form.bindInput("text", {
-          getter: () => model.text,
-          setter: (v) => (model.text = v),
-        })}
-      />
-
       <fieldset>
-        <label {...form.bindLabel(["number", "bool"])}>Number input & Checkbox</label>
+        <label {...form.bindLabel(["text", "bool"])}>Text input & Checkbox</label>
         <input
-          {...form.bindInput("number", {
-            valueAs: "number", // also supports "date"
-            getter: () => model.number,
-            setter: (v) => (model.number = v),
+         {...form.bindInput("text", {
+            getter: () => model.text,
+            setter: (v) => (model.text = v),
           })}
         />
         <input
@@ -227,37 +297,7 @@ const SampleForm: React.FC<{ model: Sample }> = observer(({ model }) => {
         />
       </fieldset>
 
-      <fieldset role="radiogroup">
-        <label {...form.bindLabel(["enum"])}>Radio buttons</label>
-        {(() => {
-          const bind = form.bindRadioButton("enum", {
-            getter: () => model.enum,
-            setter: (v) => (model.enum = v ? (v as SampleEnum) : null),
-          });
-          return Object.values(SampleEnum).map((v) => <input key={v} {...bind(v)} />);
-        })()}
-      </fieldset>
-
-      <label {...form.bindLabel(["option"])}>Select box</label>
-      <select
-        {...form.bindSelectBox("option", {
-          getter: () => model.option,
-          setter: (v) => (model.option = v),
-        })}
-      >
-        ...
-      </select>
-
-      <label {...form.bindLabel(["multiOption"])}>Multi select box</label>
-      <select
-        {...form.bindSelectBox("multiOption", {
-          multiple: true,
-          getter: () => model.multiOption,
-          setter: (v) => (model.multiOption = v),
-        })}
-      >
-        ...
-      </select>
+      ...
 
       <fieldset>
         <label {...form.bindLabel(["nested"])}>Nested form</label>
@@ -276,7 +316,9 @@ const SampleForm: React.FC<{ model: Sample }> = observer(({ model }) => {
     </form>
   );
 });
+```
 
+```tsx
 const OtherForm: React.FC<{ model: Other }> = observer(({ model }) => {
   const form = Form.get(model);
 
@@ -293,7 +335,98 @@ const OtherForm: React.FC<{ model: Other }> = observer(({ model }) => {
 });
 ```
 
----
+<details><summary>See other examples</summary>
+
+```tsx
+// Label for a single field
+<label {...form.bindLabel(["text"])}>Text input</label>
+```
+
+```tsx
+// Label for multiple fields
+<label {...form.bindLabel(["text", "bool"])}>Number input & Checkbox</label>
+```
+
+```tsx
+// Text input
+<input
+  {...form.bindInput("text", {
+    getter: () => model.text,
+    setter: (v) => (model.text = v),
+  })}
+/>
+```
+
+```tsx
+// Number input
+<input
+  {...form.bindInput("number", {
+    valueAs: "number",
+    getter: () => model.number,
+    setter: (v) => (model.number = v),
+  })}
+/>
+```
+
+```tsx
+// Date input
+<input
+  {...form.bindInput("date", {
+    valueAs: "date",
+    getter: () => model.date,
+    setter: (v) => (model.date = v),
+  })}
+/>
+```
+
+```tsx
+// Checkbox
+<input
+  {...form.bindCheckBox("bool", {
+    getter: () => model.bool,
+    setter: (v) => (model.bool = v),
+  })}
+/>
+```
+
+```tsx
+// Radio button / radio group
+{(() => {
+  const bind = form.bindRadioButton("enum", {
+    getter: () => model.enum,
+    setter: (v) => (model.enum = v ? (v as SampleEnum) : null),
+  });
+  return Object.values(SampleEnum).map((v) => <input key={v} {...bind(v)} />);
+})()}
+```
+
+```tsx
+// Select box
+<label {...form.bindLabel(["option"])}>Select box</label>
+<select
+  {...form.bindSelectBox("option", {
+    getter: () => model.option,
+    setter: (v) => (model.option = v),
+  })}
+>
+  ...
+</select>
+```
+
+```tsx
+// Multi select box
+<select
+  {...form.bindSelectBox("multiOption", {
+    multiple: true,
+    getter: () => model.multiOption,
+    setter: (v) => (model.multiOption = v),
+  })}
+>
+  ...
+</select>
+```
+
+</details>
 
 ## Alternatives
 
