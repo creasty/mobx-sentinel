@@ -7,13 +7,13 @@
 > [!CAUTION]
 > This library is currently in the early stage of development. User interface is subject to change without notice.
 
-A TypeScript form management library designed to work seamlessly with MobX domain models, providing a clean separation between form state management and domain logic while offering type-safe form bindings for React applications.
+A TypeScript library for non-intrusive model enhancement in MobX applications. It provides model change detection, validation, and form integration capabilities while maintaining the purity of your domain models. Think of it as a sentinel that watches and augments your models without contaminating them.
 
 ## Motivation
 
-TL;DR: This library provides a model-centric form management solution for MobX applications. Unlike other form libraries that focus on data serialization, it's designed to work with domain models (classes) while properly separating form state management from business logic. It offers type-safe bindings and smart error handling to create a better developer and user experience.
+TL;DR: This library provides non-intrusive change detection and validation capabilities for domain models, with form management being one of its applications. Unlike other libraries that focus on data serialization or require models to implement specific interfaces, it's designed to work with plain classes while properly separating concerns.
 
-<details><summary>Read more (English)</summary>
+<details><summary>Read more on form management (English)</summary>
 
 In the projects I'm involved with, we deal with complex domains and promote building domain models on the frontend using MobX.<br>
 We needed a solution that could work with forms while assuming business logic for how data should be displayed and updated exists as class implementations.<br>
@@ -41,7 +41,7 @@ This library aims to solve these problems through a model-centric design that pr
 
 </details>
 
-<details><summary>Read more (Japanese)</summary>
+<details><summary>Read more on form management (Japanese)</summary>
 
 私が関わっているプロジェクトでは複雑なドメインを扱っており、フロントエンドでも MobX を用いてドメインモデルを作り込むことを推進している。<br>
 データがどのように表示・更新されるべきかというビジネスロジックがクラス実装として存在する前提で、それをフォームでも使えるようにするソリューションを求めていた。<br>
