@@ -1,14 +1,7 @@
-import {
-  buildKeyPath,
-  getParentKeyOfKeyPath,
-  KeyPath,
-  KeyPathComponent,
-  KeyPathMultiMap,
-  KeyPathSelf,
-} from "./keyPath";
+import { buildKeyPath, getParentKeyOfKeyPath, KeyPath, KeyPathMultiMap } from "./keyPath";
 
 export class ValidationError extends Error {
-  readonly key: KeyPathComponent | KeyPathSelf;
+  readonly key: KeyPath;
   readonly keyPath: KeyPath;
   readonly message: string;
   readonly cause?: Error;
@@ -22,33 +15,33 @@ export class ValidationError extends Error {
   }
 }
 
-const buildToken = Symbol("ValidationErrorsBuilder.build");
+const buildToken = Symbol("validationErrorMapBuilder.build");
 
 export class ValidationErrorMapBuilder<T> {
   readonly #map = new KeyPathMultiMap<ValidationError>();
 
-  /**
-   * @internal
-   * @ignore
-   */
+  /** @internal @ignore */
   static build(instance: ValidationErrorMapBuilder<any>) {
     return instance[buildToken]();
   }
 
+  /**
+   * Invalidate the key
+   *
+   * Multiple reasons can be added for the same key.
+   */
   invalidate(key: keyof T & string, reason: string | Error) {
     const keyPath = buildKeyPath(key);
     const error = new ValidationError({ keyPath, reason });
     this.#map.set(keyPath, error);
   }
 
+  /** Whether the builder has any errors */
   get hasError() {
     return this.#map.size > 0;
   }
 
-  /**
-   * @internal
-   * @ignore
-   */
+  /** @internal @ignore */
   [buildToken]() {
     return this.#map.toImmutable();
   }

@@ -123,7 +123,7 @@ export class FormField {
     }
   }
 
-  /** @ignore @internal */
+  /** @internal @ignore */
   [internalToken]() {
     return {
       isErrorReported: this.#isErrorReported,
@@ -145,7 +145,7 @@ export namespace FormField {
   export type ChangeType = "final" | "intermediate";
 }
 
-/** @ignore @internal */
+/** @internal @ignore */
 export function debugFormField(field: FormField) {
   return field[internalToken]();
 }

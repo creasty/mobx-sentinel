@@ -1,5 +1,5 @@
 import { createPropertyLikeAnnotation, getAnnotationProcessor } from "./annotationProcessor";
-import { KeyPath, KeyPathSelf, KeyPathComponent, buildKeyPath } from "./keyPath";
+import { KeyPath, buildKeyPath } from "./keyPath";
 import { unwrapShallowContents } from "./mobx-utils";
 
 const nestedKey = Symbol("nested");
@@ -32,7 +32,7 @@ export function* getNestedAnnotations(target: object): Generator<[key: string | 
  */
 export class StandardNestedFetcher<T extends object> implements Iterable<StandardNestedFetcher.Entry<T>> {
   readonly #transform: (entry: StandardNestedFetcher.Entry<any>) => T | null;
-  readonly #fetchers = new Map<KeyPathComponent | KeyPathSelf, () => Generator<StandardNestedFetcher.Entry<T>>>();
+  readonly #fetchers = new Map<KeyPath, () => Generator<StandardNestedFetcher.Entry<T>>>();
 
   /**
    * @param target - The target object
@@ -64,6 +64,7 @@ export class StandardNestedFetcher<T extends object> implements Iterable<Standar
     return fetcher;
   }
 
+  /** Iterate over all entries */
   *[Symbol.iterator]() {
     for (const fn of this.#fetchers.values()) {
       for (const entry of fn()) {
@@ -72,7 +73,8 @@ export class StandardNestedFetcher<T extends object> implements Iterable<Standar
     }
   }
 
-  *getForKey(keyPath: KeyPathComponent | KeyPathSelf) {
+  /** Iterate over all entries for the given key path */
+  *getForKey(keyPath: KeyPath) {
     const fetcher = this.#fetchers.get(keyPath);
     if (!fetcher) return;
     for (const entry of fetcher()) {
@@ -85,7 +87,7 @@ export namespace StandardNestedFetcher {
   /** Nested entry */
   export type Entry<T extends object> = {
     /** Name of the field that has the nested annotation */
-    readonly key: KeyPathComponent | KeyPathSelf;
+    readonly key: KeyPath;
     /** Key path to the nested entry */
     readonly keyPath: KeyPath;
     /** Data */

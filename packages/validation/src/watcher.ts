@@ -148,7 +148,6 @@ export class Watcher {
    * The value is incremented for each change and each key.
    * Observe this value to react to changes.
    */
-  @computed
   get changedTick() {
     return this.#changedTick.get();
   }
@@ -318,7 +317,7 @@ export class Watcher {
     }
   }
 
-  /** @ignore @internal */
+  /** @internal @ignore */
   [internalToken]() {
     return {
       didChange: this.#didChange.bind(this),
@@ -326,7 +325,7 @@ export class Watcher {
   }
 }
 
-/** @ignore @internal */
+/** @internal @ignore */
 export function debugWatcher(watcher: Watcher) {
   return watcher[internalToken]();
 }

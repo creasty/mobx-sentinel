@@ -40,8 +40,8 @@ export class Submission {
     let succeed = true;
     try {
       for (const handler of this.#handlers.submit) {
+        // Serialized
         if (!(await handler(abortCtrl.signal))) {
-          // Serialized
           succeed = false;
           break;
         }
