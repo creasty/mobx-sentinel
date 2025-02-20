@@ -203,7 +203,11 @@ export class Form<T> {
   /** Whether the form can be submitted */
   @computed
   get canSubmit() {
-    return !this.isBusy && this.isValid && this.isDirty;
+    return (
+      !this.isBusy &&
+      (this.config.allowSubmitInvalid || this.isValid) &&
+      (this.config.allowSubmitNonDirty || this.isDirty)
+    );
   }
 
   /**
