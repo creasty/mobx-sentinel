@@ -248,16 +248,47 @@ describe("Form", () => {
       expect(form.canSubmit).toBe(false);
     });
 
-    it("returns false when the validation is scheduled", () => {
+    it("returns true when config.allowSubmitNonDirty is true", () => {
+      const model = new SampleModel();
+      const form = Form.get(model);
+      expect(form.isDirty).toBe(false);
+      expect(form.isValid).toBe(true);
+
+      form.configure({ allowSubmitNonDirty: true });
+      expect(form.isDirty).toBe(false);
+      expect(form.isValid).toBe(true);
+      expect(form.canSubmit).toBe(true);
+    });
+
+    it("returns true when config.allowSubmitInvalid is true", () => {
+      const model = new SampleModel();
+      const form = Form.get(model);
+      form.markAsDirty();
+      form.validator.updateErrors(Symbol(), (b) => b.invalidate("field", "error"));
+      expect(form.isDirty).toBe(true);
+      expect(form.isValid).toBe(false);
+
+      form.configure({ allowSubmitInvalid: true });
+      expect(form.isDirty).toBe(true);
+      expect(form.isValid).toBe(false);
+      expect(form.canSubmit).toBe(true);
+    });
+
+    it("returns false while the form is validating", async () => {
       const model = new SampleModel();
       const form = Form.get(model);
       form.addHandler("asyncValidate", async () => void 0, { initialRun: false });
 
       form.markAsDirty();
+      expect(form.isValidating).toBe(false);
       expect(form.canSubmit).toBe(true);
 
       form.validate();
+      expect(form.isValidating).toBe(true);
       expect(form.canSubmit).toBe(false);
+
+      await vi.waitFor(() => expect(form.isValidating).toBe(false));
+      expect(form.canSubmit).toBe(true);
     });
   });
 

@@ -29,6 +29,18 @@ export type FormConfig = {
    * @default 3000
    */
   autoFinalizationDelayMs: number;
+  /**
+   * Allow submission even if the form is not dirty.
+   *
+   * @default false
+   */
+  allowSubmitNonDirty: boolean;
+  /**
+   * Allow submission even if the form is invalid.
+   *
+   * @default false
+   */
+  allowSubmitInvalid: boolean;
 };
 
 /** Default configuration */
@@ -37,6 +49,8 @@ export const defaultConfig: Readonly<FormConfig> = Object.freeze({
   asyncValidationEnqueueDelayMs: 100,
   asyncValidationScheduleDelayMs: 300,
   autoFinalizationDelayMs: 3000,
+  allowSubmitNonDirty: false,
+  allowSubmitInvalid: false,
 });
 
 /** Global configuration */
