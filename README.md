@@ -80,10 +80,10 @@ This library aims to solve these problems through a model-centric design that pr
 **Key points:**
 
 - No module directly updates your model.
+- Core package can be used as a standalone library.
 - Watcher and Validator observe your model, and Form and FormField utilize them.
 - Form has no reactive dependencies on FormField/FormBinding.
   - State synchronization is only broadcast from Form to FormField.
-- Core package can be used as a standalone library.
 
 ```mermaid
 graph TB
@@ -135,9 +135,8 @@ end
 <pre><code>npm install --save <b>@mobx-sentinel/core</b></code></pre>
 
 [![npm version](https://badge.fury.io/js/@mobx-sentinel%2Fcore.svg)](https://www.npmjs.com/package/@mobx-sentinel/core)
-[![npm size](https://badgen.net/bundlephobia/min/@mobx-sentinel/core)](https://bundlephobia.com/package/@mobx-sentinel/core)
-
-Use with `mobx`.
+[![npm size](https://img.shields.io/bundlephobia/min/@mobx-sentinel/core)](https://bundlephobia.com/package/@mobx-sentinel/core)
+![target: nodejs, browser](https://img.shields.io/badge/nodejs%2C%20browser-_?label=target&color=007ec6)
 
 - `StandardNestedFetcher` provides a simple API for retrieving nested models.
   - `@nested` annotation is processed by `StandardNestedFetcher` to track nested models.
@@ -157,9 +156,8 @@ Use with `mobx`.
 <pre><code>npm install --save <b>@mobx-sentinel/form</b></code></pre>
 
 [![npm version](https://badge.fury.io/js/@mobx-sentinel%2Fform.svg)](https://www.npmjs.com/package/@mobx-sentinel/form)
-[![npm size](https://badgen.net/bundlephobia/min/@mobx-sentinel/form)](https://bundlephobia.com/package/@mobx-sentinel/form)
-
-Use with `mobx`.
+[![npm size](https://img.shields.io/bundlephobia/min/@mobx-sentinel/form)](https://bundlephobia.com/package/@mobx-sentinel/form)
+![target: nodejs, browser](https://img.shields.io/badge/nodejs%2C%20browser-_?label=target&color=007ec6)
 
 - Asynchronous submission
   - Composable from multiple sources.
@@ -178,9 +176,8 @@ Use with `mobx`.
 <pre><code>npm install --save <b>@mobx-sentinel/react</b></code></pre>
 
 [![npm version](https://badge.fury.io/js/@mobx-sentinel%2Freact.svg)](https://www.npmjs.com/package/@mobx-sentinel/react)
-[![npm size](https://badgen.net/bundlephobia/min/@mobx-sentinel/react)](https://bundlephobia.com/package/@mobx-sentinel/react)
-
-Use with `mobx-react-lite`.
+[![npm size](https://img.shields.io/bundlephobia/min/@mobx-sentinel/react)](https://bundlephobia.com/package/@mobx-sentinel/react)
+![target: browser](https://img.shields.io/badge/browser-_?label=target&color=007ec6)
 
 - React hooks that automatically handle component lifecycle under the hood.
 - Standard bindings for most common form elements.
@@ -265,14 +262,13 @@ class Other {
 ```typescript
 const model = new Sample();
 
-const watcher = Watcher.get(model);
-const validator = Validator.get(model);
-
 // do something with the model...
 
+const watcher = Watcher.get(model);
 watcher.changed //=> true
 watcher.changedKeyPaths //=> new Set(["text", ..., "nested.other", "array.0.other"])
 
+const validator = Validator.get(model);
 validator.isValid //=> false
 validator.invalidKeyPaths //=> new Set(["text", ..., "nested.other", "array.0.other"])
 
