@@ -20,7 +20,9 @@ export function useFormAutoReset(form: Form<any>) {
  *
  * @param form The form instance.
  * @param event The event of the handler.
- * @param handler The handler.
+ * @param handler The handler.\
+ *   No memoization is needed as the handler is stored in a ref internally.
+ * @param options The options of the handler.
  */
 export function useFormHandler<T extends object, Event extends keyof Form.Handlers<T>>(
   form: Form<T>,
