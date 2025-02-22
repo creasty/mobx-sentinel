@@ -53,32 +53,82 @@ describe("MobX", () => {
   });
 
   describe("reaction()", () => {
-    test("debounced scheduler affects on both observing expression and effect", async () => {
-      const obj = observable({ expr: 0, effect: 0 });
-      const exprFn = vi.fn(() => {
-        return obj.expr;
-      });
-      const effectFn = vi.fn((value: number) => {
-        obj.effect = value;
+    describe("scheduler / delay", () => {
+      test("delayed scheduler affects on both observing expression and effect", async () => {
+        const obj = observable({ expr: 0, effect: 0 });
+        const exprFn = vi.fn(() => {
+          return obj.expr;
+        });
+        const effectFn = vi.fn((value: number) => {
+          obj.effect = value;
+        });
+
+        reaction(exprFn, effectFn, {
+          delay: 100,
+        });
+        for (let i = 0; i < 10; i++) {
+          runInAction(() => obj.expr++);
+        }
+
+        await vi.waitFor(() => expect(obj.effect).toBe(obj.expr));
+        expect(exprFn).toBeCalledTimes(2);
+        expect(exprFn).nthReturnedWith(1, 0);
+        expect(exprFn).nthReturnedWith(2, 10);
+        expect(effectFn).toBeCalledTimes(1);
+        expect(effectFn).lastCalledWith(10, 0, expect.anything());
       });
 
-      let timerId: number | null = null;
-      reaction(exprFn, effectFn, {
-        scheduler: (fn) => {
-          if (timerId) clearTimeout(timerId);
-          timerId = +setTimeout(fn, 100);
-        },
-      });
-      for (let i = 0; i < 10; i++) {
-        runInAction(() => obj.expr++);
-      }
+      test("delayed scheduler acts as a throttle", async () => {
+        const obj = observable({ expr: 0, effect: 0 });
+        const exprFn = vi.fn(() => {
+          return obj.expr;
+        });
+        const effectFn = vi.fn((value: number) => {
+          obj.effect = value;
+        });
 
-      await vi.waitFor(() => expect(obj.effect).toBe(obj.expr));
-      expect(exprFn).toBeCalledTimes(2);
-      expect(exprFn).nthReturnedWith(1, 0);
-      expect(exprFn).nthReturnedWith(2, 10);
-      expect(effectFn).toBeCalledTimes(1);
-      expect(effectFn).lastCalledWith(10, 0, expect.anything());
+        reaction(exprFn, effectFn, {
+          delay: 100,
+        });
+        for (let i = 0; i < 10; i++) {
+          await new Promise((resolve) => setTimeout(resolve, 20));
+          runInAction(() => obj.expr++);
+        }
+
+        await vi.waitFor(() => expect(obj.effect).toBe(obj.expr));
+        expect(exprFn).toBeCalledTimes(3); // If it's debounced, it should be 2
+        expect(exprFn).nthReturnedWith(1, 0);
+        expect(exprFn).nthReturnedWith(2, 5);
+        expect(effectFn).toBeCalledTimes(2); // If it's debounced, it should be 1
+        expect(effectFn).nthCalledWith(1, 5, 0, expect.anything());
+        expect(effectFn).nthCalledWith(2, 10, 5, expect.anything());
+      });
+
+      test("scheduler will not be called when the previous scheduler is still running", async () => {
+        const obj = observable({ expr: 0, effect: 0 });
+        const exprFn = vi.fn(() => {
+          return obj.expr;
+        });
+        const effectFn = vi.fn((value: number) => {
+          obj.effect = value;
+        });
+
+        let schedulerCallCount = 0;
+        reaction(exprFn, effectFn, {
+          scheduler: (fn) => {
+            schedulerCallCount++;
+            // clearTimeout is meaningless
+            setTimeout(fn, 100);
+          },
+        });
+        for (let i = 0; i < 5; i++) {
+          await new Promise((resolve) => setTimeout(resolve, 10)); // Adds up to 50ms at the end
+          runInAction(() => obj.expr++);
+        }
+
+        await vi.waitFor(() => expect(obj.effect).toBe(obj.expr));
+        expect(schedulerCallCount).toBe(1);
+      });
     });
 
     describe("boxed observables", () => {
