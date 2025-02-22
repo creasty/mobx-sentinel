@@ -255,14 +255,14 @@ export class Watcher {
    * Process `@nested` annotations
    */
   #processNestedAnnotations(target: object) {
-    for (const [key, getValue] of getNestedAnnotations(target)) {
+    for (const { key, getValue, hoist } of getNestedAnnotations(target)) {
       if (typeof key !== "string") continue; // symbol and number keys are not supported
       if (this.#processedKeys.has(key)) continue;
       this.#processedKeys.add(key);
 
       reaction(
         () => shallowReadValue(getValue()),
-        () => this.#didChange(buildKeyPath(key))
+        () => (hoist ? this.#incrementChangedTick() : this.#didChange(buildKeyPath(key)))
       );
       reaction(
         () => {
