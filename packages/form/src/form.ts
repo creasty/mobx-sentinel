@@ -1,4 +1,4 @@
-import { action, computed, makeObservable, observable, reaction } from "mobx";
+import { action, computed, makeObservable, observable } from "mobx";
 import { v4 as uuidV4 } from "uuid";
 import { KeyPath, Validator, Watcher, StandardNestedFetcher, buildKeyPath, KeyPathSelf } from "@mobx-sentinel/core";
 import { FormField } from "./field";
@@ -118,22 +118,6 @@ export class Form<T> {
         this.reset();
       }
     });
-
-    reaction(
-      () => this.config.reactiveValidationDelayMs,
-      (delay) => (this.validator.reactionDelayMs = delay),
-      { fireImmediately: true }
-    );
-    reaction(
-      () => this.config.asyncValidationEnqueueDelayMs,
-      (delay) => (this.validator.enqueueDelayMs = delay),
-      { fireImmediately: true }
-    );
-    reaction(
-      () => this.config.asyncValidationScheduleDelayMs,
-      (delay) => (this.validator.scheduleDelayMs = delay),
-      { fireImmediately: true }
-    );
   }
 
   /**
@@ -262,11 +246,6 @@ export class Form<T> {
   async submit(args?: { force?: boolean }) {
     if (!args?.force && !this.canSubmit) return false;
     return this.#submission.exec();
-  }
-
-  /** Validate the form */
-  validate(...args: Parameters<Validator<T>["request"]>) {
-    this.validator.request(...args);
   }
 
   /**
