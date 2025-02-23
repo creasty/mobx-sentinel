@@ -74,6 +74,7 @@ export class Validator<T> {
   });
   readonly #nestedFetcher: StandardNestedFetcher<Validator<any>>;
   readonly #reactionTimerIds = observable.map<symbol, number>();
+  readonly #reactionResets = new Map<symbol, () => void>();
   readonly #jobs = observable.set<AsyncJob<any>>();
 
   /**
@@ -266,13 +267,14 @@ export class Validator<T> {
   /** Reset the validator */
   @action
   reset() {
+    this.#reactionTimerIds.clear();
+    for (const reset of this.#reactionResets.values()) {
+      reset();
+    }
+
     for (const job of this.#jobs) {
       job.reset();
     }
-    for (const timerId of this.#reactionTimerIds.values()) {
-      clearTimeout(timerId);
-    }
-    this.#reactionTimerIds.clear();
 
     this.#errors.clear();
   }
@@ -384,10 +386,13 @@ export class Validator<T> {
     dispose?: () => void;
   }) {
     const reactionDelayMs = args.opt?.delayMs ?? Validator.defaultDelayMs;
+    let initialRun = args.opt?.initialRun ?? true;
 
     const dispose = reaction(
       args.expr,
       (expr) => {
+        if (!initialRun && !this.#reactionTimerIds.has(args.key)) return; // In case of reset()
+        initialRun = false;
         this.#reactionTimerIds.delete(args.key);
         args.effect(expr);
       },
@@ -398,6 +403,11 @@ export class Validator<T> {
           const timerId = +setTimeout(fn, reactionDelayMs);
           runInAction(() => {
             this.#reactionTimerIds.set(args.key, timerId!);
+          });
+          this.#reactionResets.set(args.key, () => {
+            clearTimeout(timerId);
+            this.#reactionResets.delete(args.key);
+            fn();
           });
         },
       }
@@ -411,9 +421,13 @@ export class Validator<T> {
       }
       runInAction(() => {
         this.#reactionTimerIds.delete(args.key);
-        args.dispose?.();
+        this.#reactionResets.delete(args.key);
+        try {
+          args.dispose?.();
+        } finally {
+          this.#errors.delete(args.key);
+        }
       });
-      this.#errors.delete(args.key);
     };
   }
 }
