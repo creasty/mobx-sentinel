@@ -921,6 +921,22 @@ describe("Validator", () => {
       expect(env.validator.asyncState).toBe(0);
       expect(env.validator.isValidating).toBe(false);
     });
+
+    it("can resume handlers after reset", async () => {
+      const env = setupEnv({ syncHandler: true });
+
+      runInAction(() => {
+        env.model.field1++;
+      });
+      expect(env.validator.reactionState).toBe(1);
+      env.validator.reset();
+
+      runInAction(() => {
+        env.model.field1++;
+      });
+      expect(env.validator.reactionState).toBe(1);
+      await env.waitForReactionState(0);
+    });
   });
 });
 
