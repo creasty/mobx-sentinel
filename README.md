@@ -103,7 +103,7 @@ subgraph core package
   %%Watcher --> |observes| Object
 
   Validator
-  Validator --> |observes| Watcher
+  Validator --> |delegates| AsyncJob["AsyncJob<br>(internal)"]
   Validator -.-> |uses| StandardNestedFetcher
   %%Validator --> |observes| Object
 
@@ -145,11 +145,10 @@ end
   - All `@observable` and `@computed` annotations are automatically watched by default.
   - `@watch` annotation can be used where `@observable` is not applicable, e.g. on private fields: `@watch readonly #private = observable.box(0)`
   - `@unwatch` annotation and `unwatch(() => ...)` function disable change detection when you need to modify values silently.
-- `Validator` and `makeValidatable` provides model validation with automatic re-evaluation.
+- `Validator` and `makeValidatable` provides reactive model validation.
   - Composable from multiple sources.
-  - Reactive validation: `reaction()` based validation with debouncing.
-  - Asynchronous validation: `Watcher` powered async validation with smart job scheduling.
-  - Cancellable with [AbortSignal](https://developer.mozilla.org/en-US/docs/Web/API/AbortSignal).
+  - Both sync and async validations are supported.
+  - Async validations feature smart job scheduling and are cancellable with [AbortSignal](https://developer.mozilla.org/en-US/docs/Web/API/AbortSignal).
 
 ### `form` — Form and bindings
 
@@ -230,7 +229,7 @@ class Sample {
 
     // 'Reactive validation' is implemented here
     makeValidatable(this, (b) => {
-      if (!this.text) b.invalidate("text", "Required");
+      if (this.text === "") b.invalidate("text", "Required");
       if (this.number === null) b.invalidate("number", "Required");
       if (this.date === null) b.invalidate("date", "Required");
       if (this.enum === null) b.invalidate("enum", "Required");
@@ -253,7 +252,7 @@ class Other {
     makeObservable(this);
 
     makeValidatable(this, (b) => {
-      if (!this.other) b.invalidate("other", "Required");
+      if (this.other === "") b.invalidate("other", "Required");
     });
   }
 }
@@ -262,16 +261,21 @@ class Other {
 ```typescript
 const model = new Sample();
 
-// do something with the model...
+// Do something with the model...
+model.text = "hello";
+model.nested.other = "world";
 
+// Check if the model has changed
 const watcher = Watcher.get(model);
 watcher.changed //=> true
-watcher.changedKeyPaths //=> new Set(["text", ..., "nested.other", "array.0.other"])
+watcher.changedKeyPaths //=> Set ["text", "nested.other"]
 
+// Check if the model is valid
 const validator = Validator.get(model);
 validator.isValid //=> false
-validator.invalidKeyPaths //=> new Set(["text", ..., "nested.other", "array.0.other"])
+validator.invalidKeyPaths //=> Set ["number", "date", ..., "array.0.other"]
 
+// Iterate over all errors
 for (const [keyPath, error] of validator.findErrors(KeyPathSelf, true)) {
   console.log(keyPath, error);
 }
@@ -292,11 +296,6 @@ const SampleForm: React.FC<{ model: Sample }> = observer(({ model }) => {
     // TODO: Serialize the model and send the data to a server
     return true;
   });
-
-  // [Optional] You can add extra validation rules here.
-  // useFormHandler(form, "validate", (builder) => {
-  //   ...
-  // });
 
   return (
     <form>
@@ -428,7 +427,11 @@ const OtherForm: React.FC<{ model: Other }> = observer(({ model }) => {
     setter: (v) => (model.option = v),
   })}
 >
-  ...
+  {SAMPLE_OPTIONS.map((option) => (
+    <option key={option.code} value={option.code}>
+      {option.name}
+    </option>
+  ))}
 </select>
 ```
 
@@ -441,8 +444,17 @@ const OtherForm: React.FC<{ model: Other }> = observer(({ model }) => {
     setter: (v) => (model.multiOption = v),
   })}
 >
-  ...
+  {SAMPLE_OPTIONS.map((option) => (
+    <option key={option.code} value={option.code}>
+      {option.name}
+    </option>
+  ))}
 </select>
+```
+
+```tsx
+// Submit button
+<button {...form.bindSubmitButton()}>Submit</button>
 ```
 
 </details>
