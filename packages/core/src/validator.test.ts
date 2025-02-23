@@ -930,6 +930,7 @@ describe("Validator", () => {
       });
       expect(env.validator.reactionState).toBe(1);
       env.validator.reset();
+      expect(env.validator.reactionState).toBe(0);
 
       runInAction(() => {
         env.model.field1++;
