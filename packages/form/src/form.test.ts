@@ -277,7 +277,7 @@ describe("Form", () => {
     it("returns false while the form is validating", async () => {
       const model = new SampleModel();
       const form = Form.get(model);
-      form.addHandler("asyncValidate", async () => void 0, { initialRun: false });
+      form.validator.addAsyncHandler(async () => void 0, { initialRun: false });
 
       form.markAsDirty();
       expect(form.isValidating).toBe(false);
@@ -430,22 +430,6 @@ describe("Form", () => {
       expect(form.addHandler("submit", async () => false)).toBeInstanceOf(Function);
       expect(form.addHandler("didSubmit", () => void 0)).toBeInstanceOf(Function);
       expect(spy).toBeCalledTimes(3);
-    });
-
-    it("adds an async validation handler", () => {
-      const model = new SampleModel();
-      const form = Form.get(model);
-      const spy = vi.spyOn(form.validator, "addAsyncHandler");
-      expect(form.addHandler("asyncValidate", async () => void 0)).toBeInstanceOf(Function);
-      expect(spy).toBeCalledTimes(1);
-    });
-
-    it("adds a reactive validation handler", () => {
-      const model = new SampleModel();
-      const form = Form.get(model);
-      const spy = vi.spyOn(form.validator, "addReactiveHandler");
-      expect(form.addHandler("validate", () => void 0)).toBeInstanceOf(Function);
-      expect(spy).toBeCalledTimes(1);
     });
 
     it("throws an error when the event is invalid", () => {

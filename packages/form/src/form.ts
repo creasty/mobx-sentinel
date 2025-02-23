@@ -274,25 +274,9 @@ export class Form<T> {
    *
    * @returns A function to remove the handler.
    */
-  addHandler<K extends keyof Form.Handlers<T>>(
-    event: K,
-    handler: Form.Handlers<T>[NoInfer<K>],
-    options?: Form.HandlerOptions[NoInfer<K>]
-  ) {
-    switch (event) {
-      case "willSubmit":
-      case "submit":
-      case "didSubmit":
-        return this.#submission.addHandler(event, handler as any);
-      case "asyncValidate":
-        return this.validator.addAsyncHandler(handler as any, options);
-      case "validate":
-        return this.validator.addReactiveHandler(handler as any, options);
-      default:
-        event satisfies never;
-        throw new Error(`Invalid event: ${event}`);
-    }
-  }
+  addHandler: Submission["addHandler"] = (...args) => {
+    return this.#submission.addHandler(...args);
+  };
 
   /** Get a field by name */
   getField(fieldName: FormField.Name<T>) {
@@ -414,17 +398,7 @@ export class Form<T> {
 }
 
 export namespace Form {
-  export type Handlers<T> = Submission.Handlers & {
-    asyncValidate: Validator.AsyncHandler<T>;
-    validate: Validator.ReactiveHandler<T>;
-  };
-  export type HandlerOptions = {
-    willSubmit: never;
-    submit: never;
-    didSubmit: never;
-    asyncValidate: Validator.HandlerOptions;
-    validate: Validator.HandlerOptions;
-  };
+  export type Handlers = Submission.Handlers;
 }
 
 /** @internal @ignore */
