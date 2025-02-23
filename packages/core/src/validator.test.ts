@@ -118,10 +118,10 @@ function buildErrorMap(iter: ReturnType<Validator<any>["findErrors"]>) {
 describe("makeValidatable", () => {
   it("throws an error when a non-object is given", () => {
     expect(() => {
-      makeValidatable(null as any, () => ({}));
+      makeValidatable(null as any, () => void 0);
     }).toThrowError(/Expected an object/);
     expect(() => {
-      makeValidatable(1 as any, () => ({}));
+      makeValidatable(1 as any, () => void 0);
     }).toThrowError(/Expected an object/);
   });
 
@@ -129,7 +129,19 @@ describe("makeValidatable", () => {
     const target = {};
     const validator = Validator.get(target);
     const spy = vi.spyOn(validator, "addSyncHandler");
-    makeValidatable(target, () => ({}));
+    makeValidatable(target, () => void 0);
+    expect(spy).toBeCalled();
+  });
+
+  it("adds an async handler to the validator", () => {
+    const target = {};
+    const validator = Validator.get(target);
+    const spy = vi.spyOn(validator, "addAsyncHandler");
+    makeValidatable(
+      target,
+      () => true,
+      async () => void 0
+    );
     expect(spy).toBeCalled();
   });
 });

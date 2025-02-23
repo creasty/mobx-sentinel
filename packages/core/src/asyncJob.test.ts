@@ -117,6 +117,31 @@ describe("AsyncJob", () => {
       `);
     });
 
+    it("batches multiple requests when the job is scheduled", async () => {
+      const { job, timeline, waitFor } = setupEnv();
+
+      job.request(1);
+      job.request(2);
+      await waitFor("scheduled");
+      job.request(3);
+      job.request(4);
+      await waitFor("idle");
+      // payload 2, 3 are discarded
+      expect(timeline).toMatchInlineSnapshot(`
+        [
+          "state: idle",
+          "state: running",
+          "job start 1 with payload 1",
+          "job end 1",
+          "state: scheduled",
+          "state: running",
+          "job start 2 with payload 4",
+          "job aborted 2",
+          "state: idle",
+        ]
+      `);
+    });
+
     it("aborts the current running job and runs a new job immediately when the force option is provided", async () => {
       const { job, timeline, waitFor } = setupEnv();
 
