@@ -91,17 +91,17 @@ describe("MobX", () => {
           delay: 100,
         });
         for (let i = 0; i < 10; i++) {
-          await new Promise((resolve) => setTimeout(resolve, 20));
+          await new Promise((resolve) => setTimeout(resolve, 15));
           runInAction(() => obj.expr++);
         }
 
         await vi.waitFor(() => expect(obj.effect).toBe(obj.expr));
         expect(exprFn).toBeCalledTimes(3); // If it's debounced, it should be 2
         expect(exprFn).nthReturnedWith(1, 0);
-        expect(exprFn).nthReturnedWith(2, 5);
+        expect(exprFn).nthReturnedWith(2, 7);
         expect(effectFn).toBeCalledTimes(2); // If it's debounced, it should be 1
-        expect(effectFn).nthCalledWith(1, 5, 0, expect.anything());
-        expect(effectFn).nthCalledWith(2, 10, 5, expect.anything());
+        expect(effectFn).nthCalledWith(1, 7, 0, expect.anything());
+        expect(effectFn).nthCalledWith(2, 10, 7, expect.anything());
       });
 
       test("scheduler will not be called when the previous scheduler is still running", async () => {
