@@ -1,6 +1,6 @@
 import { action, computed, makeObservable, observable } from "mobx";
 import { v4 as uuidV4 } from "uuid";
-import { KeyPath, Validator, Watcher, StandardNestedFetcher, buildKeyPath, KeyPathSelf } from "@mobx-sentinel/core";
+import { Validator, Watcher, StandardNestedFetcher, buildKeyPath, KeyPathSelf } from "@mobx-sentinel/core";
 import { FormField } from "./field";
 import { FormBinding, FormBindingConstructor, FormBindingFunc, getSafeBindingName } from "./binding";
 import { FormConfig, globalConfig } from "./config";
@@ -18,7 +18,7 @@ export class Form<T> {
   readonly #submission = new Submission();
   readonly #fields = new Map<string, FormField>();
   readonly #bindings = new Map<string, FormBinding>();
-  readonly #nestedFetchers: StandardNestedFetcher<Form<any>>;
+  readonly #nestedFetcher: StandardNestedFetcher<Form<any>>;
   readonly #localConfig = observable.box<Partial<FormConfig>>({});
 
   /** Extension fields for bindings */
@@ -109,7 +109,7 @@ export class Form<T> {
     this.#formKey = args.formKey;
     this.watcher = Watcher.get(args.subject);
     this.validator = Validator.get(args.subject);
-    this.#nestedFetchers = new StandardNestedFetcher(args.subject, (entry) => Form.getSafe(entry.data, this.#formKey));
+    this.#nestedFetcher = new StandardNestedFetcher(args.subject, (entry) => Form.getSafe(entry.data, this.#formKey));
 
     makeObservable(this);
 
@@ -199,13 +199,8 @@ export class Form<T> {
    *
    * Forms are collected via `@nested` annotation.
    */
-  @computed.struct
-  get subForms(): ReadonlyMap<KeyPath, Form<any>> {
-    const result = new Map<KeyPath, Form<any>>();
-    for (const entry of this.#nestedFetchers) {
-      result.set(entry.keyPath, entry.data);
-    }
-    return result;
+  get subForms() {
+    return this.#nestedFetcher.dataMap;
   }
 
   /** Report error states on all fields and sub-forms */
@@ -214,7 +209,7 @@ export class Form<T> {
     for (const field of this.#fields.values()) {
       field.reportError();
     }
-    for (const entry of this.#nestedFetchers) {
+    for (const entry of this.#nestedFetcher) {
       entry.data.reportError();
     }
   }
@@ -231,7 +226,7 @@ export class Form<T> {
     for (const field of this.#fields.values()) {
       field.reset();
     }
-    for (const entry of this.#nestedFetchers) {
+    for (const entry of this.#nestedFetcher) {
       entry.data.reset();
     }
   }

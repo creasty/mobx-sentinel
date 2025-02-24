@@ -1,7 +1,7 @@
 {
   "name": "@mobx-sentinel/form",
   "description": "A TypeScript library for non-intrusive model enhancement in MobX applications. Provides model change detection, validation, and form integration capabilities while maintaining the purity of domain models.",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "author": "creasty <yuki@creasty.com>",
   "license": "MIT",
   "homepage": "https://github.com/creasty/mobx-sentinel",

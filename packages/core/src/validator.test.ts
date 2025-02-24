@@ -167,14 +167,19 @@ describe("Validator", () => {
 
     it("returns the same instance for the same target", () => {
       const target = {};
-      const validator = Validator.get(target);
-      expect(Validator.get(target)).toBe(validator);
+      const validator1 = Validator.get(target);
+      const validator2 = Validator.get(target);
+      expect(validator1).toBe(validator2);
+      expect(validator1.id).toBe(validator2.id);
     });
 
     it("returns different instances for different targets", () => {
       const target1 = {};
       const target2 = {};
-      expect(Validator.get(target1)).not.toBe(Validator.get(target2));
+      const validator1 = Validator.get(target1);
+      const validator2 = Validator.get(target2);
+      expect(validator1).not.toBe(validator2);
+      expect(validator1.id).not.toBe(validator2.id);
     });
   });
 
