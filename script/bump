@@ -1,0 +1,49 @@
+#!/usr/bin/env bash
+#> Usage: ./script bump <version>
+#>
+#> ./script bump 1.2.3
+#> ./script bump dev
+
+set -euo pipefail
+
+do_help() {
+  sed -n -E '/^#>/s/^#>[ ]?//p' < "$0"
+  exit 1
+}
+
+VERSION=
+PREID=
+
+case "${1:-}" in
+  '')
+    do_help
+    ;;
+  "dev")
+    if [ -z "${GITHUB_SHA:-}" ]; then
+      echo "GITHUB_SHA is not set"
+      exit 1
+    else
+      PREID="-dev-${GITHUB_SHA:0:8}"
+    fi
+    ;;
+  *)
+    VERSION="$1"
+    ;;
+esac
+
+for dir in ./packages/*; do
+  if [ -d "$dir" ] && [ -f "$dir/package.json" ]; then
+    tmp="$(mktemp)"
+    cat "$dir/package.json" > "$tmp"
+
+    if [ -n "$VERSION" ]; then
+      jq ".version = \"$VERSION$PREID\"" \
+        "$tmp" > "$dir/package.json"
+    else
+      jq ".version = \"\(.version)$PREID\"" \
+        "$tmp" > "$dir/package.json"
+    fi
+
+    rm "$tmp"
+  fi
+done

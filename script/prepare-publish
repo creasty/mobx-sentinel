@@ -1,0 +1,9 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+for dir in ./packages/*; do
+  if [ -d "$dir" ] && [ -f "$dir/package.json" ]; then
+    cat ./README.md > "$dir/README.md"
+  fi
+done
