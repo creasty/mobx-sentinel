@@ -219,10 +219,14 @@ export class Form<T> {
     }
   }
 
-  /** Reset the form's state */
+  /**
+   * Reset the form's state
+   *
+   * It also resets the watcher but not the validator.
+   */
   @action
   reset() {
-    this.validator.reset();
+    // NOTE: DO NOT reset the validator here.
     this.watcher.reset();
     for (const field of this.#fields.values()) {
       field.reset();

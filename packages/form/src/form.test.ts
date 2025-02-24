@@ -301,13 +301,13 @@ describe("Form", () => {
       expect(spy).toBeCalled();
     });
 
-    it("resets the validator", () => {
+    it("does not reset the validator", () => {
       const model = new SampleModel();
       const form = Form.get(model);
       const spy = vi.spyOn(form.validator, "reset");
 
       form.reset();
-      expect(spy).toBeCalled();
+      expect(spy).not.toBeCalled();
     });
 
     it("resets fields", () => {
