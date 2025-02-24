@@ -1,4 +1,4 @@
-import { action, comparer, computed, makeObservable, observable, reaction, runInAction } from "mobx";
+import { action, comparer, computed, IEqualsComparer, makeObservable, observable, reaction, runInAction } from "mobx";
 import { ValidationError, ValidationErrorMapBuilder } from "./error";
 import { StandardNestedFetcher } from "./nested";
 import {
@@ -34,7 +34,7 @@ export function makeValidatable<T extends object, Expr>(
   target: T,
   expr: () => Expr,
   handler: Validator.AsyncHandler<T, NoInfer<Expr>>,
-  opt?: Validator.HandlerOptions
+  opt?: Validator.HandlerOptions<NoInfer<Expr>>
 ): () => void;
 
 /**
@@ -344,7 +344,7 @@ export class Validator<T> {
   addAsyncHandler<Expr>(
     expr: () => Expr,
     handler: Validator.AsyncHandler<T, NoInfer<Expr>>,
-    opt?: Validator.HandlerOptions
+    opt?: Validator.HandlerOptions<NoInfer<Expr>>
   ) {
     const delayMs = opt?.delayMs ?? Validator.defaultDelayMs;
 
@@ -385,9 +385,9 @@ export class Validator<T> {
 
   #createReaction<Expr>(args: {
     key: symbol;
-    opt?: Validator.HandlerOptions;
+    opt?: Validator.HandlerOptions<NoInfer<Expr>>;
     expr: () => Expr;
-    effect: (expr: Expr) => void;
+    effect: (expr: NoInfer<Expr>) => void;
     dispose?: () => void;
   }) {
     const reactionDelayMs = args.opt?.delayMs ?? Validator.defaultDelayMs;
@@ -463,7 +463,7 @@ export namespace Validator {
    */
   export type InstantHandler<T> = (builder: ValidationErrorMapBuilder<T>) => void;
   /** Handler options */
-  export type HandlerOptions = {
+  export type HandlerOptions<Expr = unknown> = {
     /**
      * Whether to run the handler immediately
      *
@@ -476,5 +476,11 @@ export namespace Validator {
      * @default 100
      */
     delayMs?: number;
+    /**
+     * The equality comparer for the expression.
+     *
+     * Only effective for async handlers.
+     */
+    equals?: IEqualsComparer<Expr>;
   };
 }
