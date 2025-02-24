@@ -236,7 +236,12 @@ export class Validator<T> {
     return this.#nestedFetcher.dataMap;
   }
 
-  /** Reset the validator */
+  /**
+   * Reset the validator
+   *
+   * Use with caution.\
+   * Since validation is reactive, errors won't reappear until you make some changes.
+   */
   @action
   reset() {
     this.#resetJobTimer();
