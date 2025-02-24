@@ -16,21 +16,8 @@ jobs:
 
       - name: Prepare
         run: |
-          for dir in ./packages/*; do
-            if [ -d "$dir" ] && [ -f "$dir/package.json" ]; then
-              # Update version info
-              preid="dev-${GITHUB_SHA:0:8}"
-              tmp="$(mktemp)"
-              cat "$dir/package.json" > "$tmp"
-              jq ".version = \"\(.version)-$preid\"" \
-                "$tmp" > "$dir/package.json"
-              rm "$tmp"
-
-              # Copy README
-              cat ./README.md > "$dir/README.md"
-            fi
-          done
-
+          ./script/bump dev
+          ./script/prepare-publish
       - run: pnpm build
 
       - uses: actions/setup-node@v4
