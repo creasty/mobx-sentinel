@@ -30,7 +30,8 @@
     "build": "tsup"
   },
   "dependencies": {
-    "mobx": "^6.12.3"
+    "mobx": "^6.12.3",
+    "uuid": "^11.0.4"
   },
   "devDependencies": {
     "@types/node": "^22.10.2",

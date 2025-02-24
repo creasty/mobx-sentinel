@@ -24,14 +24,19 @@ describe("Watcher", () => {
 
     it("returns the same instance for the same target", () => {
       const target = {};
-      const watcher = Watcher.get(target);
-      expect(Watcher.get(target)).toBe(watcher);
+      const watcher1 = Watcher.get(target);
+      const watcher2 = Watcher.get(target);
+      expect(watcher1).toBe(watcher2);
+      expect(watcher1.id).toBe(watcher2.id);
     });
 
     it("returns different instances for different targets", () => {
       const target1 = {};
       const target2 = {};
-      expect(Watcher.get(target1)).not.toBe(Watcher.get(target2));
+      const watcher1 = Watcher.get(target1);
+      const watcher2 = Watcher.get(target2);
+      expect(watcher1).not.toBe(watcher2);
+      expect(watcher1.id).not.toBe(watcher2.id);
     });
   });
 
