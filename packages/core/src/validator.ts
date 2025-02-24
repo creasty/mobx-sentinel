@@ -1,4 +1,5 @@
 import { action, comparer, computed, makeObservable, observable, reaction, runInAction } from "mobx";
+import { v4 as uuidV4 } from "uuid";
 import { ValidationError, ValidationErrorMapBuilder } from "./error";
 import { Watcher } from "./watcher";
 import { StandardNestedFetcher } from "./nested";
@@ -35,6 +36,7 @@ export function makeValidatable<T extends object>(
 }
 
 export class Validator<T> {
+  readonly id = uuidV4();
   readonly #errors = observable.map<symbol, ReadonlyKeyPathMultiMap<ValidationError>>([], {
     equals: comparer.structural,
   });
@@ -230,13 +232,8 @@ export class Validator<T> {
   }
 
   /** Nested validators */
-  @computed.struct
   get nested(): ReadonlyMap<KeyPath, Validator<any>> {
-    const result = new Map<KeyPath, Validator<any>>();
-    for (const entry of this.#nestedFetcher) {
-      result.set(entry.keyPath, entry.data);
-    }
-    return result;
+    return this.#nestedFetcher.dataMap;
   }
 
   /** Reset the validator */

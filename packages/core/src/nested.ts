@@ -1,3 +1,4 @@
+import { IComputedValue, computed } from "mobx";
 import { createPropertyLikeAnnotation, getAnnotationProcessor } from "./annotationProcessor";
 import { KeyPath, buildKeyPath } from "./keyPath";
 import { unwrapShallowContents } from "./mobx-utils";
@@ -33,6 +34,7 @@ export function* getNestedAnnotations(target: object): Generator<[key: string | 
 export class StandardNestedFetcher<T extends object> implements Iterable<StandardNestedFetcher.Entry<T>> {
   readonly #transform: (entry: StandardNestedFetcher.Entry<any>) => T | null;
   readonly #fetchers = new Map<KeyPath, () => Generator<StandardNestedFetcher.Entry<T>>>();
+  readonly #dataMap: IComputedValue<ReadonlyMap<KeyPath, T>>;
 
   /**
    * @param target - The target object
@@ -47,6 +49,26 @@ export class StandardNestedFetcher<T extends object> implements Iterable<Standar
       const keyPath = buildKeyPath(key);
       this.#fetchers.set(keyPath, this.#createFetcher(keyPath, getValue));
     }
+
+    this.#dataMap = computed(
+      () => {
+        const result = new Map<KeyPath, T>();
+        for (const entry of this) {
+          result.set(entry.keyPath, entry.data);
+        }
+        return result;
+      },
+      {
+        equals: (a, b) => {
+          if (a.size !== b.size) return false;
+          for (const key of a.keys()) {
+            if (!b.has(key)) return false;
+            if (a.get(key) !== b.get(key)) return false;
+          }
+          return true;
+        },
+      }
+    );
   }
 
   #createFetcher(key: KeyPath, getValue: () => any) {
@@ -80,6 +102,11 @@ export class StandardNestedFetcher<T extends object> implements Iterable<Standar
     for (const entry of fetcher()) {
       yield entry;
     }
+  }
+
+  /** Map of key paths to data */
+  get dataMap() {
+    return this.#dataMap.get();
   }
 }
 

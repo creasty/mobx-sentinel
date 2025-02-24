@@ -50,6 +50,9 @@ importers:
       mobx:
         specifier: ^6.12.3
         version: 6.12.3
+      uuid:
+        specifier: ^11.0.4
+        version: 11.0.4
     devDependencies:
       '@types/node':
         specifier: ^22.10.2
