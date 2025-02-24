@@ -185,13 +185,8 @@ export class Watcher {
   }
 
   /** Nested watchers */
-  @computed.struct
-  get nested(): ReadonlyMap<KeyPath, Watcher> {
-    const result = new Map<KeyPath, Watcher>();
-    for (const entry of this.#nestedFetcher) {
-      result.set(entry.keyPath, entry.data);
-    }
-    return result;
+  get nested() {
+    return this.#nestedFetcher.dataMap;
   }
 
   /** Reset the changed keys */

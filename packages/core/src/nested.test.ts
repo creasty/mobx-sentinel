@@ -196,7 +196,7 @@ describe("StandardNestedFetcher", () => {
     });
   });
 
-  describe("getForKey", () => {
+  describe("#getForKey", () => {
     it("returns nested entries for a given key", () => {
       const sample = new Sample();
       const fetcher = new StandardNestedFetcher(sample, (entry) => entry.data);
@@ -205,7 +205,7 @@ describe("StandardNestedFetcher", () => {
     });
   });
 
-  describe("dataMap", () => {
+  describe("#dataMap", () => {
     let idCounter = 0;
     const cache = new WeakMap<object, { id: number }>();
     const createData = (object: object) => {
@@ -223,7 +223,7 @@ describe("StandardNestedFetcher", () => {
       return data;
     };
 
-    it("is a computed property with a shallow equality", async () => {
+    it("is a computed property with an identity equality of its entries", async () => {
       const sample = new Sample();
       const fetcher = new StandardNestedFetcher(sample, (entry) => {
         if (entry.key === "otherArray1" && typeof entry.data === "object") {
@@ -232,11 +232,22 @@ describe("StandardNestedFetcher", () => {
         return null;
       });
 
-      autorun(() => fetcher.dataMap);
+      let observeCount = 0;
+      autorun(() => {
+        void fetcher.dataMap;
+        observeCount++;
+      });
 
       const data1 = fetcher.dataMap.get("otherArray1.0" as KeyPath)!;
       expect(Object.keys(data1)).toEqual([]);
       expect(data1.id).toEqual(1);
+      expect(observeCount).toBe(1);
+
+      runInAction(() => {
+        const last = sample.otherArray1.pop();
+        sample.otherArray1.push(last!);
+      });
+      expect(observeCount).toBe(1);
 
       runInAction(() => {
         sample.otherArray1[0] = new Other();
@@ -244,6 +255,7 @@ describe("StandardNestedFetcher", () => {
       const data2 = fetcher.dataMap.get("otherArray1.0" as KeyPath)!;
       expect(Object.keys(data2)).toEqual([]);
       expect(data2.id).toEqual(2);
+      expect(observeCount).toBe(2);
     });
   });
 });

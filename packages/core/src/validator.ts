@@ -230,13 +230,8 @@ export class Validator<T> {
   }
 
   /** Nested validators */
-  @computed.struct
   get nested(): ReadonlyMap<KeyPath, Validator<any>> {
-    const result = new Map<KeyPath, Validator<any>>();
-    for (const entry of this.#nestedFetcher) {
-      result.set(entry.keyPath, entry.data);
-    }
-    return result;
+    return this.#nestedFetcher.dataMap;
   }
 
   /** Reset the validator */
