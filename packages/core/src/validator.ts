@@ -225,7 +225,7 @@ export class Validator<T> {
       }
       if (prefixMatch) {
         for (const [keyPath, validator] of this.nested) {
-          for (const [relativeKeyPath, error] of validator.#findErrors(KeyPathSelf, true, false)) {
+          for (const [relativeKeyPath, error] of validator.#findErrors(KeyPathSelf, true, exact)) {
             yield [buildKeyPath(keyPath, relativeKeyPath), error];
           }
         }
@@ -234,7 +234,11 @@ export class Validator<T> {
           const isSelf = entry.key === KeyPathSelf;
           const isDirectChild = entry.keyPath === entry.key; // Ignores entries with subKey (like arrays)
           if (isSelf || isDirectChild) {
-            for (const [relativeKeyPath, error] of entry.data.#findErrors(KeyPathSelf, false, !isSelf)) {
+            for (const [relativeKeyPath, error] of entry.data.#findErrors(
+              KeyPathSelf,
+              false,
+              !isSelf || !isDirectChild
+            )) {
               yield [buildKeyPath(entry.keyPath, relativeKeyPath), error];
             }
           }
@@ -254,7 +258,7 @@ export class Validator<T> {
               ? KeyPathSelf
               : getRelativeKeyPath(searchKeyPath, entry.keyPath);
           if (!childKeyPath) continue;
-          for (const [relativeKeyPath, error] of entry.data.#findErrors(childKeyPath, prefixMatch, false)) {
+          for (const [relativeKeyPath, error] of entry.data.#findErrors(childKeyPath, prefixMatch, exact)) {
             yield [buildKeyPath(entry.keyPath, relativeKeyPath), error];
           }
           break ancestorLoop;
