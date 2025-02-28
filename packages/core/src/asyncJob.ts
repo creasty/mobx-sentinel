@@ -1,6 +1,6 @@
 import { action, makeObservable, observable, runInAction } from "mobx";
 
-const noPayload = Symbol();
+const nullPayload = Symbol();
 
 export class AsyncJob<Payload> {
   readonly scheduledRunDelayMs: number;
@@ -9,7 +9,7 @@ export class AsyncJob<Payload> {
   #nextJobRequested = false;
   #jobTimerId: number | null = null;
   #abortCtrl: AbortController | null = null;
-  #payload: Payload | typeof noPayload = noPayload;
+  #payload: Payload | typeof nullPayload = nullPayload;
 
   constructor(args: { handler: AsyncJob.Handler<Payload>; scheduledRunDelayMs: number }) {
     this.#handler = args.handler;
@@ -88,9 +88,9 @@ export class AsyncJob<Payload> {
     this.#abortCtrl = abortCtrl;
 
     const payload = this.#payload;
-    this.#payload = noPayload;
+    this.#payload = nullPayload;
 
-    if (payload !== noPayload) {
+    if (payload !== nullPayload) {
       runInAction(() => {
         this.#state.set("running");
       });

@@ -15,14 +15,12 @@ export class ValidationError extends Error {
   }
 }
 
-const buildToken = Symbol("validationErrorMapBuilder.build");
-
 export class ValidationErrorMapBuilder<T> {
   readonly #map = new KeyPathMultiMap<ValidationError>();
 
   /** @internal @ignore */
   static build(instance: ValidationErrorMapBuilder<any>) {
-    return instance[buildToken]();
+    return instance.#build();
   }
 
   /**
@@ -41,8 +39,7 @@ export class ValidationErrorMapBuilder<T> {
     return this.#map.size > 0;
   }
 
-  /** @internal @ignore */
-  [buildToken]() {
+  #build() {
     return this.#map.toImmutable();
   }
 }
