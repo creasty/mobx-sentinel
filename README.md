@@ -71,65 +71,6 @@ This library aims to solve these problems through a model-centric design that pr
 
 ## Packages
 
-<details><summary>Architecture</summary>
-
-- `┈┈` Dashed lines indicate non-reactive, unidirectional relationships.
-- `──` Solid lines indicate reactive, unidirectional relationships.
-- `━━` Heavy lines indicate reactive, bidirectional relationships.
-
-**Key points:**
-
-- No module directly updates your model.
-- Core package can be used as a standalone library.
-- Watcher and Validator observe your model, and Form and FormField utilize them.
-- Form has no reactive dependencies on FormField/FormBinding.
-  - State synchronization is only broadcast from Form to FormField.
-
-```mermaid
-graph TB
-
-%%subgraph external
-%%  Object((Object))
-%%end
-
-subgraph core package
-  nested(["@nested"])
-  StandardNestedFetcher -.-> |retrieves| nested
-  %%StandardNestedFetcher -.-> |reads| Object
-
-  watch(["@watch, @watch.ref, @unwatch"])
-  Watcher -.-> |retrieves| watch
-  Watcher -.-> |uses| StandardNestedFetcher
-  %%Watcher --> |observes| Object
-
-  Validator
-  Validator --> |delegates| AsyncJob["AsyncJob<br>(internal)"]
-  Validator -.-> |uses| StandardNestedFetcher
-  %%Validator --> |observes| Object
-
-  watch & Watcher & nested & StandardNestedFetcher -.-> |uses| AnnotationProcessor["AnnotationProcessor<br>(internal)"]
-end
-
-subgraph form package
-  Form -.-> |manages/updates| FormField
-  Form -.-> |manages| FormBinding["&lt;&lt;interface&gt;&gt;<br>FormBinding"]
-  %%FormBinding -.-> |references| Form & FormField
-  Form ==> Watcher
-  FormField & Form  ==> Validator
-  Form -.-> |uses| StandardNestedFetcher
-  Form --> |delegates| Submission["Submission<br>(internal)"]
-end
-
-subgraph react package
-  Hooks --> |updates| Form
-
-  Bindings -.-> |implements| FormBinding
-  Bindings ==> Form & FormField
-end
-```
-
-</details>
-
 ### `core` — Core functionality like Watcher and Validator
 
 <pre><code>npm install --save <b>@mobx-sentinel/core</b></code></pre>
@@ -138,12 +79,15 @@ end
 [![npm size](https://img.shields.io/bundlephobia/min/@mobx-sentinel/core)](https://bundlephobia.com/package/@mobx-sentinel/core)
 ![target: nodejs, browser](https://img.shields.io/badge/nodejs%2C%20browser-_?label=target&color=007ec6)
 
-- `StandardNestedFetcher` provides a simple API for retrieving nested models.
-  - `@nested` annotation is processed by `StandardNestedFetcher` to track nested models.
-  - `StandardNestedFetcher` allows other modules (even your own code) to integrate nested models into their logic.
+- `@nested` annotation for tracking nested models.
+  - `@nested` annotation supports objects, boxed observables, arrays, sets, and maps.
+  - `@nested.hoist` annotation can be used to hoist sub-fields in a nested model to the parent model.
+  - `StandardNestedFetcher` (low-level API) provides a simple but powerful mechanism for tracking and retrieving nested models. Allowing other modules (even your own code) to integrate nested models into their logic without hassle.
 - `Watcher` detects changes in models automatically.
   - All `@observable` and `@computed` annotations are automatically watched by default.
-  - `@watch` annotation can be used where `@observable` is not applicable, e.g. on private fields: `@watch readonly #private = observable.box(0)`
+  - `@watch` annotation can be used where `@observable` is not applicable.<br>
+    e.g., on private fields: `@watch #private = observable.box(0)`
+  - `@watch.ref` annotation can be used to watch values with identity comparison, in contrast to the default behavior which uses shallow comparison.
   - `@unwatch` annotation and `unwatch(() => ...)` function disable change detection when you need to modify values silently.
 - `Validator` and `makeValidatable` provides reactive model validation.
   - Composable from multiple sources.
@@ -200,6 +144,65 @@ end
 - Rigorous typing
   - Maximizes use of TypeScript's type system for error detection and code completion
   - Improves development productivity
+
+## Architecture
+
+<details>
+
+- `┈┈` Dashed lines indicate non-reactive, unidirectional relationships.
+- `──` Solid lines indicate reactive, unidirectional relationships.
+- `━━` Heavy lines indicate reactive, bidirectional relationships.
+
+Key points:
+
+- Watcher and Validator observe your model, and Form and FormField utilize them.
+- Form has no reactive dependencies on FormField/FormBinding.
+- State synchronization is only broadcast from Form to FormField (and Watcher).
+
+```mermaid
+graph TB
+
+%%subgraph external
+%%  Object((Object))
+%%end
+
+subgraph core package
+  nested(["@nested"])
+  StandardNestedFetcher -.-> |retrieves| nested
+  %%StandardNestedFetcher -.-> |reads| Object
+
+  watch(["@watch, @watch.ref, @unwatch"])
+  Watcher -.-> |retrieves| watch
+  Watcher -.-> |uses| StandardNestedFetcher
+  %%Watcher --> |observes| Object
+
+  Validator
+  Validator --> |delegates| AsyncJob["AsyncJob<br>(internal)"]
+  Validator -.-> |uses| StandardNestedFetcher
+  %%Validator --> |observes| Object
+
+  watch & Watcher & nested & StandardNestedFetcher -.-> |uses| AnnotationProcessor["AnnotationProcessor<br>(internal)"]
+end
+
+subgraph form package
+  Form -.-> |manages/updates| FormField
+  Form -.-> |manages| FormBinding["&lt;&lt;interface&gt;&gt;<br>FormBinding"]
+  %%FormBinding -.-> |references| Form & FormField
+  Form ==> Watcher
+  FormField & Form  ==> Validator
+  Form -.-> |uses| StandardNestedFetcher
+  Form --> |delegates| Submission["Submission<br>(internal)"]
+end
+
+subgraph react package
+  Hooks --> |updates| Form
+
+  Bindings -.-> |implements| FormBinding
+  Bindings ==> Form & FormField
+end
+```
+
+</details>
 
 ---
 
