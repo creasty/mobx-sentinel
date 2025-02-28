@@ -74,7 +74,7 @@ describe("SubmitButtonBinding", () => {
   });
 });
 
-suite("bindSubmitButton", () => {
+describe("bindSubmitButton", () => {
   const setupEnv = () => {
     const model = new SampleModel();
 

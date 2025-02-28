@@ -169,7 +169,7 @@ describe("RadioButtonBinding", () => {
   });
 });
 
-suite("bindRadioButton", () => {
+describe("bindRadioButton", () => {
   test("works with a required field", async () => {
     const env = setupEnv("enum");
 

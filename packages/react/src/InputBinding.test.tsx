@@ -201,7 +201,7 @@ describe("InputBinding", () => {
   });
 });
 
-suite("bindInput", () => {
+describe("bindInput", () => {
   const setupEnv = (inputLabel: string) => {
     const model = new SampleModel();
 

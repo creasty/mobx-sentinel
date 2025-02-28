@@ -642,7 +642,7 @@ describe("Form", () => {
   });
 });
 
-suite("Sub-forms", () => {
+describe("Sub-forms", () => {
   class SampleModel {
     @observable field = true;
 
@@ -694,7 +694,7 @@ suite("Sub-forms", () => {
     };
   };
 
-  suite("Dirty check", () => {
+  describe("Dirty check", () => {
     test("when a sub-form becomes dirty, the parent form also becomes dirty", () => {
       const { form, sampleForm } = setupEnv();
 
@@ -720,7 +720,7 @@ suite("Sub-forms", () => {
     });
   });
 
-  suite("Reporting errors", () => {
+  describe("Reporting errors", () => {
     test("when a new field is added after reportError is called, the error on the new field is not reported", async () => {
       const { form } = setupEnv();
 

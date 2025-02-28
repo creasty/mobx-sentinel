@@ -96,7 +96,7 @@ describe("LabelBinding", () => {
   });
 });
 
-suite("bindLabel", () => {
+describe("bindLabel", () => {
   const setupEnv = () => {
     const model = new SampleModel();
 
