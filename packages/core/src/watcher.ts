@@ -168,13 +168,21 @@ export class Watcher {
     return this.changedTick > 0n || this.#assumeChanged.get();
   }
 
-  /** The keys that have changed */
+  /**
+   * The keys that have changed
+   *
+   * Keys of nested objects are NOT included.
+   */
   @computed.struct
   get changedKeys(): ReadonlySet<KeyPath> {
     return new Set(this.#changedKeys);
   }
 
-  /** The key paths that have changed, including nested objects */
+  /**
+   * The key paths that have changed
+   *
+   * Keys of nested objects are included.
+   */
   @computed.struct
   get changedKeyPaths(): ReadonlySet<KeyPath> {
     const result = new Set(this.#changedKeys);

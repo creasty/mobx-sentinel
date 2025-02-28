@@ -129,7 +129,11 @@ export class Validator<T> {
     return this.invalidKeys.size;
   }
 
-  /** The number of invalid keys */
+  /**
+   * The keys that have errors
+   *
+   * Keys of nested objects are NOT included.
+   */
   @computed.struct
   get invalidKeys(): ReadonlySet<KeyPath> {
     const seenKeys = new Set<KeyPath>();
@@ -147,7 +151,11 @@ export class Validator<T> {
     return this.invalidKeyPaths.size;
   }
 
-  /** The number of invalid key paths */
+  /**
+   * The key paths that have errors
+   *
+   * Keys of nested objects are included.
+   */
   @computed.struct
   get invalidKeyPaths(): ReadonlySet<KeyPath> {
     const result = new Set<KeyPath>();
