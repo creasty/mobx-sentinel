@@ -73,10 +73,9 @@ describe("getNestedAnnotations", () => {
       map.set(key, { getValue, hoist });
     }
 
-    expect(new Set(map.keys())).toEqual(
-      new Set([
-        symbolKey1,
-
+    expect(new Set(map.keys())).toMatchInlineSnapshot(`
+      Set {
+        Symbol(key1),
         "number1",
         "object1",
         "other1",
@@ -89,7 +88,6 @@ describe("getNestedAnnotations", () => {
         "map1",
         "map2",
         "otherMap1",
-
         "boxedNumber1",
         "boxedObject1",
         "boxedOther1",
@@ -102,7 +100,6 @@ describe("getNestedAnnotations", () => {
         "boxedMap1",
         "boxedMap2",
         "boxedOtherMap1",
-
         "refObject1",
         "refOther1",
         "refArray1",
@@ -113,10 +110,9 @@ describe("getNestedAnnotations", () => {
         "refMap1",
         "refMap2",
         "refOtherMap1",
-
         "hoist1",
-      ])
-    );
+      }
+    `);
     expect(map.size).toBe(36);
 
     for (const [key, { getValue, hoist }] of map) {
@@ -177,8 +173,6 @@ describe("StandardNestedFetcher", () => {
         map.set(entry.keyPath, entry.data);
       }
 
-      expect(map.size).toBe(37);
-
       expect(map.get("number1" as KeyPath)).toEqual(sample.number1);
       expect(map.get("object1" as KeyPath)).toEqual(sample.object1);
       expect(map.get("other1" as KeyPath)).toEqual(sample.other1);
@@ -217,6 +211,8 @@ describe("StandardNestedFetcher", () => {
       expect(map.get("refOtherMap1.key1" as KeyPath)).toEqual(sample.refOtherMap1.get("key1"));
 
       expect(map.get("0" as KeyPath)).toEqual(sample.hoist1[0]); // "hoist1.0" lifted to "0"
+
+      expect(map.size).toBe(37);
     });
 
     it("ignores null data", () => {
@@ -228,24 +224,22 @@ describe("StandardNestedFetcher", () => {
         map.set(entry.keyPath, entry.data);
       }
 
-      expect(new Set(map.keys())).toEqual(
-        new Set([
+      expect(new Set(map.keys())).toMatchInlineSnapshot(`
+        Set {
           "other1",
           "otherArray1.0",
-          "otherMap1.key1",
           "otherSet1.0",
-
+          "otherMap1.key1",
           "boxedOther1",
           "boxedOtherArray1.0",
-          "boxedOtherMap1.key1",
           "boxedOtherSet1.0",
-
+          "boxedOtherMap1.key1",
           "refOther1",
           "refOtherArray1.0",
-          "refOtherMap1.key1",
           "refOtherSet1.0",
-        ])
-      );
+          "refOtherMap1.key1",
+        }
+      `);
       expect(map.size).toBe(12);
     });
   });
@@ -255,7 +249,13 @@ describe("StandardNestedFetcher", () => {
       const sample = new Sample();
       const fetcher = new StandardNestedFetcher(sample, (entry) => entry.data);
       const entries = fetcher.getForKey("other1" as KeyPath);
-      expect(Array.from(entries)).toEqual([{ key: "other1", keyPath: "other1", data: sample.other1 }]);
+      expect(Array.from(entries)).toEqual([
+        {
+          key: "other1",
+          keyPath: "other1",
+          data: sample.other1,
+        },
+      ]);
     });
   });
 
