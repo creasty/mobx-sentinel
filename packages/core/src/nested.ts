@@ -98,7 +98,7 @@ export class StandardNestedFetcher<T extends object> implements Iterable<Standar
   #createFetcher(key: KeyPath, getValue: () => any) {
     // eslint-disable-next-line @typescript-eslint/no-this-alias
     const that = this;
-    return function* () {
+    return function* (): Generator<StandardNestedFetcher.Entry<T>> {
       for (const [subKey, value] of unwrapShallowContents(getValue())) {
         if (typeof subKey === "symbol") continue; // symbol keys are not supported
         const keyPath = buildKeyPath(key, subKey);

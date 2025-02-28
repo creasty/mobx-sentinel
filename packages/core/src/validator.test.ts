@@ -459,6 +459,7 @@ describe("Validator", () => {
             ],
             "child" => [
               "invalid at parent.child",
+              "invalid self at parent.child",
             ],
             "children" => [
               "invalid at parent.children",
@@ -484,6 +485,7 @@ describe("Validator", () => {
             ],
             "grandchild" => [
               "invalid at parent.child.grandchild",
+              "invalid self at parent.child.grandchild",
             ],
             "grandchildren" => [
               "invalid at parent.child.grandchildren",
@@ -654,6 +656,7 @@ describe("Validator", () => {
             ],
             "child.grandchild" => [
               "invalid at parent.child.grandchild",
+              "invalid self at parent.child.grandchild",
             ],
             "child.grandchildren" => [
               "invalid at parent.child.grandchildren",
