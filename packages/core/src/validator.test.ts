@@ -389,46 +389,46 @@ describe("Validator", () => {
 
       if (!opt?.clean) {
         validators["parent"].updateErrors(Symbol(), (builder) => {
-          // builder.invalidateSelf("invalid self at parent");
+          builder.invalidateSelf("invalid self at parent");
           builder.invalidate("a", "invalid at parent.a");
           builder.invalidate("b", "invalid at parent.b");
           builder.invalidate("child", "invalid at parent.child");
           builder.invalidate("children", "invalid at parent.children");
         });
         validators["parent.hoist"].updateErrors(Symbol(), (builder) => {
-          // builder.invalidateSelf("invalid self at parent.(hoist)");
+          builder.invalidateSelf("invalid self at parent.(hoist)");
           builder.invalidate("aa", "invalid at parent.(hoist).aa");
           builder.invalidate("bb", "invalid at parent.(hoist).bb");
         });
         validators["parent.child"].updateErrors(Symbol(), (builder) => {
-          // builder.invalidateSelf("invalid self at parent.child");
+          builder.invalidateSelf("invalid self at parent.child");
           builder.invalidate("aa", "invalid at parent.child.aa");
           builder.invalidate("bb", "invalid at parent.child.bb");
           builder.invalidate("grandchild", "invalid at parent.child.grandchild");
           builder.invalidate("grandchildren", "invalid at parent.child.grandchildren");
         });
         validators["parent.child.arrayHoist.0"].updateErrors(Symbol(), (builder) => {
-          // builder.invalidateSelf("invalid self at parent.child.(arrayHoist).0");
+          builder.invalidateSelf("invalid self at parent.child.(arrayHoist).0");
           builder.invalidate("aaa", "invalid at parent.child.(arrayHoist).0.aaa");
           builder.invalidate("bbb", "invalid at parent.child.(arrayHoist).0.bbb");
         });
         validators["parent.child.grandchild"].updateErrors(Symbol(), (builder) => {
-          // builder.invalidateSelf("invalid self at parent.child.grandchild");
+          builder.invalidateSelf("invalid self at parent.child.grandchild");
           builder.invalidate("aaa", "invalid at parent.child.grandchild.aaa");
           builder.invalidate("bbb", "invalid at parent.child.grandchild.bbb");
         });
         validators["parent.children.0"].updateErrors(Symbol(), (builder) => {
-          // builder.invalidateSelf("invalid self at parent.children.0");
+          builder.invalidateSelf("invalid self at parent.children.0");
           builder.invalidate("aa", "invalid at parent.children.0.aa");
           builder.invalidate("bb", "invalid at parent.children.0.bb");
         });
         validators["parent.children.0.grandchildren.0"].updateErrors(Symbol(), (builder) => {
-          // builder.invalidateSelf("invalid self at parent.children.0.grandchildren.0");
+          builder.invalidateSelf("invalid self at parent.children.0.grandchildren.0");
           builder.invalidate("aaa", "invalid at parent.children.0.grandchildren.0.aaa");
           builder.invalidate("bbb", "invalid at parent.children.0.grandchildren.0.bbb");
         });
         validators["parent.child.grandchildren.0"].updateErrors(Symbol(), (builder) => {
-          // builder.invalidateSelf("invalid self at parent.child.grandchildren.0");
+          builder.invalidateSelf("invalid self at parent.child.grandchildren.0");
           builder.invalidate("aaa", "invalid at parent.child.grandchildren.0.aaa");
           builder.invalidate("bbb", "invalid at parent.child.grandchildren.0.bbb");
         });
@@ -447,6 +447,10 @@ describe("Validator", () => {
         const env = setupEnv();
         expect(buildErrorMap(env["parent"].findErrors(KeyPathSelf))).toMatchInlineSnapshot(`
           Map {
+            Symbol(self) => [
+              "invalid self at parent",
+              "invalid self at parent.(hoist)",
+            ],
             "a" => [
               "invalid at parent.a",
             ],
@@ -469,6 +473,9 @@ describe("Validator", () => {
         `);
         expect(buildErrorMap(env["parent.child"].findErrors(KeyPathSelf))).toMatchInlineSnapshot(`
           Map {
+            Symbol(self) => [
+              "invalid self at parent.child",
+            ],
             "aa" => [
               "invalid at parent.child.aa",
             ],
@@ -480,6 +487,9 @@ describe("Validator", () => {
             ],
             "grandchildren" => [
               "invalid at parent.child.grandchildren",
+            ],
+            "0" => [
+              "invalid self at parent.child.(arrayHoist).0",
             ],
             "0.aaa" => [
               "invalid at parent.child.(arrayHoist).0.aaa",
@@ -495,6 +505,10 @@ describe("Validator", () => {
         const env = setupEnv();
         expect(buildErrorMap(env["parent"].findErrors(KeyPathSelf, true))).toMatchInlineSnapshot(`
           Map {
+            Symbol(self) => [
+              "invalid self at parent",
+              "invalid self at parent.(hoist)",
+            ],
             "a" => [
               "invalid at parent.a",
             ],
@@ -503,6 +517,7 @@ describe("Validator", () => {
             ],
             "child" => [
               "invalid at parent.child",
+              "invalid self at parent.child",
             ],
             "children" => [
               "invalid at parent.children",
@@ -521,9 +536,13 @@ describe("Validator", () => {
             ],
             "child.grandchild" => [
               "invalid at parent.child.grandchild",
+              "invalid self at parent.child.grandchild",
             ],
             "child.grandchildren" => [
               "invalid at parent.child.grandchildren",
+            ],
+            "child.0" => [
+              "invalid self at parent.child.(arrayHoist).0",
             ],
             "child.0.aaa" => [
               "invalid at parent.child.(arrayHoist).0.aaa",
@@ -537,17 +556,26 @@ describe("Validator", () => {
             "child.grandchild.bbb" => [
               "invalid at parent.child.grandchild.bbb",
             ],
+            "child.grandchildren.0" => [
+              "invalid self at parent.child.grandchildren.0",
+            ],
             "child.grandchildren.0.aaa" => [
               "invalid at parent.child.grandchildren.0.aaa",
             ],
             "child.grandchildren.0.bbb" => [
               "invalid at parent.child.grandchildren.0.bbb",
             ],
+            "children.0" => [
+              "invalid self at parent.children.0",
+            ],
             "children.0.aa" => [
               "invalid at parent.children.0.aa",
             ],
             "children.0.bb" => [
               "invalid at parent.children.0.bb",
+            ],
+            "children.0.grandchildren.0" => [
+              "invalid self at parent.children.0.grandchildren.0",
             ],
             "children.0.grandchildren.0.aaa" => [
               "invalid at parent.children.0.grandchildren.0.aaa",
@@ -559,6 +587,9 @@ describe("Validator", () => {
         `);
         expect(buildErrorMap(env["parent.child"].findErrors(KeyPathSelf, true))).toMatchInlineSnapshot(`
           Map {
+            Symbol(self) => [
+              "invalid self at parent.child",
+            ],
             "aa" => [
               "invalid at parent.child.aa",
             ],
@@ -567,9 +598,13 @@ describe("Validator", () => {
             ],
             "grandchild" => [
               "invalid at parent.child.grandchild",
+              "invalid self at parent.child.grandchild",
             ],
             "grandchildren" => [
               "invalid at parent.child.grandchildren",
+            ],
+            "0" => [
+              "invalid self at parent.child.(arrayHoist).0",
             ],
             "0.aaa" => [
               "invalid at parent.child.(arrayHoist).0.aaa",
@@ -582,6 +617,9 @@ describe("Validator", () => {
             ],
             "grandchild.bbb" => [
               "invalid at parent.child.grandchild.bbb",
+            ],
+            "grandchildren.0" => [
+              "invalid self at parent.child.grandchildren.0",
             ],
             "grandchildren.0.aaa" => [
               "invalid at parent.child.grandchildren.0.aaa",
@@ -606,6 +644,7 @@ describe("Validator", () => {
           Map {
             "child" => [
               "invalid at parent.child",
+              "invalid self at parent.child",
             ],
             "child.aa" => [
               "invalid at parent.child.aa",
@@ -618,6 +657,9 @@ describe("Validator", () => {
             ],
             "child.grandchildren" => [
               "invalid at parent.child.grandchildren",
+            ],
+            "child.0" => [
+              "invalid self at parent.child.(arrayHoist).0",
             ],
             "child.0.aaa" => [
               "invalid at parent.child.(arrayHoist).0.aaa",
@@ -646,6 +688,9 @@ describe("Validator", () => {
 
         expect(buildErrorMap(env["parent"].findErrors("child.grandchildren.0" as KeyPath))).toMatchInlineSnapshot(`
           Map {
+            "child.grandchildren.0" => [
+              "invalid self at parent.child.grandchildren.0",
+            ],
             "child.grandchildren.0.aaa" => [
               "invalid at parent.child.grandchildren.0.aaa",
             ],
@@ -662,6 +707,7 @@ describe("Validator", () => {
           Map {
             "child" => [
               "invalid at parent.child",
+              "invalid self at parent.child",
             ],
             "child.aa" => [
               "invalid at parent.child.aa",
@@ -671,9 +717,13 @@ describe("Validator", () => {
             ],
             "child.grandchild" => [
               "invalid at parent.child.grandchild",
+              "invalid self at parent.child.grandchild",
             ],
             "child.grandchildren" => [
               "invalid at parent.child.grandchildren",
+            ],
+            "child.0" => [
+              "invalid self at parent.child.(arrayHoist).0",
             ],
             "child.0.aaa" => [
               "invalid at parent.child.(arrayHoist).0.aaa",
@@ -686,6 +736,9 @@ describe("Validator", () => {
             ],
             "child.grandchild.bbb" => [
               "invalid at parent.child.grandchild.bbb",
+            ],
+            "child.grandchildren.0" => [
+              "invalid self at parent.child.grandchildren.0",
             ],
             "child.grandchildren.0.aaa" => [
               "invalid at parent.child.grandchildren.0.aaa",
@@ -708,6 +761,9 @@ describe("Validator", () => {
           Map {
             "child.grandchildren" => [
               "invalid at parent.child.grandchildren",
+            ],
+            "child.grandchildren.0" => [
+              "invalid self at parent.child.grandchildren.0",
             ],
             "child.grandchildren.0.aaa" => [
               "invalid at parent.child.grandchildren.0.aaa",
