@@ -493,12 +493,6 @@ describe("Validator", () => {
             "0" => [
               "invalid self at parent.child.(arrayHoist).0",
             ],
-            "0.aaa" => [
-              "invalid at parent.child.(arrayHoist).0.aaa",
-            ],
-            "0.bbb" => [
-              "invalid at parent.child.(arrayHoist).0.bbb",
-            ],
           }
         `);
       });
@@ -663,12 +657,6 @@ describe("Validator", () => {
             ],
             "child.0" => [
               "invalid self at parent.child.(arrayHoist).0",
-            ],
-            "child.0.aaa" => [
-              "invalid at parent.child.(arrayHoist).0.aaa",
-            ],
-            "child.0.bbb" => [
-              "invalid at parent.child.(arrayHoist).0.bbb",
             ],
           }
         `);
