@@ -388,41 +388,49 @@ describe("Validator", () => {
       };
 
       if (!opt?.clean) {
-        validators.parent.updateErrors(Symbol(), (builder) => {
-          builder.invalidate("a", "invalid at a");
-          builder.invalidate("b", "invalid at b");
-          builder.invalidate("child", "invalid at child");
-          builder.invalidate("children", "invalid at children");
+        validators["parent"].updateErrors(Symbol(), (builder) => {
+          // builder.invalidateSelf("invalid self at parent");
+          builder.invalidate("a", "invalid at parent.a");
+          builder.invalidate("b", "invalid at parent.b");
+          builder.invalidate("child", "invalid at parent.child");
+          builder.invalidate("children", "invalid at parent.children");
         });
         validators["parent.hoist"].updateErrors(Symbol(), (builder) => {
-          builder.invalidate("aa", "invalid at (hoist).aa");
-          builder.invalidate("bb", "invalid at (hoist).bb");
+          // builder.invalidateSelf("invalid self at parent.(hoist)");
+          builder.invalidate("aa", "invalid at parent.(hoist).aa");
+          builder.invalidate("bb", "invalid at parent.(hoist).bb");
         });
         validators["parent.child"].updateErrors(Symbol(), (builder) => {
-          builder.invalidate("aa", "invalid at child.aa");
-          builder.invalidate("bb", "invalid at child.bb");
-          builder.invalidate("grandchild", "invalid at child.grandchild");
-          builder.invalidate("grandchildren", "invalid at child.grandchildren");
+          // builder.invalidateSelf("invalid self at parent.child");
+          builder.invalidate("aa", "invalid at parent.child.aa");
+          builder.invalidate("bb", "invalid at parent.child.bb");
+          builder.invalidate("grandchild", "invalid at parent.child.grandchild");
+          builder.invalidate("grandchildren", "invalid at parent.child.grandchildren");
         });
         validators["parent.child.arrayHoist.0"].updateErrors(Symbol(), (builder) => {
-          builder.invalidate("aaa", "invalid at child.(arrayHoist).0.aaa");
-          builder.invalidate("bbb", "invalid at child.(arrayHoist).0.bbb");
+          // builder.invalidateSelf("invalid self at parent.child.(arrayHoist).0");
+          builder.invalidate("aaa", "invalid at parent.child.(arrayHoist).0.aaa");
+          builder.invalidate("bbb", "invalid at parent.child.(arrayHoist).0.bbb");
         });
         validators["parent.child.grandchild"].updateErrors(Symbol(), (builder) => {
-          builder.invalidate("aaa", "invalid at child.grandchild.aaa");
-          builder.invalidate("bbb", "invalid at child.grandchild.bbb");
+          // builder.invalidateSelf("invalid self at parent.child.grandchild");
+          builder.invalidate("aaa", "invalid at parent.child.grandchild.aaa");
+          builder.invalidate("bbb", "invalid at parent.child.grandchild.bbb");
         });
         validators["parent.children.0"].updateErrors(Symbol(), (builder) => {
-          builder.invalidate("aa", "invalid at children.0.aa");
-          builder.invalidate("bb", "invalid at children.0.bb");
+          // builder.invalidateSelf("invalid self at parent.children.0");
+          builder.invalidate("aa", "invalid at parent.children.0.aa");
+          builder.invalidate("bb", "invalid at parent.children.0.bb");
         });
         validators["parent.children.0.grandchildren.0"].updateErrors(Symbol(), (builder) => {
-          builder.invalidate("aaa", "invalid at children.0.grandchildren.0.aaa");
-          builder.invalidate("bbb", "invalid at children.0.grandchildren.0.bbb");
+          // builder.invalidateSelf("invalid self at parent.children.0.grandchildren.0");
+          builder.invalidate("aaa", "invalid at parent.children.0.grandchildren.0.aaa");
+          builder.invalidate("bbb", "invalid at parent.children.0.grandchildren.0.bbb");
         });
         validators["parent.child.grandchildren.0"].updateErrors(Symbol(), (builder) => {
-          builder.invalidate("aaa", "invalid at child.grandchildren.0.aaa");
-          builder.invalidate("bbb", "invalid at child.grandchildren.0.bbb");
+          // builder.invalidateSelf("invalid self at parent.child.grandchildren.0");
+          builder.invalidate("aaa", "invalid at parent.child.grandchildren.0.aaa");
+          builder.invalidate("bbb", "invalid at parent.child.grandchildren.0.bbb");
         });
       }
 
@@ -432,52 +440,52 @@ describe("Validator", () => {
     describe("Search with a self path", () => {
       it("returns an empty iterator when there are no errors", () => {
         const env = setupEnv({ clean: true });
-        expect(buildErrorMap(env.parent.findErrors(KeyPathSelf))).toEqual(new Map());
+        expect(buildErrorMap(env["parent"].findErrors(KeyPathSelf))).toEqual(new Map());
       });
 
       it("returns own errors", () => {
         const env = setupEnv();
-        expect(buildErrorMap(env.parent.findErrors(KeyPathSelf))).toMatchInlineSnapshot(`
+        expect(buildErrorMap(env["parent"].findErrors(KeyPathSelf))).toMatchInlineSnapshot(`
           Map {
             "a" => [
-              "invalid at a",
+              "invalid at parent.a",
             ],
             "b" => [
-              "invalid at b",
+              "invalid at parent.b",
             ],
             "child" => [
-              "invalid at child",
+              "invalid at parent.child",
             ],
             "children" => [
-              "invalid at children",
+              "invalid at parent.children",
             ],
             "aa" => [
-              "invalid at (hoist).aa",
+              "invalid at parent.(hoist).aa",
             ],
             "bb" => [
-              "invalid at (hoist).bb",
+              "invalid at parent.(hoist).bb",
             ],
           }
         `);
         expect(buildErrorMap(env["parent.child"].findErrors(KeyPathSelf))).toMatchInlineSnapshot(`
           Map {
             "aa" => [
-              "invalid at child.aa",
+              "invalid at parent.child.aa",
             ],
             "bb" => [
-              "invalid at child.bb",
+              "invalid at parent.child.bb",
             ],
             "grandchild" => [
-              "invalid at child.grandchild",
+              "invalid at parent.child.grandchild",
             ],
             "grandchildren" => [
-              "invalid at child.grandchildren",
+              "invalid at parent.child.grandchildren",
             ],
             "aaa" => [
-              "invalid at child.(arrayHoist).0.aaa",
+              "invalid at parent.child.(arrayHoist).0.aaa",
             ],
             "bbb" => [
-              "invalid at child.(arrayHoist).0.bbb",
+              "invalid at parent.child.(arrayHoist).0.bbb",
             ],
           }
         `);
@@ -485,101 +493,101 @@ describe("Validator", () => {
 
       it("returns all errors with prefix match", () => {
         const env = setupEnv();
-        expect(buildErrorMap(env.parent.findErrors(KeyPathSelf, true))).toMatchInlineSnapshot(`
+        expect(buildErrorMap(env["parent"].findErrors(KeyPathSelf, true))).toMatchInlineSnapshot(`
           Map {
             "a" => [
-              "invalid at a",
+              "invalid at parent.a",
             ],
             "b" => [
-              "invalid at b",
+              "invalid at parent.b",
             ],
             "child" => [
-              "invalid at child",
+              "invalid at parent.child",
             ],
             "children" => [
-              "invalid at children",
+              "invalid at parent.children",
             ],
             "aa" => [
-              "invalid at (hoist).aa",
+              "invalid at parent.(hoist).aa",
             ],
             "bb" => [
-              "invalid at (hoist).bb",
+              "invalid at parent.(hoist).bb",
             ],
             "child.aa" => [
-              "invalid at child.aa",
+              "invalid at parent.child.aa",
             ],
             "child.bb" => [
-              "invalid at child.bb",
+              "invalid at parent.child.bb",
             ],
             "child.grandchild" => [
-              "invalid at child.grandchild",
+              "invalid at parent.child.grandchild",
             ],
             "child.grandchildren" => [
-              "invalid at child.grandchildren",
+              "invalid at parent.child.grandchildren",
             ],
             "child.0.aaa" => [
-              "invalid at child.(arrayHoist).0.aaa",
+              "invalid at parent.child.(arrayHoist).0.aaa",
             ],
             "child.0.bbb" => [
-              "invalid at child.(arrayHoist).0.bbb",
+              "invalid at parent.child.(arrayHoist).0.bbb",
             ],
             "child.grandchild.aaa" => [
-              "invalid at child.grandchild.aaa",
+              "invalid at parent.child.grandchild.aaa",
             ],
             "child.grandchild.bbb" => [
-              "invalid at child.grandchild.bbb",
+              "invalid at parent.child.grandchild.bbb",
             ],
             "child.grandchildren.0.aaa" => [
-              "invalid at child.grandchildren.0.aaa",
+              "invalid at parent.child.grandchildren.0.aaa",
             ],
             "child.grandchildren.0.bbb" => [
-              "invalid at child.grandchildren.0.bbb",
+              "invalid at parent.child.grandchildren.0.bbb",
             ],
             "children.0.aa" => [
-              "invalid at children.0.aa",
+              "invalid at parent.children.0.aa",
             ],
             "children.0.bb" => [
-              "invalid at children.0.bb",
+              "invalid at parent.children.0.bb",
             ],
             "children.0.grandchildren.0.aaa" => [
-              "invalid at children.0.grandchildren.0.aaa",
+              "invalid at parent.children.0.grandchildren.0.aaa",
             ],
             "children.0.grandchildren.0.bbb" => [
-              "invalid at children.0.grandchildren.0.bbb",
+              "invalid at parent.children.0.grandchildren.0.bbb",
             ],
           }
         `);
         expect(buildErrorMap(env["parent.child"].findErrors(KeyPathSelf, true))).toMatchInlineSnapshot(`
           Map {
             "aa" => [
-              "invalid at child.aa",
+              "invalid at parent.child.aa",
             ],
             "bb" => [
-              "invalid at child.bb",
+              "invalid at parent.child.bb",
             ],
             "grandchild" => [
-              "invalid at child.grandchild",
+              "invalid at parent.child.grandchild",
             ],
             "grandchildren" => [
-              "invalid at child.grandchildren",
+              "invalid at parent.child.grandchildren",
             ],
             "0.aaa" => [
-              "invalid at child.(arrayHoist).0.aaa",
+              "invalid at parent.child.(arrayHoist).0.aaa",
             ],
             "0.bbb" => [
-              "invalid at child.(arrayHoist).0.bbb",
+              "invalid at parent.child.(arrayHoist).0.bbb",
             ],
             "grandchild.aaa" => [
-              "invalid at child.grandchild.aaa",
+              "invalid at parent.child.grandchild.aaa",
             ],
             "grandchild.bbb" => [
-              "invalid at child.grandchild.bbb",
+              "invalid at parent.child.grandchild.bbb",
             ],
             "grandchildren.0.aaa" => [
-              "invalid at child.grandchildren.0.aaa",
+              "invalid at parent.child.grandchildren.0.aaa",
             ],
             "grandchildren.0.bbb" => [
-              "invalid at child.grandchildren.0.bbb",
+              "invalid at parent.child.grandchildren.0.bbb",
             ],
           }
         `);
@@ -589,60 +597,60 @@ describe("Validator", () => {
     describe("Search for a specific path", () => {
       it("returns an empty iterator when there are no errors", () => {
         const env = setupEnv({ clean: true });
-        expect(buildErrorMap(env.parent.findErrors(KeyPathSelf))).toEqual(new Map());
+        expect(buildErrorMap(env["parent"].findErrors(KeyPathSelf))).toEqual(new Map());
       });
 
       it("returns errors for the specific path", () => {
         const env = setupEnv();
-        expect(buildErrorMap(env.parent.findErrors("child" as KeyPath))).toMatchInlineSnapshot(`
+        expect(buildErrorMap(env["parent"].findErrors("child" as KeyPath))).toMatchInlineSnapshot(`
           Map {
             "child" => [
-              "invalid at child",
+              "invalid at parent.child",
             ],
             "child.aa" => [
-              "invalid at child.aa",
+              "invalid at parent.child.aa",
             ],
             "child.bb" => [
-              "invalid at child.bb",
+              "invalid at parent.child.bb",
             ],
             "child.grandchild" => [
-              "invalid at child.grandchild",
+              "invalid at parent.child.grandchild",
             ],
             "child.grandchildren" => [
-              "invalid at child.grandchildren",
+              "invalid at parent.child.grandchildren",
             ],
             "child.aaa" => [
-              "invalid at child.(arrayHoist).0.aaa",
+              "invalid at parent.child.(arrayHoist).0.aaa",
             ],
             "child.bbb" => [
-              "invalid at child.(arrayHoist).0.bbb",
+              "invalid at parent.child.(arrayHoist).0.bbb",
             ],
           }
         `);
 
-        expect(buildErrorMap(env.parent.findErrors("child.aa" as KeyPath))).toMatchInlineSnapshot(`
+        expect(buildErrorMap(env["parent"].findErrors("child.aa" as KeyPath))).toMatchInlineSnapshot(`
           Map {
             "child.aa" => [
-              "invalid at child.aa",
+              "invalid at parent.child.aa",
             ],
           }
         `);
 
-        expect(buildErrorMap(env.parent.findErrors("child.grandchildren" as KeyPath))).toMatchInlineSnapshot(`
+        expect(buildErrorMap(env["parent"].findErrors("child.grandchildren" as KeyPath))).toMatchInlineSnapshot(`
           Map {
             "child.grandchildren" => [
-              "invalid at child.grandchildren",
+              "invalid at parent.child.grandchildren",
             ],
           }
         `);
 
-        expect(buildErrorMap(env.parent.findErrors("child.grandchildren.0" as KeyPath))).toMatchInlineSnapshot(`
+        expect(buildErrorMap(env["parent"].findErrors("child.grandchildren.0" as KeyPath))).toMatchInlineSnapshot(`
           Map {
             "child.grandchildren.0.aaa" => [
-              "invalid at child.grandchildren.0.aaa",
+              "invalid at parent.child.grandchildren.0.aaa",
             ],
             "child.grandchildren.0.bbb" => [
-              "invalid at child.grandchildren.0.bbb",
+              "invalid at parent.child.grandchildren.0.bbb",
             ],
           }
         `);
@@ -650,62 +658,62 @@ describe("Validator", () => {
 
       it("returns all errors for the specific path with prefix match", () => {
         const env = setupEnv();
-        expect(buildErrorMap(env.parent.findErrors("child" as KeyPath, true))).toMatchInlineSnapshot(`
+        expect(buildErrorMap(env["parent"].findErrors("child" as KeyPath, true))).toMatchInlineSnapshot(`
           Map {
             "child" => [
-              "invalid at child",
+              "invalid at parent.child",
             ],
             "child.aa" => [
-              "invalid at child.aa",
+              "invalid at parent.child.aa",
             ],
             "child.bb" => [
-              "invalid at child.bb",
+              "invalid at parent.child.bb",
             ],
             "child.grandchild" => [
-              "invalid at child.grandchild",
+              "invalid at parent.child.grandchild",
             ],
             "child.grandchildren" => [
-              "invalid at child.grandchildren",
+              "invalid at parent.child.grandchildren",
             ],
             "child.0.aaa" => [
-              "invalid at child.(arrayHoist).0.aaa",
+              "invalid at parent.child.(arrayHoist).0.aaa",
             ],
             "child.0.bbb" => [
-              "invalid at child.(arrayHoist).0.bbb",
+              "invalid at parent.child.(arrayHoist).0.bbb",
             ],
             "child.grandchild.aaa" => [
-              "invalid at child.grandchild.aaa",
+              "invalid at parent.child.grandchild.aaa",
             ],
             "child.grandchild.bbb" => [
-              "invalid at child.grandchild.bbb",
+              "invalid at parent.child.grandchild.bbb",
             ],
             "child.grandchildren.0.aaa" => [
-              "invalid at child.grandchildren.0.aaa",
+              "invalid at parent.child.grandchildren.0.aaa",
             ],
             "child.grandchildren.0.bbb" => [
-              "invalid at child.grandchildren.0.bbb",
+              "invalid at parent.child.grandchildren.0.bbb",
             ],
           }
         `);
 
-        expect(buildErrorMap(env.parent.findErrors("child.aa" as KeyPath, true))).toMatchInlineSnapshot(`
+        expect(buildErrorMap(env["parent"].findErrors("child.aa" as KeyPath, true))).toMatchInlineSnapshot(`
           Map {
             "child.aa" => [
-              "invalid at child.aa",
+              "invalid at parent.child.aa",
             ],
           }
         `);
 
-        expect(buildErrorMap(env.parent.findErrors("child.grandchildren" as KeyPath, true))).toMatchInlineSnapshot(`
+        expect(buildErrorMap(env["parent"].findErrors("child.grandchildren" as KeyPath, true))).toMatchInlineSnapshot(`
           Map {
             "child.grandchildren" => [
-              "invalid at child.grandchildren",
+              "invalid at parent.child.grandchildren",
             ],
             "child.grandchildren.0.aaa" => [
-              "invalid at child.grandchildren.0.aaa",
+              "invalid at parent.child.grandchildren.0.aaa",
             ],
             "child.grandchildren.0.bbb" => [
-              "invalid at child.grandchildren.0.bbb",
+              "invalid at parent.child.grandchildren.0.bbb",
             ],
           }
         `);
