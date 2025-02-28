@@ -44,6 +44,8 @@ class Sample {
   @nested @observable.ref refMap2 = new Map([["key1", { value: 0 }]]);
   @nested @observable.ref refOtherMap1 = new Map([["key1", new Other()]]);
 
+  @nested.hoist @observable hoist1 = [0];
+
   constructor() {
     makeObservable(this);
   }
@@ -60,13 +62,20 @@ class Other {
 describe("getNestedAnnotations", () => {
   it("returns all nested annotations", () => {
     const sample = new Sample();
-    const annotations = getNestedAnnotations(sample);
-    const map = new Map(annotations);
+    const map = new Map<
+      string | symbol,
+      {
+        getValue: () => any;
+        hoist: boolean;
+      }
+    >();
+    for (const { key, getValue, hoist } of getNestedAnnotations(sample)) {
+      map.set(key, { getValue, hoist });
+    }
 
-    expect(new Set(map.keys())).toEqual(
-      new Set([
-        symbolKey1,
-
+    expect(new Set(map.keys())).toMatchInlineSnapshot(`
+      Set {
+        Symbol(key1),
         "number1",
         "object1",
         "other1",
@@ -79,7 +88,6 @@ describe("getNestedAnnotations", () => {
         "map1",
         "map2",
         "otherMap1",
-
         "boxedNumber1",
         "boxedObject1",
         "boxedOther1",
@@ -92,7 +100,6 @@ describe("getNestedAnnotations", () => {
         "boxedMap1",
         "boxedMap2",
         "boxedOtherMap1",
-
         "refObject1",
         "refOther1",
         "refArray1",
@@ -103,14 +110,55 @@ describe("getNestedAnnotations", () => {
         "refMap1",
         "refMap2",
         "refOtherMap1",
-      ])
-    );
-    expect(map.size).toBe(35);
+        "hoist1",
+      }
+    `);
+    expect(map.size).toBe(36);
 
-    for (const [key, getValue] of map) {
+    for (const [key, { getValue, hoist }] of map) {
       expect(key in sample).toBe(true);
       expect(sample[key as keyof Sample]).toBe(getValue());
+      expect(hoist).toBe(key === "hoist1");
     }
+  });
+
+  it("throws an error if mixed @nested annotations are found for the same key", () => {
+    class Sample {
+      @nested @nested.hoist hoist1 = [0];
+    }
+    const sample = new Sample();
+    expect(() => Array.from(getNestedAnnotations(sample))).toThrow(/Mixed @nested/);
+  });
+
+  it("throws an error if mixed @nested annotations are found for the same key in the same inheritance chain", () => {
+    class Parent {
+      @nested.hoist hoist1 = [0];
+    }
+    class Sample extends Parent {
+      @nested hoist1 = [0];
+    }
+    const sample = new Sample();
+    expect(() => Array.from(getNestedAnnotations(sample))).toThrow(/Mixed @nested/);
+  });
+
+  it("throws an error if multiple @nested.hoist annotations are found in the same class", () => {
+    class Sample {
+      @nested.hoist hoist1 = [0];
+      @nested.hoist hoist2 = [0];
+    }
+    const sample = new Sample();
+    expect(() => Array.from(getNestedAnnotations(sample))).toThrow(/Multiple @nested.hoist/);
+  });
+
+  it("throws an error if multiple @nested.hoist annotations are found in the same inheritance chain", () => {
+    class Parent {
+      @nested.hoist hoist1 = [0];
+    }
+    class Sample extends Parent {
+      @nested.hoist hoist2 = [0];
+    }
+    const sample = new Sample();
+    expect(() => Array.from(getNestedAnnotations(sample))).toThrow(/Multiple @nested.hoist/);
   });
 });
 
@@ -124,8 +172,6 @@ describe("StandardNestedFetcher", () => {
       for (const entry of fetcher) {
         map.set(entry.keyPath, entry.data);
       }
-
-      expect(map.size).toBe(36);
 
       expect(map.get("number1" as KeyPath)).toEqual(sample.number1);
       expect(map.get("object1" as KeyPath)).toEqual(sample.object1);
@@ -163,6 +209,10 @@ describe("StandardNestedFetcher", () => {
       expect(map.get("refMap1.key1" as KeyPath)).toEqual(sample.refMap1.get("key1"));
       expect(map.get("refMap2.key1" as KeyPath)).toEqual(sample.refMap2.get("key1"));
       expect(map.get("refOtherMap1.key1" as KeyPath)).toEqual(sample.refOtherMap1.get("key1"));
+
+      expect(map.get("0" as KeyPath)).toEqual(sample.hoist1[0]); // "hoist1.0" lifted to "0"
+
+      expect(map.size).toBe(37);
     });
 
     it("ignores null data", () => {
@@ -174,24 +224,22 @@ describe("StandardNestedFetcher", () => {
         map.set(entry.keyPath, entry.data);
       }
 
-      expect(new Set(map.keys())).toEqual(
-        new Set([
+      expect(new Set(map.keys())).toMatchInlineSnapshot(`
+        Set {
           "other1",
           "otherArray1.0",
-          "otherMap1.key1",
           "otherSet1.0",
-
+          "otherMap1.key1",
           "boxedOther1",
           "boxedOtherArray1.0",
-          "boxedOtherMap1.key1",
           "boxedOtherSet1.0",
-
+          "boxedOtherMap1.key1",
           "refOther1",
           "refOtherArray1.0",
-          "refOtherMap1.key1",
           "refOtherSet1.0",
-        ])
-      );
+          "refOtherMap1.key1",
+        }
+      `);
       expect(map.size).toBe(12);
     });
   });
@@ -201,7 +249,13 @@ describe("StandardNestedFetcher", () => {
       const sample = new Sample();
       const fetcher = new StandardNestedFetcher(sample, (entry) => entry.data);
       const entries = fetcher.getForKey("other1" as KeyPath);
-      expect(Array.from(entries)).toEqual([{ key: "other1", keyPath: "other1", data: sample.other1 }]);
+      expect(Array.from(entries)).toEqual([
+        {
+          key: "other1",
+          keyPath: "other1",
+          data: sample.other1,
+        },
+      ]);
     });
   });
 

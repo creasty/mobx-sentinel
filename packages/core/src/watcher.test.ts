@@ -1,7 +1,7 @@
 import { computed, makeObservable, observable, runInAction } from "mobx";
 import { Watcher, debugWatcher, unwatch, watch } from "./watcher";
 import { nested } from "./nested";
-import { KeyPath } from "./keyPath";
+import { KeyPath, KeyPathSelf } from "./keyPath";
 
 describe("Watcher", () => {
   describe("constructor", () => {
@@ -898,6 +898,88 @@ describe("Annotations", () => {
         watcher.reset();
         expect(watcher.changed).toBe(false);
         expect(watcherNested.changed).toBe(false);
+      });
+    });
+  });
+
+  describe("@nested.hoist", () => {
+    describe("class", () => {
+      class Sample {
+        @nested.hoist other = new Other();
+
+        constructor() {
+          makeObservable(this);
+        }
+      }
+
+      class Other {
+        @observable value = false;
+
+        constructor() {
+          makeObservable(this);
+        }
+      }
+
+      test("nested watchers are created with KeyPathSelf", () => {
+        const sample = new Sample();
+        const watcher = Watcher.get(sample);
+        expect(watcher.nested.size).toBe(1);
+        expect(watcher.nested.get("other" as KeyPath)).toBeFalsy();
+        expect(watcher.nested.get(KeyPathSelf)).toBe(Watcher.get(sample.other));
+      });
+
+      test("changes to a nested class are tracked and hoisted", () => {
+        const sample = new Sample();
+        const watcher = Watcher.get(sample);
+
+        runInAction(() => {
+          sample.other.value = true;
+        });
+        expect(watcher.changedKeys).toEqual(new Set([]));
+        expect(watcher.changedKeyPaths).toEqual(new Set(["value"]));
+        expect(watcher.changed).toBe(true);
+        expect(watcher.nested.get(KeyPathSelf)?.changedKeys).toEqual(new Set(["value"]));
+        expect(watcher.nested.get(KeyPathSelf)?.changed).toBe(true);
+      });
+    });
+
+    describe("array", () => {
+      class Sample {
+        @nested.hoist list = [new Other()];
+
+        constructor() {
+          makeObservable(this);
+        }
+      }
+
+      class Other {
+        @observable value = false;
+
+        constructor() {
+          makeObservable(this);
+        }
+      }
+
+      test("nested watchers are created with KeyPathSelf", () => {
+        const sample = new Sample();
+        const watcher = Watcher.get(sample);
+        expect(watcher.nested.size).toBe(1);
+        expect(watcher.nested.get("list" as KeyPath)).toBeFalsy();
+        expect(watcher.nested.get("0" as KeyPath)).toBe(Watcher.get(sample.list[0]));
+      });
+
+      test("changes to a nested class are tracked and hoisted", () => {
+        const sample = new Sample();
+        const watcher = Watcher.get(sample);
+
+        runInAction(() => {
+          sample.list[0].value = true;
+        });
+        expect(watcher.changedKeys).toEqual(new Set([]));
+        expect(watcher.changedKeyPaths).toEqual(new Set(["0.value"]));
+        expect(watcher.changed).toBe(true);
+        expect(watcher.nested.get("0" as KeyPath)?.changedKeys).toEqual(new Set(["value"]));
+        expect(watcher.nested.get("0" as KeyPath)?.changed).toBe(true);
       });
     });
   });

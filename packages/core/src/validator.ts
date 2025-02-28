@@ -129,7 +129,11 @@ export class Validator<T> {
     return this.invalidKeys.size;
   }
 
-  /** The number of invalid keys */
+  /**
+   * The keys that have errors
+   *
+   * Keys of nested objects are NOT included.
+   */
   @computed.struct
   get invalidKeys(): ReadonlySet<KeyPath> {
     const seenKeys = new Set<KeyPath>();
@@ -147,7 +151,11 @@ export class Validator<T> {
     return this.invalidKeyPaths.size;
   }
 
-  /** The number of invalid key paths */
+  /**
+   * The key paths that have errors
+   *
+   * Keys of nested objects are included.
+   */
   @computed.struct
   get invalidKeyPaths(): ReadonlySet<KeyPath> {
     const result = new Set<KeyPath>();
@@ -191,17 +199,44 @@ export class Validator<T> {
   }
 
   /** Find errors for the key path */
-  *findErrors(searchKeyPath: KeyPath, prefixMatch = false): Generator<[keyPath: KeyPath, error: ValidationError]> {
+  *findErrors(searchKeyPath: KeyPath, prefixMatch = false) {
+    yield* this.#findErrors(searchKeyPath, prefixMatch, false);
+  }
+
+  /** Find errors for the key path */
+  *#findErrors(
+    searchKeyPath: KeyPath,
+    prefixMatch: boolean,
+    exact: boolean
+  ): Generator<[keyPath: KeyPath, error: ValidationError]> {
     if (isKeyPathSelf(searchKeyPath)) {
-      for (const errors of this.#errors.values()) {
-        for (const [keyPath, error] of errors) {
-          yield [keyPath, error];
+      if (exact) {
+        for (const errors of this.#errors.values()) {
+          for (const error of errors.findExact(KeyPathSelf)) {
+            yield [KeyPathSelf, error];
+          }
+        }
+      } else {
+        for (const errors of this.#errors.values()) {
+          for (const [keyPath, error] of errors) {
+            yield [keyPath, error];
+          }
         }
       }
       if (prefixMatch) {
         for (const [keyPath, validator] of this.nested) {
-          for (const [relativeKeyPath, error] of validator.findErrors(KeyPathSelf, prefixMatch)) {
+          for (const [relativeKeyPath, error] of validator.#findErrors(KeyPathSelf, true, false)) {
             yield [buildKeyPath(keyPath, relativeKeyPath), error];
+          }
+        }
+      } else if (!exact) {
+        for (const entry of this.#nestedFetcher) {
+          const isSelf = entry.key === KeyPathSelf;
+          const isDirectChild = entry.keyPath === entry.key; // Ignores entries with subKey (like arrays)
+          if (isSelf || isDirectChild) {
+            for (const [relativeKeyPath, error] of entry.data.#findErrors(KeyPathSelf, false, !isSelf)) {
+              yield [buildKeyPath(entry.keyPath, relativeKeyPath), error];
+            }
           }
         }
       }
@@ -219,7 +254,7 @@ export class Validator<T> {
               ? KeyPathSelf
               : getRelativeKeyPath(searchKeyPath, entry.keyPath);
           if (!childKeyPath) continue;
-          for (const [relativeKeyPath, error] of entry.data.findErrors(childKeyPath, prefixMatch)) {
+          for (const [relativeKeyPath, error] of entry.data.#findErrors(childKeyPath, prefixMatch, false)) {
             yield [buildKeyPath(entry.keyPath, relativeKeyPath), error];
           }
           break ancestorLoop;

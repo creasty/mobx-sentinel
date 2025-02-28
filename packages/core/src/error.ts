@@ -1,4 +1,4 @@
-import { buildKeyPath, getParentKeyOfKeyPath, KeyPath, KeyPathMultiMap } from "./keyPath";
+import { buildKeyPath, getParentKeyOfKeyPath, KeyPath, KeyPathMultiMap, KeyPathSelf } from "./keyPath";
 
 export class ValidationError extends Error {
   readonly key: KeyPath;
@@ -30,6 +30,17 @@ export class ValidationErrorMapBuilder<T> {
    */
   invalidate(key: keyof T & string, reason: string | Error) {
     const keyPath = buildKeyPath(key);
+    const error = new ValidationError({ keyPath, reason });
+    this.#map.set(keyPath, error);
+  }
+
+  /**
+   * Invalidate the target object itself
+   *
+   * This is useful with `@nested.hoist` to invalidate the parent object.
+   */
+  invalidateSelf(reason: string | Error) {
+    const keyPath = KeyPathSelf;
     const error = new ValidationError({ keyPath, reason });
     this.#map.set(keyPath, error);
   }

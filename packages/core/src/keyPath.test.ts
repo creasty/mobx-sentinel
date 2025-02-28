@@ -156,6 +156,12 @@ describe("KeyPathMultiMap", () => {
       map.set("a.b.c" as KeyPath, "value2");
       expect(Array.from(map.findExact("a.b.c" as KeyPath))).toEqual(["value1", "value2"]);
     });
+
+    it("yields values for self key path", () => {
+      const map = new KeyPathMultiMap<string>();
+      map.set(KeyPathSelf, "value");
+      expect(Array.from(map.findExact(KeyPathSelf))).toEqual(["value"]);
+    });
   });
 
   describe("#findPrefix", () => {
@@ -183,6 +189,13 @@ describe("KeyPathMultiMap", () => {
       map.set("a.b" as KeyPath, "parent");
       map.set("a.b.c" as KeyPath, "child");
       expect(Array.from(map.findPrefix("a.b" as KeyPath))).toEqual(["parent", "child"]);
+    });
+
+    it("yields all values with self key path", () => {
+      const map = new KeyPathMultiMap<string>();
+      map.set("a.b" as KeyPath, "parent");
+      map.set("a.b.c" as KeyPath, "child");
+      expect(Array.from(map.findPrefix(KeyPathSelf))).toEqual(["parent", "child"]);
     });
   });
 

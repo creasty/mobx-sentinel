@@ -168,13 +168,21 @@ export class Watcher {
     return this.changedTick > 0n || this.#assumeChanged.get();
   }
 
-  /** The keys that have changed */
+  /**
+   * The keys that have changed
+   *
+   * Keys of nested objects are NOT included.
+   */
   @computed.struct
   get changedKeys(): ReadonlySet<KeyPath> {
     return new Set(this.#changedKeys);
   }
 
-  /** The key paths that have changed, including nested objects */
+  /**
+   * The key paths that have changed
+   *
+   * Keys of nested objects are included.
+   */
   @computed.struct
   get changedKeyPaths(): ReadonlySet<KeyPath> {
     const result = new Set(this.#changedKeys);
@@ -255,14 +263,14 @@ export class Watcher {
    * Process `@nested` annotations
    */
   #processNestedAnnotations(target: object) {
-    for (const [key, getValue] of getNestedAnnotations(target)) {
+    for (const { key, getValue, hoist } of getNestedAnnotations(target)) {
       if (typeof key !== "string") continue; // symbol and number keys are not supported
       if (this.#processedKeys.has(key)) continue;
       this.#processedKeys.add(key);
 
       reaction(
         () => shallowReadValue(getValue()),
-        () => this.#didChange(buildKeyPath(key))
+        () => (hoist ? this.#incrementChangedTick() : this.#didChange(buildKeyPath(key)))
       );
       reaction(
         () => {

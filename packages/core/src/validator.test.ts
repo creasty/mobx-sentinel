@@ -259,242 +259,523 @@ describe("Validator", () => {
     });
   });
 
-  describe("#findErrors, #getErrorMessages, #hasErrors, #firstErrorMessage", () => {
-    class Sample {
-      a1 = false;
-      b1 = false;
-      @nested nested1 = new Nested1();
-      @nested array1 = [new Nested1()];
+  describe("#firstErrorMessage", () => {
+    it("calls findErrors() internally", () => {
+      const validator = Validator.get({});
+      const spy = vi.spyOn(validator, "findErrors");
+      void validator.firstErrorMessage;
+      expect(spy).toBeCalledWith(KeyPathSelf, true);
+    });
+
+    it("returns null when there are no errors", () => {
+      const validator = Validator.get({});
+      expect(validator.firstErrorMessage).toBeNull();
+    });
+
+    it("returns the first error message", () => {
+      const validator = Validator.get({ field1: 0, field2: 0 });
+      validator.updateErrors(Symbol(), (builder) => {
+        builder.invalidate("field1", "invalid1");
+        builder.invalidate("field2", "invalid2");
+      });
+      expect(validator.firstErrorMessage).toBe("invalid1");
+    });
+  });
+
+  describe("#getErrorMessages", () => {
+    it("calls findErrors() internally", () => {
+      const validator = Validator.get({});
+      const spy = vi.spyOn(validator, "findErrors");
+
+      validator.getErrorMessages(KeyPathSelf);
+      expect(spy).nthCalledWith(1, KeyPathSelf, false);
+
+      validator.getErrorMessages(KeyPathSelf, true);
+      expect(spy).nthCalledWith(2, KeyPathSelf, true);
+
+      validator.getErrorMessages("field1" as KeyPath);
+      expect(spy).nthCalledWith(3, "field1" as KeyPath, false);
+
+      validator.getErrorMessages("field1" as KeyPath, true);
+      expect(spy).nthCalledWith(4, "field1" as KeyPath, true);
+    });
+
+    it("returns an empty set when there are no errors", () => {
+      const validator = Validator.get({});
+      expect(validator.getErrorMessages(KeyPathSelf)).toEqual(new Set());
+    });
+
+    it("returns a set of error messages", () => {
+      const validator = Validator.get({ field1: 0, field2: 0 });
+      validator.updateErrors(Symbol(), (builder) => {
+        builder.invalidate("field1", "invalid1");
+        builder.invalidate("field2", "invalid2");
+        builder.invalidate("field2", "invalid3");
+      });
+      expect(validator.getErrorMessages(KeyPathSelf)).toEqual(new Set(["invalid1", "invalid2", "invalid3"]));
+      expect(validator.getErrorMessages("field1" as KeyPath)).toEqual(new Set(["invalid1"]));
+      expect(validator.getErrorMessages("field2" as KeyPath)).toEqual(new Set(["invalid2", "invalid3"]));
+    });
+  });
+
+  describe("#hasErrors", () => {
+    it("calls findErrors() internally", () => {
+      const validator = Validator.get({});
+      const spy = vi.spyOn(validator, "findErrors");
+
+      validator.hasErrors(KeyPathSelf);
+      expect(spy).nthCalledWith(1, KeyPathSelf, false);
+
+      validator.hasErrors(KeyPathSelf, true);
+      expect(spy).nthCalledWith(2, KeyPathSelf, true);
+
+      validator.hasErrors("field1" as KeyPath);
+      expect(spy).nthCalledWith(3, "field1" as KeyPath, false);
+
+      validator.hasErrors("field1" as KeyPath, true);
+      expect(spy).nthCalledWith(4, "field1" as KeyPath, true);
+    });
+
+    it("returns false when there are no errors", () => {
+      const validator = Validator.get({});
+      expect(validator.hasErrors(KeyPathSelf)).toBe(false);
+    });
+
+    it("returns true when there are errors", () => {
+      const validator = Validator.get({ field1: 0, field2: 0 });
+      validator.updateErrors(Symbol(), (builder) => {
+        builder.invalidate("field1", "invalid1");
+      });
+      expect(validator.hasErrors(KeyPathSelf)).toBe(true);
+      expect(validator.hasErrors("field1" as KeyPath)).toBe(true);
+      expect(validator.hasErrors("field2" as KeyPath)).toBe(false);
+    });
+  });
+
+  describe("#findErrors", () => {
+    class Parent {
+      a = false;
+      b = false;
+      @nested.hoist hoist = new Child();
+      @nested child = new Child();
+      @nested children = [new Child()];
     }
 
-    class Nested1 {
-      a2 = false;
-      b2 = false;
-      @nested nested2 = new Nested2();
-      @nested array2 = [new Nested2()];
+    class Child {
+      aa = false;
+      bb = false;
+      @nested.hoist arrayHoist = [new Grandchild()];
+      @nested grandchild = new Grandchild();
+      @nested grandchildren = [new Grandchild()];
     }
 
-    class Nested2 {
-      a3 = false;
-      b3 = false;
+    class Grandchild {
+      aaa = false;
+      bbb = false;
     }
 
     const setupEnv = (opt?: { clean?: boolean }) => {
-      const object = new Sample();
-      const validator = Validator.get(object);
-      const vNested1 = Validator.get(object.nested1);
-      const vNested2 = Validator.get(object.nested1.nested2);
-      const vArray1 = Validator.get(object.array1[0]);
-      const vArray2 = Validator.get(object.array1[0].array2[0]);
-      const vNested1Array2 = Validator.get(object.nested1.array2[0]);
+      const parent = new Parent();
+      const validators = {
+        parent: Validator.get(parent),
+        "parent.hoist": Validator.get(parent.hoist),
+        "parent.child": Validator.get(parent.child),
+        "parent.child.arrayHoist.0": Validator.get(parent.child.arrayHoist[0]),
+        "parent.child.grandchild": Validator.get(parent.child.grandchild),
+        "parent.child.grandchildren.0": Validator.get(parent.child.grandchildren[0]),
+        "parent.children.0": Validator.get(parent.children[0]),
+        "parent.children.0.grandchildren.0": Validator.get(parent.children[0].grandchildren[0]),
+      };
 
       if (!opt?.clean) {
-        validator.updateErrors(Symbol(), (builder) => {
-          builder.invalidate("a1", "invalid1 at a1");
-          builder.invalidate("b1", "invalid1 at b1");
-          builder.invalidate("nested1", "invalid1 at nested1");
-          builder.invalidate("array1", "invalid1 at array1");
+        validators["parent"].updateErrors(Symbol(), (builder) => {
+          builder.invalidateSelf("invalid self at parent");
+          builder.invalidate("a", "invalid at parent.a");
+          builder.invalidate("b", "invalid at parent.b");
+          builder.invalidate("child", "invalid at parent.child");
+          builder.invalidate("children", "invalid at parent.children");
         });
-        vNested1.updateErrors(Symbol(), (builder) => {
-          builder.invalidate("a2", "invalid2 at nested1.a2");
-          builder.invalidate("b2", "invalid2 at nested1.b2");
-          builder.invalidate("nested2", "invalid2 at nested1.nested2");
-          builder.invalidate("array2", "invalid2 at nested1.array2");
+        validators["parent.hoist"].updateErrors(Symbol(), (builder) => {
+          builder.invalidateSelf("invalid self at parent.(hoist)");
+          builder.invalidate("aa", "invalid at parent.(hoist).aa");
+          builder.invalidate("bb", "invalid at parent.(hoist).bb");
         });
-        vNested2.updateErrors(Symbol(), (builder) => {
-          builder.invalidate("a3", "invalid3 at nested1.nested2.a3");
-          builder.invalidate("b3", "invalid3 at nested1.nested2.b3");
+        validators["parent.child"].updateErrors(Symbol(), (builder) => {
+          builder.invalidateSelf("invalid self at parent.child");
+          builder.invalidate("aa", "invalid at parent.child.aa");
+          builder.invalidate("bb", "invalid at parent.child.bb");
+          builder.invalidate("grandchild", "invalid at parent.child.grandchild");
+          builder.invalidate("grandchildren", "invalid at parent.child.grandchildren");
         });
-        vArray1.updateErrors(Symbol(), (builder) => {
-          builder.invalidate("a2", "invalid4 at array1.0.a2");
-          builder.invalidate("b2", "invalid4 at array1.0.b2");
+        validators["parent.child.arrayHoist.0"].updateErrors(Symbol(), (builder) => {
+          builder.invalidateSelf("invalid self at parent.child.(arrayHoist).0");
+          builder.invalidate("aaa", "invalid at parent.child.(arrayHoist).0.aaa");
+          builder.invalidate("bbb", "invalid at parent.child.(arrayHoist).0.bbb");
         });
-        vArray2.updateErrors(Symbol(), (builder) => {
-          builder.invalidate("a3", "invalid5 at array1.0.array2.0.a3");
-          builder.invalidate("b3", "invalid5 at array1.0.array2.0.b3");
+        validators["parent.child.grandchild"].updateErrors(Symbol(), (builder) => {
+          builder.invalidateSelf("invalid self at parent.child.grandchild");
+          builder.invalidate("aaa", "invalid at parent.child.grandchild.aaa");
+          builder.invalidate("bbb", "invalid at parent.child.grandchild.bbb");
         });
-        vNested1Array2.updateErrors(Symbol(), (builder) => {
-          builder.invalidate("a3", "invalid6 at nested1.array2.0.a3");
-          builder.invalidate("b3", "invalid6 at nested1.array2.0.b3");
+        validators["parent.children.0"].updateErrors(Symbol(), (builder) => {
+          builder.invalidateSelf("invalid self at parent.children.0");
+          builder.invalidate("aa", "invalid at parent.children.0.aa");
+          builder.invalidate("bb", "invalid at parent.children.0.bb");
+        });
+        validators["parent.children.0.grandchildren.0"].updateErrors(Symbol(), (builder) => {
+          builder.invalidateSelf("invalid self at parent.children.0.grandchildren.0");
+          builder.invalidate("aaa", "invalid at parent.children.0.grandchildren.0.aaa");
+          builder.invalidate("bbb", "invalid at parent.children.0.grandchildren.0.bbb");
+        });
+        validators["parent.child.grandchildren.0"].updateErrors(Symbol(), (builder) => {
+          builder.invalidateSelf("invalid self at parent.child.grandchildren.0");
+          builder.invalidate("aaa", "invalid at parent.child.grandchildren.0.aaa");
+          builder.invalidate("bbb", "invalid at parent.child.grandchildren.0.bbb");
         });
       }
 
-      return { validator };
+      return validators;
     };
-
-    describe("#firstErrorMessage", () => {
-      it("returns null when there are no errors", () => {
-        const env = setupEnv({ clean: true });
-        expect(env.validator.firstErrorMessage).toBeNull();
-      });
-
-      it("returns the first error message", () => {
-        const env = setupEnv();
-        expect(env.validator.firstErrorMessage).toBe("invalid1 at a1");
-      });
-    });
 
     describe("Search with a self path", () => {
       it("returns an empty iterator when there are no errors", () => {
         const env = setupEnv({ clean: true });
-        expect(buildErrorMap(env.validator.findErrors(KeyPathSelf))).toEqual(new Map());
-        expect(env.validator.getErrorMessages(KeyPathSelf)).toEqual(new Set());
-        expect(env.validator.hasErrors(KeyPathSelf)).toBe(false);
+        expect(buildErrorMap(env["parent"].findErrors(KeyPathSelf))).toEqual(new Map());
       });
 
       it("returns own errors", () => {
         const env = setupEnv();
-        expect(buildErrorMap(env.validator.findErrors(KeyPathSelf))).toEqual(
-          new Map([
-            ["a1", ["invalid1 at a1"]],
-            ["b1", ["invalid1 at b1"]],
-            ["nested1", ["invalid1 at nested1"]],
-            ["array1", ["invalid1 at array1"]],
-          ])
-        );
-        expect(env.validator.getErrorMessages(KeyPathSelf)).toEqual(
-          new Set(["invalid1 at a1", "invalid1 at b1", "invalid1 at nested1", "invalid1 at array1"])
-        );
-        expect(env.validator.hasErrors(KeyPathSelf)).toBe(true);
+        expect(buildErrorMap(env["parent"].findErrors(KeyPathSelf))).toMatchInlineSnapshot(`
+          Map {
+            Symbol(self) => [
+              "invalid self at parent",
+              "invalid self at parent.(hoist)",
+            ],
+            "a" => [
+              "invalid at parent.a",
+            ],
+            "b" => [
+              "invalid at parent.b",
+            ],
+            "child" => [
+              "invalid at parent.child",
+              "invalid self at parent.child",
+            ],
+            "children" => [
+              "invalid at parent.children",
+            ],
+            "aa" => [
+              "invalid at parent.(hoist).aa",
+            ],
+            "bb" => [
+              "invalid at parent.(hoist).bb",
+            ],
+          }
+        `);
+        expect(buildErrorMap(env["parent.child"].findErrors(KeyPathSelf))).toMatchInlineSnapshot(`
+          Map {
+            Symbol(self) => [
+              "invalid self at parent.child",
+            ],
+            "aa" => [
+              "invalid at parent.child.aa",
+            ],
+            "bb" => [
+              "invalid at parent.child.bb",
+            ],
+            "grandchild" => [
+              "invalid at parent.child.grandchild",
+              "invalid self at parent.child.grandchild",
+            ],
+            "grandchildren" => [
+              "invalid at parent.child.grandchildren",
+            ],
+            "0" => [
+              "invalid self at parent.child.(arrayHoist).0",
+            ],
+            "0.aaa" => [
+              "invalid at parent.child.(arrayHoist).0.aaa",
+            ],
+            "0.bbb" => [
+              "invalid at parent.child.(arrayHoist).0.bbb",
+            ],
+          }
+        `);
       });
 
       it("returns all errors with prefix match", () => {
         const env = setupEnv();
-        expect(buildErrorMap(env.validator.findErrors(KeyPathSelf, true))).toEqual(
-          new Map([
-            ["a1", ["invalid1 at a1"]],
-            ["b1", ["invalid1 at b1"]],
-            ["array1", ["invalid1 at array1"]],
-            ["array1.0.a2", ["invalid4 at array1.0.a2"]],
-            ["array1.0.b2", ["invalid4 at array1.0.b2"]],
-            ["array1.0.array2.0.a3", ["invalid5 at array1.0.array2.0.a3"]],
-            ["array1.0.array2.0.b3", ["invalid5 at array1.0.array2.0.b3"]],
-            ["nested1", ["invalid1 at nested1"]],
-            ["nested1.a2", ["invalid2 at nested1.a2"]],
-            ["nested1.b2", ["invalid2 at nested1.b2"]],
-            ["nested1.nested2", ["invalid2 at nested1.nested2"]],
-            ["nested1.nested2.a3", ["invalid3 at nested1.nested2.a3"]],
-            ["nested1.nested2.b3", ["invalid3 at nested1.nested2.b3"]],
-            ["nested1.array2", ["invalid2 at nested1.array2"]],
-            ["nested1.array2.0.a3", ["invalid6 at nested1.array2.0.a3"]],
-            ["nested1.array2.0.b3", ["invalid6 at nested1.array2.0.b3"]],
-          ])
-        );
-        expect(env.validator.getErrorMessages(KeyPathSelf, true)).toEqual(
-          new Set([
-            "invalid1 at a1",
-            "invalid1 at b1",
-            "invalid1 at array1",
-            "invalid4 at array1.0.a2",
-            "invalid4 at array1.0.b2",
-            "invalid5 at array1.0.array2.0.a3",
-            "invalid5 at array1.0.array2.0.b3",
-            "invalid1 at nested1",
-            "invalid2 at nested1.a2",
-            "invalid2 at nested1.b2",
-            "invalid2 at nested1.nested2",
-            "invalid3 at nested1.nested2.a3",
-            "invalid3 at nested1.nested2.b3",
-            "invalid2 at nested1.array2",
-            "invalid6 at nested1.array2.0.a3",
-            "invalid6 at nested1.array2.0.b3",
-          ])
-        );
-        expect(env.validator.hasErrors(KeyPathSelf, true)).toBe(true);
+        expect(buildErrorMap(env["parent"].findErrors(KeyPathSelf, true))).toMatchInlineSnapshot(`
+          Map {
+            Symbol(self) => [
+              "invalid self at parent",
+              "invalid self at parent.(hoist)",
+            ],
+            "a" => [
+              "invalid at parent.a",
+            ],
+            "b" => [
+              "invalid at parent.b",
+            ],
+            "child" => [
+              "invalid at parent.child",
+              "invalid self at parent.child",
+            ],
+            "children" => [
+              "invalid at parent.children",
+            ],
+            "aa" => [
+              "invalid at parent.(hoist).aa",
+            ],
+            "bb" => [
+              "invalid at parent.(hoist).bb",
+            ],
+            "child.aa" => [
+              "invalid at parent.child.aa",
+            ],
+            "child.bb" => [
+              "invalid at parent.child.bb",
+            ],
+            "child.grandchild" => [
+              "invalid at parent.child.grandchild",
+              "invalid self at parent.child.grandchild",
+            ],
+            "child.grandchildren" => [
+              "invalid at parent.child.grandchildren",
+            ],
+            "child.0" => [
+              "invalid self at parent.child.(arrayHoist).0",
+            ],
+            "child.0.aaa" => [
+              "invalid at parent.child.(arrayHoist).0.aaa",
+            ],
+            "child.0.bbb" => [
+              "invalid at parent.child.(arrayHoist).0.bbb",
+            ],
+            "child.grandchild.aaa" => [
+              "invalid at parent.child.grandchild.aaa",
+            ],
+            "child.grandchild.bbb" => [
+              "invalid at parent.child.grandchild.bbb",
+            ],
+            "child.grandchildren.0" => [
+              "invalid self at parent.child.grandchildren.0",
+            ],
+            "child.grandchildren.0.aaa" => [
+              "invalid at parent.child.grandchildren.0.aaa",
+            ],
+            "child.grandchildren.0.bbb" => [
+              "invalid at parent.child.grandchildren.0.bbb",
+            ],
+            "children.0" => [
+              "invalid self at parent.children.0",
+            ],
+            "children.0.aa" => [
+              "invalid at parent.children.0.aa",
+            ],
+            "children.0.bb" => [
+              "invalid at parent.children.0.bb",
+            ],
+            "children.0.grandchildren.0" => [
+              "invalid self at parent.children.0.grandchildren.0",
+            ],
+            "children.0.grandchildren.0.aaa" => [
+              "invalid at parent.children.0.grandchildren.0.aaa",
+            ],
+            "children.0.grandchildren.0.bbb" => [
+              "invalid at parent.children.0.grandchildren.0.bbb",
+            ],
+          }
+        `);
+        expect(buildErrorMap(env["parent.child"].findErrors(KeyPathSelf, true))).toMatchInlineSnapshot(`
+          Map {
+            Symbol(self) => [
+              "invalid self at parent.child",
+            ],
+            "aa" => [
+              "invalid at parent.child.aa",
+            ],
+            "bb" => [
+              "invalid at parent.child.bb",
+            ],
+            "grandchild" => [
+              "invalid at parent.child.grandchild",
+              "invalid self at parent.child.grandchild",
+            ],
+            "grandchildren" => [
+              "invalid at parent.child.grandchildren",
+            ],
+            "0" => [
+              "invalid self at parent.child.(arrayHoist).0",
+            ],
+            "0.aaa" => [
+              "invalid at parent.child.(arrayHoist).0.aaa",
+            ],
+            "0.bbb" => [
+              "invalid at parent.child.(arrayHoist).0.bbb",
+            ],
+            "grandchild.aaa" => [
+              "invalid at parent.child.grandchild.aaa",
+            ],
+            "grandchild.bbb" => [
+              "invalid at parent.child.grandchild.bbb",
+            ],
+            "grandchildren.0" => [
+              "invalid self at parent.child.grandchildren.0",
+            ],
+            "grandchildren.0.aaa" => [
+              "invalid at parent.child.grandchildren.0.aaa",
+            ],
+            "grandchildren.0.bbb" => [
+              "invalid at parent.child.grandchildren.0.bbb",
+            ],
+          }
+        `);
       });
     });
 
     describe("Search for a specific path", () => {
       it("returns an empty iterator when there are no errors", () => {
         const env = setupEnv({ clean: true });
-        expect(buildErrorMap(env.validator.findErrors(KeyPathSelf))).toEqual(new Map());
-        expect(env.validator.getErrorMessages(KeyPathSelf)).toEqual(new Set());
-        expect(env.validator.hasErrors(KeyPathSelf)).toBe(false);
+        expect(buildErrorMap(env["parent"].findErrors(KeyPathSelf))).toEqual(new Map());
       });
 
       it("returns errors for the specific path", () => {
         const env = setupEnv();
-        expect(buildErrorMap(env.validator.findErrors("nested1" as KeyPath))).toEqual(
-          new Map([
-            ["nested1", ["invalid1 at nested1"]],
-            ["nested1.a2", ["invalid2 at nested1.a2"]],
-            ["nested1.b2", ["invalid2 at nested1.b2"]],
-            ["nested1.nested2", ["invalid2 at nested1.nested2"]],
-            ["nested1.array2", ["invalid2 at nested1.array2"]],
-          ])
-        );
-        expect(env.validator.getErrorMessages("nested1" as KeyPath)).toEqual(
-          new Set([
-            "invalid1 at nested1",
-            "invalid2 at nested1.a2",
-            "invalid2 at nested1.b2",
-            "invalid2 at nested1.nested2",
-            "invalid2 at nested1.array2",
-          ])
-        );
-        expect(env.validator.hasErrors("nested1" as KeyPath)).toBe(true);
+        expect(buildErrorMap(env["parent"].findErrors("child" as KeyPath))).toMatchInlineSnapshot(`
+          Map {
+            "child" => [
+              "invalid at parent.child",
+              "invalid self at parent.child",
+            ],
+            "child.aa" => [
+              "invalid at parent.child.aa",
+            ],
+            "child.bb" => [
+              "invalid at parent.child.bb",
+            ],
+            "child.grandchild" => [
+              "invalid at parent.child.grandchild",
+              "invalid self at parent.child.grandchild",
+            ],
+            "child.grandchildren" => [
+              "invalid at parent.child.grandchildren",
+            ],
+            "child.0" => [
+              "invalid self at parent.child.(arrayHoist).0",
+            ],
+            "child.0.aaa" => [
+              "invalid at parent.child.(arrayHoist).0.aaa",
+            ],
+            "child.0.bbb" => [
+              "invalid at parent.child.(arrayHoist).0.bbb",
+            ],
+          }
+        `);
 
-        expect(buildErrorMap(env.validator.findErrors("nested1.array2" as KeyPath))).toEqual(
-          new Map([["nested1.array2", ["invalid2 at nested1.array2"]]])
-        );
-        expect(env.validator.getErrorMessages("nested1.array2" as KeyPath)).toEqual(
-          new Set(["invalid2 at nested1.array2"])
-        );
-        expect(env.validator.hasErrors("nested1.array2" as KeyPath)).toBe(true);
+        expect(buildErrorMap(env["parent"].findErrors("child.aa" as KeyPath))).toMatchInlineSnapshot(`
+          Map {
+            "child.aa" => [
+              "invalid at parent.child.aa",
+            ],
+          }
+        `);
 
-        expect(buildErrorMap(env.validator.findErrors("nested1.array2.0" as KeyPath))).toEqual(
-          new Map([
-            ["nested1.array2.0.a3", ["invalid6 at nested1.array2.0.a3"]],
-            ["nested1.array2.0.b3", ["invalid6 at nested1.array2.0.b3"]],
-          ])
-        );
-        expect(env.validator.getErrorMessages("nested1.array2.0" as KeyPath)).toEqual(
-          new Set(["invalid6 at nested1.array2.0.a3", "invalid6 at nested1.array2.0.b3"])
-        );
-        expect(env.validator.hasErrors("nested1.array2.0" as KeyPath)).toBe(true);
+        expect(buildErrorMap(env["parent"].findErrors("child.grandchildren" as KeyPath))).toMatchInlineSnapshot(`
+          Map {
+            "child.grandchildren" => [
+              "invalid at parent.child.grandchildren",
+            ],
+          }
+        `);
+
+        expect(buildErrorMap(env["parent"].findErrors("child.grandchildren.0" as KeyPath))).toMatchInlineSnapshot(`
+          Map {
+            "child.grandchildren.0" => [
+              "invalid self at parent.child.grandchildren.0",
+            ],
+            "child.grandchildren.0.aaa" => [
+              "invalid at parent.child.grandchildren.0.aaa",
+            ],
+            "child.grandchildren.0.bbb" => [
+              "invalid at parent.child.grandchildren.0.bbb",
+            ],
+          }
+        `);
       });
 
       it("returns all errors for the specific path with prefix match", () => {
         const env = setupEnv();
-        expect(buildErrorMap(env.validator.findErrors("nested1" as KeyPath, true))).toEqual(
-          new Map([
-            ["nested1", ["invalid1 at nested1"]],
-            ["nested1.a2", ["invalid2 at nested1.a2"]],
-            ["nested1.b2", ["invalid2 at nested1.b2"]],
-            ["nested1.nested2", ["invalid2 at nested1.nested2"]],
-            ["nested1.nested2.a3", ["invalid3 at nested1.nested2.a3"]],
-            ["nested1.nested2.b3", ["invalid3 at nested1.nested2.b3"]],
-            ["nested1.array2", ["invalid2 at nested1.array2"]],
-            ["nested1.array2.0.a3", ["invalid6 at nested1.array2.0.a3"]],
-            ["nested1.array2.0.b3", ["invalid6 at nested1.array2.0.b3"]],
-          ])
-        );
-        expect(env.validator.getErrorMessages("nested1" as KeyPath, true)).toEqual(
-          new Set([
-            "invalid1 at nested1",
-            "invalid2 at nested1.a2",
-            "invalid2 at nested1.b2",
-            "invalid2 at nested1.nested2",
-            "invalid3 at nested1.nested2.a3",
-            "invalid3 at nested1.nested2.b3",
-            "invalid2 at nested1.array2",
-            "invalid6 at nested1.array2.0.a3",
-            "invalid6 at nested1.array2.0.b3",
-          ])
-        );
-        expect(env.validator.hasErrors("nested1.array2" as KeyPath, true)).toBe(true);
+        expect(buildErrorMap(env["parent"].findErrors("child" as KeyPath, true))).toMatchInlineSnapshot(`
+          Map {
+            "child" => [
+              "invalid at parent.child",
+              "invalid self at parent.child",
+            ],
+            "child.aa" => [
+              "invalid at parent.child.aa",
+            ],
+            "child.bb" => [
+              "invalid at parent.child.bb",
+            ],
+            "child.grandchild" => [
+              "invalid at parent.child.grandchild",
+              "invalid self at parent.child.grandchild",
+            ],
+            "child.grandchildren" => [
+              "invalid at parent.child.grandchildren",
+            ],
+            "child.0" => [
+              "invalid self at parent.child.(arrayHoist).0",
+            ],
+            "child.0.aaa" => [
+              "invalid at parent.child.(arrayHoist).0.aaa",
+            ],
+            "child.0.bbb" => [
+              "invalid at parent.child.(arrayHoist).0.bbb",
+            ],
+            "child.grandchild.aaa" => [
+              "invalid at parent.child.grandchild.aaa",
+            ],
+            "child.grandchild.bbb" => [
+              "invalid at parent.child.grandchild.bbb",
+            ],
+            "child.grandchildren.0" => [
+              "invalid self at parent.child.grandchildren.0",
+            ],
+            "child.grandchildren.0.aaa" => [
+              "invalid at parent.child.grandchildren.0.aaa",
+            ],
+            "child.grandchildren.0.bbb" => [
+              "invalid at parent.child.grandchildren.0.bbb",
+            ],
+          }
+        `);
 
-        expect(buildErrorMap(env.validator.findErrors("nested1.array2" as KeyPath, true))).toEqual(
-          new Map([
-            ["nested1.array2", ["invalid2 at nested1.array2"]],
-            ["nested1.array2.0.a3", ["invalid6 at nested1.array2.0.a3"]],
-            ["nested1.array2.0.b3", ["invalid6 at nested1.array2.0.b3"]],
-          ])
-        );
-        expect(env.validator.getErrorMessages("nested1.array2" as KeyPath, true)).toEqual(
-          new Set(["invalid2 at nested1.array2", "invalid6 at nested1.array2.0.a3", "invalid6 at nested1.array2.0.b3"])
-        );
-        expect(env.validator.hasErrors("nested1.array2" as KeyPath, true)).toBe(true);
+        expect(buildErrorMap(env["parent"].findErrors("child.aa" as KeyPath, true))).toMatchInlineSnapshot(`
+          Map {
+            "child.aa" => [
+              "invalid at parent.child.aa",
+            ],
+          }
+        `);
+
+        expect(buildErrorMap(env["parent"].findErrors("child.grandchildren" as KeyPath, true))).toMatchInlineSnapshot(`
+          Map {
+            "child.grandchildren" => [
+              "invalid at parent.child.grandchildren",
+            ],
+            "child.grandchildren.0" => [
+              "invalid self at parent.child.grandchildren.0",
+            ],
+            "child.grandchildren.0.aaa" => [
+              "invalid at parent.child.grandchildren.0.aaa",
+            ],
+            "child.grandchildren.0.bbb" => [
+              "invalid at parent.child.grandchildren.0.bbb",
+            ],
+          }
+        `);
       });
     });
   });
