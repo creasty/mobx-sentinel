@@ -481,10 +481,10 @@ describe("Validator", () => {
             "grandchildren" => [
               "invalid at parent.child.grandchildren",
             ],
-            "aaa" => [
+            "0.aaa" => [
               "invalid at parent.child.(arrayHoist).0.aaa",
             ],
-            "bbb" => [
+            "0.bbb" => [
               "invalid at parent.child.(arrayHoist).0.bbb",
             ],
           }
@@ -619,10 +619,10 @@ describe("Validator", () => {
             "child.grandchildren" => [
               "invalid at parent.child.grandchildren",
             ],
-            "child.aaa" => [
+            "child.0.aaa" => [
               "invalid at parent.child.(arrayHoist).0.aaa",
             ],
-            "child.bbb" => [
+            "child.0.bbb" => [
               "invalid at parent.child.(arrayHoist).0.bbb",
             ],
           }
