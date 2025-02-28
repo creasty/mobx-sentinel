@@ -1,4 +1,4 @@
-import { buildKeyPath, getParentKeyOfKeyPath, KeyPath, KeyPathMultiMap } from "./keyPath";
+import { buildKeyPath, getParentKeyOfKeyPath, KeyPath, KeyPathMultiMap, KeyPathSelf } from "./keyPath";
 
 export class ValidationError extends Error {
   readonly key: KeyPath;
@@ -15,14 +15,12 @@ export class ValidationError extends Error {
   }
 }
 
-const buildToken = Symbol("validationErrorMapBuilder.build");
-
 export class ValidationErrorMapBuilder<T> {
   readonly #map = new KeyPathMultiMap<ValidationError>();
 
   /** @internal @ignore */
   static build(instance: ValidationErrorMapBuilder<any>) {
-    return instance[buildToken]();
+    return instance.#build();
   }
 
   /**
@@ -36,13 +34,23 @@ export class ValidationErrorMapBuilder<T> {
     this.#map.set(keyPath, error);
   }
 
+  /**
+   * Invalidate the target object itself
+   *
+   * This is useful with `@nested.hoist` to invalidate the parent object.
+   */
+  invalidateSelf(reason: string | Error) {
+    const keyPath = KeyPathSelf;
+    const error = new ValidationError({ keyPath, reason });
+    this.#map.set(keyPath, error);
+  }
+
   /** Whether the builder has any errors */
   get hasError() {
     return this.#map.size > 0;
   }
 
-  /** @internal @ignore */
-  [buildToken]() {
+  #build() {
     return this.#map.toImmutable();
   }
 }

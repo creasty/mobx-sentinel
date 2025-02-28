@@ -22,17 +22,14 @@ export function useFormAutoReset(form: Form<any>) {
  * @param event The event of the handler.
  * @param handler The handler.\
  *   No memoization is needed as the handler is stored in a ref internally.
- * @param options The options of the handler.
  */
-export function useFormHandler<T extends object, Event extends keyof Form.Handlers<T>>(
+export function useFormHandler<T extends object, Event extends keyof Form.Handlers>(
   form: Form<T>,
   event: Event,
-  handler: Form.Handlers<T>[NoInfer<Event>],
-  options?: Form.HandlerOptions[NoInfer<Event>]
+  handler: Form.Handlers[NoInfer<Event>]
 ) {
   const handlerRef = useRef(handler);
   handlerRef.current = handler;
-  const optionsRef = useRef(options);
 
-  useEffect(() => form.addHandler(event, handlerRef.current, optionsRef.current), [form, event]);
+  useEffect(() => form.addHandler(event, handlerRef.current), [form, event]);
 }

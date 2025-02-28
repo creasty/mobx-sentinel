@@ -13,10 +13,10 @@ class Sample {
 }
 
 function setupEnv(opt?: {
+  syncTimeline?: boolean;
+  syncHandler?: boolean;
   asyncTimeline?: boolean;
   asyncHandler?: boolean;
-  reactiveTimeline?: boolean;
-  reactiveHandler?: boolean;
 }) {
   const lag = {
     requestDelay: 90,
@@ -26,26 +26,32 @@ function setupEnv(opt?: {
 
   const model = new Sample();
   const validator = Validator.get(model);
-  validator.enqueueDelayMs = lag.requestDelay;
-  validator.scheduleDelayMs = lag.scheduleDelay;
 
   const timeline: string[] = [];
+  if (opt?.asyncTimeline || opt?.asyncHandler || opt?.syncTimeline || opt?.syncHandler) {
+    autorun(() => {
+      timeline.push(`reactionState: ${validator.reactionState}`);
+    });
+  }
 
   let asyncCallCounter = 0;
   if (opt?.asyncTimeline || opt?.asyncHandler) {
     autorun(() => {
-      timeline.push(`jobState: ${validator.jobState}`);
+      timeline.push(`asyncState: ${validator.asyncState}`);
     });
   }
   if (opt?.asyncHandler) {
     validator.addAsyncHandler(
-      async (builder, abortSignal) => {
+      () => model.field1,
+      async (field1, builder, abortSignal) => {
         const localCounter = ++asyncCallCounter;
-        timeline.push(`job start ${localCounter}`);
+        timeline.push(`job start ${localCounter} with payload ${field1}`);
         return new Promise((resolve) => {
           const timerId = setTimeout(() => {
             timeline.push(`job end ${localCounter}`);
-            builder.invalidate("field1", "invalid");
+            if (field1 < 0) {
+              builder.invalidate("field1", "invalid");
+            }
             resolve();
           }, lag.runTime);
           abortSignal.onabort = () => {
@@ -59,13 +65,8 @@ function setupEnv(opt?: {
   }
 
   let reactionCounter = -1;
-  if (opt?.reactiveTimeline || opt?.reactiveHandler) {
-    autorun(() => {
-      timeline.push(`reactionState: ${validator.reactionState}`);
-    });
-  }
-  if (opt?.reactiveHandler) {
-    validator.addReactiveHandler(
+  if (opt?.syncHandler) {
+    validator.addSyncHandler(
       (builder) => {
         reactionCounter++;
         if (reactionCounter > 0) {
@@ -89,11 +90,8 @@ function setupEnv(opt?: {
     getAsyncCallCount() {
       return asyncCallCounter;
     },
-    request(opt?: { force?: boolean }) {
-      return validator.request({ force: !!opt?.force });
-    },
-    async waitForJobState(state: Validator.JobState) {
-      return vi.waitFor(() => expect(this.validator.jobState).toBe(state));
+    async waitForAsyncState(state: number) {
+      return vi.waitFor(() => expect(this.validator.asyncState).toBe(state));
     },
     getReactionCount() {
       return Math.max(0, reactionCounter);
@@ -120,18 +118,30 @@ function buildErrorMap(iter: ReturnType<Validator<any>["findErrors"]>) {
 describe("makeValidatable", () => {
   it("throws an error when a non-object is given", () => {
     expect(() => {
-      makeValidatable(null as any, () => ({}));
+      makeValidatable(null as any, () => void 0);
     }).toThrowError(/Expected an object/);
     expect(() => {
-      makeValidatable(1 as any, () => ({}));
+      makeValidatable(1 as any, () => void 0);
     }).toThrowError(/Expected an object/);
   });
 
-  it("adds a reactive handler to the validator", () => {
+  it("adds a sync handler to the validator", () => {
     const target = {};
     const validator = Validator.get(target);
-    const spy = vi.spyOn(validator, "addReactiveHandler");
-    makeValidatable(target, () => ({}));
+    const spy = vi.spyOn(validator, "addSyncHandler");
+    makeValidatable(target, () => void 0);
+    expect(spy).toBeCalled();
+  });
+
+  it("adds an async handler to the validator", () => {
+    const target = {};
+    const validator = Validator.get(target);
+    const spy = vi.spyOn(validator, "addAsyncHandler");
+    makeValidatable(
+      target,
+      () => true,
+      async () => void 0
+    );
     expect(spy).toBeCalled();
   });
 });
@@ -249,242 +259,523 @@ describe("Validator", () => {
     });
   });
 
-  describe("#findErrors, #getErrorMessages, #hasErrors, #firstErrorMessage", () => {
-    class Sample {
-      a1 = false;
-      b1 = false;
-      @nested nested1 = new Nested1();
-      @nested array1 = [new Nested1()];
+  describe("#firstErrorMessage", () => {
+    it("calls findErrors() internally", () => {
+      const validator = Validator.get({});
+      const spy = vi.spyOn(validator, "findErrors");
+      void validator.firstErrorMessage;
+      expect(spy).toBeCalledWith(KeyPathSelf, true);
+    });
+
+    it("returns null when there are no errors", () => {
+      const validator = Validator.get({});
+      expect(validator.firstErrorMessage).toBeNull();
+    });
+
+    it("returns the first error message", () => {
+      const validator = Validator.get({ field1: 0, field2: 0 });
+      validator.updateErrors(Symbol(), (builder) => {
+        builder.invalidate("field1", "invalid1");
+        builder.invalidate("field2", "invalid2");
+      });
+      expect(validator.firstErrorMessage).toBe("invalid1");
+    });
+  });
+
+  describe("#getErrorMessages", () => {
+    it("calls findErrors() internally", () => {
+      const validator = Validator.get({});
+      const spy = vi.spyOn(validator, "findErrors");
+
+      validator.getErrorMessages(KeyPathSelf);
+      expect(spy).nthCalledWith(1, KeyPathSelf, false);
+
+      validator.getErrorMessages(KeyPathSelf, true);
+      expect(spy).nthCalledWith(2, KeyPathSelf, true);
+
+      validator.getErrorMessages("field1" as KeyPath);
+      expect(spy).nthCalledWith(3, "field1" as KeyPath, false);
+
+      validator.getErrorMessages("field1" as KeyPath, true);
+      expect(spy).nthCalledWith(4, "field1" as KeyPath, true);
+    });
+
+    it("returns an empty set when there are no errors", () => {
+      const validator = Validator.get({});
+      expect(validator.getErrorMessages(KeyPathSelf)).toEqual(new Set());
+    });
+
+    it("returns a set of error messages", () => {
+      const validator = Validator.get({ field1: 0, field2: 0 });
+      validator.updateErrors(Symbol(), (builder) => {
+        builder.invalidate("field1", "invalid1");
+        builder.invalidate("field2", "invalid2");
+        builder.invalidate("field2", "invalid3");
+      });
+      expect(validator.getErrorMessages(KeyPathSelf)).toEqual(new Set(["invalid1", "invalid2", "invalid3"]));
+      expect(validator.getErrorMessages("field1" as KeyPath)).toEqual(new Set(["invalid1"]));
+      expect(validator.getErrorMessages("field2" as KeyPath)).toEqual(new Set(["invalid2", "invalid3"]));
+    });
+  });
+
+  describe("#hasErrors", () => {
+    it("calls findErrors() internally", () => {
+      const validator = Validator.get({});
+      const spy = vi.spyOn(validator, "findErrors");
+
+      validator.hasErrors(KeyPathSelf);
+      expect(spy).nthCalledWith(1, KeyPathSelf, false);
+
+      validator.hasErrors(KeyPathSelf, true);
+      expect(spy).nthCalledWith(2, KeyPathSelf, true);
+
+      validator.hasErrors("field1" as KeyPath);
+      expect(spy).nthCalledWith(3, "field1" as KeyPath, false);
+
+      validator.hasErrors("field1" as KeyPath, true);
+      expect(spy).nthCalledWith(4, "field1" as KeyPath, true);
+    });
+
+    it("returns false when there are no errors", () => {
+      const validator = Validator.get({});
+      expect(validator.hasErrors(KeyPathSelf)).toBe(false);
+    });
+
+    it("returns true when there are errors", () => {
+      const validator = Validator.get({ field1: 0, field2: 0 });
+      validator.updateErrors(Symbol(), (builder) => {
+        builder.invalidate("field1", "invalid1");
+      });
+      expect(validator.hasErrors(KeyPathSelf)).toBe(true);
+      expect(validator.hasErrors("field1" as KeyPath)).toBe(true);
+      expect(validator.hasErrors("field2" as KeyPath)).toBe(false);
+    });
+  });
+
+  describe("#findErrors", () => {
+    class Parent {
+      a = false;
+      b = false;
+      @nested.hoist hoist = new Child();
+      @nested child = new Child();
+      @nested children = [new Child()];
     }
 
-    class Nested1 {
-      a2 = false;
-      b2 = false;
-      @nested nested2 = new Nested2();
-      @nested array2 = [new Nested2()];
+    class Child {
+      aa = false;
+      bb = false;
+      @nested.hoist arrayHoist = [new Grandchild()];
+      @nested grandchild = new Grandchild();
+      @nested grandchildren = [new Grandchild()];
     }
 
-    class Nested2 {
-      a3 = false;
-      b3 = false;
+    class Grandchild {
+      aaa = false;
+      bbb = false;
     }
 
     const setupEnv = (opt?: { clean?: boolean }) => {
-      const object = new Sample();
-      const validator = Validator.get(object);
-      const vNested1 = Validator.get(object.nested1);
-      const vNested2 = Validator.get(object.nested1.nested2);
-      const vArray1 = Validator.get(object.array1[0]);
-      const vArray2 = Validator.get(object.array1[0].array2[0]);
-      const vNested1Array2 = Validator.get(object.nested1.array2[0]);
+      const parent = new Parent();
+      const validators = {
+        parent: Validator.get(parent),
+        "parent.hoist": Validator.get(parent.hoist),
+        "parent.child": Validator.get(parent.child),
+        "parent.child.arrayHoist.0": Validator.get(parent.child.arrayHoist[0]),
+        "parent.child.grandchild": Validator.get(parent.child.grandchild),
+        "parent.child.grandchildren.0": Validator.get(parent.child.grandchildren[0]),
+        "parent.children.0": Validator.get(parent.children[0]),
+        "parent.children.0.grandchildren.0": Validator.get(parent.children[0].grandchildren[0]),
+      };
 
       if (!opt?.clean) {
-        validator.updateErrors(Symbol(), (builder) => {
-          builder.invalidate("a1", "invalid1 at a1");
-          builder.invalidate("b1", "invalid1 at b1");
-          builder.invalidate("nested1", "invalid1 at nested1");
-          builder.invalidate("array1", "invalid1 at array1");
+        validators["parent"].updateErrors(Symbol(), (builder) => {
+          builder.invalidateSelf("invalid self at parent");
+          builder.invalidate("a", "invalid at parent.a");
+          builder.invalidate("b", "invalid at parent.b");
+          builder.invalidate("child", "invalid at parent.child");
+          builder.invalidate("children", "invalid at parent.children");
         });
-        vNested1.updateErrors(Symbol(), (builder) => {
-          builder.invalidate("a2", "invalid2 at nested1.a2");
-          builder.invalidate("b2", "invalid2 at nested1.b2");
-          builder.invalidate("nested2", "invalid2 at nested1.nested2");
-          builder.invalidate("array2", "invalid2 at nested1.array2");
+        validators["parent.hoist"].updateErrors(Symbol(), (builder) => {
+          builder.invalidateSelf("invalid self at parent.(hoist)");
+          builder.invalidate("aa", "invalid at parent.(hoist).aa");
+          builder.invalidate("bb", "invalid at parent.(hoist).bb");
         });
-        vNested2.updateErrors(Symbol(), (builder) => {
-          builder.invalidate("a3", "invalid3 at nested1.nested2.a3");
-          builder.invalidate("b3", "invalid3 at nested1.nested2.b3");
+        validators["parent.child"].updateErrors(Symbol(), (builder) => {
+          builder.invalidateSelf("invalid self at parent.child");
+          builder.invalidate("aa", "invalid at parent.child.aa");
+          builder.invalidate("bb", "invalid at parent.child.bb");
+          builder.invalidate("grandchild", "invalid at parent.child.grandchild");
+          builder.invalidate("grandchildren", "invalid at parent.child.grandchildren");
         });
-        vArray1.updateErrors(Symbol(), (builder) => {
-          builder.invalidate("a2", "invalid4 at array1.0.a2");
-          builder.invalidate("b2", "invalid4 at array1.0.b2");
+        validators["parent.child.arrayHoist.0"].updateErrors(Symbol(), (builder) => {
+          builder.invalidateSelf("invalid self at parent.child.(arrayHoist).0");
+          builder.invalidate("aaa", "invalid at parent.child.(arrayHoist).0.aaa");
+          builder.invalidate("bbb", "invalid at parent.child.(arrayHoist).0.bbb");
         });
-        vArray2.updateErrors(Symbol(), (builder) => {
-          builder.invalidate("a3", "invalid5 at array1.0.array2.0.a3");
-          builder.invalidate("b3", "invalid5 at array1.0.array2.0.b3");
+        validators["parent.child.grandchild"].updateErrors(Symbol(), (builder) => {
+          builder.invalidateSelf("invalid self at parent.child.grandchild");
+          builder.invalidate("aaa", "invalid at parent.child.grandchild.aaa");
+          builder.invalidate("bbb", "invalid at parent.child.grandchild.bbb");
         });
-        vNested1Array2.updateErrors(Symbol(), (builder) => {
-          builder.invalidate("a3", "invalid6 at nested1.array2.0.a3");
-          builder.invalidate("b3", "invalid6 at nested1.array2.0.b3");
+        validators["parent.children.0"].updateErrors(Symbol(), (builder) => {
+          builder.invalidateSelf("invalid self at parent.children.0");
+          builder.invalidate("aa", "invalid at parent.children.0.aa");
+          builder.invalidate("bb", "invalid at parent.children.0.bb");
+        });
+        validators["parent.children.0.grandchildren.0"].updateErrors(Symbol(), (builder) => {
+          builder.invalidateSelf("invalid self at parent.children.0.grandchildren.0");
+          builder.invalidate("aaa", "invalid at parent.children.0.grandchildren.0.aaa");
+          builder.invalidate("bbb", "invalid at parent.children.0.grandchildren.0.bbb");
+        });
+        validators["parent.child.grandchildren.0"].updateErrors(Symbol(), (builder) => {
+          builder.invalidateSelf("invalid self at parent.child.grandchildren.0");
+          builder.invalidate("aaa", "invalid at parent.child.grandchildren.0.aaa");
+          builder.invalidate("bbb", "invalid at parent.child.grandchildren.0.bbb");
         });
       }
 
-      return { validator };
+      return validators;
     };
-
-    describe("#firstErrorMessage", () => {
-      it("returns null when there are no errors", () => {
-        const env = setupEnv({ clean: true });
-        expect(env.validator.firstErrorMessage).toBeNull();
-      });
-
-      it("returns the first error message", () => {
-        const env = setupEnv();
-        expect(env.validator.firstErrorMessage).toBe("invalid1 at a1");
-      });
-    });
 
     describe("Search with a self path", () => {
       it("returns an empty iterator when there are no errors", () => {
         const env = setupEnv({ clean: true });
-        expect(buildErrorMap(env.validator.findErrors(KeyPathSelf))).toEqual(new Map());
-        expect(env.validator.getErrorMessages(KeyPathSelf)).toEqual(new Set());
-        expect(env.validator.hasErrors(KeyPathSelf)).toBe(false);
+        expect(buildErrorMap(env["parent"].findErrors(KeyPathSelf))).toEqual(new Map());
       });
 
       it("returns own errors", () => {
         const env = setupEnv();
-        expect(buildErrorMap(env.validator.findErrors(KeyPathSelf))).toEqual(
-          new Map([
-            ["a1", ["invalid1 at a1"]],
-            ["b1", ["invalid1 at b1"]],
-            ["nested1", ["invalid1 at nested1"]],
-            ["array1", ["invalid1 at array1"]],
-          ])
-        );
-        expect(env.validator.getErrorMessages(KeyPathSelf)).toEqual(
-          new Set(["invalid1 at a1", "invalid1 at b1", "invalid1 at nested1", "invalid1 at array1"])
-        );
-        expect(env.validator.hasErrors(KeyPathSelf)).toBe(true);
+        expect(buildErrorMap(env["parent"].findErrors(KeyPathSelf))).toMatchInlineSnapshot(`
+          Map {
+            Symbol(self) => [
+              "invalid self at parent",
+              "invalid self at parent.(hoist)",
+            ],
+            "a" => [
+              "invalid at parent.a",
+            ],
+            "b" => [
+              "invalid at parent.b",
+            ],
+            "child" => [
+              "invalid at parent.child",
+              "invalid self at parent.child",
+            ],
+            "children" => [
+              "invalid at parent.children",
+            ],
+            "aa" => [
+              "invalid at parent.(hoist).aa",
+            ],
+            "bb" => [
+              "invalid at parent.(hoist).bb",
+            ],
+          }
+        `);
+        expect(buildErrorMap(env["parent.child"].findErrors(KeyPathSelf))).toMatchInlineSnapshot(`
+          Map {
+            Symbol(self) => [
+              "invalid self at parent.child",
+            ],
+            "aa" => [
+              "invalid at parent.child.aa",
+            ],
+            "bb" => [
+              "invalid at parent.child.bb",
+            ],
+            "grandchild" => [
+              "invalid at parent.child.grandchild",
+              "invalid self at parent.child.grandchild",
+            ],
+            "grandchildren" => [
+              "invalid at parent.child.grandchildren",
+            ],
+            "0" => [
+              "invalid self at parent.child.(arrayHoist).0",
+            ],
+            "0.aaa" => [
+              "invalid at parent.child.(arrayHoist).0.aaa",
+            ],
+            "0.bbb" => [
+              "invalid at parent.child.(arrayHoist).0.bbb",
+            ],
+          }
+        `);
       });
 
       it("returns all errors with prefix match", () => {
         const env = setupEnv();
-        expect(buildErrorMap(env.validator.findErrors(KeyPathSelf, true))).toEqual(
-          new Map([
-            ["a1", ["invalid1 at a1"]],
-            ["b1", ["invalid1 at b1"]],
-            ["array1", ["invalid1 at array1"]],
-            ["array1.0.a2", ["invalid4 at array1.0.a2"]],
-            ["array1.0.b2", ["invalid4 at array1.0.b2"]],
-            ["array1.0.array2.0.a3", ["invalid5 at array1.0.array2.0.a3"]],
-            ["array1.0.array2.0.b3", ["invalid5 at array1.0.array2.0.b3"]],
-            ["nested1", ["invalid1 at nested1"]],
-            ["nested1.a2", ["invalid2 at nested1.a2"]],
-            ["nested1.b2", ["invalid2 at nested1.b2"]],
-            ["nested1.nested2", ["invalid2 at nested1.nested2"]],
-            ["nested1.nested2.a3", ["invalid3 at nested1.nested2.a3"]],
-            ["nested1.nested2.b3", ["invalid3 at nested1.nested2.b3"]],
-            ["nested1.array2", ["invalid2 at nested1.array2"]],
-            ["nested1.array2.0.a3", ["invalid6 at nested1.array2.0.a3"]],
-            ["nested1.array2.0.b3", ["invalid6 at nested1.array2.0.b3"]],
-          ])
-        );
-        expect(env.validator.getErrorMessages(KeyPathSelf, true)).toEqual(
-          new Set([
-            "invalid1 at a1",
-            "invalid1 at b1",
-            "invalid1 at array1",
-            "invalid4 at array1.0.a2",
-            "invalid4 at array1.0.b2",
-            "invalid5 at array1.0.array2.0.a3",
-            "invalid5 at array1.0.array2.0.b3",
-            "invalid1 at nested1",
-            "invalid2 at nested1.a2",
-            "invalid2 at nested1.b2",
-            "invalid2 at nested1.nested2",
-            "invalid3 at nested1.nested2.a3",
-            "invalid3 at nested1.nested2.b3",
-            "invalid2 at nested1.array2",
-            "invalid6 at nested1.array2.0.a3",
-            "invalid6 at nested1.array2.0.b3",
-          ])
-        );
-        expect(env.validator.hasErrors(KeyPathSelf, true)).toBe(true);
+        expect(buildErrorMap(env["parent"].findErrors(KeyPathSelf, true))).toMatchInlineSnapshot(`
+          Map {
+            Symbol(self) => [
+              "invalid self at parent",
+              "invalid self at parent.(hoist)",
+            ],
+            "a" => [
+              "invalid at parent.a",
+            ],
+            "b" => [
+              "invalid at parent.b",
+            ],
+            "child" => [
+              "invalid at parent.child",
+              "invalid self at parent.child",
+            ],
+            "children" => [
+              "invalid at parent.children",
+            ],
+            "aa" => [
+              "invalid at parent.(hoist).aa",
+            ],
+            "bb" => [
+              "invalid at parent.(hoist).bb",
+            ],
+            "child.aa" => [
+              "invalid at parent.child.aa",
+            ],
+            "child.bb" => [
+              "invalid at parent.child.bb",
+            ],
+            "child.grandchild" => [
+              "invalid at parent.child.grandchild",
+              "invalid self at parent.child.grandchild",
+            ],
+            "child.grandchildren" => [
+              "invalid at parent.child.grandchildren",
+            ],
+            "child.0" => [
+              "invalid self at parent.child.(arrayHoist).0",
+            ],
+            "child.0.aaa" => [
+              "invalid at parent.child.(arrayHoist).0.aaa",
+            ],
+            "child.0.bbb" => [
+              "invalid at parent.child.(arrayHoist).0.bbb",
+            ],
+            "child.grandchild.aaa" => [
+              "invalid at parent.child.grandchild.aaa",
+            ],
+            "child.grandchild.bbb" => [
+              "invalid at parent.child.grandchild.bbb",
+            ],
+            "child.grandchildren.0" => [
+              "invalid self at parent.child.grandchildren.0",
+            ],
+            "child.grandchildren.0.aaa" => [
+              "invalid at parent.child.grandchildren.0.aaa",
+            ],
+            "child.grandchildren.0.bbb" => [
+              "invalid at parent.child.grandchildren.0.bbb",
+            ],
+            "children.0" => [
+              "invalid self at parent.children.0",
+            ],
+            "children.0.aa" => [
+              "invalid at parent.children.0.aa",
+            ],
+            "children.0.bb" => [
+              "invalid at parent.children.0.bb",
+            ],
+            "children.0.grandchildren.0" => [
+              "invalid self at parent.children.0.grandchildren.0",
+            ],
+            "children.0.grandchildren.0.aaa" => [
+              "invalid at parent.children.0.grandchildren.0.aaa",
+            ],
+            "children.0.grandchildren.0.bbb" => [
+              "invalid at parent.children.0.grandchildren.0.bbb",
+            ],
+          }
+        `);
+        expect(buildErrorMap(env["parent.child"].findErrors(KeyPathSelf, true))).toMatchInlineSnapshot(`
+          Map {
+            Symbol(self) => [
+              "invalid self at parent.child",
+            ],
+            "aa" => [
+              "invalid at parent.child.aa",
+            ],
+            "bb" => [
+              "invalid at parent.child.bb",
+            ],
+            "grandchild" => [
+              "invalid at parent.child.grandchild",
+              "invalid self at parent.child.grandchild",
+            ],
+            "grandchildren" => [
+              "invalid at parent.child.grandchildren",
+            ],
+            "0" => [
+              "invalid self at parent.child.(arrayHoist).0",
+            ],
+            "0.aaa" => [
+              "invalid at parent.child.(arrayHoist).0.aaa",
+            ],
+            "0.bbb" => [
+              "invalid at parent.child.(arrayHoist).0.bbb",
+            ],
+            "grandchild.aaa" => [
+              "invalid at parent.child.grandchild.aaa",
+            ],
+            "grandchild.bbb" => [
+              "invalid at parent.child.grandchild.bbb",
+            ],
+            "grandchildren.0" => [
+              "invalid self at parent.child.grandchildren.0",
+            ],
+            "grandchildren.0.aaa" => [
+              "invalid at parent.child.grandchildren.0.aaa",
+            ],
+            "grandchildren.0.bbb" => [
+              "invalid at parent.child.grandchildren.0.bbb",
+            ],
+          }
+        `);
       });
     });
 
     describe("Search for a specific path", () => {
       it("returns an empty iterator when there are no errors", () => {
         const env = setupEnv({ clean: true });
-        expect(buildErrorMap(env.validator.findErrors(KeyPathSelf))).toEqual(new Map());
-        expect(env.validator.getErrorMessages(KeyPathSelf)).toEqual(new Set());
-        expect(env.validator.hasErrors(KeyPathSelf)).toBe(false);
+        expect(buildErrorMap(env["parent"].findErrors(KeyPathSelf))).toEqual(new Map());
       });
 
       it("returns errors for the specific path", () => {
         const env = setupEnv();
-        expect(buildErrorMap(env.validator.findErrors("nested1" as KeyPath))).toEqual(
-          new Map([
-            ["nested1", ["invalid1 at nested1"]],
-            ["nested1.a2", ["invalid2 at nested1.a2"]],
-            ["nested1.b2", ["invalid2 at nested1.b2"]],
-            ["nested1.nested2", ["invalid2 at nested1.nested2"]],
-            ["nested1.array2", ["invalid2 at nested1.array2"]],
-          ])
-        );
-        expect(env.validator.getErrorMessages("nested1" as KeyPath)).toEqual(
-          new Set([
-            "invalid1 at nested1",
-            "invalid2 at nested1.a2",
-            "invalid2 at nested1.b2",
-            "invalid2 at nested1.nested2",
-            "invalid2 at nested1.array2",
-          ])
-        );
-        expect(env.validator.hasErrors("nested1" as KeyPath)).toBe(true);
+        expect(buildErrorMap(env["parent"].findErrors("child" as KeyPath))).toMatchInlineSnapshot(`
+          Map {
+            "child" => [
+              "invalid at parent.child",
+              "invalid self at parent.child",
+            ],
+            "child.aa" => [
+              "invalid at parent.child.aa",
+            ],
+            "child.bb" => [
+              "invalid at parent.child.bb",
+            ],
+            "child.grandchild" => [
+              "invalid at parent.child.grandchild",
+              "invalid self at parent.child.grandchild",
+            ],
+            "child.grandchildren" => [
+              "invalid at parent.child.grandchildren",
+            ],
+            "child.0" => [
+              "invalid self at parent.child.(arrayHoist).0",
+            ],
+            "child.0.aaa" => [
+              "invalid at parent.child.(arrayHoist).0.aaa",
+            ],
+            "child.0.bbb" => [
+              "invalid at parent.child.(arrayHoist).0.bbb",
+            ],
+          }
+        `);
 
-        expect(buildErrorMap(env.validator.findErrors("nested1.array2" as KeyPath))).toEqual(
-          new Map([["nested1.array2", ["invalid2 at nested1.array2"]]])
-        );
-        expect(env.validator.getErrorMessages("nested1.array2" as KeyPath)).toEqual(
-          new Set(["invalid2 at nested1.array2"])
-        );
-        expect(env.validator.hasErrors("nested1.array2" as KeyPath)).toBe(true);
+        expect(buildErrorMap(env["parent"].findErrors("child.aa" as KeyPath))).toMatchInlineSnapshot(`
+          Map {
+            "child.aa" => [
+              "invalid at parent.child.aa",
+            ],
+          }
+        `);
 
-        expect(buildErrorMap(env.validator.findErrors("nested1.array2.0" as KeyPath))).toEqual(
-          new Map([
-            ["nested1.array2.0.a3", ["invalid6 at nested1.array2.0.a3"]],
-            ["nested1.array2.0.b3", ["invalid6 at nested1.array2.0.b3"]],
-          ])
-        );
-        expect(env.validator.getErrorMessages("nested1.array2.0" as KeyPath)).toEqual(
-          new Set(["invalid6 at nested1.array2.0.a3", "invalid6 at nested1.array2.0.b3"])
-        );
-        expect(env.validator.hasErrors("nested1.array2.0" as KeyPath)).toBe(true);
+        expect(buildErrorMap(env["parent"].findErrors("child.grandchildren" as KeyPath))).toMatchInlineSnapshot(`
+          Map {
+            "child.grandchildren" => [
+              "invalid at parent.child.grandchildren",
+            ],
+          }
+        `);
+
+        expect(buildErrorMap(env["parent"].findErrors("child.grandchildren.0" as KeyPath))).toMatchInlineSnapshot(`
+          Map {
+            "child.grandchildren.0" => [
+              "invalid self at parent.child.grandchildren.0",
+            ],
+            "child.grandchildren.0.aaa" => [
+              "invalid at parent.child.grandchildren.0.aaa",
+            ],
+            "child.grandchildren.0.bbb" => [
+              "invalid at parent.child.grandchildren.0.bbb",
+            ],
+          }
+        `);
       });
 
       it("returns all errors for the specific path with prefix match", () => {
         const env = setupEnv();
-        expect(buildErrorMap(env.validator.findErrors("nested1" as KeyPath, true))).toEqual(
-          new Map([
-            ["nested1", ["invalid1 at nested1"]],
-            ["nested1.a2", ["invalid2 at nested1.a2"]],
-            ["nested1.b2", ["invalid2 at nested1.b2"]],
-            ["nested1.nested2", ["invalid2 at nested1.nested2"]],
-            ["nested1.nested2.a3", ["invalid3 at nested1.nested2.a3"]],
-            ["nested1.nested2.b3", ["invalid3 at nested1.nested2.b3"]],
-            ["nested1.array2", ["invalid2 at nested1.array2"]],
-            ["nested1.array2.0.a3", ["invalid6 at nested1.array2.0.a3"]],
-            ["nested1.array2.0.b3", ["invalid6 at nested1.array2.0.b3"]],
-          ])
-        );
-        expect(env.validator.getErrorMessages("nested1" as KeyPath, true)).toEqual(
-          new Set([
-            "invalid1 at nested1",
-            "invalid2 at nested1.a2",
-            "invalid2 at nested1.b2",
-            "invalid2 at nested1.nested2",
-            "invalid3 at nested1.nested2.a3",
-            "invalid3 at nested1.nested2.b3",
-            "invalid2 at nested1.array2",
-            "invalid6 at nested1.array2.0.a3",
-            "invalid6 at nested1.array2.0.b3",
-          ])
-        );
-        expect(env.validator.hasErrors("nested1.array2" as KeyPath, true)).toBe(true);
+        expect(buildErrorMap(env["parent"].findErrors("child" as KeyPath, true))).toMatchInlineSnapshot(`
+          Map {
+            "child" => [
+              "invalid at parent.child",
+              "invalid self at parent.child",
+            ],
+            "child.aa" => [
+              "invalid at parent.child.aa",
+            ],
+            "child.bb" => [
+              "invalid at parent.child.bb",
+            ],
+            "child.grandchild" => [
+              "invalid at parent.child.grandchild",
+              "invalid self at parent.child.grandchild",
+            ],
+            "child.grandchildren" => [
+              "invalid at parent.child.grandchildren",
+            ],
+            "child.0" => [
+              "invalid self at parent.child.(arrayHoist).0",
+            ],
+            "child.0.aaa" => [
+              "invalid at parent.child.(arrayHoist).0.aaa",
+            ],
+            "child.0.bbb" => [
+              "invalid at parent.child.(arrayHoist).0.bbb",
+            ],
+            "child.grandchild.aaa" => [
+              "invalid at parent.child.grandchild.aaa",
+            ],
+            "child.grandchild.bbb" => [
+              "invalid at parent.child.grandchild.bbb",
+            ],
+            "child.grandchildren.0" => [
+              "invalid self at parent.child.grandchildren.0",
+            ],
+            "child.grandchildren.0.aaa" => [
+              "invalid at parent.child.grandchildren.0.aaa",
+            ],
+            "child.grandchildren.0.bbb" => [
+              "invalid at parent.child.grandchildren.0.bbb",
+            ],
+          }
+        `);
 
-        expect(buildErrorMap(env.validator.findErrors("nested1.array2" as KeyPath, true))).toEqual(
-          new Map([
-            ["nested1.array2", ["invalid2 at nested1.array2"]],
-            ["nested1.array2.0.a3", ["invalid6 at nested1.array2.0.a3"]],
-            ["nested1.array2.0.b3", ["invalid6 at nested1.array2.0.b3"]],
-          ])
-        );
-        expect(env.validator.getErrorMessages("nested1.array2" as KeyPath, true)).toEqual(
-          new Set(["invalid2 at nested1.array2", "invalid6 at nested1.array2.0.a3", "invalid6 at nested1.array2.0.b3"])
-        );
-        expect(env.validator.hasErrors("nested1.array2" as KeyPath, true)).toBe(true);
+        expect(buildErrorMap(env["parent"].findErrors("child.aa" as KeyPath, true))).toMatchInlineSnapshot(`
+          Map {
+            "child.aa" => [
+              "invalid at parent.child.aa",
+            ],
+          }
+        `);
+
+        expect(buildErrorMap(env["parent"].findErrors("child.grandchildren" as KeyPath, true))).toMatchInlineSnapshot(`
+          Map {
+            "child.grandchildren" => [
+              "invalid at parent.child.grandchildren",
+            ],
+            "child.grandchildren.0" => [
+              "invalid self at parent.child.grandchildren.0",
+            ],
+            "child.grandchildren.0.aaa" => [
+              "invalid at parent.child.grandchildren.0.aaa",
+            ],
+            "child.grandchildren.0.bbb" => [
+              "invalid at parent.child.grandchildren.0.bbb",
+            ],
+          }
+        `);
       });
     });
   });
@@ -550,62 +841,36 @@ describe("Validator", () => {
     });
   });
 
-  describe("#reset", () => {
-    it("resets the errors and states", async () => {
+  describe("Sync validations", () => {
+    it("updates errors immediately after a handler is added", async () => {
       const env = setupEnv();
-
-      const symbol = Symbol();
-      env.validator.updateErrors(symbol, (builder) => {
-        builder.invalidate("field1", "invalid1");
-      });
-      expect(env.validator.invalidKeyPathCount).toBe(1);
-
-      env.validator.reset();
-      expect(env.validator.invalidKeyPathCount).toBe(0);
-    });
-
-    it("cancels pending reactive validations", async () => {
-      const env = setupEnv({ reactiveHandler: true });
-
-      runInAction(() => {
-        env.model.field1++;
-      });
-      expect(env.validator.reactionState).toBe(1);
-
-      env.validator.reset();
-      await env.waitForReactionState(0);
-      expect(env.validator.isValidating).toBe(false);
-    });
-
-    it("cancels scheduled async validations", async () => {
-      const env = setupEnv({ asyncHandler: true });
-
-      env.request();
-      env.validator.reset();
-      await env.waitForJobState("idle");
-      expect(env.validator.isValidating).toBe(false);
-
-      expect(env.timeline).toMatchInlineSnapshot(`
-        [
-          "jobState: idle",
-          "jobState: enqueued",
-          "jobState: idle",
-        ]
-      `);
-    });
-  });
-
-  describe("Reactive validations", () => {
-    it("does nothing when there are no handlers", () => {
-      const env = setupEnv();
-      runInAction(() => {
-        env.model.field1++;
+      const spy = vi.fn();
+      env.validator.addSyncHandler((b) => {
+        spy();
+        b.invalidate("field1", "invalid");
       });
       expect(env.validator.reactionState).toBe(0);
+      expect(spy).toBeCalledTimes(1);
+      expect(env.validator.invalidKeys).toEqual(new Set(["field1"]));
+    });
+
+    it("does not update errors when the initialRun option is false", () => {
+      const env = setupEnv();
+      const spy = vi.fn();
+      env.validator.addSyncHandler(
+        (b) => {
+          spy();
+          b.invalidate("field1", "invalid");
+        },
+        { initialRun: false }
+      );
+      expect(env.validator.reactionState).toBe(0);
+      expect(spy).toBeCalledTimes(1);
+      expect(env.validator.invalidKeys).toEqual(new Set());
     });
 
     it("does nothing when the changes are not related to the handler", () => {
-      const env = setupEnv({ reactiveHandler: true });
+      const env = setupEnv({ syncHandler: true });
       runInAction(() => {
         env.model.field2++;
       });
@@ -619,7 +884,7 @@ describe("Validator", () => {
     });
 
     it("runs the handler when the changes are related to the handler", async () => {
-      const env = setupEnv({ reactiveHandler: true });
+      const env = setupEnv({ syncHandler: true });
       runInAction(() => {
         env.model.field1++;
       });
@@ -639,7 +904,7 @@ describe("Validator", () => {
     });
 
     it("keeps delaying the reaction when the changes are made sequentially", async () => {
-      const env = setupEnv({ reactiveHandler: true });
+      const env = setupEnv({ syncHandler: true });
       runInAction(() => {
         env.model.field1++;
       });
@@ -662,7 +927,7 @@ describe("Validator", () => {
     });
 
     it("updates the errors", async () => {
-      const env = setupEnv({ reactiveHandler: true });
+      const env = setupEnv({ syncHandler: true });
 
       expect(buildErrorMap(env.validator.findErrors(KeyPathSelf))).toEqual(new Map());
       runInAction(() => {
@@ -673,7 +938,7 @@ describe("Validator", () => {
     });
 
     it("removes the errors when the condition is no longer met", async () => {
-      const env = setupEnv({ reactiveHandler: true });
+      const env = setupEnv({ syncHandler: true });
 
       expect(buildErrorMap(env.validator.findErrors(KeyPathSelf))).toEqual(new Map());
       runInAction(() => {
@@ -690,7 +955,7 @@ describe("Validator", () => {
 
     it("removes the handler by calling the returned function", async () => {
       const env = setupEnv();
-      const dispose = env.validator.addReactiveHandler((b) => {
+      const dispose = env.validator.addSyncHandler((b) => {
         void env.model.field1;
         b.invalidate("field1", "invalid");
       });
@@ -709,9 +974,9 @@ describe("Validator", () => {
       expect(env.validator.reactionState).toBe(0);
     });
 
-    it("cancels the pending reactive validation when the handler is removed", async () => {
+    it("cancels the pending validation when the handler is removed", async () => {
       const env = setupEnv();
-      const dispose = env.validator.addReactiveHandler((b) => {
+      const dispose = env.validator.addSyncHandler((b) => {
         void env.model.field1;
         b.invalidate("field1", "invalid");
       });
@@ -725,317 +990,239 @@ describe("Validator", () => {
       await env.waitForReactionState(0);
       expect(env.getReactionCount()).toBe(0);
     });
+  });
 
-    it("runs the handler immediately", async () => {
+  describe("Async validations", () => {
+    it("runs the handler immediately after a handler is added", async () => {
       const env = setupEnv();
-      env.validator.addReactiveHandler((b) => {
-        b.invalidate("field1", "invalid");
-      });
+      const spy = vi.fn();
+      env.validator.addAsyncHandler(() => true, spy);
       expect(env.validator.reactionState).toBe(0);
-      expect(buildErrorMap(env.validator.findErrors(KeyPathSelf))).toEqual(new Map([["field1", ["invalid"]]]));
+      expect(env.validator.asyncState).toBe(1);
+      await env.waitForAsyncState(0);
+      expect(spy).toBeCalledTimes(1);
     });
 
     it("does not run the handler when the initialRun option is false", () => {
       const env = setupEnv();
-      env.validator.addReactiveHandler(
-        (b) => {
-          b.invalidate("field1", "invalid");
-        },
-        { initialRun: false }
+      const spy = vi.fn();
+      env.validator.addAsyncHandler(() => true, spy, { initialRun: false });
+      expect(env.validator.reactionState).toBe(0);
+      expect(env.validator.asyncState).toBe(0);
+      expect(spy).toBeCalledTimes(0);
+    });
+
+    it("removes the handler by calling the returned function", async () => {
+      const env = setupEnv();
+
+      const dispose = env.validator.addAsyncHandler(
+        () => true,
+        async () => {}
       );
       expect(env.validator.reactionState).toBe(0);
+      await env.waitForAsyncState(1);
+
+      dispose();
+      expect(env.validator.reactionState).toBe(0);
+      expect(env.validator.asyncState).toBe(0);
+    });
+
+    it("does nothing when the changes are not related to the handler", () => {
+      const env = setupEnv({ asyncHandler: true });
+      runInAction(() => {
+        env.model.field2++;
+      });
+      expect(env.validator.reactionState).toBe(0);
+      expect(env.timeline).toMatchInlineSnapshot(`
+        [
+          "reactionState: 0",
+          "asyncState: 0",
+        ]
+      `);
+    });
+
+    it("runs the handler when the changes are related to the handler", async () => {
+      const env = setupEnv({ asyncHandler: true });
+      runInAction(() => {
+        env.model.field1++;
+      });
+      expect(env.validator.reactionState).toBe(1);
+      expect(env.validator.isValidating).toBe(true);
+      await env.waitForReactionState(0);
+      expect(env.validator.asyncState).toBe(1);
+      expect(env.validator.isValidating).toBe(true);
+      await env.waitForAsyncState(0);
+      expect(env.validator.isValidating).toBe(false);
+      expect(env.timeline).toMatchInlineSnapshot(`
+        [
+          "reactionState: 0",
+          "asyncState: 0",
+          "reactionState: 1",
+          "job start 1 with payload 1",
+          "reactionState: 0",
+          "asyncState: 1",
+          "job end 1",
+          "asyncState: 0",
+        ]
+      `);
+    });
+
+    it("keeps delaying the reaction when the changes are made sequentially", async () => {
+      const env = setupEnv({ asyncHandler: true });
+      runInAction(() => {
+        env.model.field1++;
+      });
+      expect(env.validator.reactionState).toBe(1);
+      runInAction(() => {
+        env.model.field1++;
+      });
+      expect(env.validator.reactionState).toBe(1);
+      await env.waitForReactionState(0);
+      await env.waitForAsyncState(0);
+      expect(env.validator.isValidating).toBe(false);
+      expect(env.timeline).toMatchInlineSnapshot(`
+        [
+          "reactionState: 0",
+          "asyncState: 0",
+          "reactionState: 1",
+          "job start 1 with payload 2",
+          "reactionState: 0",
+          "asyncState: 1",
+          "job end 1",
+          "asyncState: 0",
+        ]
+      `);
+      expect(env.getAsyncCallCount()).toBe(1);
+    });
+
+    it("updates the errors", async () => {
+      const env = setupEnv({ asyncHandler: true });
+
       expect(buildErrorMap(env.validator.findErrors(KeyPathSelf))).toEqual(new Map());
+      runInAction(() => {
+        env.model.field1 = -1;
+      });
+      await env.waitForReactionState(0);
+      await env.waitForAsyncState(0);
+      expect(buildErrorMap(env.validator.findErrors(KeyPathSelf))).toEqual(new Map([["field1", ["invalid"]]]));
+    });
+
+    it("removes the errors when the condition is no longer met", async () => {
+      const env = setupEnv({ asyncHandler: true });
+
+      expect(buildErrorMap(env.validator.findErrors(KeyPathSelf))).toEqual(new Map());
+      runInAction(() => {
+        env.model.field1 = -1;
+      });
+      await env.waitForReactionState(0);
+      await env.waitForAsyncState(0);
+
+      runInAction(() => {
+        env.model.field1 = 0;
+      });
+      await env.waitForReactionState(0);
+      await env.waitForAsyncState(0);
+      expect(buildErrorMap(env.validator.findErrors(KeyPathSelf))).toEqual(new Map());
+    });
+
+    it("removes the handler by calling the returned function", async () => {
+      const env = setupEnv();
+      const dispose = env.validator.addAsyncHandler(
+        () => env.model.field1,
+        async (_, b) => {
+          b.invalidate("field1", "invalid");
+        }
+      );
+
+      runInAction(() => {
+        env.model.field1++;
+      });
+      await env.waitForReactionState(0);
+      await env.waitForAsyncState(0);
+
+      dispose();
+
+      runInAction(() => {
+        env.model.field1++;
+      });
+      expect(env.validator.reactionState).toBe(0);
+    });
+
+    it("cancels the pending validation when the handler is removed", async () => {
+      const env = setupEnv();
+      const dispose = env.validator.addAsyncHandler(
+        () => env.model.field1,
+        async (_, b) => {
+          b.invalidate("field1", "invalid");
+        }
+      );
+
+      runInAction(() => {
+        env.model.field1++;
+      });
+      expect(env.validator.reactionState).toBe(1);
+
+      dispose();
+      await env.waitForReactionState(0);
+      await env.waitForAsyncState(0);
+      expect(env.getReactionCount()).toBe(0);
     });
   });
 
-  describe("Async validations", () => {
-    describe("Watcher integration", () => {
-      test("When changes are detected, it calls request() method", async () => {
-        const env = setupEnv({ asyncHandler: true });
-        const spy = vi.spyOn(env.validator, "request");
+  describe("#reset", () => {
+    it("resets the errors and states", async () => {
+      const env = setupEnv();
 
-        runInAction(() => {
-          env.model.field1++;
-        });
-        expect(spy).toBeCalled();
+      const symbol = Symbol();
+      env.validator.updateErrors(symbol, (builder) => {
+        builder.invalidate("field1", "invalid1");
       });
+      expect(env.validator.invalidKeyPathCount).toBe(1);
+
+      env.validator.reset();
+      expect(env.validator.invalidKeyPathCount).toBe(0);
     });
 
-    describe("#addAsyncHandler", () => {
-      it("removes the handler by calling the returned function", async () => {
-        const env = setupEnv();
+    it("cancels pending sync validations", async () => {
+      const env = setupEnv({ syncHandler: true });
 
-        const dispose = env.validator.addAsyncHandler(async () => {});
-        env.request();
-        expect(env.validator.jobState).toBe("enqueued");
-        await env.waitForJobState("idle");
-
-        dispose();
-        env.request();
-        expect(env.validator.jobState).toBe("idle");
+      runInAction(() => {
+        env.model.field1++;
       });
+      expect(env.validator.reactionState).toBe(1);
 
-      it("runs the handler immediately", async () => {
-        const env = setupEnv();
-        env.validator.addAsyncHandler(async () => {});
-        expect(env.validator.jobState).toBe("enqueued");
-        await env.waitForJobState("idle");
-      });
-
-      it("does not run the handler when the initialRun option is false", async () => {
-        const env = setupEnv();
-        env.validator.addAsyncHandler(async () => {}, { initialRun: false });
-        expect(env.validator.jobState).toBe("idle");
-      });
+      env.validator.reset();
+      await env.waitForReactionState(0);
+      expect(env.validator.isValidating).toBe(false);
     });
 
-    describe("#request", () => {
-      it("does nothing when there are no handlers", () => {
-        const env = setupEnv();
-        env.request();
-        expect(env.validator.jobState).toBe("idle");
+    it("cancels scheduled async validations", async () => {
+      const env = setupEnv({ asyncHandler: true });
+
+      runInAction(() => {
+        env.model.field1++;
       });
+      await env.waitForAsyncState(1);
+      env.validator.reset();
+      expect(env.validator.asyncState).toBe(0);
+      expect(env.validator.isValidating).toBe(false);
+    });
 
-      it("process validation handlers in parallel", async () => {
-        const env = setupEnv({ asyncTimeline: true });
+    it("can resume handlers after reset", async () => {
+      const env = setupEnv({ syncHandler: true });
 
-        env.validator.addAsyncHandler(async () => {
-          env.timeline.push("validate 1 start");
-          await new Promise((resolve) => setTimeout(resolve, 50));
-          env.timeline.push("validate 1 end");
-        });
-        env.validator.addAsyncHandler(async () => {
-          env.timeline.push("validate 2 start");
-          await new Promise((resolve) => setTimeout(resolve, 10));
-          env.timeline.push("validate 2 end");
-        });
-        env.validator.addAsyncHandler(async () => {
-          env.timeline.push("validate 3 start");
-          await new Promise((resolve) => setTimeout(resolve, 30));
-          env.timeline.push("validate 3 end");
-        });
-
-        env.request();
-        expect(env.validator.isValidating).toBe(true);
-        await env.waitForJobState("idle");
-        expect(env.validator.isValidating).toBe(false);
-        expect(env.timeline).toMatchInlineSnapshot(`
-        [
-          "jobState: idle",
-          "jobState: enqueued",
-          "jobState: running",
-          "validate 1 start",
-          "validate 2 start",
-          "validate 3 start",
-          "validate 2 end",
-          "validate 3 end",
-          "validate 1 end",
-          "jobState: idle",
-        ]
-      `);
+      runInAction(() => {
+        env.model.field1++;
       });
+      expect(env.validator.reactionState).toBe(1);
+      env.validator.reset();
+      expect(env.validator.reactionState).toBe(0);
 
-      it("handles errors in the handler", async () => {
-        const env = setupEnv();
-        const consoleSpy = vi.spyOn(console, "error").mockImplementation(() => {});
-
-        env.validator.addAsyncHandler(async () => {
-          throw new Error("Test error");
-        });
-
-        env.request();
-        await env.waitForJobState("idle");
-        expect(consoleSpy).toHaveBeenCalled();
+      runInAction(() => {
+        env.model.field1++;
       });
-
-      it("enqueues a new validation request", async () => {
-        const env = setupEnv({ asyncHandler: true });
-
-        expect(env.validator.jobState).toBe("idle");
-        env.request();
-        expect(env.validator.jobState).toBe("enqueued");
-        await env.waitForJobState("idle");
-
-        expect(env.getAsyncCallCount()).toBe(1);
-        expect(env.timeline).toMatchInlineSnapshot(`
-        [
-          "jobState: idle",
-          "jobState: enqueued",
-          "jobState: running",
-          "job start 1",
-          "job end 1",
-          "jobState: idle",
-        ]
-      `);
-      });
-
-      it("stays enqueued with a subsequent request when the previous request is still running", async () => {
-        const env = setupEnv({ asyncHandler: true });
-
-        // 1st request
-        env.request();
-        expect(env.validator.jobState).toBe("enqueued");
-
-        // 2nd request
-        env.request();
-        expect(env.validator.jobState).toBe("enqueued");
-        await env.waitForJobState("idle");
-
-        expect(env.getAsyncCallCount()).toBe(1);
-        expect(env.timeline).toMatchInlineSnapshot(`
-        [
-          "jobState: idle",
-          "jobState: enqueued",
-          "jobState: running",
-          "job start 1",
-          "job end 1",
-          "jobState: idle",
-        ]
-      `);
-      });
-
-      it("schedules a new validation request after the completion of the current running validation", async () => {
-        const env = setupEnv({ asyncHandler: true });
-
-        // 1st request
-        env.request();
-        expect(env.validator.jobState).toBe("enqueued");
-        await env.waitForJobState("running");
-
-        // 2nd request
-        env.request();
-        expect(env.validator.jobState).toBe("running");
-        await env.waitForJobState("scheduled");
-        expect(env.getAsyncCallCount()).toBe(1);
-        await env.waitForJobState("idle");
-
-        expect(env.getAsyncCallCount()).toBe(2);
-        expect(env.timeline).toMatchInlineSnapshot(`
-        [
-          "jobState: idle",
-          "jobState: enqueued",
-          "jobState: running",
-          "job start 1",
-          "job end 1",
-          "jobState: scheduled",
-          "jobState: running",
-          "job start 2",
-          "job end 2",
-          "jobState: idle",
-        ]
-      `);
-      });
-
-      it("stays scheduled with a subsequent request when a previous request is also scheduled", async () => {
-        const env = setupEnv({ asyncHandler: true });
-
-        // 1st request
-        env.request();
-        expect(env.validator.jobState).toBe("enqueued");
-        await env.waitForJobState("running");
-
-        // 2nd request
-        env.request();
-        expect(env.validator.jobState).toBe("running");
-        await env.waitForJobState("scheduled");
-        expect(env.getAsyncCallCount()).toBe(1);
-
-        // 3rd request
-        env.request();
-        expect(env.validator.jobState).toBe("scheduled");
-        expect(env.getAsyncCallCount()).toBe(1);
-        await env.waitForJobState("idle");
-
-        expect(env.getAsyncCallCount()).toBe(2);
-        expect(env.timeline).toMatchInlineSnapshot(`
-        [
-          "jobState: idle",
-          "jobState: enqueued",
-          "jobState: running",
-          "job start 1",
-          "job end 1",
-          "jobState: scheduled",
-          "jobState: running",
-          "job start 2",
-          "job end 2",
-          "jobState: idle",
-        ]
-      `);
-      });
-
-      describe("with a force option", () => {
-        it("runs immediately", async () => {
-          const env = setupEnv({ asyncHandler: true });
-
-          env.request({ force: true });
-          expect(env.validator.jobState).toBe("running");
-          await env.waitForJobState("idle");
-
-          expect(env.getAsyncCallCount()).toBe(1);
-          expect(env.timeline).toMatchInlineSnapshot(`
-          [
-            "jobState: idle",
-            "jobState: running",
-            "job start 1",
-            "job end 1",
-            "jobState: idle",
-          ]
-        `);
-        });
-
-        it("cancels the enqueued request and runs a subsequent request immediately", async () => {
-          const env = setupEnv({ asyncHandler: true });
-
-          // 1st request
-          env.request();
-          expect(env.validator.jobState).toBe("enqueued");
-
-          // 2nd request - before the 1st request is run
-          env.request({ force: true });
-          expect(env.validator.jobState).toBe("running");
-          await env.waitForJobState("idle");
-
-          expect(env.getAsyncCallCount()).toBe(1);
-          expect(env.timeline).toMatchInlineSnapshot(`
-          [
-            "jobState: idle",
-            "jobState: enqueued",
-            "jobState: running",
-            "job start 1",
-            "job end 1",
-            "jobState: idle",
-          ]
-        `);
-        });
-
-        it("cancels the current running validation and runs a subsequent request immediately", async () => {
-          const env = setupEnv({ asyncHandler: true });
-
-          // 1st request
-          env.request();
-          expect(env.validator.jobState).toBe("enqueued");
-          await env.waitForJobState("running");
-
-          // 2nd request - while the 1st request is running
-          env.request({ force: true });
-          expect(env.validator.jobState).toBe("running");
-          await env.waitForJobState("idle");
-
-          expect(env.getAsyncCallCount()).toBe(2);
-          expect(env.timeline).toMatchInlineSnapshot(`
-          [
-            "jobState: idle",
-            "jobState: enqueued",
-            "jobState: running",
-            "job start 1",
-            "job aborted 1",
-            "job start 2",
-            "job end 2",
-            "jobState: idle",
-          ]
-        `);
-        });
-      });
+      expect(env.validator.reactionState).toBe(1);
+      await env.waitForReactionState(0);
     });
   });
 });

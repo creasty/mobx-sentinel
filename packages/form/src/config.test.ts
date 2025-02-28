@@ -28,26 +28,26 @@ describe("configureForm", () => {
   });
 
   it("returns the new config if a non-empty object is provided", () => {
-    expect(configureForm({ reactiveValidationDelayMs: 999 })).toEqual({
+    expect(configureForm({ autoFinalizationDelayMs: 999 })).toEqual({
       ...defaultConfig,
-      reactiveValidationDelayMs: 999,
+      autoFinalizationDelayMs: 999,
     });
-    expect(configureForm({ asyncValidationEnqueueDelayMs: 888 })).toEqual({
+    expect(configureForm({ allowSubmitInvalid: true })).toEqual({
       ...defaultConfig,
-      reactiveValidationDelayMs: 999,
-      asyncValidationEnqueueDelayMs: 888,
+      autoFinalizationDelayMs: 999,
+      allowSubmitInvalid: true,
     });
     expect(configureForm({})).toEqual({
       ...defaultConfig,
-      reactiveValidationDelayMs: 999,
-      asyncValidationEnqueueDelayMs: 888,
+      autoFinalizationDelayMs: 999,
+      allowSubmitInvalid: true,
     });
   });
 
   it("returns the default config if true is provided", () => {
-    expect(configureForm({ reactiveValidationDelayMs: 999 })).toEqual({
+    expect(configureForm({ autoFinalizationDelayMs: 999 })).toEqual({
       ...defaultConfig,
-      reactiveValidationDelayMs: 999,
+      autoFinalizationDelayMs: 999,
     });
     expect(configureForm(true)).toEqual(defaultConfig);
   });
@@ -58,15 +58,15 @@ describe("configureForm", () => {
       timeline.push({ ...globalConfig });
     });
 
-    configureForm({ reactiveValidationDelayMs: 999 });
-    configureForm({ asyncValidationEnqueueDelayMs: 888 });
+    configureForm({ autoFinalizationDelayMs: 999 });
+    configureForm({ allowSubmitInvalid: true });
     configureForm({});
     configureForm(true);
 
     expect(timeline).toEqual([
       defaultConfig,
-      { ...defaultConfig, reactiveValidationDelayMs: 999 },
-      { ...defaultConfig, reactiveValidationDelayMs: 999, asyncValidationEnqueueDelayMs: 888 },
+      { ...defaultConfig, autoFinalizationDelayMs: 999 },
+      { ...defaultConfig, autoFinalizationDelayMs: 999, allowSubmitInvalid: true },
       defaultConfig,
     ]);
   });

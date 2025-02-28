@@ -132,6 +132,13 @@ export class KeyPathMultiMap<T> implements ReadonlyKeyPathMultiMap<T> {
 
   /** Find prefix matches for a key path */
   *findPrefix(keyPath: KeyPath) {
+    if (isKeyPathSelf(keyPath)) {
+      for (const values of this.#map.values()) {
+        yield* values;
+      }
+      return;
+    }
+
     const exactMatches = this.#map.get(keyPath);
     if (exactMatches) {
       yield* exactMatches;

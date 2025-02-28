@@ -169,7 +169,7 @@ describe("SelectBoxBinding", () => {
   });
 });
 
-suite("bindSelectBox", () => {
+describe("bindSelectBox", () => {
   const setupEnv = (inputLabel: string) => {
     const model = new SampleModel();
 

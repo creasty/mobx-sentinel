@@ -1,4 +1,4 @@
-import { action, computed, makeObservable, observable, reaction } from "mobx";
+import { action, computed, makeObservable, observable } from "mobx";
 import { v4 as uuidV4 } from "uuid";
 import { Validator, Watcher, StandardNestedFetcher, buildKeyPath, KeyPathSelf } from "@mobx-sentinel/core";
 import { FormField } from "./field";
@@ -118,22 +118,6 @@ export class Form<T> {
         this.reset();
       }
     });
-
-    reaction(
-      () => this.config.reactiveValidationDelayMs,
-      (delay) => (this.validator.reactionDelayMs = delay),
-      { fireImmediately: true }
-    );
-    reaction(
-      () => this.config.asyncValidationEnqueueDelayMs,
-      (delay) => (this.validator.enqueueDelayMs = delay),
-      { fireImmediately: true }
-    );
-    reaction(
-      () => this.config.asyncValidationScheduleDelayMs,
-      (delay) => (this.validator.scheduleDelayMs = delay),
-      { fireImmediately: true }
-    );
   }
 
   /**
@@ -263,35 +247,14 @@ export class Form<T> {
     return this.#submission.exec();
   }
 
-  /** Validate the form */
-  validate(...args: Parameters<Validator<T>["request"]>) {
-    this.validator.request(...args);
-  }
-
   /**
    * Add a handler to the form
    *
    * @returns A function to remove the handler.
    */
-  addHandler<K extends keyof Form.Handlers<T>>(
-    event: K,
-    handler: Form.Handlers<T>[NoInfer<K>],
-    options?: Form.HandlerOptions[NoInfer<K>]
-  ) {
-    switch (event) {
-      case "willSubmit":
-      case "submit":
-      case "didSubmit":
-        return this.#submission.addHandler(event, handler as any);
-      case "asyncValidate":
-        return this.validator.addAsyncHandler(handler as any, options);
-      case "validate":
-        return this.validator.addReactiveHandler(handler as any, options);
-      default:
-        event satisfies never;
-        throw new Error(`Invalid event: ${event}`);
-    }
-  }
+  addHandler: Submission["addHandler"] = (...args) => {
+    return this.#submission.addHandler(...args);
+  };
 
   /** Get a field by name */
   getField(fieldName: FormField.Name<T>) {
@@ -413,17 +376,7 @@ export class Form<T> {
 }
 
 export namespace Form {
-  export type Handlers<T> = Submission.Handlers & {
-    asyncValidate: Validator.AsyncHandler<T>;
-    validate: Validator.ReactiveHandler<T>;
-  };
-  export type HandlerOptions = {
-    willSubmit: never;
-    submit: never;
-    didSubmit: never;
-    asyncValidate: Validator.HandlerOptions;
-    validate: Validator.HandlerOptions;
-  };
+  export type Handlers = Submission.Handlers;
 }
 
 /** @internal @ignore */

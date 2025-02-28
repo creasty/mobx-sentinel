@@ -131,7 +131,7 @@ describe("CheckBoxBinding", () => {
   });
 });
 
-suite("bindCheckBox", () => {
+describe("bindCheckBox", () => {
   const setupEnv = (inputLabel: string) => {
     const model = new SampleModel();
 

@@ -1,7 +1,6 @@
-import { action, comparer, computed, makeObservable, observable, reaction, runInAction } from "mobx";
+import { action, comparer, computed, IEqualsComparer, makeObservable, observable, reaction, runInAction } from "mobx";
 import { v4 as uuidV4 } from "uuid";
 import { ValidationError, ValidationErrorMapBuilder } from "./error";
-import { Watcher } from "./watcher";
 import { StandardNestedFetcher } from "./nested";
 import {
   KeyPath,
@@ -12,48 +11,73 @@ import {
   getRelativeKeyPath,
   isKeyPathSelf,
 } from "./keyPath";
+import { AsyncJob } from "./asyncJob";
 
 const validatorKey = Symbol("validator");
 const internalToken = Symbol("validator.internal");
-const defaultErrorGroupKey = Symbol("validator.defaultErrorGroupKey");
 
 /**
  * Make a target object validatable
  *
- * It's just a shorthand of `Validator.get(target).addReactiveHandler(handler)`.
+ * It's just a shorthand of `Validator.get(target).addAsyncHandler(expr, handler)`.
  *
  * If you're using `make(Auto)Observable`, make sure to call `makeValidatable`
  * after `make(Auto)Observable`.
+ *
+ * @param target The target object
+ * @param expr The expression to observe
+ * @param handler The async handler to call when the expression changes
+ * @param opt The handler options
+ *
+ * @returns A function to remove the handler
+ */
+export function makeValidatable<T extends object, Expr>(
+  target: T,
+  expr: () => Expr,
+  handler: Validator.AsyncHandler<T, NoInfer<Expr>>,
+  opt?: Validator.HandlerOptions<NoInfer<Expr>>
+): () => void;
+
+/**
+ * Make a target object validatable
+ *
+ * It's just a shorthand of `Validator.get(target).addSyncHandler(handler)`.
+ *
+ * If you're using `make(Auto)Observable`, make sure to call `makeValidatable`
+ * after `make(Auto)Observable`.
+ *
+ * @param target The target object
+ * @param handler The sync handler containing observable expressions
+ * @param opt The handler options
  *
  * @returns A function to remove the handler
  */
 export function makeValidatable<T extends object>(
   target: T,
-  handler: Validator.ReactiveHandler<T>,
+  handler: Validator.SyncHandler<T>,
   opt?: Validator.HandlerOptions
-) {
-  return Validator.get(target).addReactiveHandler(handler, opt);
+): () => void;
+
+export function makeValidatable(target: object, ...args: any[]) {
+  if (typeof args[0] === "function" && typeof args[1] === "function") {
+    const [expr, handler, opt] = args;
+    return Validator.get(target).addAsyncHandler(expr, handler, opt);
+  }
+  const [handler, opt] = args;
+  return Validator.get(target).addSyncHandler(handler, opt);
 }
 
 export class Validator<T> {
+  static defaultDelayMs = 100;
+
   readonly id = uuidV4();
   readonly #errors = observable.map<symbol, ReadonlyKeyPathMultiMap<ValidationError>>([], {
     equals: comparer.structural,
   });
   readonly #nestedFetcher: StandardNestedFetcher<Validator<any>>;
-
-  // Async validation
-  enqueueDelayMs = 100;
-  scheduleDelayMs = 300;
-  readonly #asyncHandlers = new Set<Validator.AsyncHandler<T>>();
-  readonly #jobState = observable.box<Validator.JobState>("idle");
-  #nextJobRequested = false;
-  #jobTimerId: number | null = null;
-  #abortCtrl: AbortController | null = null;
-
-  // Reactive validation
-  reactionDelayMs = 100;
   readonly #reactionTimerIds = observable.map<symbol, number>();
+  readonly #reactionResets = new Map<symbol, () => void>();
+  readonly #jobs = observable.set<AsyncJob<any>>();
 
   /**
    * Get a validator for a target object
@@ -91,12 +115,6 @@ export class Validator<T> {
 
     this.#nestedFetcher = new StandardNestedFetcher(target, (entry) => Validator.getSafe(entry.data));
     makeObservable(this);
-
-    const watcher = Watcher.get(target);
-    reaction(
-      () => watcher.changedTick,
-      () => this.request()
-    );
   }
 
   /** Whether no errors are found */
@@ -111,7 +129,11 @@ export class Validator<T> {
     return this.invalidKeys.size;
   }
 
-  /** The number of invalid keys */
+  /**
+   * The keys that have errors
+   *
+   * Keys of nested objects are NOT included.
+   */
   @computed.struct
   get invalidKeys(): ReadonlySet<KeyPath> {
     const seenKeys = new Set<KeyPath>();
@@ -129,7 +151,11 @@ export class Validator<T> {
     return this.invalidKeyPaths.size;
   }
 
-  /** The number of invalid key paths */
+  /**
+   * The key paths that have errors
+   *
+   * Keys of nested objects are included.
+   */
   @computed.struct
   get invalidKeyPaths(): ReadonlySet<KeyPath> {
     const result = new Set<KeyPath>();
@@ -173,17 +199,44 @@ export class Validator<T> {
   }
 
   /** Find errors for the key path */
-  *findErrors(searchKeyPath: KeyPath, prefixMatch = false): Generator<[keyPath: KeyPath, error: ValidationError]> {
+  *findErrors(searchKeyPath: KeyPath, prefixMatch = false) {
+    yield* this.#findErrors(searchKeyPath, prefixMatch, false);
+  }
+
+  /** Find errors for the key path */
+  *#findErrors(
+    searchKeyPath: KeyPath,
+    prefixMatch: boolean,
+    exact: boolean
+  ): Generator<[keyPath: KeyPath, error: ValidationError]> {
     if (isKeyPathSelf(searchKeyPath)) {
-      for (const errors of this.#errors.values()) {
-        for (const [keyPath, error] of errors) {
-          yield [keyPath, error];
+      if (exact) {
+        for (const errors of this.#errors.values()) {
+          for (const error of errors.findExact(KeyPathSelf)) {
+            yield [KeyPathSelf, error];
+          }
+        }
+      } else {
+        for (const errors of this.#errors.values()) {
+          for (const [keyPath, error] of errors) {
+            yield [keyPath, error];
+          }
         }
       }
       if (prefixMatch) {
         for (const [keyPath, validator] of this.nested) {
-          for (const [relativeKeyPath, error] of validator.findErrors(KeyPathSelf, prefixMatch)) {
+          for (const [relativeKeyPath, error] of validator.#findErrors(KeyPathSelf, true, false)) {
             yield [buildKeyPath(keyPath, relativeKeyPath), error];
+          }
+        }
+      } else if (!exact) {
+        for (const entry of this.#nestedFetcher) {
+          const isSelf = entry.key === KeyPathSelf;
+          const isDirectChild = entry.keyPath === entry.key; // Ignores entries with subKey (like arrays)
+          if (isSelf || isDirectChild) {
+            for (const [relativeKeyPath, error] of entry.data.#findErrors(KeyPathSelf, false, !isSelf)) {
+              yield [buildKeyPath(entry.keyPath, relativeKeyPath), error];
+            }
           }
         }
       }
@@ -201,7 +254,7 @@ export class Validator<T> {
               ? KeyPathSelf
               : getRelativeKeyPath(searchKeyPath, entry.keyPath);
           if (!childKeyPath) continue;
-          for (const [relativeKeyPath, error] of entry.data.findErrors(childKeyPath, prefixMatch)) {
+          for (const [relativeKeyPath, error] of entry.data.#findErrors(childKeyPath, prefixMatch, false)) {
             yield [buildKeyPath(entry.keyPath, relativeKeyPath), error];
           }
           break ancestorLoop;
@@ -210,25 +263,32 @@ export class Validator<T> {
     }
   }
 
-  /** State of the async validation */
-  get jobState() {
-    return this.#jobState.get();
-  }
-
   /**
-   * State of the reactive validation
-   *
-   * The number of pending executions.
+   * The number of pending/running reactions.
    */
   @computed
   get reactionState() {
     return this.#reactionTimerIds.size;
   }
 
+  /**
+   * The number of pending/running async jobs.
+   */
+  @computed
+  get asyncState() {
+    let count = 0;
+    for (const job of this.#jobs) {
+      if (job.state !== "idle") {
+        count++;
+      }
+    }
+    return count;
+  }
+
   /** Whether the validator is computing errors */
   @computed
   get isValidating() {
-    return this.jobState !== "idle" || this.#reactionTimerIds.size > 0;
+    return this.reactionState > 0 || this.asyncState > 0;
   }
 
   /** Nested validators */
@@ -244,14 +304,14 @@ export class Validator<T> {
    */
   @action
   reset() {
-    this.#resetJobTimer();
-    this.#abortCtrl?.abort();
-    this.#jobState.set("idle");
-
-    for (const timerId of this.#reactionTimerIds.values()) {
-      clearTimeout(timerId);
-    }
     this.#reactionTimerIds.clear();
+    for (const reset of this.#reactionResets.values()) {
+      reset();
+    }
+
+    for (const job of this.#jobs) {
+      job.reset();
+    }
 
     this.#errors.clear();
   }
@@ -261,6 +321,7 @@ export class Validator<T> {
    *
    * @returns A function to remove the errors
    */
+  @action
   updateErrors(key: symbol, handler: Validator.InstantHandler<T>) {
     const builder = new ValidationErrorMapBuilder();
     handler(builder);
@@ -276,41 +337,114 @@ export class Validator<T> {
   }
 
   /**
-   * Add a reactive handler
+   * Add a sync handler
+   *
+   * @param handler The sync handler containing observable expressions
    *
    * @returns A function to remove the handler
    */
-  addReactiveHandler(handler: Validator.ReactiveHandler<T>, opt?: Validator.HandlerOptions) {
+  addSyncHandler(handler: Validator.SyncHandler<T>, opt?: Validator.HandlerOptions) {
     const key = Symbol();
-    let timerId: number | null = null;
-
-    const dispose = reaction(
-      () => {
+    return this.#createReaction({
+      key,
+      opt,
+      expr: () => {
         const builder = new ValidationErrorMapBuilder();
         handler(builder);
         return ValidationErrorMapBuilder.build(builder);
       },
-      (result) => {
-        this.#reactionTimerIds.delete(key);
-
+      effect: (result) => {
         if (result.size > 0) {
           this.#errors.set(key, result);
         } else {
           this.#errors.delete(key);
         }
       },
-      {
-        fireImmediately: opt?.initialRun ?? true,
-        scheduler: (fn) => {
-          // NOTE: Reading timerId from this.#reactionTimerIds didn't work
-          // because it always returns undefined for some reason.
-          // To workaround this, we use a local variable.
-          if (timerId) {
-            clearTimeout(timerId);
-          }
-          timerId = +setTimeout(fn, this.reactionDelayMs);
+    });
+  }
+
+  /**
+   * Add an async handler
+   *
+   * @param expr The expression to observe
+   * @param handler The async handler to call when the expression changes
+   * @param opt The handler options
+   *
+   * @returns A function to remove the handler
+   */
+  @action
+  addAsyncHandler<Expr>(
+    expr: () => Expr,
+    handler: Validator.AsyncHandler<T, NoInfer<Expr>>,
+    opt?: Validator.HandlerOptions<NoInfer<Expr>>
+  ) {
+    const delayMs = opt?.delayMs ?? Validator.defaultDelayMs;
+
+    const key = Symbol();
+    const job = new AsyncJob<Expr>({
+      handler: async (expr, abortSignal) => {
+        const builder = new ValidationErrorMapBuilder();
+        try {
+          await handler(expr, builder, abortSignal);
+        } finally {
           runInAction(() => {
-            this.#reactionTimerIds.set(key, timerId!);
+            const result = ValidationErrorMapBuilder.build(builder);
+            if (result.size > 0) {
+              this.#errors.set(key, result);
+            } else {
+              this.#errors.delete(key);
+            }
+          });
+        }
+      },
+      scheduledRunDelayMs: delayMs,
+    });
+    this.#jobs.add(job);
+
+    return this.#createReaction({
+      key,
+      opt,
+      expr,
+      effect: (expr) => {
+        job.request(expr);
+      },
+      dispose: () => {
+        job.reset();
+        this.#jobs.delete(job);
+      },
+    });
+  }
+
+  #createReaction<Expr>(args: {
+    key: symbol;
+    opt?: Validator.HandlerOptions<NoInfer<Expr>>;
+    expr: () => Expr;
+    effect: (expr: NoInfer<Expr>) => void;
+    dispose?: () => void;
+  }) {
+    const reactionDelayMs = args.opt?.delayMs ?? Validator.defaultDelayMs;
+    let initialRun = args.opt?.initialRun ?? true;
+
+    const dispose = reaction(
+      args.expr,
+      (expr) => {
+        if (!initialRun && !this.#reactionTimerIds.has(args.key)) return; // In case of reset()
+        initialRun = false;
+        this.#reactionTimerIds.delete(args.key);
+        args.effect(expr);
+      },
+      {
+        fireImmediately: args.opt?.initialRun ?? true,
+        scheduler: (fn) => {
+          // No need for clearing timer
+          const timerId = +setTimeout(fn, reactionDelayMs);
+          runInAction(() => {
+            this.#reactionTimerIds.set(args.key, timerId!);
+          });
+          this.#reactionResets.set(args.key, () => {
+            clearTimeout(timerId);
+            this.#reactionResets.delete(args.key);
+            fn();
           });
         },
       }
@@ -318,146 +452,67 @@ export class Validator<T> {
 
     return (): void => {
       dispose();
-
-      const timerId = this.#reactionTimerIds.get(key);
+      const timerId = this.#reactionTimerIds.get(args.key);
       if (timerId) {
         clearTimeout(timerId);
-        runInAction(() => {
-          this.#reactionTimerIds.delete(key);
-        });
       }
+      runInAction(() => {
+        this.#reactionTimerIds.delete(args.key);
+        this.#reactionResets.delete(args.key);
+        try {
+          args.dispose?.();
+        } finally {
+          this.#errors.delete(args.key);
+        }
+      });
     };
-  }
-
-  /**
-   * Add an async handler
-   *
-   * @returns A function to remove the handler
-   */
-  addAsyncHandler(handler: Validator.AsyncHandler<T>, opt?: Validator.HandlerOptions) {
-    this.#asyncHandlers.add(handler);
-    if (opt?.initialRun ?? true) this.request(); // TODO: Run only newly added handler
-    return (): void => void this.#asyncHandlers.delete(handler);
-  }
-
-  /**
-   * Request new async validation job to be executed
-   */
-  request(opt?: {
-    /** Force the validator to be executed immediately */
-    force?: boolean;
-  }) {
-    if (this.#asyncHandlers.size === 0) {
-      return;
-    }
-
-    if (opt?.force) {
-      this.#runJob();
-      return;
-    }
-
-    switch (this.jobState) {
-      case "idle": {
-        this.#transitionToEnqueued();
-        break;
-      }
-      case "enqueued": {
-        this.#resetJobTimer();
-        this.#transitionToEnqueued();
-        break;
-      }
-      case "running": {
-        this.#nextJobRequested = true;
-        break;
-      }
-      case "scheduled": {
-        this.#resetJobTimer();
-        this.#transitionToScheduled();
-        break;
-      }
-    }
-  }
-
-  #transitionToEnqueued() {
-    runInAction(() => {
-      this.#jobState.set("enqueued");
-    });
-    this.#jobTimerId = +setTimeout(() => {
-      this.#runJob();
-    }, this.enqueueDelayMs);
-  }
-
-  #transitionToScheduled() {
-    runInAction(() => {
-      this.#jobState.set("scheduled");
-    });
-    this.#jobTimerId = +setTimeout(() => {
-      this.#runJob();
-    }, this.scheduleDelayMs);
-  }
-
-  #resetJobTimer(): void {
-    if (this.#jobTimerId) {
-      clearTimeout(this.#jobTimerId);
-      this.#jobTimerId = null;
-    }
-  }
-
-  async #runJob() {
-    this.#resetJobTimer();
-
-    this.#abortCtrl?.abort();
-    const abortCtrl = new AbortController();
-    this.#abortCtrl = abortCtrl;
-
-    runInAction(() => {
-      this.#jobState.set("running");
-    });
-
-    const builder = new ValidationErrorMapBuilder();
-    try {
-      const promises = [];
-      for (const handler of this.#asyncHandlers) {
-        promises.push(handler(builder, abortCtrl.signal)); // Parallelized
-      }
-      await Promise.all(promises);
-    } catch (e) {
-      console.error(e);
-    }
-    this.#abortCtrl = null;
-
-    runInAction(() => {
-      if (builder.hasError) {
-        this.#errors.set(defaultErrorGroupKey, ValidationErrorMapBuilder.build(builder));
-      } else {
-        this.#errors.delete(defaultErrorGroupKey);
-      }
-
-      if (this.#nextJobRequested) {
-        this.#nextJobRequested = false;
-        this.#transitionToScheduled();
-      } else {
-        this.#jobState.set("idle");
-      }
-    });
   }
 }
 
 export namespace Validator {
-  /** State of the async validation */
-  export type JobState = "idle" | "enqueued" | "running" | "scheduled";
-  /** Async handler */
-  export type AsyncHandler<T> = (builder: ValidationErrorMapBuilder<T>, abortSignal: AbortSignal) => Promise<void>;
-  /** Reactive handler */
-  export type ReactiveHandler<T> = (builder: ValidationErrorMapBuilder<T>) => void;
-  /** Instant handler */
+  /**
+   * Async handler
+   *
+   * @param expr The expression observed
+   * @param builder The builder to build the errors
+   * @param abortSignal The abort signal
+   */
+  export type AsyncHandler<T, Expr> = (
+    expr: Expr,
+    builder: ValidationErrorMapBuilder<T>,
+    abortSignal: AbortSignal
+  ) => Promise<void>;
+  /**
+   * Sync handler
+   *
+   * @param builder The builder to build the errors
+   */
+  export type SyncHandler<T> = (builder: ValidationErrorMapBuilder<T>) => void;
+  /**
+   * Instant handler
+   *
+   * @param builder The builder to build the errors
+   */
   export type InstantHandler<T> = (builder: ValidationErrorMapBuilder<T>) => void;
   /** Handler options */
-  export type HandlerOptions = {
+  export type HandlerOptions<Expr = unknown> = {
     /**
      * Whether to run the handler immediately
+     *
      * @default true
      */
     initialRun?: boolean;
+    /**
+     * Throttle reaction. [milliseconds]
+     *
+     * @default 100
+     */
+    delayMs?: number;
+    /**
+     * The equality comparer for the expression.
+     *
+     * Only effective for async handlers.
+     */
+    equals?: IEqualsComparer<Expr>;
   };
 }
