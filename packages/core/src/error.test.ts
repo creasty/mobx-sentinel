@@ -1,5 +1,5 @@
 import { ValidationError, ValidationErrorMapBuilder } from "./error";
-import { buildKeyPath, KeyPathMultiMap } from "./keyPath";
+import { buildKeyPath, KeyPathMultiMap, KeyPathSelf } from "./keyPath";
 
 describe("ValidationError", () => {
   it("can be created with a string reason", () => {
@@ -76,6 +76,20 @@ describe("ValidationErrorMapBuilder", () => {
       );
       expect(result.get(buildKeyPath("key2"))).toEqual(
         new Set([new ValidationError({ keyPath: buildKeyPath("key2"), reason: "reasonB" })])
+      );
+    });
+  });
+
+  describe("#invalidateSelf", () => {
+    it("adds an error for the target object itself", () => {
+      const builder = new ValidationErrorMapBuilder<{ key1: number; key2: number }>();
+      builder.invalidateSelf("reason");
+      expect(builder.hasError).toBe(true);
+
+      const result = ValidationErrorMapBuilder.build(builder);
+      expect(result.size).toEqual(1);
+      expect(result.get(KeyPathSelf)).toEqual(
+        new Set([new ValidationError({ keyPath: KeyPathSelf, reason: "reason" })])
       );
     });
   });
