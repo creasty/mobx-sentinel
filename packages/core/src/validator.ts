@@ -204,6 +204,12 @@ export class Validator<T> {
             yield [buildKeyPath(keyPath, relativeKeyPath), error];
           }
         }
+      } else {
+        for (const entry of this.#nestedFetcher.getForKey(KeyPathSelf)) {
+          for (const [relativeKeyPath, error] of entry.data.findErrors(KeyPathSelf, prefixMatch)) {
+            yield [relativeKeyPath, error];
+          }
+        }
       }
     } else {
       for (const errors of this.#errors.values()) {
