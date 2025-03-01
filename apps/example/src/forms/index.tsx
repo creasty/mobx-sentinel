@@ -20,7 +20,7 @@ export const DefaultSampleForm = observer(() => {
   if (!isClient) return null;
 
   return (
-    <div style={{ display: "grid", gridTemplateColumns: "1fr 320px", gap: 32, width: "100%" }}>
+    <div className="grid">
       <SampleForm model={sample} />
       <Debugger model={sample} />
     </div>
@@ -71,7 +71,7 @@ export const SampleForm: React.FC<{ model: Sample }> = observer(({ model }) => {
 
   return (
     <div>
-      <div>
+      <fieldset>
         <label {...form.bindLabel(["text"])}>Text input</label>
         <input
           {...form.bindInput("text", {
@@ -80,11 +80,9 @@ export const SampleForm: React.FC<{ model: Sample }> = observer(({ model }) => {
           })}
         />
         {Array.from(form.getErrors("text"), (error, i) => (
-          <p key={i} className="error">
-            {error}
-          </p>
+          <small key={i}>{error}</small>
         ))}
-      </div>
+      </fieldset>
 
       <fieldset>
         <label {...form.bindLabel(["number", "date"])}>Number & Date input</label>
@@ -95,6 +93,9 @@ export const SampleForm: React.FC<{ model: Sample }> = observer(({ model }) => {
             setter: (v) => (model.number = v),
           })}
         />
+        {Array.from(form.getErrors("number"), (error, i) => (
+          <small key={i}>{error}</small>
+        ))}
         <input
           {...form.bindInput("date", {
             valueAs: "date",
@@ -102,19 +103,12 @@ export const SampleForm: React.FC<{ model: Sample }> = observer(({ model }) => {
             setter: (v) => (model.date = v),
           })}
         />
-        {Array.from(form.getErrors("number"), (error, i) => (
-          <p key={i} className="error">
-            {error}
-          </p>
-        ))}
         {Array.from(form.getErrors("date"), (error, i) => (
-          <p key={i} className="error">
-            {error}
-          </p>
+          <small key={i}>{error}</small>
         ))}
       </fieldset>
 
-      <div>
+      <fieldset>
         <label {...form.bindLabel(["bool"])}>Checkbox</label>
         <input
           {...form.bindCheckBox("bool", {
@@ -123,11 +117,9 @@ export const SampleForm: React.FC<{ model: Sample }> = observer(({ model }) => {
           })}
         />
         {Array.from(form.getErrors("bool"), (error, i) => (
-          <p key={i} className="error">
-            {error}
-          </p>
+          <small key={i}>{error}</small>
         ))}
-      </div>
+      </fieldset>
 
       <fieldset>
         <label {...form.bindLabel(["enum"])}>Radio group</label>
@@ -143,13 +135,11 @@ export const SampleForm: React.FC<{ model: Sample }> = observer(({ model }) => {
           ));
         })()}
         {Array.from(form.getErrors("enum"), (error, i) => (
-          <p key={i} className="error">
-            {error}
-          </p>
+          <small key={i}>{error}</small>
         ))}
       </fieldset>
 
-      <div>
+      <fieldset>
         <label {...form.bindLabel(["option"])}>Select box</label>
         <select
           {...form.bindSelectBox("option", {
@@ -164,13 +154,11 @@ export const SampleForm: React.FC<{ model: Sample }> = observer(({ model }) => {
           ))}
         </select>
         {Array.from(form.getErrors("option"), (error, i) => (
-          <p key={i} className="error">
-            {error}
-          </p>
+          <small key={i}>{error}</small>
         ))}
-      </div>
+      </fieldset>
 
-      <div>
+      <fieldset>
         <label {...form.bindLabel(["multiOption"])}>Multi select box</label>
         <select
           {...form.bindSelectBox("multiOption", {
@@ -186,11 +174,9 @@ export const SampleForm: React.FC<{ model: Sample }> = observer(({ model }) => {
           ))}
         </select>
         {Array.from(form.getErrors("multiOption"), (error, i) => (
-          <p key={i} className="error">
-            {error}
-          </p>
+          <small key={i}>{error}</small>
         ))}
-      </div>
+      </fieldset>
 
       <hr />
 
@@ -206,11 +192,13 @@ export const SampleForm: React.FC<{ model: Sample }> = observer(({ model }) => {
         {model.array.map((item, i) => (
           <OtherForm key={i} model={item} onDelete={action(() => model.array.splice(i, 1))} />
         ))}
-        <button onClick={action(() => model.array.push(new Other()))}>Add a new form</button>
+        <div>
+          <button className="secondary" onClick={action(() => model.array.push(new Other()))}>
+            Add a new form
+          </button>
+        </div>
         {Array.from(form.getErrors("array"), (error, i) => (
-          <p key={i} className="error">
-            {error}
-          </p>
+          <small key={i}>{error}</small>
         ))}
       </fieldset>
 
@@ -226,17 +214,21 @@ export const OtherForm: React.FC<{ model: Other; onDelete?: () => void }> = obse
 
   return (
     <fieldset>
-      <input
-        {...form.bindInput("other", {
-          getter: () => model.other,
-          setter: (v) => (model.other = v),
-        })}
-      />
-      {onDelete && <button onClick={onDelete}>Delete me</button>}
+      <div role="group">
+        <input
+          {...form.bindInput("other", {
+            getter: () => model.other,
+            setter: (v) => (model.other = v),
+          })}
+        />
+        {onDelete && (
+          <button className="outline secondary" onClick={onDelete}>
+            Delete
+          </button>
+        )}
+      </div>
       {Array.from(form.getErrors("other"), (error, i) => (
-        <p key={i} className="error">
-          {error}
-        </p>
+        <small key={i}>{error}</small>
       ))}
     </fieldset>
   );
