@@ -39,7 +39,7 @@ export class SubmitButtonBinding implements FormBinding {
   get props() {
     return {
       onClick: this.onClick,
-      onMouseOver: this.onMouseEnter,
+      onMouseEnter: this.onMouseEnter,
       disabled: !this.form.canSubmit,
       "aria-busy": this.busy,
       "aria-invalid": !this.form.isValid,

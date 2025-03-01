@@ -11,7 +11,7 @@ label:has(input) {
 
 button {
   &[aria-invalid="true"]:before {
-    content: "❌ ";
+    content: "❗ ";
   }
   &:disabled {
     pointer-events: all !important;

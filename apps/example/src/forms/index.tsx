@@ -8,15 +8,13 @@ import { useFormHandler } from "@mobx-sentinel/react";
 import { Other, Sample, SampleEnum, SampleOption } from "@/models";
 import { useEffect, useState } from "react";
 import { action } from "mobx";
-import { KeyPathSelf } from "@mobx-sentinel/core";
+import { Debugger } from "./Debugger";
 
 export const DefaultSampleForm = observer(() => {
   const [sample] = useState(() => new Sample());
 
   const [isClient, setIsClient] = useState(false);
-  useEffect(() => {
-    setIsClient(true);
-  }, []);
+  useEffect(() => setIsClient(true), []);
   if (!isClient) return null;
 
   return (
@@ -27,44 +25,10 @@ export const DefaultSampleForm = observer(() => {
   );
 });
 
-const Debugger: React.FC<{ model: Sample }> = observer(({ model }) => {
-  const form = Form.get(model);
-
-  return (
-    <div>
-      <pre>
-        <code>
-          {JSON.stringify(
-            {
-              isDirty: form.isDirty,
-              isValid: form.isValid,
-              invalidFieldCount: form.invalidFieldCount,
-              invalidFieldPathCount: form.invalidFieldPathCount,
-              isValidating: form.isValidating,
-              isSubmitting: form.isSubmitting,
-              canSubmit: form.canSubmit,
-              errors: Array.from(form.validator.findErrors(KeyPathSelf, true), ([keyPath, error]) => [
-                keyPath,
-                error.message,
-              ]),
-            },
-            undefined,
-            2
-          )}
-        </code>
-      </pre>
-      <pre>
-        <code>{JSON.stringify(model, undefined, 2)}</code>
-      </pre>
-    </div>
-  );
-});
-
 export const SampleForm: React.FC<{ model: Sample }> = observer(({ model }) => {
   const form = Form.get(model);
 
-  useFormHandler(form, "submit", async (abortSignal) => {
-    // TODO: Serialize the model and send the data to a server
+  useFormHandler(form, "submit", async () => {
     await new Promise((resolve) => setTimeout(resolve, 2000));
     return true;
   });
@@ -85,7 +49,7 @@ export const SampleForm: React.FC<{ model: Sample }> = observer(({ model }) => {
       </fieldset>
 
       <fieldset>
-        <label {...form.bindLabel(["number", "date"])}>Number & Date input</label>
+        <label {...form.bindLabel(["number", "date"])}>Number &amp; Date input</label>
         <input
           {...form.bindInput("number", {
             valueAs: "number",
