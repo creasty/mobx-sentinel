@@ -13,8 +13,8 @@
   ],
   "scripts": {
     "prepare": "simple-git-hooks",
-    "dev": "turbo watch build",
-    "build": "turbo run build",
+    "dev": "turbo watch build --filter=./packages/*",
+    "build": "turbo run build --filter=./packages/*",
     "doc": "typedoc",
     "test": "turbo run test",
     "lint": "pnpm run -w --parallel --aggregate-output '/^lint:.+/'",
