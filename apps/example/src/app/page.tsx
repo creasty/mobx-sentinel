@@ -1,5 +1,5 @@
-import styles from "./page.module.css";
+import { DefaultSampleForm } from "@/forms";
 
 export default function Home() {
-  return <div className={styles.page}></div>;
+  return <DefaultSampleForm />;
 }

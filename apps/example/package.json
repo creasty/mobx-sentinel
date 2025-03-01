@@ -9,7 +9,9 @@
     "lint": "next lint"
   },
   "dependencies": {
+    "@mobx-sentinel/core": "workspace:*",
     "@mobx-sentinel/form": "workspace:*",
+    "@mobx-sentinel/react": "workspace:*",
     "mobx": "^6.12.3",
     "mobx-react-lite": "^4.0.7",
     "next": "15.2.0",
