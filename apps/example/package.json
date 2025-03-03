@@ -12,7 +12,6 @@
     "@mobx-sentinel/core": "workspace:*",
     "@mobx-sentinel/form": "workspace:*",
     "@mobx-sentinel/react": "workspace:*",
-    "@picocss/pico": "^2.0.6",
     "mobx": "^6.12.3",
     "mobx-react-lite": "^4.0.7",
     "next": "15.2.0",

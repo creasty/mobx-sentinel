@@ -1,29 +1,9 @@
-"use client";
-
 import "@mobx-sentinel/react/extension";
-
+import { action } from "mobx";
 import { observer } from "mobx-react-lite";
 import { Form } from "@mobx-sentinel/form";
 import { useFormHandler } from "@mobx-sentinel/react";
-import { Other, Sample, SampleEnum, SampleOption } from "@/models";
-import { useEffect, useState } from "react";
-import { action } from "mobx";
-import { Debugger } from "./Debugger";
-
-export const DefaultSampleForm = observer(() => {
-  const [sample] = useState(() => new Sample());
-
-  const [isClient, setIsClient] = useState(false);
-  useEffect(() => setIsClient(true), []);
-  if (!isClient) return null;
-
-  return (
-    <div className="grid">
-      <SampleForm model={sample} />
-      <Debugger model={sample} />
-    </div>
-  );
-});
+import { Other, Sample, SampleEnum, SampleOption } from "@/main-example/models";
 
 export const SampleForm: React.FC<{ model: Sample }> = observer(({ model }) => {
   const form = Form.get(model);
@@ -43,9 +23,7 @@ export const SampleForm: React.FC<{ model: Sample }> = observer(({ model }) => {
             setter: (v) => (model.text = v),
           })}
         />
-        {Array.from(form.getErrors("text"), (error, i) => (
-          <small key={i}>{error}</small>
-        ))}
+        <ErrorText errors={form.getErrors("text")} />
       </div>
 
       <div className="input-layout">
@@ -57,9 +35,7 @@ export const SampleForm: React.FC<{ model: Sample }> = observer(({ model }) => {
             setter: (v) => (model.number = v),
           })}
         />
-        {Array.from(form.getErrors("number"), (error, i) => (
-          <small key={i}>{error}</small>
-        ))}
+        <ErrorText errors={form.getErrors("number")} />
         <input
           {...form.bindInput("date", {
             valueAs: "date",
@@ -67,9 +43,7 @@ export const SampleForm: React.FC<{ model: Sample }> = observer(({ model }) => {
             setter: (v) => (model.date = v),
           })}
         />
-        {Array.from(form.getErrors("date"), (error, i) => (
-          <small key={i}>{error}</small>
-        ))}
+        <ErrorText errors={form.getErrors("date")} />
       </div>
 
       <div className="input-layout">
@@ -83,9 +57,7 @@ export const SampleForm: React.FC<{ model: Sample }> = observer(({ model }) => {
           />
           Yes
         </label>
-        {Array.from(form.getErrors("bool"), (error, i) => (
-          <small key={i}>{error}</small>
-        ))}
+        <ErrorText errors={form.getErrors("bool")} />
       </div>
 
       <fieldset>
@@ -96,16 +68,14 @@ export const SampleForm: React.FC<{ model: Sample }> = observer(({ model }) => {
               getter: () => model.enum,
               setter: (v) => (model.enum = v ? (v as SampleEnum) : null),
             });
-            return Object.values(SampleEnum).map((v, i) => (
+            return Object.values(SampleEnum).map((v) => (
               <label key={v}>
                 <input {...bind(v)} /> {v}
               </label>
             ));
           })()}
         </div>
-        {Array.from(form.getErrors("enum"), (error, i) => (
-          <small key={i}>{error}</small>
-        ))}
+        <ErrorText errors={form.getErrors("enum")} />
       </fieldset>
 
       <div className="input-layout">
@@ -122,9 +92,7 @@ export const SampleForm: React.FC<{ model: Sample }> = observer(({ model }) => {
             </option>
           ))}
         </select>
-        {Array.from(form.getErrors("option"), (error, i) => (
-          <small key={i}>{error}</small>
-        ))}
+        <ErrorText errors={form.getErrors("option")} />
       </div>
 
       <div className="input-layout">
@@ -142,9 +110,7 @@ export const SampleForm: React.FC<{ model: Sample }> = observer(({ model }) => {
             </option>
           ))}
         </select>
-        {Array.from(form.getErrors("multiOption"), (error, i) => (
-          <small key={i}>{error}</small>
-        ))}
+        <ErrorText errors={form.getErrors("multiOption")} />
       </div>
 
       <hr />
@@ -166,9 +132,7 @@ export const SampleForm: React.FC<{ model: Sample }> = observer(({ model }) => {
             Add a new form
           </button>
         </div>
-        {Array.from(form.getErrors("array"), (error, i) => (
-          <small key={i}>{error}</small>
-        ))}
+        <ErrorText errors={form.getErrors("array")} />
       </div>
 
       <hr />
@@ -211,9 +175,17 @@ export const OtherForm: React.FC<{ model: Other; onDelete?: () => void }> = obse
           </button>
         )}
       </div>
-      {Array.from(form.getErrors("other"), (error, i) => (
+      <ErrorText errors={form.getErrors("other")} />
+    </fieldset>
+  );
+});
+
+const ErrorText: React.FC<{ errors: ReadonlySet<string> }> = observer(({ errors }) => {
+  return (
+    <>
+      {Array.from(errors, (error, i) => (
         <small key={i}>{error}</small>
       ))}
-    </fieldset>
+    </>
   );
 });
