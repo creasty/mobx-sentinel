@@ -160,22 +160,22 @@ export const OtherForm: React.FC<{ model: Other; onDelete?: () => void }> = obse
   const form = Form.get(model);
 
   return (
-    <fieldset className="card">
-      <label {...form.bindLabel(["other"])}>Other</label>
-      <div role="group">
+    <fieldset className="sub-form" data-deletable={!!onDelete}>
+      <div>
+        <label {...form.bindLabel(["other"])}>Other</label>
         <input
           {...form.bindInput("other", {
             getter: () => model.other,
             setter: (v) => (model.other = v),
           })}
         />
-        {onDelete && (
-          <button className="outline secondary" onClick={onDelete}>
-            Delete
-          </button>
-        )}
+        <ErrorText errors={form.getErrors("other")} />
       </div>
-      <ErrorText errors={form.getErrors("other")} />
+      {onDelete && (
+        <button className="outline secondary" onClick={onDelete}>
+          Delete
+        </button>
+      )}
     </fieldset>
   );
 });

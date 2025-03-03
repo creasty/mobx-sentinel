@@ -31,11 +31,21 @@
     color: var(--pico-del-color);
   }
 
-  .card {
+  .sub-form {
     margin-bottom: var(--pico-block-spacing-vertical);
     padding: var(--pico-block-spacing-vertical) var(--pico-block-spacing-horizontal);
     border-radius: var(--pico-border-radius);
     background: var(--pico-card-background-color);
     box-shadow: var(--pico-card-box-shadow);
+
+    display: grid;
+    align-items: start;
+    gap: var(--pico-block-spacing-vertical) var(--pico-block-spacing-horizontal);
+    &[data-deletable="false"] {
+      grid-template-columns: 1fr;
+    }
+    &[data-deletable="true"] {
+      grid-template-columns: 1fr auto;
+    }
   }
 }
