@@ -147,7 +147,7 @@ export const SampleForm: React.FC<{ model: Sample }> = observer(({ model }) => {
       <p style={{ marginTop: 16, color: "var(--pico-muted-color)" }}>
         <small>
           <i>
-            * Reset only updates Watcher's change state and Form's error reporting state. It does not update the model
+            * Reset only updates Watcher’s change state and Form’s error reporting state. It does not update the model
             itself.
           </i>
         </small>

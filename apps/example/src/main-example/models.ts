@@ -12,6 +12,7 @@ export type SampleOption = {
   code: string;
   name: string;
 };
+// eslint-disable-next-line @typescript-eslint/no-namespace
 export namespace SampleOption {
   export const all: SampleOption[] = [
     { code: "a", name: "Alpha" },
