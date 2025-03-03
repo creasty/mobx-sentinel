@@ -15,7 +15,7 @@
     "prepare": "simple-git-hooks",
     "dev": "turbo watch build --filter=./packages/*",
     "build": "turbo run build --filter=./packages/*",
-    "build:apps": "turbo run build --filter=./apps/*",
+    "build:apps:example": "turbo run build --filter=./apps/example",
     "doc": "typedoc",
     "test": "turbo run test",
     "lint": "pnpm run -w --parallel --aggregate-output '/^lint:.+/'",

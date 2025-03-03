@@ -4,7 +4,6 @@ import { useEffect, useState } from "react";
 import { Debugger } from "@/helpers/Debugger";
 import { SampleForm } from "@/main-example/form";
 import { Sample } from "@/main-example/models";
-import "@/helpers/picocss-custom.css";
 
 export default function Home() {
   return (
