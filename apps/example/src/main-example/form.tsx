@@ -68,9 +68,9 @@ export const SampleForm: React.FC<{ model: Sample }> = observer(({ model }) => {
               getter: () => model.enum,
               setter: (v) => (model.enum = v ? (v as SampleEnum) : null),
             });
-            return Object.values(SampleEnum).map((v) => (
+            return Object.values(SampleEnum).map((v, i) => (
               <label key={v}>
-                <input {...bind(v)} /> {v}
+                <input {...bind(v, { id: i === 0 })} /> {v}
               </label>
             ));
           })()}

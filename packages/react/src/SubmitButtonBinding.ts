@@ -9,7 +9,7 @@ export namespace SubmitButtonBinding {
     /** [Extend] Click handler */
     onClick?: Attrs["onClick"];
     /** [Extend] Mouse enter handler */
-    onMouseEnter?: Attrs["onMouseEnter"];
+    onMouseOver?: Attrs["onMouseOver"];
   };
 }
 
@@ -31,15 +31,15 @@ export class SubmitButtonBinding implements FormBinding {
     this.config.onClick?.(e);
   };
 
-  onMouseEnter: SubmitButtonBinding.AttrsRequired["onMouseEnter"] = (e) => {
+  onMouseOver: SubmitButtonBinding.AttrsRequired["onMouseOver"] = (e) => {
     this.form.reportError();
-    this.config.onMouseEnter?.(e);
+    this.config.onMouseOver?.(e);
   };
 
   get props() {
     return {
       onClick: this.onClick,
-      onMouseEnter: this.onMouseEnter,
+      onMouseOver: this.onMouseOver,
       disabled: !this.form.canSubmit,
       "aria-busy": this.busy,
       "aria-invalid": !this.form.isValid,

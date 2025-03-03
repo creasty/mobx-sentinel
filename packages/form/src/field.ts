@@ -43,10 +43,17 @@ export class FormField {
    * Whether the error states has been reported
    *
    * Check this value to determine if errors should be displayed.
+   *
+   * @returns
+   * - 'undefined': Error reporting is pending.
+   * - 'false': The field has no errors.
+   * - 'true': The field has errors.
+   *
+   * This distinction is essential for `aria-invalid` attribute.
    */
   @computed
   get isErrorReported() {
-    if (!this.#isErrorReported.get()) return false;
+    if (!this.#isErrorReported.get()) return undefined;
     return this.hasErrors;
   }
 
@@ -60,7 +67,11 @@ export class FormField {
     return this.validator.getErrorMessages(buildKeyPath(this.fieldName));
   }
 
-  /** Whether the field has errors */
+  /**
+   * Whether the field has errors
+   *
+   * Regardless of {@link isErrorReported}, this value is always up-to-date.
+   */
   @computed
   get hasErrors() {
     return this.validator.hasErrors(buildKeyPath(this.fieldName));

@@ -45,24 +45,7 @@ describe("FormField", () => {
     expect(field.isIntermediate).toBe(false);
     expect(field.isChanged).toBe(false);
     expect(field.isIntermediate).toBe(false);
-    expect(field.isErrorReported).toBe(false);
-  });
-
-  describe("#reportError", () => {
-    it("marks the field as reported", () => {
-      const { field, updateErrors } = setupEnv();
-      const internal = debugFormField(field);
-      field.reportError();
-      expect(field.isTouched).toBe(false);
-      expect(field.isIntermediate).toBe(false);
-      expect(field.isChanged).toBe(false);
-      expect(field.isErrorReported).toBe(false);
-      expect(internal.isErrorReported.get()).toBe(true);
-
-      updateErrors((b) => b.invalidate("test", "error"));
-      expect(field.isErrorReported).toBe(true);
-      expect(internal.isErrorReported.get()).toBe(true);
-    });
+    expect(field.isErrorReported).toBe(undefined);
   });
 
   describe("#errors", () => {
@@ -102,15 +85,31 @@ describe("FormField", () => {
     });
   });
 
-  describe("#isErrorReported", () => {
-    it("returns false if there are no errors", () => {
+  describe("#reportError", () => {
+    it("marks the field as reported", () => {
       const { field } = setupEnv();
-      expect(field.isErrorReported).toBe(false);
+      const internal = debugFormField(field);
+      expect(internal.isErrorReported.get()).toBe(false);
+      field.reportError();
+      expect(internal.isErrorReported.get()).toBe(true);
+    });
+  });
+
+  describe("#reportError, #isErrorReported", () => {
+    it("returns undefined if reporting is pending", () => {
+      const { field } = setupEnv();
+      expect(field.isErrorReported).toBe(undefined);
     });
 
-    it("returns false if there are errors but they are not reported", () => {
+    it("returns undefined if there are errors but they are not reported", () => {
       const { field, updateErrors } = setupEnv();
       updateErrors((b) => b.invalidate("test", "error"));
+      expect(field.isErrorReported).toBe(undefined);
+    });
+
+    it("returns false if there are no errors", () => {
+      const { field } = setupEnv();
+      field.reportError();
       expect(field.isErrorReported).toBe(false);
     });
 
@@ -129,7 +128,7 @@ describe("FormField", () => {
       expect(field.isTouched).toBe(true);
       expect(field.isIntermediate).toBe(false);
       expect(field.isChanged).toBe(false);
-      expect(field.isErrorReported).toBe(false);
+      expect(field.isErrorReported).toBe(undefined);
     });
   });
 
@@ -160,7 +159,7 @@ describe("FormField", () => {
         expect(field.isTouched).toBe(false);
         expect(field.isIntermediate).toBe(true);
         expect(field.isChanged).toBe(true);
-        expect(field.isErrorReported).toBe(false);
+        expect(field.isErrorReported).toBe(undefined);
 
         // Finalized after a delay
         await waitForDelay();
@@ -256,7 +255,7 @@ describe("FormField", () => {
       expect(field.isTouched).toBe(false);
       expect(field.isIntermediate).toBe(false);
       expect(field.isChanged).toBe(false);
-      expect(field.isErrorReported).toBe(false);
+      expect(field.isErrorReported).toBe(undefined);
       expect(internal.isErrorReported.get()).toBe(false);
     });
   });

@@ -58,17 +58,17 @@ describe("SubmitButtonBinding", () => {
     });
   });
 
-  describe("#onMouseEnter", () => {
+  describe("onMouseOver", () => {
     it("works without a callback", () => {
       const env = setupEnv();
-      env.binding.onMouseEnter(env.fakeEvent());
+      env.binding.onMouseOver(env.fakeEvent());
     });
 
     it("calls the callback if provided", () => {
       const env = setupEnv();
       const callback = vi.fn();
-      env.binding.config.onMouseEnter = callback;
-      env.binding.onMouseEnter(env.fakeEvent());
+      env.binding.config.onMouseOver = callback;
+      env.binding.onMouseOver(env.fakeEvent());
       expect(callback).toBeCalledWith(env.fakeEvent());
     });
   });

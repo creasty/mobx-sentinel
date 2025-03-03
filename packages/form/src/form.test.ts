@@ -732,12 +732,12 @@ describe("Sub-forms", () => {
 
       const field1 = form.getField("field");
 
-      expect(field1.isErrorReported).toEqual(false);
+      expect(field1.isErrorReported).toEqual(undefined);
       form.reportError();
       expect(field1.isErrorReported).toEqual(true);
 
       const field2 = form.getField("sample");
-      expect(field2.isErrorReported).toEqual(false);
+      expect(field2.isErrorReported).toEqual(undefined);
     });
 
     test("reporting errors on sub-forms does not affect the parent form", async () => {
@@ -763,7 +763,7 @@ describe("Sub-forms", () => {
       sampleForm.reportError();
       arrayForm0.reportError();
 
-      expect(field1.isErrorReported).toEqual(false);
+      expect(field1.isErrorReported).toEqual(undefined);
       expect(field2.isErrorReported).toEqual(true);
       expect(field3.isErrorReported).toEqual(true);
     });
@@ -798,7 +798,7 @@ describe("Sub-forms", () => {
 
       expect(field1.isErrorReported).toEqual(true);
       expect(field2.isErrorReported).toEqual(true);
-      expect(field3.isErrorReported).toEqual(false);
+      expect(field3.isErrorReported).toEqual(undefined);
     });
   });
 });
