@@ -35,7 +35,7 @@ export const SampleForm: React.FC<{ model: Sample }> = observer(({ model }) => {
 
   return (
     <div>
-      <fieldset>
+      <div className="input-layout">
         <label {...form.bindLabel(["text"])}>Text input</label>
         <input
           {...form.bindInput("text", {
@@ -46,9 +46,9 @@ export const SampleForm: React.FC<{ model: Sample }> = observer(({ model }) => {
         {Array.from(form.getErrors("text"), (error, i) => (
           <small key={i}>{error}</small>
         ))}
-      </fieldset>
+      </div>
 
-      <fieldset>
+      <div className="input-layout">
         <label {...form.bindLabel(["number", "date"])}>Number &amp; Date input</label>
         <input
           {...form.bindInput("number", {
@@ -70,40 +70,45 @@ export const SampleForm: React.FC<{ model: Sample }> = observer(({ model }) => {
         {Array.from(form.getErrors("date"), (error, i) => (
           <small key={i}>{error}</small>
         ))}
-      </fieldset>
+      </div>
 
-      <fieldset>
+      <div className="input-layout">
         <label {...form.bindLabel(["bool"])}>Checkbox</label>
-        <input
-          {...form.bindCheckBox("bool", {
-            getter: () => model.bool,
-            setter: (v) => (model.bool = v),
-          })}
-        />
+        <label>
+          <input
+            {...form.bindCheckBox("bool", {
+              getter: () => model.bool,
+              setter: (v) => (model.bool = v),
+            })}
+          />
+          Yes
+        </label>
         {Array.from(form.getErrors("bool"), (error, i) => (
           <small key={i}>{error}</small>
         ))}
-      </fieldset>
+      </div>
 
       <fieldset>
         <label {...form.bindLabel(["enum"])}>Radio group</label>
-        {(() => {
-          const bind = form.bindRadioButton("enum", {
-            getter: () => model.enum,
-            setter: (v) => (model.enum = v ? (v as SampleEnum) : null),
-          });
-          return Object.values(SampleEnum).map((v) => (
-            <label key={v}>
-              <input {...bind(v)} /> {v}
-            </label>
-          ));
-        })()}
+        <div style={{ display: "flex", flexWrap: "wrap", gap: "4px 24px" }}>
+          {(() => {
+            const bind = form.bindRadioButton("enum", {
+              getter: () => model.enum,
+              setter: (v) => (model.enum = v ? (v as SampleEnum) : null),
+            });
+            return Object.values(SampleEnum).map((v, i) => (
+              <label key={v}>
+                <input {...bind(v)} /> {v}
+              </label>
+            ));
+          })()}
+        </div>
         {Array.from(form.getErrors("enum"), (error, i) => (
           <small key={i}>{error}</small>
         ))}
       </fieldset>
 
-      <fieldset>
+      <div className="input-layout">
         <label {...form.bindLabel(["option"])}>Select box</label>
         <select
           {...form.bindSelectBox("option", {
@@ -120,9 +125,9 @@ export const SampleForm: React.FC<{ model: Sample }> = observer(({ model }) => {
         {Array.from(form.getErrors("option"), (error, i) => (
           <small key={i}>{error}</small>
         ))}
-      </fieldset>
+      </div>
 
-      <fieldset>
+      <div className="input-layout">
         <label {...form.bindLabel(["multiOption"])}>Multi select box</label>
         <select
           {...form.bindSelectBox("multiOption", {
@@ -140,23 +145,23 @@ export const SampleForm: React.FC<{ model: Sample }> = observer(({ model }) => {
         {Array.from(form.getErrors("multiOption"), (error, i) => (
           <small key={i}>{error}</small>
         ))}
-      </fieldset>
+      </div>
 
       <hr />
 
-      <fieldset>
-        <label {...form.bindLabel(["nested"])}>Nested form</label>
+      <div className="input-layout">
+        <h3 {...form.bindLabel(["nested"])}>Nested form</h3>
         <OtherForm model={model.nested} />
-      </fieldset>
+      </div>
 
       <hr />
 
-      <fieldset>
-        <label {...form.bindLabel(["array"])}>Dynamic form</label>
+      <div className="input-layout">
+        <h3 {...form.bindLabel(["array"])}>Dynamic form</h3>
         {model.array.map((item, i) => (
           <OtherForm key={i} model={item} onDelete={action(() => model.array.splice(i, 1))} />
         ))}
-        <div>
+        <div className="grid">
           <button className="secondary" onClick={action(() => model.array.push(new Other()))}>
             Add a new form
           </button>
@@ -164,11 +169,25 @@ export const SampleForm: React.FC<{ model: Sample }> = observer(({ model }) => {
         {Array.from(form.getErrors("array"), (error, i) => (
           <small key={i}>{error}</small>
         ))}
-      </fieldset>
+      </div>
 
       <hr />
 
-      <button {...form.bindSubmitButton()}>Submit</button>
+      <div className="grid">
+        <button className="outline secondary" onClick={() => form.reset()}>
+          Reset
+        </button>
+        <button {...form.bindSubmitButton()}>Submit</button>
+      </div>
+
+      <p style={{ marginTop: 16, color: "var(--pico-muted-color)" }}>
+        <small>
+          <i>
+            * Reset only updates Watcher's change state and Form's error reporting state. It does not update the model
+            itself.
+          </i>
+        </small>
+      </p>
     </div>
   );
 });
@@ -177,7 +196,8 @@ export const OtherForm: React.FC<{ model: Other; onDelete?: () => void }> = obse
   const form = Form.get(model);
 
   return (
-    <fieldset>
+    <fieldset className="card">
+      <label {...form.bindLabel(["other"])}>Other</label>
       <div role="group">
         <input
           {...form.bindInput("other", {

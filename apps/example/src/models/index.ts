@@ -1,4 +1,4 @@
-import { action, observable, makeObservable } from "mobx";
+import { observable, makeObservable } from "mobx";
 import { nested, makeValidatable } from "@mobx-sentinel/core";
 
 export enum SampleEnum {
@@ -67,13 +67,14 @@ export class Sample {
 
     // 'Reactive validation' is implemented here
     makeValidatable(this, (b) => {
-      if (this.text === "") b.invalidate("text", "Required");
-      if (this.number === null) b.invalidate("number", "Required");
-      if (this.date === null) b.invalidate("date", "Required");
-      if (this.enum === null) b.invalidate("enum", "Required");
-      if (this.option === null) b.invalidate("option", "Required");
-      if (this.multiOption.length === 0) b.invalidate("multiOption", "Required");
-      if (this.array.length === 0) b.invalidate("array", "Required");
+      if (this.text === "") b.invalidate("text", "Text is required");
+      if (this.number === null) b.invalidate("number", "Number is required");
+      if (this.date === null) b.invalidate("date", "Date is required");
+      if (this.bool === false) b.invalidate("bool", "Bool must be true");
+      if (this.enum === null) b.invalidate("enum", "Enum is required");
+      if (this.option === SampleOption.all[0].code) b.invalidate("option", "Option must not be 'Alpha'");
+      if (this.multiOption.length === 0) b.invalidate("multiOption", "Multi option is required");
+      if (this.array.length === 0) b.invalidate("array", "Array is required");
     });
   }
 
@@ -99,7 +100,7 @@ export class Other {
     makeObservable(this);
 
     makeValidatable(this, (b) => {
-      if (this.other === "") b.invalidate("other", "Required");
+      if (this.other === "") b.invalidate("other", "Other is required");
     });
   }
 

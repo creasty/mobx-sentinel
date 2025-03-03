@@ -5,8 +5,8 @@ body {
 label:not(:has(input)) {
   font-weight: bold;
 }
-label:has(input) {
-  color: var(--pico-h5-color);
+label[aria-invalid="true"] {
+  color: var(--pico-del-color);
 }
 
 button {
@@ -18,10 +18,18 @@ button {
   }
 }
 
-[aria-invalid="true"] + small + small {
+.input-layout {
+  margin-bottom: var(--pico-spacing);
+}
+
+:is(fieldset, .input-layout):has([aria-invalid="true"]) small {
   color: var(--pico-del-color);
 }
 
-fieldset:has([aria-invalid="true"]) small {
-  color: var(--pico-del-color);
+.card {
+  margin-bottom: var(--pico-block-spacing-vertical);
+  padding: var(--pico-block-spacing-vertical) var(--pico-block-spacing-horizontal);
+  border-radius: var(--pico-border-radius);
+  background: var(--pico-card-background-color);
+  box-shadow: var(--pico-card-box-shadow);
 }
