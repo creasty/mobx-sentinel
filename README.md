@@ -204,9 +204,9 @@ end
 
 </details>
 
----
-
 ## Overview
+
+[apps/example/](./apps/example) is deployed at [mobx-sentinel-example.creasty.com](https://mobx-sentinel-example.creasty.com).
 
 ### Model-side
 
@@ -214,13 +214,13 @@ end
 import { action, observable, makeObservable } from "mobx";
 import { nested, makeValidatable } from "@mobx-sentinel/core";
 
-class Sample {
+export class Sample {
   @observable text: string = "";
   @observable number: number | null = null;
   @observable date: Date | null = null;
   @observable bool: boolean = false;
   @observable enum: SampleEnum | null = null;
-  @observable option: string | null = null;
+  @observable option = SampleOption.all[0].code;
   @observable multiOption: string[] = [];
 
   // Nested/dynamic objects can be tracked with @nested annotation
@@ -232,25 +232,14 @@ class Sample {
 
     // 'Reactive validation' is implemented here
     makeValidatable(this, (b) => {
-      if (this.text === "") b.invalidate("text", "Required");
-      if (this.number === null) b.invalidate("number", "Required");
-      if (this.date === null) b.invalidate("date", "Required");
-      if (this.enum === null) b.invalidate("enum", "Required");
-      if (this.option === null) b.invalidate("option", "Required");
-      if (this.multiOption.length === 0) b.invalidate("multiOption", "Required");
-      if (this.array.length === 0) b.invalidate("array", "Required");
-    });
-  }
-}
-
-class Other {
-  @observable other: string = "";
-
-  constructor() {
-    makeObservable(this);
-
-    makeValidatable(this, (b) => {
-      if (this.other === "") b.invalidate("other", "Required");
+      if (this.text === "") b.invalidate("text", "Text is required");
+      if (this.number === null) b.invalidate("number", "Number is required");
+      if (this.date === null) b.invalidate("date", "Date is required");
+      if (this.bool === false) b.invalidate("bool", "Bool must be true");
+      if (this.enum === null) b.invalidate("enum", "Enum is required");
+      if (this.option === SampleOption.all[0].code) b.invalidate("option", "Option must not be 'Alpha'");
+      if (this.multiOption.length === 0) b.invalidate("multiOption", "Multi option is required");
+      if (this.array.length === 0) b.invalidate("array", "Array is required");
     });
   }
 }
@@ -296,7 +285,7 @@ const SampleForm: React.FC<{ model: Sample }> = observer(({ model }) => {
   });
 
   return (
-    <form>
+    <>
       <fieldset>
         <label {...form.bindLabel(["text", "bool"])}>Text input & Checkbox</label>
         <input
@@ -315,21 +304,21 @@ const SampleForm: React.FC<{ model: Sample }> = observer(({ model }) => {
 
       ...
 
-      <fieldset>
+      <div>
         <label {...form.bindLabel(["nested"])}>Nested form</label>
         <OtherForm model={model.nested} />
-      </fieldset>
+      </div>
 
-      <fieldset>
+      <div>
         <label {...form.bindLabel(["array"])}>Dynamic form</label>
         {model.array.map((item, i) => (
           <OtherForm key={i} model={item} />
         ))}
         <button onClick={action(() => model.array.push(new Other()))}>Add a new form</button>
-      </fieldset>
+      </div>
 
       <button {...form.bindSubmitButton()}>Submit</button>
-    </form>
+    </>
   );
 });
 ```
@@ -350,112 +339,6 @@ const OtherForm: React.FC<{ model: Other }> = observer(({ model }) => {
   );
 });
 ```
-
-<details><summary>See other examples</summary>
-
-```tsx
-// Label for a single field
-<label {...form.bindLabel(["text"])}>Text input</label>
-```
-
-```tsx
-// Label for multiple fields
-<label {...form.bindLabel(["text", "bool"])}>Number input & Checkbox</label>
-```
-
-```tsx
-// Text input
-<input
-  {...form.bindInput("text", {
-    getter: () => model.text,
-    setter: (v) => (model.text = v),
-  })}
-/>
-```
-
-```tsx
-// Number input
-<input
-  {...form.bindInput("number", {
-    valueAs: "number",
-    getter: () => model.number,
-    setter: (v) => (model.number = v),
-  })}
-/>
-```
-
-```tsx
-// Date input
-<input
-  {...form.bindInput("date", {
-    valueAs: "date",
-    getter: () => model.date,
-    setter: (v) => (model.date = v),
-  })}
-/>
-```
-
-```tsx
-// Checkbox
-<input
-  {...form.bindCheckBox("bool", {
-    getter: () => model.bool,
-    setter: (v) => (model.bool = v),
-  })}
-/>
-```
-
-```tsx
-// Radio button / radio group
-{(() => {
-  const bind = form.bindRadioButton("enum", {
-    getter: () => model.enum,
-    setter: (v) => (model.enum = v ? (v as SampleEnum) : null),
-  });
-  return Object.values(SampleEnum).map((v) => <input key={v} {...bind(v)} />);
-})()}
-```
-
-```tsx
-// Select box
-<label {...form.bindLabel(["option"])}>Select box</label>
-<select
-  {...form.bindSelectBox("option", {
-    getter: () => model.option,
-    setter: (v) => (model.option = v),
-  })}
->
-  {SAMPLE_OPTIONS.map((option) => (
-    <option key={option.code} value={option.code}>
-      {option.name}
-    </option>
-  ))}
-</select>
-```
-
-```tsx
-// Multi select box
-<select
-  {...form.bindSelectBox("multiOption", {
-    multiple: true,
-    getter: () => model.multiOption,
-    setter: (v) => (model.multiOption = v),
-  })}
->
-  {SAMPLE_OPTIONS.map((option) => (
-    <option key={option.code} value={option.code}>
-      {option.name}
-    </option>
-  ))}
-</select>
-```
-
-```tsx
-// Submit button
-<button {...form.bindSubmitButton()}>Submit</button>
-```
-
-</details>
 
 ## Alternatives
 
