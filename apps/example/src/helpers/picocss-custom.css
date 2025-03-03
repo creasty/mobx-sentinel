@@ -1,31 +1,37 @@
 .picocss-scope {
   padding: 32px;
 
-  & label:not(:has(input)) {
+  label:not(:has(input)) {
     font-weight: bold;
   }
-  & label[aria-invalid="true"] {
+  label[aria-invalid="true"] {
     color: var(--pico-del-color);
   }
 
-  & button {
+  button {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+
     &[aria-invalid="true"]:before {
-      content: "❗ ";
+      content: var(--pico-icon-invalid);
+      margin-right: 8px;
+      height: 24px;
     }
     &:disabled {
       pointer-events: all !important;
     }
   }
 
-  & .input-layout {
+  .input-layout {
     margin-bottom: var(--pico-spacing);
   }
 
-  & :is(fieldset, .input-layout):has([aria-invalid="true"]) small {
+  :is(fieldset, .input-layout):has([aria-invalid="true"]) small {
     color: var(--pico-del-color);
   }
 
-  & .card {
+  .card {
     margin-bottom: var(--pico-block-spacing-vertical);
     padding: var(--pico-block-spacing-vertical) var(--pico-block-spacing-horizontal);
     border-radius: var(--pico-border-radius);
