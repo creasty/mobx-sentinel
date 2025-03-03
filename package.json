@@ -8,12 +8,14 @@
   "packageManager": "pnpm@9.15.4",
   "type": "module",
   "workspaces": [
-    "packages/*"
+    "packages/*",
+    "apps/*"
   ],
   "scripts": {
     "prepare": "simple-git-hooks",
-    "dev": "turbo watch build",
-    "build": "turbo run build",
+    "dev": "turbo watch build --filter=./packages/*",
+    "build": "turbo run build --filter=./packages/*",
+    "build:apps:example": "turbo run build --filter=./apps/example",
     "doc": "typedoc",
     "test": "turbo run test",
     "lint": "pnpm run -w --parallel --aggregate-output '/^lint:.+/'",

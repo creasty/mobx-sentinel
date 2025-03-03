@@ -241,11 +241,6 @@ class Sample {
       if (this.array.length === 0) b.invalidate("array", "Required");
     });
   }
-
-  @action
-  addNewForm() {
-    this.array.push(new Other());
-  }
 }
 
 class Other {
@@ -330,7 +325,7 @@ const SampleForm: React.FC<{ model: Sample }> = observer(({ model }) => {
         {model.array.map((item, i) => (
           <OtherForm key={i} model={item} />
         ))}
-        <button onClick={model.addNewForm}>Add a new form</button>
+        <button onClick={action(() => model.array.push(new Other()))}>Add a new form</button>
       </fieldset>
 
       <button {...form.bindSubmitButton()}>Submit</button>

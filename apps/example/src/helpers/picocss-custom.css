@@ -1,0 +1,41 @@
+.picocss-scope {
+  padding: 32px;
+
+  label:not(:has(input)) {
+    font-weight: bold;
+  }
+  label[aria-invalid="true"] {
+    color: var(--pico-del-color);
+  }
+
+  button {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+
+    &[aria-invalid="true"]:before {
+      content: var(--pico-icon-invalid);
+      margin-right: 8px;
+      height: 24px;
+    }
+    &:disabled {
+      pointer-events: all !important;
+    }
+  }
+
+  .input-layout {
+    margin-bottom: var(--pico-spacing);
+  }
+
+  :is(fieldset, .input-layout):has([aria-invalid="true"]) small {
+    color: var(--pico-del-color);
+  }
+
+  .card {
+    margin-bottom: var(--pico-block-spacing-vertical);
+    padding: var(--pico-block-spacing-vertical) var(--pico-block-spacing-horizontal);
+    border-radius: var(--pico-border-radius);
+    background: var(--pico-card-background-color);
+    box-shadow: var(--pico-card-box-shadow);
+  }
+}
