@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useCallback, useState } from "react";
 import "@testing-library/jest-dom";
 import { act, render, screen } from "@testing-library/react";
 import { userEvent } from "@testing-library/user-event";
@@ -16,14 +16,22 @@ class SampleModel {
   }
 }
 
-const ParentComponent: React.FC<{ model: SampleModel; submitHandler: () => void }> = observer(
+const ParentComponent: React.FC<{ model: SampleModel; submitHandler: (counter: number) => void }> = observer(
   ({ model, submitHandler }) => {
     const [mounted, setMounted] = useState(false);
+    const [counter, setCounter] = useState(0);
+
+    const submitHandlerLocal = useCallback(() => {
+      submitHandler(counter);
+    }, [submitHandler, counter]);
+
     return (
       <>
+        <p>{counter}</p>
+        <button onClick={() => setCounter((v) => v + 1)}>Increment</button>
         <button onClick={() => setMounted(true)}>Mount</button>
         <button onClick={() => setMounted(false)}>Unmount</button>
-        {mounted && <SampleComponent model={model} submitHandler={submitHandler} />}
+        {mounted && <SampleComponent model={model} submitHandler={submitHandlerLocal} />}
       </>
     );
   }
@@ -52,6 +60,7 @@ const setupEnv = () => {
   render(<ParentComponent model={model} submitHandler={spy} />);
   const mountButton = screen.getByText("Mount") as HTMLButtonElement;
   const unmountButton = screen.getByText("Unmount") as HTMLButtonElement;
+  const incrementButton = screen.getByText("Increment") as HTMLButtonElement;
 
   return {
     model,
@@ -59,6 +68,7 @@ const setupEnv = () => {
     spy,
     mount: () => userEvent.click(mountButton),
     unmount: () => userEvent.click(unmountButton),
+    increment: () => userEvent.click(incrementButton),
   };
 };
 
@@ -86,6 +96,20 @@ describe("useFormHandler", () => {
       await env.form.submit({ force: true });
     });
     expect(env.spy).toBeCalledTimes(1);
+    expect(env.spy).toBeCalledWith(0);
+  });
+
+  test("updates the handler when the counter is incremented", async () => {
+    const env = setupEnv();
+
+    await env.mount();
+    expect(env.spy).toBeCalledTimes(0);
+    await env.increment();
+    await act(async () => {
+      await env.form.submit({ force: true });
+    });
+    expect(env.spy).toBeCalledTimes(1);
+    expect(env.spy).toBeCalledWith(1);
   });
 
   test("removes the handler when unmounted", async () => {

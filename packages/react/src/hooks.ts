@@ -31,5 +31,12 @@ export function useFormHandler<T extends object, Event extends keyof Form.Handle
   const handlerRef = useRef(handler);
   handlerRef.current = handler;
 
-  useEffect(() => form.addHandler(event, handlerRef.current), [form, event]);
+  useEffect(() => {
+    const dispose = form.addHandler(
+      event,
+      // eslint-disable-next-line prefer-spread, @typescript-eslint/no-unsafe-function-type
+      (...args: any[]) => (handlerRef.current as Function).apply(undefined, args) as any
+    );
+    return dispose;
+  }, [form, event]);
 }
