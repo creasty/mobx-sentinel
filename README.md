@@ -149,9 +149,9 @@ This library aims to solve these problems through a model-centric design that pr
 
 <details>
 
-- `┈┈` Dashed lines indicate non-reactive, unidirectional relationships.
-- `──` Solid lines indicate reactive, unidirectional relationships.
-- `━━` Heavy lines indicate reactive, bidirectional relationships.
+- `┈┈` Dashed lines indicate non-reactive relationships.
+- `──` Solid lines indicate reactive relationships.
+- `━━` Heavy lines indicate main reactive relationships.
 
 Key points:
 
@@ -208,7 +208,7 @@ end
 
 [apps/example/](./apps/example) is deployed at [mobx-sentinel-example.creasty.com](https://mobx-sentinel-example.creasty.com).
 
-### Model-side
+### Model
 
 ```typescript
 import { action, observable, makeObservable } from "mobx";
@@ -220,10 +220,10 @@ export class Sample {
   @observable date: Date | null = null;
   @observable bool: boolean = false;
   @observable enum: SampleEnum | null = null;
-  @observable option = SampleOption.all[0].code;
+  @observable option: string | null = null;
   @observable multiOption: string[] = [];
 
-  // Nested/dynamic objects can be tracked with @nested annotation
+  // Nested/dynamic models can be tracked with @nested annotation
   @nested @observable nested = new Other();
   @nested @observable array = [new Other()];
 
@@ -237,10 +237,15 @@ export class Sample {
       if (this.date === null) b.invalidate("date", "Date is required");
       if (this.bool === false) b.invalidate("bool", "Bool must be true");
       if (this.enum === null) b.invalidate("enum", "Enum is required");
-      if (this.option === SampleOption.all[0].code) b.invalidate("option", "Option must not be 'Alpha'");
+      if (this.option === null) b.invalidate("option", "Option is required");
       if (this.multiOption.length === 0) b.invalidate("multiOption", "Multi option is required");
       if (this.array.length === 0) b.invalidate("array", "Array is required");
     });
+  }
+
+  @action.bound
+  addNewArrayItem() {
+    this.array.push(new Other());
   }
 }
 ```
@@ -261,14 +266,9 @@ watcher.changedKeyPaths //=> Set ["text", "nested.other"]
 const validator = Validator.get(model);
 validator.isValid //=> false
 validator.invalidKeyPaths //=> Set ["number", "date", ..., "array.0.other"]
-
-// Iterate over all errors
-for (const [keyPath, error] of validator.findErrors(KeyPathSelf, true)) {
-  console.log(keyPath, error);
-}
 ```
 
-### UI-side
+### Form
 
 ```tsx
 import { observer } from "mobx-react-lite";
@@ -277,44 +277,53 @@ import { useFormHandler } from "@mobx-sentinel/react";
 import "@mobx-sentinel/react/dist/extension"; // Makes .bindTextInput() and other bind methods available.
 
 const SampleForm: React.FC<{ model: Sample }> = observer(({ model }) => {
+  // Get the form instance for the model.
+  // It's guaranteed to be the same form instance for the same model instance.
   const form = Form.get(model);
 
+  // Form submission logic is implemented here.
   useFormHandler(form, "submit", async (abortSignal) => {
-    // TODO: Serialize the model and send the data to a server
+    // TODO: Serialize the model and send it to a server
     return true;
   });
 
   return (
     <>
-      <fieldset>
-        <label {...form.bindLabel(["text", "bool"])}>Text input & Checkbox</label>
+      <div className="field">
+        <label {...form.bindLabel(["text", "bool"])}>Text input &amp; Checkbox</label>
         <input
          {...form.bindInput("text", {
-            getter: () => model.text,
-            setter: (v) => (model.text = v),
+            getter: () => model.text, // Get the value from the model.
+            setter: (v) => (model.text = v), // Write the value to the model.
           })}
         />
+        <ErrorText errors={form.getErrors("text")} />
         <input
           {...form.bindCheckBox("bool", {
             getter: () => model.bool,
             setter: (v) => (model.bool = v),
           })}
         />
-      </fieldset>
+        <ErrorText errors={form.getErrors("bool")} />
+      </div>
 
       ...
 
-      <div>
-        <label {...form.bindLabel(["nested"])}>Nested form</label>
+      <div className="field">
+        <h4>Nested form</h4>
         <OtherForm model={model.nested} />
       </div>
 
-      <div>
-        <label {...form.bindLabel(["array"])}>Dynamic form</label>
+      <div className="field">
+        <h4>Dynamic form</h4>
+        <ErrorText errors={form.getErrors("array")} />
+
         {model.array.map((item, i) => (
           <OtherForm key={i} model={item} />
         ))}
-        <button onClick={action(() => model.array.push(new Other()))}>Add a new form</button>
+
+        {/* Add a new form by mutating the model directly. */}
+        <button onClick={model.addNewArrayItem}>Add a new form</button>
       </div>
 
       <button {...form.bindSubmitButton()}>Submit</button>
@@ -325,18 +334,11 @@ const SampleForm: React.FC<{ model: Sample }> = observer(({ model }) => {
 
 ```tsx
 const OtherForm: React.FC<{ model: Other }> = observer(({ model }) => {
+  // Forms are completely independent.
+  // A nested form doesn't need to know the parent form.
   const form = Form.get(model);
 
-  return (
-    <fieldset>
-      <input
-        {...form.bindInput("other", {
-          getter: () => model.other,
-          setter: (v) => (model.other = v),
-        })}
-      />
-    </fieldset>
-  );
+  return (...);
 });
 ```
 

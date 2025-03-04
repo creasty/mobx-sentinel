@@ -1,4 +1,4 @@
-import { observable, makeObservable } from "mobx";
+import { observable, makeObservable, action } from "mobx";
 import { nested, makeValidatable } from "@mobx-sentinel/core";
 
 export enum SampleEnum {
@@ -56,7 +56,7 @@ export class Sample {
   @observable date: Date | null = null;
   @observable bool: boolean = false;
   @observable enum: SampleEnum | null = null;
-  @observable option = SampleOption.all[0].code;
+  @observable option: string | null = null;
   @observable multiOption: string[] = [];
 
   // Nested/dynamic objects can be tracked with @nested annotation
@@ -73,10 +73,15 @@ export class Sample {
       if (this.date === null) b.invalidate("date", "Date is required");
       if (this.bool === false) b.invalidate("bool", "Bool must be true");
       if (this.enum === null) b.invalidate("enum", "Enum is required");
-      if (this.option === SampleOption.all[0].code) b.invalidate("option", "Option must not be 'Alpha'");
+      if (this.option === null) b.invalidate("option", "Option is required");
       if (this.multiOption.length === 0) b.invalidate("multiOption", "Multi option is required");
       if (this.array.length === 0) b.invalidate("array", "Array is required");
     });
+  }
+
+  @action.bound
+  addNewArrayItem() {
+    this.array.push(new Other());
   }
 
   toJSON() {
