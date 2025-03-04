@@ -206,7 +206,7 @@ end
 
 ## Overview
 
-[apps/example/](./apps/example) is deployed at [mobx-sentinel-example.creasty.com](https://mobx-sentinel-example.creasty.com).
+[apps/example/](./apps/example) is deployed at [example.mobx-sentinel.creasty.com](https://example.mobx-sentinel.creasty.com).
 
 ### Model
 
