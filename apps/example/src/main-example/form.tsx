@@ -15,7 +15,7 @@ export const SampleForm: React.FC<{ model: Sample }> = observer(({ model }) => {
 
   return (
     <div>
-      <div className="input-layout">
+      <div className="field">
         <label {...form.bindLabel(["text"])}>Text input</label>
         <input
           {...form.bindInput("text", {
@@ -26,7 +26,7 @@ export const SampleForm: React.FC<{ model: Sample }> = observer(({ model }) => {
         <ErrorText errors={form.getErrors("text")} />
       </div>
 
-      <div className="input-layout">
+      <div className="field">
         <label {...form.bindLabel(["number", "date"])}>Number &amp; Date input</label>
         <input
           {...form.bindInput("number", {
@@ -46,7 +46,7 @@ export const SampleForm: React.FC<{ model: Sample }> = observer(({ model }) => {
         <ErrorText errors={form.getErrors("date")} />
       </div>
 
-      <div className="input-layout">
+      <div className="field">
         <label {...form.bindLabel(["bool"])}>Checkbox</label>
         <label>
           <input
@@ -60,7 +60,7 @@ export const SampleForm: React.FC<{ model: Sample }> = observer(({ model }) => {
         <ErrorText errors={form.getErrors("bool")} />
       </div>
 
-      <fieldset>
+      <fieldset className="field">
         <label {...form.bindLabel(["enum"])}>Radio group</label>
         <div style={{ display: "flex", flexWrap: "wrap", gap: "4px 24px" }}>
           {(() => {
@@ -78,14 +78,17 @@ export const SampleForm: React.FC<{ model: Sample }> = observer(({ model }) => {
         <ErrorText errors={form.getErrors("enum")} />
       </fieldset>
 
-      <div className="input-layout">
+      <div className="field">
         <label {...form.bindLabel(["option"])}>Select box</label>
         <select
           {...form.bindSelectBox("option", {
-            getter: () => model.option,
-            setter: (v) => (model.option = v),
+            getter: () => model.option ?? "",
+            setter: (v) => (model.option = v || null),
           })}
         >
+          <option value="" disabled hidden>
+            -- Select --
+          </option>
           {SampleOption.all.map((option) => (
             <option key={option.code} value={option.code}>
               {option.name}
@@ -95,7 +98,7 @@ export const SampleForm: React.FC<{ model: Sample }> = observer(({ model }) => {
         <ErrorText errors={form.getErrors("option")} />
       </div>
 
-      <div className="input-layout">
+      <div className="field">
         <label {...form.bindLabel(["multiOption"])}>Multi select box</label>
         <select
           {...form.bindSelectBox("multiOption", {
@@ -115,24 +118,24 @@ export const SampleForm: React.FC<{ model: Sample }> = observer(({ model }) => {
 
       <hr />
 
-      <div className="input-layout">
-        <h3 {...form.bindLabel(["nested"])}>Nested form</h3>
+      <div className="field">
+        <h4 {...form.bindLabel(["nested"])}>Nested form</h4>
         <OtherForm model={model.nested} />
       </div>
 
       <hr />
 
-      <div className="input-layout">
-        <h3 {...form.bindLabel(["array"])}>Dynamic form</h3>
+      <div className="field">
+        <h4 {...form.bindLabel(["array"])}>Dynamic form</h4>
+        <ErrorText errors={form.getErrors("array")} />
         {model.array.map((item, i) => (
           <OtherForm key={i} model={item} onDelete={action(() => model.array.splice(i, 1))} />
         ))}
         <div className="grid">
-          <button className="secondary" onClick={action(() => model.array.push(new Other()))}>
+          <button className="secondary" onClick={model.addNewArrayItem}>
             Add a new form
           </button>
         </div>
-        <ErrorText errors={form.getErrors("array")} />
       </div>
 
       <hr />
@@ -160,8 +163,8 @@ export const OtherForm: React.FC<{ model: Other; onDelete?: () => void }> = obse
   const form = Form.get(model);
 
   return (
-    <fieldset className="sub-form" data-deletable={!!onDelete}>
-      <div>
+    <div className="sub-form" data-deletable={!!onDelete}>
+      <div className="field">
         <label {...form.bindLabel(["other"])}>Other</label>
         <input
           {...form.bindInput("other", {
@@ -176,7 +179,7 @@ export const OtherForm: React.FC<{ model: Other; onDelete?: () => void }> = obse
           Delete
         </button>
       )}
-    </fieldset>
+    </div>
   );
 });
 
