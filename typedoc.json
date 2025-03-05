@@ -8,5 +8,6 @@
   "name": "mobx-sentinel API doc",
   "navigationLinks": {
     "Example": "https://example.mobx-sentinel.creasty.com"
-  }
+  },
+  "plugin": ["./script/typedoc-plugin.js"]
 }
