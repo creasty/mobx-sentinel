@@ -2,5 +2,11 @@
   "$schema": "https://typedoc.org/schema.json",
   "entryPoints": ["./packages/*"],
   "entryPointStrategy": "packages",
-  "includeVersion": false
+  "includeVersion": false,
+  "readme": "none",
+  "customCss": "./script/typedoc.css",
+  "name": "mobx-sentinel API doc",
+  "navigationLinks": {
+    "Example": "https://example.mobx-sentinel.creasty.com"
+  }
 }
