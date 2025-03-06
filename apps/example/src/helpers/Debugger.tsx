@@ -38,7 +38,7 @@ export const Debugger: React.FC<{ model: object }> = observer(({ model }) => {
             <tbody>
               {Object.entries({
                 changed: String(form.watcher.changed),
-                changedTick: form.watcher.changedTick,
+                changedTick: String(form.watcher.changedTick),
                 changedKeyPaths: (
                   <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
                     {Array.from(form.watcher.changedKeyPaths, (v) => (
