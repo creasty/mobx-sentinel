@@ -123,7 +123,11 @@ export class FormField {
     }
   }
 
-  /** Report the errors of the field */
+  /**
+   * Report the errors of the field.
+   *
+   * It will wait until the validation is up-to-date before reporting the errors.
+   */
   @action
   reportError() {
     this.#isReported.set(true);
