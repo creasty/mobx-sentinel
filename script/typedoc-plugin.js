@@ -36,8 +36,14 @@ function sort(container) {
       canonicalOrder = i;
       canonicalOrderMap.set(key, canonicalOrder);
     }
-    orderMap.set(child, canonicalOrder + i / len);
+    // Penalize namespaces to push them to the bottom within the same-named group
+    const penalty = child.kindOf(td.ReflectionKind.Namespace) ? 0.1 : 0;
+    // Keep the original order of children consistent
+    const localOrder = i / len / 10;
+    // Move the children with the same name closer together
+    orderMap.set(child, canonicalOrder + localOrder + penalty);
 
+    // Recurse into children
     if (child.children) sort(child);
   }
 
