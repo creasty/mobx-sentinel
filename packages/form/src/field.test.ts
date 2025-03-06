@@ -89,9 +89,9 @@ describe("FormField", () => {
     it("marks the field as reported", () => {
       const { field } = setupEnv();
       const internal = debugFormField(field);
-      expect(internal.isErrorReported.get()).toBe(false);
+      expect(internal.isReported.get()).toBe(false);
       field.reportError();
-      expect(internal.isErrorReported.get()).toBe(true);
+      expect(internal.isReported.get()).toBe(true);
     });
   });
 
@@ -256,7 +256,7 @@ describe("FormField", () => {
       expect(field.isIntermediate).toBe(false);
       expect(field.isChanged).toBe(false);
       expect(field.isErrorReported).toBe(undefined);
-      expect(internal.isErrorReported.get()).toBe(false);
+      expect(internal.isReported.get()).toBe(false);
     });
   });
 });

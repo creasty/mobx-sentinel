@@ -11,7 +11,7 @@ export class FormField {
   readonly #getFinalizationDelayMs: () => number;
   readonly #isTouched = observable.box(false);
   readonly #changeType = observable.box<FormField.ChangeType | null>(null);
-  readonly #isErrorReported = observable.box(false);
+  readonly #isReported = observable.box(false);
   #timerId: number | null = null;
 
   /** @ignore */
@@ -54,7 +54,7 @@ export class FormField {
    */
   @computed
   get isErrorReported() {
-    if (!this.#isErrorReported.get()) return undefined;
+    if (!this.#isReported.get()) return undefined;
     return this.hasErrors;
   }
 
@@ -83,7 +83,7 @@ export class FormField {
   reset() {
     this.#changeType.set(null);
     this.#isTouched.set(false);
-    this.#isErrorReported.set(false);
+    this.#isReported.set(false);
     this.#cancelFinalizeChangeWithDelay();
   }
 
@@ -114,7 +114,7 @@ export class FormField {
   /** Report the errors of the field */
   @action
   reportError() {
-    this.#isErrorReported.set(true);
+    this.#isReported.set(true);
   }
 
   /** Finalize the intermediate change if needed (usually triggered by onBlur) */
@@ -142,7 +142,7 @@ export class FormField {
   /** @internal @ignore */
   [internalToken]() {
     return {
-      isErrorReported: this.#isErrorReported,
+      isReported: this.#isReported,
     };
   }
 }
