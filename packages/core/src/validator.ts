@@ -11,9 +11,12 @@ const internalToken = Symbol("validator.internal");
 /**
  * Make a target object validatable
  *
- * It's just a shorthand of `Validator.get(target).addAsyncHandler(expr, handler)`.
+ * It's just a shorthand of:
+ * ```typescript
+ * Validator.get(target).addAsyncHandler(expr, handler, opt)
+ * ```
  *
- * If you're using `make(Auto)Observable`, make sure to call `makeValidatable`
+ * @remarks If you're using `make(Auto)Observable`, make sure to call `makeValidatable`
  * after `make(Auto)Observable`.
  *
  * @param target The target object
@@ -33,9 +36,12 @@ export function makeValidatable<T extends object, Expr>(
 /**
  * Make a target object validatable
  *
- * It's just a shorthand of `Validator.get(target).addSyncHandler(handler)`.
+ * It's just a shorthand of:
+ * ```typescript
+ * Validator.get(target).addSyncHandler(handler, opt)
+ * ```
  *
- * If you're using `make(Auto)Observable`, make sure to call `makeValidatable`
+ * @remarks If you're using `make(Auto)Observable`, make sure to call `makeValidatable`
  * after `make(Auto)Observable`.
  *
  * @param target The target object
