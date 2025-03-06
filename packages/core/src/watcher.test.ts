@@ -1,7 +1,7 @@
 import { computed, makeObservable, observable, runInAction } from "mobx";
 import { Watcher, debugWatcher, unwatch, watch } from "./watcher";
 import { nested } from "./nested";
-import { KeyPath, KeyPathSelf } from "./keyPath";
+import { KeyPath } from "./keyPath";
 
 describe("Watcher", () => {
   describe("constructor", () => {
@@ -920,12 +920,12 @@ describe("Annotations", () => {
         }
       }
 
-      test("nested watchers are created with KeyPathSelf", () => {
+      test("nested watchers are created with KeyPath.Self", () => {
         const sample = new Sample();
         const watcher = Watcher.get(sample);
         expect(watcher.nested.size).toBe(1);
         expect(watcher.nested.get("other" as KeyPath)).toBeFalsy();
-        expect(watcher.nested.get(KeyPathSelf)).toBe(Watcher.get(sample.other));
+        expect(watcher.nested.get(KeyPath.Self)).toBe(Watcher.get(sample.other));
       });
 
       test("changes to a nested class are tracked and hoisted", () => {
@@ -938,8 +938,8 @@ describe("Annotations", () => {
         expect(watcher.changedKeys).toEqual(new Set([]));
         expect(watcher.changedKeyPaths).toEqual(new Set(["value"]));
         expect(watcher.changed).toBe(true);
-        expect(watcher.nested.get(KeyPathSelf)?.changedKeys).toEqual(new Set(["value"]));
-        expect(watcher.nested.get(KeyPathSelf)?.changed).toBe(true);
+        expect(watcher.nested.get(KeyPath.Self)?.changedKeys).toEqual(new Set(["value"]));
+        expect(watcher.nested.get(KeyPath.Self)?.changed).toBe(true);
       });
     });
 
@@ -960,7 +960,7 @@ describe("Annotations", () => {
         }
       }
 
-      test("nested watchers are created with KeyPathSelf", () => {
+      test("nested watchers are created with KeyPath.Self", () => {
         const sample = new Sample();
         const watcher = Watcher.get(sample);
         expect(watcher.nested.size).toBe(1);

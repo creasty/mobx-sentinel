@@ -1,6 +1,6 @@
 import { comparer, computed, makeObservable } from "mobx";
 import { createPropertyLikeAnnotation, getAnnotationProcessor } from "./annotationProcessor";
-import { KeyPath, KeyPathSelf, buildKeyPath } from "./keyPath";
+import { KeyPath } from "./keyPath";
 import { unwrapShallowContents } from "./mobx-utils";
 
 enum NestedMode {
@@ -89,7 +89,7 @@ export class StandardNestedFetcher<T extends object> implements Iterable<Standar
 
     for (const { key, getValue, hoist } of getNestedAnnotations(target)) {
       if (typeof key !== "string") continue; // symbol keys are not supported
-      const keyPath = hoist ? KeyPathSelf : buildKeyPath(key);
+      const keyPath = hoist ? KeyPath.Self : KeyPath.build(key);
       const fetcher = this.#createFetcher(keyPath, getValue);
       this.#fetchers.set(keyPath, fetcher);
     }
@@ -101,7 +101,7 @@ export class StandardNestedFetcher<T extends object> implements Iterable<Standar
     return function* (): Generator<StandardNestedFetcher.Entry<T>> {
       for (const [subKey, value] of unwrapShallowContents(getValue())) {
         if (typeof subKey === "symbol") continue; // symbol keys are not supported
-        const keyPath = buildKeyPath(key, subKey);
+        const keyPath = KeyPath.build(key, subKey);
         const data = that.#transform({ key, keyPath, data: value }) ?? null;
         if (data === null) continue;
         yield { key, keyPath, data };

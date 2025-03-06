@@ -2,12 +2,6 @@
   display: none;
 }
 
-.tsd-member {
-  background: var(--color-background-secondary);
-  padding: 16px;
-  margin: 16px 0;
-}
-
 .tsd-signatures > .tsd-signature {
   background: var(--color-background-secondary);
   padding: 16px;
@@ -22,6 +16,11 @@
   margin: 0;
 }
 
+.tsd-member {
+  background: var(--color-background-secondary);
+  padding: 16px;
+  margin: 16px 0;
+}
 .tsd-member .tsd-signatures {
   margin: 0 -16px -16px;
 }

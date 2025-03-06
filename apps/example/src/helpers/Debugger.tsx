@@ -1,4 +1,4 @@
-import { KeyPathSelf } from "@mobx-sentinel/core";
+import { KeyPath } from "@mobx-sentinel/core";
 import { Form } from "@mobx-sentinel/form";
 import { observer } from "mobx-react-lite";
 
@@ -85,7 +85,7 @@ export const Debugger: React.FC<{ model: object }> = observer(({ model }) => {
               </tr>
             </thead>
             <tbody>
-              {Array.from(form.validator.findErrors(KeyPathSelf, true), ([keyPath, error], i) => (
+              {Array.from(form.validator.findErrors(KeyPath.Self, true), ([keyPath, error], i) => (
                 <tr key={i}>
                   <th scope="row">
                     <code>{String(keyPath)}</code>

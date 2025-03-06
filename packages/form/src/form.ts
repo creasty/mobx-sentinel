@@ -1,6 +1,6 @@
 import { action, computed, makeObservable, observable } from "mobx";
 import { v4 as uuidV4 } from "uuid";
-import { Validator, Watcher, StandardNestedFetcher, buildKeyPath, KeyPathSelf } from "@mobx-sentinel/core";
+import { Validator, Watcher, StandardNestedFetcher, KeyPath } from "@mobx-sentinel/core";
 import { FormField } from "./field";
 import { FormBinding, FormBindingConstructor, FormBindingFunc, getSafeBindingName } from "./binding";
 import { FormConfig, globalConfig } from "./config";
@@ -356,7 +356,7 @@ export class Form<T> {
    * @param fieldName - The field name to get errors for. If omitted, all errors are returned.
    */
   getAllErrors(fieldName?: FormField.Name<T>) {
-    return this.validator.getErrorMessages(fieldName ? buildKeyPath(fieldName) : KeyPathSelf, true);
+    return this.validator.getErrorMessages(fieldName ? KeyPath.build(fieldName) : KeyPath.Self, true);
   }
 
   /** The first error message (including nested objects) */

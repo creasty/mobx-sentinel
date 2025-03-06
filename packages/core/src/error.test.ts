@@ -1,9 +1,9 @@
 import { ValidationError, ValidationErrorMapBuilder } from "./error";
-import { buildKeyPath, KeyPathMultiMap, KeyPathSelf } from "./keyPath";
+import { KeyPath, KeyPathMultiMap } from "./keyPath";
 
 describe("ValidationError", () => {
   it("can be created with a string reason", () => {
-    const error = new ValidationError({ keyPath: buildKeyPath("key1.subKey1"), reason: "reason" });
+    const error = new ValidationError({ keyPath: KeyPath.build("key1.subKey1"), reason: "reason" });
     expect(error.key).toBe("key1");
     expect(error.keyPath).toBe("key1.subKey1");
     expect(error.message).toBe("reason");
@@ -11,7 +11,7 @@ describe("ValidationError", () => {
   });
 
   it("can be created with an error reason", () => {
-    const error = new ValidationError({ keyPath: buildKeyPath("key1.subKey1"), reason: new Error("reason") });
+    const error = new ValidationError({ keyPath: KeyPath.build("key1.subKey1"), reason: new Error("reason") });
     expect(error.key).toBe("key1");
     expect(error.keyPath).toBe("key1.subKey1");
     expect(error.message).toBe("reason");
@@ -42,8 +42,8 @@ describe("ValidationErrorMapBuilder", () => {
 
       const result = ValidationErrorMapBuilder.build(builder);
       expect(result.size).toEqual(1);
-      expect(result.get(buildKeyPath("key1"))).toEqual(
-        new Set([new ValidationError({ keyPath: buildKeyPath("key1"), reason: "reason" })])
+      expect(result.get(KeyPath.build("key1"))).toEqual(
+        new Set([new ValidationError({ keyPath: KeyPath.build("key1"), reason: "reason" })])
       );
     });
 
@@ -55,10 +55,10 @@ describe("ValidationErrorMapBuilder", () => {
 
       const result = ValidationErrorMapBuilder.build(builder);
       expect(result.size).toEqual(1);
-      expect(result.get(buildKeyPath("key1"))).toEqual(
+      expect(result.get(KeyPath.build("key1"))).toEqual(
         new Set([
-          new ValidationError({ keyPath: buildKeyPath("key1"), reason: "reason1" }),
-          new ValidationError({ keyPath: buildKeyPath("key1"), reason: "reason2" }),
+          new ValidationError({ keyPath: KeyPath.build("key1"), reason: "reason1" }),
+          new ValidationError({ keyPath: KeyPath.build("key1"), reason: "reason2" }),
         ])
       );
     });
@@ -71,11 +71,11 @@ describe("ValidationErrorMapBuilder", () => {
 
       const result = ValidationErrorMapBuilder.build(builder);
       expect(result.size).toEqual(2);
-      expect(result.get(buildKeyPath("key1"))).toEqual(
-        new Set([new ValidationError({ keyPath: buildKeyPath("key1"), reason: "reasonA" })])
+      expect(result.get(KeyPath.build("key1"))).toEqual(
+        new Set([new ValidationError({ keyPath: KeyPath.build("key1"), reason: "reasonA" })])
       );
-      expect(result.get(buildKeyPath("key2"))).toEqual(
-        new Set([new ValidationError({ keyPath: buildKeyPath("key2"), reason: "reasonB" })])
+      expect(result.get(KeyPath.build("key2"))).toEqual(
+        new Set([new ValidationError({ keyPath: KeyPath.build("key2"), reason: "reasonB" })])
       );
     });
   });
@@ -88,8 +88,8 @@ describe("ValidationErrorMapBuilder", () => {
 
       const result = ValidationErrorMapBuilder.build(builder);
       expect(result.size).toEqual(1);
-      expect(result.get(KeyPathSelf)).toEqual(
-        new Set([new ValidationError({ keyPath: KeyPathSelf, reason: "reason" })])
+      expect(result.get(KeyPath.Self)).toEqual(
+        new Set([new ValidationError({ keyPath: KeyPath.Self, reason: "reason" })])
       );
     });
   });

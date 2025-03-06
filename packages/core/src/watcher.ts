@@ -3,7 +3,7 @@ import { v4 as uuidV4 } from "uuid";
 import { createPropertyLikeAnnotation, getAnnotationProcessor } from "./annotationProcessor";
 import { getMobxObservableAnnotations, shallowReadValue, unwrapShallowContents } from "./mobx-utils";
 import { StandardNestedFetcher, getNestedAnnotations } from "./nested";
-import { KeyPath, buildKeyPath } from "./keyPath";
+import { KeyPath } from "./keyPath";
 
 enum WatchMode {
   /**
@@ -191,7 +191,7 @@ export class Watcher {
     const result = new Set(this.#changedKeys);
     for (const entry of this.#nestedFetcher) {
       for (const changedKeyPath of entry.data.changedKeyPaths) {
-        result.add(buildKeyPath(entry.keyPath, changedKeyPath));
+        result.add(KeyPath.build(entry.keyPath, changedKeyPath));
       }
     }
     return result;
@@ -257,7 +257,7 @@ export class Watcher {
 
       reaction(
         () => shallowReadValue(getValue()),
-        () => this.#didChange(buildKeyPath(key))
+        () => this.#didChange(KeyPath.build(key))
       );
     }
   }
@@ -273,7 +273,7 @@ export class Watcher {
 
       reaction(
         () => shallowReadValue(getValue()),
-        () => (hoist ? this.#incrementChangedTick() : this.#didChange(buildKeyPath(key)))
+        () => (hoist ? this.#incrementChangedTick() : this.#didChange(KeyPath.build(key)))
       );
       reaction(
         () => {
@@ -312,7 +312,7 @@ export class Watcher {
 
       reaction(
         () => (isShallow ? shallowReadValue(getValue()) : getValue()),
-        () => this.#didChange(buildKeyPath(key))
+        () => this.#didChange(KeyPath.build(key))
       );
     }
   }

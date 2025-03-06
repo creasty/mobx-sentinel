@@ -1,6 +1,6 @@
 import { action, computed, makeObservable, observable } from "mobx";
 import { v4 as uuidV4 } from "uuid";
-import { buildKeyPath, type Validator } from "@mobx-sentinel/core";
+import { KeyPath, type Validator } from "@mobx-sentinel/core";
 
 const internalToken = Symbol("formField.internal");
 
@@ -14,6 +14,7 @@ export class FormField {
   readonly #isErrorReported = observable.box(false);
   #timerId: number | null = null;
 
+  /** @ignore */
   constructor(args: { fieldName: string; validator: Validator<any>; getFinalizationDelayMs: () => number }) {
     makeObservable(this);
     this.fieldName = args.fieldName;
@@ -64,7 +65,7 @@ export class FormField {
    */
   @computed.struct
   get errors(): ReadonlySet<string> {
-    return this.validator.getErrorMessages(buildKeyPath(this.fieldName));
+    return this.validator.getErrorMessages(KeyPath.build(this.fieldName));
   }
 
   /**
@@ -74,7 +75,7 @@ export class FormField {
    */
   @computed
   get hasErrors() {
-    return this.validator.hasErrors(buildKeyPath(this.fieldName));
+    return this.validator.hasErrors(KeyPath.build(this.fieldName));
   }
 
   /** Reset the field to its initial state */
