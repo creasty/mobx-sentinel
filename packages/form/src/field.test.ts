@@ -1,4 +1,4 @@
-import { makeObservable, observable } from "mobx";
+import { makeObservable, observable, runInAction } from "mobx";
 import { Form } from "./form";
 import { debugFormField, FormField } from "./field";
 import { Validator } from "@mobx-sentinel/core";
@@ -30,6 +30,7 @@ function setupEnv() {
 
   return {
     model,
+    validator: form.validator,
     updateErrors,
     waitForDelay,
     field,
@@ -89,9 +90,9 @@ describe("FormField", () => {
     it("marks the field as reported", () => {
       const { field } = setupEnv();
       const internal = debugFormField(field);
-      expect(internal.isErrorReported.get()).toBe(false);
+      expect(internal.isReported.get()).toBe(false);
       field.reportError();
-      expect(internal.isErrorReported.get()).toBe(true);
+      expect(internal.isReported.get()).toBe(true);
     });
   });
 
@@ -118,6 +119,29 @@ describe("FormField", () => {
       updateErrors((b) => b.invalidate("test", "error"));
       field.reportError();
       expect(field.isErrorReported).toBe(true);
+    });
+
+    it("retains the current value until the validation becomes up-to-date", async () => {
+      const { field, validator, model } = setupEnv();
+
+      validator.addSyncHandler((b) => {
+        if (model.test === "test") {
+          b.invalidate("test", "error");
+        }
+      });
+      await vi.waitFor(() => expect(validator.isValidating).toBe(false));
+      expect(field.hasErrors).toBe(true);
+      expect(field.isErrorReported).toBe(undefined);
+
+      runInAction(() => {
+        model.test = "valid";
+        field.reportError();
+      });
+      expect(validator.isValidating).toBe(true);
+      expect(field.isErrorReported).toBe(undefined); // Does not change immediately
+
+      await vi.waitFor(() => expect(validator.isValidating).toBe(false));
+      expect(field.isErrorReported).toBe(false); // Changes after the validation is up-to-date
     });
   });
 
@@ -256,7 +280,7 @@ describe("FormField", () => {
       expect(field.isIntermediate).toBe(false);
       expect(field.isChanged).toBe(false);
       expect(field.isErrorReported).toBe(undefined);
-      expect(internal.isErrorReported.get()).toBe(false);
+      expect(internal.isReported.get()).toBe(false);
     });
   });
 });

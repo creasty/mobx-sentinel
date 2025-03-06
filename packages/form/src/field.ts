@@ -1,4 +1,4 @@
-import { action, computed, makeObservable, observable } from "mobx";
+import { action, comparer, computed, makeObservable, observable, reaction } from "mobx";
 import { v4 as uuidV4 } from "uuid";
 import { KeyPath, type Validator } from "@mobx-sentinel/core";
 
@@ -11,7 +11,8 @@ export class FormField {
   readonly #getFinalizationDelayMs: () => number;
   readonly #isTouched = observable.box(false);
   readonly #changeType = observable.box<FormField.ChangeType | null>(null);
-  readonly #isErrorReported = observable.box(false);
+  readonly #isReported = observable.box(false);
+  readonly #isReportedDelayed = observable.box(false);
   #timerId: number | null = null;
 
   /** @ignore */
@@ -20,6 +21,17 @@ export class FormField {
     this.fieldName = args.fieldName;
     this.validator = args.validator;
     this.#getFinalizationDelayMs = args.getFinalizationDelayMs;
+
+    // Delay the error reporting until the validation is up-to-date.
+    reaction(
+      () => [this.#isReported.get(), this.validator.isValidating] as const,
+      ([isReported, isValidating]) => {
+        if (!isValidating) {
+          this.#isReportedDelayed.set(isReported);
+        }
+      },
+      { equals: comparer.shallow }
+    );
   }
 
   /** Whether the field is touched */
@@ -46,15 +58,15 @@ export class FormField {
    * Check this value to determine if errors should be displayed.
    *
    * @returns
-   * - 'undefined': Error reporting is pending.
-   * - 'false': The field has no errors.
-   * - 'true': The field has errors.
+   * - 'undefined': Validity of the field is undetermined.
+   * - 'false': The field is valid.
+   * - 'true': The field is invalid.
    *
    * This distinction is essential for `aria-invalid` attribute.
    */
   @computed
   get isErrorReported() {
-    if (!this.#isErrorReported.get()) return undefined;
+    if (!this.#isReportedDelayed.get()) return undefined;
     return this.hasErrors;
   }
 
@@ -83,7 +95,7 @@ export class FormField {
   reset() {
     this.#changeType.set(null);
     this.#isTouched.set(false);
-    this.#isErrorReported.set(false);
+    this.#isReported.set(false);
     this.#cancelFinalizeChangeWithDelay();
   }
 
@@ -111,10 +123,14 @@ export class FormField {
     }
   }
 
-  /** Report the errors of the field */
+  /**
+   * Report the errors of the field.
+   *
+   * It will wait until the validation is up-to-date before reporting the errors.
+   */
   @action
   reportError() {
-    this.#isErrorReported.set(true);
+    this.#isReported.set(true);
   }
 
   /** Finalize the intermediate change if needed (usually triggered by onBlur) */
@@ -142,7 +158,7 @@ export class FormField {
   /** @internal @ignore */
   [internalToken]() {
     return {
-      isErrorReported: this.#isErrorReported,
+      isReported: this.#isReported,
     };
   }
 }
