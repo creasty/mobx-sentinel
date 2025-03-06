@@ -53,7 +53,7 @@ describe("MobX", () => {
   });
 
   describe("reaction()", () => {
-    describe("scheduler / delay", () => {
+    describe.concurrent("scheduler / delay", () => {
       test("delayed scheduler affects on both observing expression and effect", async () => {
         const obj = observable({ expr: 0, effect: 0 });
         const exprFn = vi.fn(() => {
