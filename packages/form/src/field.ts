@@ -14,6 +14,7 @@ export class FormField {
   readonly #isErrorReported = observable.box(false);
   #timerId: number | null = null;
 
+  /** @ignore */
   constructor(args: { fieldName: string; validator: Validator<any>; getFinalizationDelayMs: () => number }) {
     makeObservable(this);
     this.fieldName = args.fieldName;

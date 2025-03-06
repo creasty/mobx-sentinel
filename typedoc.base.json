@@ -2,5 +2,30 @@
   "$schema": "https://typedoc.org/schema.json",
   "includeVersion": true,
   "readme": "none",
-  "sort": ["kind", "static-first", "alphabetical-ignoring-documents"]
+  "sort": ["kind", "static-first", "alphabetical-ignoring-documents"],
+  "kindSortOrder": [
+    "Reference",
+    "Project",
+    "Module",
+    "Enum",
+    "EnumMember",
+    "Class",
+    "Interface",
+    "Namespace",
+    "TypeAlias",
+    "Constructor",
+    "Property",
+    "Variable",
+    "Function",
+    "Accessor",
+    "Method",
+    "Parameter",
+    "TypeParameter",
+    "TypeLiteral",
+    "CallSignature",
+    "ConstructorSignature",
+    "IndexSignature",
+    "GetSignature",
+    "SetSignature"
+  ]
 }

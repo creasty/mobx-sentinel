@@ -7,6 +7,7 @@
   "customCss": "./script/typedoc.css",
   "name": "mobx-sentinel API doc",
   "navigationLinks": {
+    "GitHub": "https://github.com/creasty/mobx-sentinel",
     "Example": "https://example.mobx-sentinel.creasty.com"
   },
   "plugin": ["./script/typedoc-plugin.js"]
