@@ -53,7 +53,7 @@ describe("MobX", () => {
   });
 
   describe("reaction()", () => {
-    describe.concurrent("scheduler / delay", () => {
+    describe("scheduler / delay", () => {
       test("delayed scheduler affects on both observing expression and effect", async () => {
         const obj = observable({ expr: 0, effect: 0 });
         const exprFn = vi.fn(() => {
@@ -88,20 +88,20 @@ describe("MobX", () => {
         });
 
         reaction(exprFn, effectFn, {
-          delay: 100,
+          delay: 150,
         });
-        for (let i = 0; i < 10; i++) {
-          await new Promise((resolve) => setTimeout(resolve, 15));
+        for (let i = 0; i < 5; i++) {
+          await new Promise((resolve) => setTimeout(resolve, 50)); // Adds up to 250ms at the end
           runInAction(() => obj.expr++);
         }
 
         await vi.waitFor(() => expect(obj.effect).toBe(obj.expr));
         expect(exprFn).toBeCalledTimes(3); // If it's debounced, it should be 2
         expect(exprFn).nthReturnedWith(1, 0);
-        expect(exprFn).nthReturnedWith(2, 7);
+        expect(exprFn).nthReturnedWith(2, 3);
         expect(effectFn).toBeCalledTimes(2); // If it's debounced, it should be 1
-        expect(effectFn).nthCalledWith(1, 7, 0, expect.anything());
-        expect(effectFn).nthCalledWith(2, 10, 7, expect.anything());
+        expect(effectFn).nthCalledWith(1, 3, 0, expect.anything());
+        expect(effectFn).nthCalledWith(2, 5, 3, expect.anything());
       });
 
       test("scheduler will not be called when the previous scheduler is still running", async () => {
