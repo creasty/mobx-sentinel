@@ -1,7 +1,7 @@
 import { autorun, makeObservable, observable, runInAction } from "mobx";
 import { Validator, makeValidatable } from "./validator";
 import { nested } from "./nested";
-import { KeyPath, KeyPathSelf } from "./keyPath";
+import { KeyPath } from "./keyPath";
 
 class Sample {
   @observable field1 = 0;
@@ -195,7 +195,7 @@ describe("Validator", () => {
       const validator = Validator.get({ sample: false });
       const symbol = Symbol();
       validator.updateErrors(symbol, () => {});
-      expect(buildErrorMap(validator.findErrors(KeyPathSelf))).toEqual(new Map());
+      expect(buildErrorMap(validator.findErrors(KeyPath.Self))).toEqual(new Map());
     });
 
     it("updates the errors instantly", () => {
@@ -204,7 +204,7 @@ describe("Validator", () => {
       validator.updateErrors(symbol, (builder) => {
         builder.invalidate("sample", "invalid");
       });
-      expect(buildErrorMap(validator.findErrors(KeyPathSelf))).toEqual(new Map([["sample", ["invalid"]]]));
+      expect(buildErrorMap(validator.findErrors(KeyPath.Self))).toEqual(new Map([["sample", ["invalid"]]]));
     });
 
     it("removes the errors by calling the returned function", () => {
@@ -214,7 +214,7 @@ describe("Validator", () => {
         builder.invalidate("sample", "invalid");
       });
       dispose();
-      expect(buildErrorMap(validator.findErrors(KeyPathSelf))).toEqual(new Map());
+      expect(buildErrorMap(validator.findErrors(KeyPath.Self))).toEqual(new Map());
     });
 
     it("replaces the errors when called again with the same key", () => {
@@ -226,7 +226,7 @@ describe("Validator", () => {
       validator.updateErrors(symbol, (builder) => {
         builder.invalidate("sample", "invalid2");
       });
-      expect(buildErrorMap(validator.findErrors(KeyPathSelf))).toEqual(new Map([["sample", ["invalid2"]]]));
+      expect(buildErrorMap(validator.findErrors(KeyPath.Self))).toEqual(new Map([["sample", ["invalid2"]]]));
     });
 
     it("merges the errors of the different keys", () => {
@@ -239,7 +239,9 @@ describe("Validator", () => {
       validator.updateErrors(symbol2, (builder) => {
         builder.invalidate("sample", "invalid2");
       });
-      expect(buildErrorMap(validator.findErrors(KeyPathSelf))).toEqual(new Map([["sample", ["invalid1", "invalid2"]]]));
+      expect(buildErrorMap(validator.findErrors(KeyPath.Self))).toEqual(
+        new Map([["sample", ["invalid1", "invalid2"]]])
+      );
     });
 
     it("removes individual errors by calling the returned function", () => {
@@ -253,9 +255,9 @@ describe("Validator", () => {
         builder.invalidate("sample", "invalid2");
       });
       dispose1();
-      expect(buildErrorMap(validator.findErrors(KeyPathSelf))).toEqual(new Map([["sample", ["invalid2"]]]));
+      expect(buildErrorMap(validator.findErrors(KeyPath.Self))).toEqual(new Map([["sample", ["invalid2"]]]));
       dispose2();
-      expect(buildErrorMap(validator.findErrors(KeyPathSelf))).toEqual(new Map());
+      expect(buildErrorMap(validator.findErrors(KeyPath.Self))).toEqual(new Map());
     });
   });
 
@@ -264,7 +266,7 @@ describe("Validator", () => {
       const validator = Validator.get({});
       const spy = vi.spyOn(validator, "findErrors");
       void validator.firstErrorMessage;
-      expect(spy).toBeCalledWith(KeyPathSelf, true);
+      expect(spy).toBeCalledWith(KeyPath.Self, true);
     });
 
     it("returns null when there are no errors", () => {
@@ -287,11 +289,11 @@ describe("Validator", () => {
       const validator = Validator.get({});
       const spy = vi.spyOn(validator, "findErrors");
 
-      validator.getErrorMessages(KeyPathSelf);
-      expect(spy).nthCalledWith(1, KeyPathSelf, false);
+      validator.getErrorMessages(KeyPath.Self);
+      expect(spy).nthCalledWith(1, KeyPath.Self, false);
 
-      validator.getErrorMessages(KeyPathSelf, true);
-      expect(spy).nthCalledWith(2, KeyPathSelf, true);
+      validator.getErrorMessages(KeyPath.Self, true);
+      expect(spy).nthCalledWith(2, KeyPath.Self, true);
 
       validator.getErrorMessages("field1" as KeyPath);
       expect(spy).nthCalledWith(3, "field1" as KeyPath, false);
@@ -302,7 +304,7 @@ describe("Validator", () => {
 
     it("returns an empty set when there are no errors", () => {
       const validator = Validator.get({});
-      expect(validator.getErrorMessages(KeyPathSelf)).toEqual(new Set());
+      expect(validator.getErrorMessages(KeyPath.Self)).toEqual(new Set());
     });
 
     it("returns a set of error messages", () => {
@@ -312,7 +314,7 @@ describe("Validator", () => {
         builder.invalidate("field2", "invalid2");
         builder.invalidate("field2", "invalid3");
       });
-      expect(validator.getErrorMessages(KeyPathSelf)).toEqual(new Set(["invalid1", "invalid2", "invalid3"]));
+      expect(validator.getErrorMessages(KeyPath.Self)).toEqual(new Set(["invalid1", "invalid2", "invalid3"]));
       expect(validator.getErrorMessages("field1" as KeyPath)).toEqual(new Set(["invalid1"]));
       expect(validator.getErrorMessages("field2" as KeyPath)).toEqual(new Set(["invalid2", "invalid3"]));
     });
@@ -323,11 +325,11 @@ describe("Validator", () => {
       const validator = Validator.get({});
       const spy = vi.spyOn(validator, "findErrors");
 
-      validator.hasErrors(KeyPathSelf);
-      expect(spy).nthCalledWith(1, KeyPathSelf, false);
+      validator.hasErrors(KeyPath.Self);
+      expect(spy).nthCalledWith(1, KeyPath.Self, false);
 
-      validator.hasErrors(KeyPathSelf, true);
-      expect(spy).nthCalledWith(2, KeyPathSelf, true);
+      validator.hasErrors(KeyPath.Self, true);
+      expect(spy).nthCalledWith(2, KeyPath.Self, true);
 
       validator.hasErrors("field1" as KeyPath);
       expect(spy).nthCalledWith(3, "field1" as KeyPath, false);
@@ -338,7 +340,7 @@ describe("Validator", () => {
 
     it("returns false when there are no errors", () => {
       const validator = Validator.get({});
-      expect(validator.hasErrors(KeyPathSelf)).toBe(false);
+      expect(validator.hasErrors(KeyPath.Self)).toBe(false);
     });
 
     it("returns true when there are errors", () => {
@@ -346,7 +348,7 @@ describe("Validator", () => {
       validator.updateErrors(Symbol(), (builder) => {
         builder.invalidate("field1", "invalid1");
       });
-      expect(validator.hasErrors(KeyPathSelf)).toBe(true);
+      expect(validator.hasErrors(KeyPath.Self)).toBe(true);
       expect(validator.hasErrors("field1" as KeyPath)).toBe(true);
       expect(validator.hasErrors("field2" as KeyPath)).toBe(false);
     });
@@ -440,12 +442,12 @@ describe("Validator", () => {
     describe("Search with a self path", () => {
       it("returns an empty iterator when there are no errors", () => {
         const env = setupEnv({ clean: true });
-        expect(buildErrorMap(env["parent"].findErrors(KeyPathSelf))).toEqual(new Map());
+        expect(buildErrorMap(env["parent"].findErrors(KeyPath.Self))).toEqual(new Map());
       });
 
       it("returns own errors", () => {
         const env = setupEnv();
-        expect(buildErrorMap(env["parent"].findErrors(KeyPathSelf))).toMatchInlineSnapshot(`
+        expect(buildErrorMap(env["parent"].findErrors(KeyPath.Self))).toMatchInlineSnapshot(`
           Map {
             Symbol(self) => [
               "invalid self at parent",
@@ -472,7 +474,7 @@ describe("Validator", () => {
             ],
           }
         `);
-        expect(buildErrorMap(env["parent.child"].findErrors(KeyPathSelf))).toMatchInlineSnapshot(`
+        expect(buildErrorMap(env["parent.child"].findErrors(KeyPath.Self))).toMatchInlineSnapshot(`
           Map {
             Symbol(self) => [
               "invalid self at parent.child",
@@ -499,7 +501,7 @@ describe("Validator", () => {
 
       it("returns all errors with prefix match", () => {
         const env = setupEnv();
-        expect(buildErrorMap(env["parent"].findErrors(KeyPathSelf, true))).toMatchInlineSnapshot(`
+        expect(buildErrorMap(env["parent"].findErrors(KeyPath.Self, true))).toMatchInlineSnapshot(`
           Map {
             Symbol(self) => [
               "invalid self at parent",
@@ -581,7 +583,7 @@ describe("Validator", () => {
             ],
           }
         `);
-        expect(buildErrorMap(env["parent.child"].findErrors(KeyPathSelf, true))).toMatchInlineSnapshot(`
+        expect(buildErrorMap(env["parent.child"].findErrors(KeyPath.Self, true))).toMatchInlineSnapshot(`
           Map {
             Symbol(self) => [
               "invalid self at parent.child",
@@ -631,7 +633,7 @@ describe("Validator", () => {
     describe("Search for a specific path", () => {
       it("returns an empty iterator when there are no errors", () => {
         const env = setupEnv({ clean: true });
-        expect(buildErrorMap(env["parent"].findErrors(KeyPathSelf))).toEqual(new Map());
+        expect(buildErrorMap(env["parent"].findErrors(KeyPath.Self))).toEqual(new Map());
       });
 
       it("returns errors for the specific path", () => {
@@ -917,18 +919,18 @@ describe("Validator", () => {
     it("updates the errors", async () => {
       const env = setupEnv({ syncHandler: true });
 
-      expect(buildErrorMap(env.validator.findErrors(KeyPathSelf))).toEqual(new Map());
+      expect(buildErrorMap(env.validator.findErrors(KeyPath.Self))).toEqual(new Map());
       runInAction(() => {
         env.model.field1 = -1;
       });
       await env.waitForReactionState(0);
-      expect(buildErrorMap(env.validator.findErrors(KeyPathSelf))).toEqual(new Map([["field1", ["invalid"]]]));
+      expect(buildErrorMap(env.validator.findErrors(KeyPath.Self))).toEqual(new Map([["field1", ["invalid"]]]));
     });
 
     it("removes the errors when the condition is no longer met", async () => {
       const env = setupEnv({ syncHandler: true });
 
-      expect(buildErrorMap(env.validator.findErrors(KeyPathSelf))).toEqual(new Map());
+      expect(buildErrorMap(env.validator.findErrors(KeyPath.Self))).toEqual(new Map());
       runInAction(() => {
         env.model.field1 = -1;
       });
@@ -938,7 +940,7 @@ describe("Validator", () => {
         env.model.field1 = 0;
       });
       await env.waitForReactionState(0);
-      expect(buildErrorMap(env.validator.findErrors(KeyPathSelf))).toEqual(new Map());
+      expect(buildErrorMap(env.validator.findErrors(KeyPath.Self))).toEqual(new Map());
     });
 
     it("removes the handler by calling the returned function", async () => {
@@ -1086,19 +1088,19 @@ describe("Validator", () => {
     it("updates the errors", async () => {
       const env = setupEnv({ asyncHandler: true });
 
-      expect(buildErrorMap(env.validator.findErrors(KeyPathSelf))).toEqual(new Map());
+      expect(buildErrorMap(env.validator.findErrors(KeyPath.Self))).toEqual(new Map());
       runInAction(() => {
         env.model.field1 = -1;
       });
       await env.waitForReactionState(0);
       await env.waitForAsyncState(0);
-      expect(buildErrorMap(env.validator.findErrors(KeyPathSelf))).toEqual(new Map([["field1", ["invalid"]]]));
+      expect(buildErrorMap(env.validator.findErrors(KeyPath.Self))).toEqual(new Map([["field1", ["invalid"]]]));
     });
 
     it("removes the errors when the condition is no longer met", async () => {
       const env = setupEnv({ asyncHandler: true });
 
-      expect(buildErrorMap(env.validator.findErrors(KeyPathSelf))).toEqual(new Map());
+      expect(buildErrorMap(env.validator.findErrors(KeyPath.Self))).toEqual(new Map());
       runInAction(() => {
         env.model.field1 = -1;
       });
@@ -1110,7 +1112,7 @@ describe("Validator", () => {
       });
       await env.waitForReactionState(0);
       await env.waitForAsyncState(0);
-      expect(buildErrorMap(env.validator.findErrors(KeyPathSelf))).toEqual(new Map());
+      expect(buildErrorMap(env.validator.findErrors(KeyPath.Self))).toEqual(new Map());
     });
 
     it("removes the handler by calling the returned function", async () => {

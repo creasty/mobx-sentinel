@@ -1,82 +1,85 @@
-/** Branded type for key paths */
-export type KeyPath = KeyPathComponent | KeyPathSelf;
-/** Branded type for key path components */
-export type KeyPathComponent = string & { __brand: "KeyPathComponent" };
-/** Branded type for a self-referencing key path */
-export type KeyPathSelf = symbol & { __brand: "KeyPathSelf" };
-/** Self path symbol */
-export const KeyPathSelf = Symbol("self") as KeyPathSelf;
+/** Key paths */
+export type KeyPath = KeyPath.Component | KeyPath.Self;
 
-/**
- * Whether a key path is a self path
- *
- * Empty strings are also considered self paths.
- */
-export function isKeyPathSelf(keyPath: KeyPath): keyPath is KeyPathSelf {
-  return keyPath === KeyPathSelf || keyPath === "";
-}
+export namespace KeyPath {
+  /** Branded type for key path components */
+  export type Component = string & { __brand: "KeyPath.Component" };
+  /** Branded type for a self-referencing key path */
+  export type Self = symbol & { __brand: "KeyPath.Self" };
+  /** Self path symbol */
+  export const Self = Symbol("self") as Self;
 
-/** Build a key path from an array of keys */
-export function buildKeyPath(...keys: (KeyPath | string | number | null)[]): KeyPath {
-  const keyPath = keys
-    .flatMap((key) => {
-      switch (typeof key) {
-        case "string":
-          if (key === "") return []; // ignores empty keys
-          return [key];
-        case "number":
-          return [String(key)];
-        case "symbol":
-          return []; // ignores KeyPathSelf
-        default:
-          key satisfies null;
-          return [];
-      }
-    })
-    .join(".");
-  if (keyPath === "") return KeyPathSelf;
-  return keyPath as KeyPath;
-}
-
-/**
- * Get the relative key path from a prefix key path.
- *
- * @returns The relative key path or null if the key path is not a child of the prefix key path.
- */
-export function getRelativeKeyPath(keyPath: KeyPath, prefixKeyPath: KeyPath) {
-  if (isKeyPathSelf(keyPath)) return KeyPathSelf;
-  if (isKeyPathSelf(prefixKeyPath)) return keyPath;
-  if (!`${keyPath}.`.startsWith(`${prefixKeyPath}.`)) return null;
-  return buildKeyPath(keyPath.slice(prefixKeyPath.length + 1));
-}
-
-/**
- * Get the parent key of a key path
- *
- * @returns The parent key or a self path if the key path is a self path
- */
-export function getParentKeyOfKeyPath(keyPath: KeyPath): KeyPath {
-  if (isKeyPathSelf(keyPath)) return KeyPathSelf;
-  const [parentKey] = keyPath.split(".", 1);
-  return (parentKey as KeyPathComponent) || KeyPathSelf;
-}
-
-/**
- * Iterate over all ancestors of a key path
- *
- * @returns The ancestors of the key path
- */
-export function* getKeyPathAncestors(keyPath: KeyPath, includeSelf = true): Generator<KeyPath> {
-  if (includeSelf) {
-    yield keyPath || KeyPathSelf;
+  /**
+   * Whether a key path is a self path
+   *
+   * Empty strings are also considered self paths.
+   */
+  export function isSelf(keyPath: KeyPath): keyPath is Self {
+    return keyPath === Self || keyPath === "";
   }
-  if (isKeyPathSelf(keyPath)) {
-    return;
+
+  /** Build a key path from an array of keys */
+  export function build(...keys: (KeyPath | string | number | null)[]): KeyPath {
+    const keyPath = keys
+      .flatMap((key) => {
+        switch (typeof key) {
+          case "string":
+            if (key === "") return []; // ignores empty keys
+            return [key];
+          case "number":
+            return [String(key)];
+          case "symbol":
+            return []; // ignores KeyPath.Self
+          default:
+            key satisfies null;
+            return [];
+        }
+      })
+      .join(".");
+    if (keyPath === "") return Self;
+    return keyPath as KeyPath;
   }
-  const parts = keyPath.split(".");
-  while (parts.length > 1) {
-    parts.pop();
-    yield buildKeyPath(...parts);
+
+  /**
+   * Get the relative key path from a prefix key path.
+   *
+   * @returns The relative key path or null if the key path is not a child of the prefix key path.
+   */
+  export function getRelative(keyPath: KeyPath, prefixKeyPath: KeyPath) {
+    if (isSelf(keyPath)) return Self;
+    if (isSelf(prefixKeyPath)) return keyPath;
+    if (!`${keyPath}.`.startsWith(`${prefixKeyPath}.`)) return null;
+    return build(keyPath.slice(prefixKeyPath.length + 1));
+  }
+
+  /**
+   * Get the parent key of a key path
+   *
+   * @returns The parent key or a self path if the key path is a self path
+   */
+  export function getParentKey(keyPath: KeyPath): KeyPath {
+    if (isSelf(keyPath)) return Self;
+    const [parentKey] = keyPath.split(".", 1);
+    return (parentKey as Component) || Self;
+  }
+
+  /**
+   * Iterate over all ancestors of a key path
+   *
+   * @returns The ancestors of the key path
+   */
+  export function* getAncestors(keyPath: KeyPath, includeSelf = true): Generator<KeyPath> {
+    if (includeSelf) {
+      yield keyPath || Self;
+    }
+    if (isSelf(keyPath)) {
+      return;
+    }
+    const parts = keyPath.split(".");
+    while (parts.length > 1) {
+      parts.pop();
+      yield build(...parts);
+    }
   }
 }
 
@@ -132,7 +135,7 @@ export class KeyPathMultiMap<T> implements ReadonlyKeyPathMultiMap<T> {
 
   /** Find prefix matches for a key path */
   *findPrefix(keyPath: KeyPath) {
-    if (isKeyPathSelf(keyPath)) {
+    if (KeyPath.isSelf(keyPath)) {
       for (const values of this.#map.values()) {
         yield* values;
       }
@@ -175,7 +178,7 @@ export class KeyPathMultiMap<T> implements ReadonlyKeyPathMultiMap<T> {
     values.add(value);
 
     // Update prefix map
-    for (const ancestorKeyPath of getKeyPathAncestors(keyPath, false)) {
+    for (const ancestorKeyPath of KeyPath.getAncestors(keyPath, false)) {
       let children = this.#prefixMap.get(ancestorKeyPath);
       if (!children) {
         children = new Set();
@@ -195,7 +198,7 @@ export class KeyPathMultiMap<T> implements ReadonlyKeyPathMultiMap<T> {
     this.#map.delete(keyPath);
 
     // Update prefix map
-    for (const ancestorKeyPath of getKeyPathAncestors(keyPath, false)) {
+    for (const ancestorKeyPath of KeyPath.getAncestors(keyPath, false)) {
       const children = this.#prefixMap.get(ancestorKeyPath);
       if (children) {
         children.delete(keyPath);

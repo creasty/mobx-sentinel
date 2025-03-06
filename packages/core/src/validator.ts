@@ -2,15 +2,7 @@ import { action, comparer, computed, IEqualsComparer, makeObservable, observable
 import { v4 as uuidV4 } from "uuid";
 import { ValidationError, ValidationErrorMapBuilder } from "./error";
 import { StandardNestedFetcher } from "./nested";
-import {
-  KeyPath,
-  KeyPathSelf,
-  ReadonlyKeyPathMultiMap,
-  buildKeyPath,
-  getKeyPathAncestors,
-  getRelativeKeyPath,
-  isKeyPathSelf,
-} from "./keyPath";
+import { KeyPath, ReadonlyKeyPathMultiMap } from "./keyPath";
 import { AsyncJob } from "./asyncJob";
 
 const validatorKey = Symbol("validator");
@@ -139,7 +131,7 @@ export class Validator<T> {
     const seenKeys = new Set<KeyPath>();
     for (const errors of this.#errors.values()) {
       for (const [, error] of errors) {
-        seenKeys.add(buildKeyPath(error.key));
+        seenKeys.add(KeyPath.build(error.key));
       }
     }
     return Object.freeze(seenKeys);
@@ -166,7 +158,7 @@ export class Validator<T> {
     }
     for (const [keyPath, validator] of this.nested) {
       for (const relativeKeyPath of validator.invalidKeyPaths) {
-        result.add(buildKeyPath(keyPath, relativeKeyPath));
+        result.add(KeyPath.build(keyPath, relativeKeyPath));
       }
     }
     return Object.freeze(result);
@@ -175,7 +167,7 @@ export class Validator<T> {
   /** Get the first error message (including nested objects) */
   @computed
   get firstErrorMessage() {
-    for (const [, error] of this.findErrors(KeyPathSelf, true)) {
+    for (const [, error] of this.findErrors(KeyPath.Self, true)) {
       return error.message;
     }
     return null;
@@ -209,11 +201,11 @@ export class Validator<T> {
     prefixMatch: boolean,
     exact: boolean
   ): Generator<[keyPath: KeyPath, error: ValidationError]> {
-    if (isKeyPathSelf(searchKeyPath)) {
+    if (KeyPath.isSelf(searchKeyPath)) {
       if (exact) {
         for (const errors of this.#errors.values()) {
-          for (const error of errors.findExact(KeyPathSelf)) {
-            yield [KeyPathSelf, error];
+          for (const error of errors.findExact(KeyPath.Self)) {
+            yield [KeyPath.Self, error];
           }
         }
       } else {
@@ -225,21 +217,21 @@ export class Validator<T> {
       }
       if (prefixMatch) {
         for (const [keyPath, validator] of this.nested) {
-          for (const [relativeKeyPath, error] of validator.#findErrors(KeyPathSelf, true, exact)) {
-            yield [buildKeyPath(keyPath, relativeKeyPath), error];
+          for (const [relativeKeyPath, error] of validator.#findErrors(KeyPath.Self, true, exact)) {
+            yield [KeyPath.build(keyPath, relativeKeyPath), error];
           }
         }
       } else if (!exact) {
         for (const entry of this.#nestedFetcher) {
-          const isSelf = entry.key === KeyPathSelf;
+          const isSelf = entry.key === KeyPath.Self;
           const isDirectChild = entry.keyPath === entry.key; // Ignores entries with subKey (like arrays)
           if (isSelf || isDirectChild) {
             for (const [relativeKeyPath, error] of entry.data.#findErrors(
-              KeyPathSelf,
+              KeyPath.Self,
               false,
               !isSelf || !isDirectChild
             )) {
-              yield [buildKeyPath(entry.keyPath, relativeKeyPath), error];
+              yield [KeyPath.build(entry.keyPath, relativeKeyPath), error];
             }
           }
         }
@@ -251,15 +243,15 @@ export class Validator<T> {
           yield [error.keyPath, error];
         }
       }
-      ancestorLoop: for (const ancestorKeyPath of getKeyPathAncestors(searchKeyPath, true)) {
+      ancestorLoop: for (const ancestorKeyPath of KeyPath.getAncestors(searchKeyPath, true)) {
         for (const entry of this.#nestedFetcher.getForKey(ancestorKeyPath)) {
           const childKeyPath =
-            prefixMatch && entry.key !== entry.keyPath && getRelativeKeyPath(entry.keyPath, entry.key)
-              ? KeyPathSelf
-              : getRelativeKeyPath(searchKeyPath, entry.keyPath);
+            prefixMatch && entry.key !== entry.keyPath && KeyPath.getRelative(entry.keyPath, entry.key)
+              ? KeyPath.Self
+              : KeyPath.getRelative(searchKeyPath, entry.keyPath);
           if (!childKeyPath) continue;
           for (const [relativeKeyPath, error] of entry.data.#findErrors(childKeyPath, prefixMatch, exact)) {
-            yield [buildKeyPath(entry.keyPath, relativeKeyPath), error];
+            yield [KeyPath.build(entry.keyPath, relativeKeyPath), error];
           }
           break ancestorLoop;
         }
