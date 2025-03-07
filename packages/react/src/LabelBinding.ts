@@ -2,7 +2,9 @@ import { FormBinding, FormField } from "@mobx-sentinel/form";
 import { makeObservable, computed } from "mobx";
 
 export namespace LabelBinding {
+  /** @ignore */
   export type Attrs = React.LabelHTMLAttributes<HTMLLabelElement>;
+  /** @ignore */
   export type AttrsRequired = Required<Attrs>;
 
   export type Config = {

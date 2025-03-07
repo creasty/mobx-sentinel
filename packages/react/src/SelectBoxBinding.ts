@@ -2,8 +2,11 @@ import { FormBinding, FormField } from "@mobx-sentinel/form";
 import { makeObservable, computed, action } from "mobx";
 
 export namespace SelectBoxBinding {
+  /** @ignore */
   export type Attrs = React.SelectHTMLAttributes<HTMLSelectElement>;
+  /** @ignore */
   export type AttrsRequired = Required<Attrs>;
+
   export type Config = {
     /** [Override] ID of the input element */
     id?: Attrs["id"];

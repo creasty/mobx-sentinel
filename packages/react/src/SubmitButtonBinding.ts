@@ -2,7 +2,9 @@ import { Form, FormBinding } from "@mobx-sentinel/form";
 import { makeObservable, computed } from "mobx";
 
 export namespace SubmitButtonBinding {
+  /** @ignore */
   export type Attrs = React.ButtonHTMLAttributes<HTMLButtonElement>;
+  /** @ignore */
   export type AttrsRequired = Required<Attrs>;
 
   export type Config = {

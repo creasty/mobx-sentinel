@@ -2,8 +2,11 @@ import { FormBinding, FormField } from "@mobx-sentinel/form";
 import { makeObservable, computed, action } from "mobx";
 
 export namespace RadioButtonBinding {
+  /** @ignore */
   export type Attrs = React.InputHTMLAttributes<HTMLInputElement>;
+  /** @ignore */
   export type AttrsRequired = Required<Attrs>;
+
   export type Config = {
     /** Get the value from the model */
     getter: () => string | null;
