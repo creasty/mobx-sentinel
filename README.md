@@ -11,7 +11,7 @@ A TypeScript library for non-intrusive model enhancement in MobX applications. I
 
 ## Motivation
 
-TL;DR: This library provides non-intrusive change detection and validation capabilities for domain models, with form management being one of its applications. Unlike other libraries that focus on data serialization or require models to implement specific interfaces, it's designed to work with plain classes while properly separating concerns.
+This library originally started with the goal of creating a form-building library centered around models, and evolved into a more general-purpose library that enhances model capabilities with form management being one of its applications.
 
 <details><summary>Read more on form management (English)</summary>
 
@@ -26,16 +26,15 @@ Furthermore, from my research, there wasn't a single one designed to allow type-
 
 Given this background, I believe there are two fundamental challenges in implementing forms:
 
-- Form-specific state management: When considering data separately, this only involves submission and validation processing. For example:
+- Form-specific state management: When considering data separately, this only involves submission and validation. For example:
   - Disabling the submit button based on submission status or validation errors.
-  - Running validations in response to form updates.
+  - While validation itself is the model's responsibility, forms need to react to its state changes.
 - Input element connection (a.k.a. binding): Properly handling form state and UI events to update forms, models and UI.
   - Getting values from the model and writing back on input changes.
   - Expressing error states (red borders, displaying messages, etc.)
 
 Additionally, showing error messages to users at appropriate times is important for user experience — _Haven't you been frustrated by UIs that show errors before you've done anything, or immediately display errors while you're still typing?_<br>
-Achieving optimal experience requires coordinating multiple UI events (change, focus, blur) and states.<br>
-While this is something we'd prefer to delegate to a library since it's complex to write manually, it's a major factor complicating implementation on both "form state management" and "input element connection" fronts, and many existing libraries haven't achieved proper design.
+Achieving optimal experience requires coordinating multiple UI events and states, and many existing libraries lack proper design and internal implementation.
 
 This library aims to solve these problems through a model-centric design that properly separates and minimizes form responsibilities.
 
@@ -54,16 +53,15 @@ This library aims to solve these problems through a model-centric design that pr
 
 ここまでの話を踏まえて、フォームを実装する上での本質的な課題は以下の2点であると考える。
 
-- フォーム自体の状態管理: データを分離して考えれば、送信やバリデーション処理に関わるものだけである。例えば、
+- フォーム自体の状態管理: データを分離して考えれば、送信やバリデーションに関わるものだけである。例えば、
   - 送信中やエラーがある場合は送信ボタンを押せないように制御する。
-  - フォームの更新に応じてバリデーションを走らせる。
+  - バリデーション自体はモデルの責務であるが、フォームはそれに応じた処理が必要である。
 - インプット要素との接続: フォームの状態と UI イベントを適切に処理し、フォームとモデルと UI をそれぞれ更新する。
   - モデルから値を取り出し、入力変化があったらモデルに書き込む。
   - エラー状態を表現する。(枠を赤くする、メッセージを表示する等)
 
 また、エラーメッセージをユーザに適切なタイミングで表示することはユーザ体験として重要である — _何もしていないのに最初からエラーが表示されていたり、入力途中なのに即座にエラーと表示される UI にイライラしたことはないだろうか？_<br>
-最適な体験を実現するためには、複数の UI イベント (change, focus, blur) や状態を組み合わせる必要がある。<br>
-これを手で書くのは大変なためライブラリに任せたいところだが、「フォーム自体の状態管理」と「インプット要素との接続」の両側面で実装が複雑になる主な要因であると考えており、多くの既存ライブラリは適切な設計ができていない。
+最適な体験を実現するためには、複数の UI イベントや状態を組み合わせる必要があり、多くの既存ライブラリは適切な設計・内部実装ができていない。
 
 このライブラリはモデルを中心とした設計で、フォームの責務を適切に分離し最小限にすることで、これらの問題を解決しようとしている。
 
@@ -128,18 +126,18 @@ This library aims to solve these problems through a model-centric design that pr
 ## Design principles
 
 - Model first
-  - Assumes the existence of domain models
-  - Pushes responsibilities towards the model side, minimizing form responsibilities
-  - Not intended for simple data-first form implementations
-- Separation of form state and model
-  - No direct references between forms and models
-  - Models remain uncontaminated by form logic
-  - Forms don't manage data directly
+  - Assumes the existence of class-based models
+  - [Form] Pushes responsibilities towards the model side, minimizing form responsibilities
+  - [Form] Not intended for simple data-first form implementations
+- Non-intrusive
+  - Requires models to implement as little specific interfaces as possible
+  - [Form] No direct references between forms and models
+  - [Form] Do not manage data directly
 - Transparent I/O
-  - No hidden magic between model ↔ input element interactions
-  - Makes control obvious and safe
+  - No module directly mutates models — Makes control obvious and safe
+  - [Form] No hidden magic between model ↔ input element interactions
 - Modular implementation
-  - Multi-package architecture with clear separation between behavior model and UI
+  - Multi-package architecture with clear separation of concerns
   - Enhances testability and extensibility
 - Rigorous typing
   - Maximizes use of TypeScript's type system for error detection and code completion
@@ -274,16 +272,21 @@ validator.invalidKeyPaths //=> Set ["number", "date", ..., "array.0.other"]
 import { observer } from "mobx-react-lite";
 import { Form } from "@mobx-sentinel/form";
 import { useFormHandler } from "@mobx-sentinel/react";
-import "@mobx-sentinel/react/dist/extension"; // Makes .bindTextInput() and other bind methods available.
+
+// Optional: Make custom bind methods available via Form.
+//
+// Without the extension, use the default bind method with a binding class instead.
+// e.g., `.bind(field, InputBinding, config)` → `.bindInput(field, config)`
+import "@mobx-sentinel/react/dist/extension";
 
 const SampleForm: React.FC<{ model: Sample }> = observer(({ model }) => {
   // Get the form instance for the model.
-  // It's guaranteed to be the same form instance for the same model instance.
+  // You can always get the same form instance for the same model instance.
   const form = Form.get(model);
 
   // Form submission logic is implemented here.
   useFormHandler(form, "submit", async (abortSignal) => {
-    // TODO: Serialize the model and send it to a server
+    // Serialize the model and send it to a server...
     return true;
   });
 
@@ -311,6 +314,7 @@ const SampleForm: React.FC<{ model: Sample }> = observer(({ model }) => {
 
       <div className="field">
         <h4>Nested form</h4>
+        {/* No need to pass the parent form instance to the sub-form. */}
         <OtherForm model={model.nested} />
       </div>
 
@@ -335,7 +339,7 @@ const SampleForm: React.FC<{ model: Sample }> = observer(({ model }) => {
 ```tsx
 const OtherForm: React.FC<{ model: Other }> = observer(({ model }) => {
   // Forms are completely independent.
-  // A nested form doesn't need to know the parent form.
+  // Sub-forms don't need to know its parent form.
   const form = Form.get(model);
 
   return (...);
