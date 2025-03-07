@@ -4,6 +4,15 @@ import { KeyPath, type Validator } from "@mobx-sentinel/core";
 
 const internalToken = Symbol("formField.internal");
 
+/**
+ * Form field that tracks input state and validation errors
+ *
+ * Key features:
+ * - Tracks touch state
+ * - Handles intermediate (partial) input states
+ * - Manages error reporting
+ * - Supports auto-finalization of intermediate values
+ */
 export class FormField {
   readonly id = uuidV4();
   readonly fieldName: string;
@@ -34,35 +43,49 @@ export class FormField {
     );
   }
 
-  /** Whether the field is touched */
+  /**
+   * Whether the field is touched.
+   *
+   * A field becomes touched when the user interacts with it.
+   */
   get isTouched() {
     return this.#isTouched.get();
   }
+
   /**
-   * Whether the field value is intermediate (partial input).
+   * Whether the field value is intermediate (partial input)
    *
-   * The input is incomplete and does not yet conform to the expected format.
-   * Example: Typing "user@" in an email field.
+   * @example
+   * - Typing "user@" in an email field
+   * - Typing a partial date "2024-"
+   *
+   * @remarks
+   * Intermediate values are automatically finalized after a delay
    */
   get isIntermediate() {
     return this.#changeType.get() === "intermediate";
   }
-  /** Whether the field value is changed */
+
+  /**
+   * Whether the field value is changed
+   */
   get isChanged() {
     return !!this.#changeType.get();
   }
 
   /**
-   * Whether the error states has been reported
+   * Whether the error states has been reported.
    *
-   * Check this value to determine if errors should be displayed.
+   * Check this value to determine if errors should be displayed to the user.
    *
    * @returns
-   * - 'undefined': Validity of the field is undetermined.
-   * - 'false': The field is valid.
-   * - 'true': The field is invalid.
+   * - `undefined` - Validity is undetermined (not yet reported)
+   * - `false` - Field is valid
+   * - `true` - Field is invalid
    *
-   * This distinction is essential for `aria-invalid` attribute.
+   * @remarks
+   * - Error reporting is delayed until validation is complete.
+   * - It can be used directly with the `aria-invalid` attribute.
    */
   @computed
   get isErrorReported() {
@@ -90,7 +113,15 @@ export class FormField {
     return this.validator.hasErrors(KeyPath.build(this.fieldName));
   }
 
-  /** Reset the field to its initial state */
+  /**
+   * Reset the field state
+   *
+   * @remarks
+   * - Clears touched state
+   * - Clears change state
+   * - Clears error reporting
+   * - Cancels any pending auto-finalization
+   */
   @action
   reset() {
     this.#changeType.set(null);
@@ -99,13 +130,27 @@ export class FormField {
     this.#cancelFinalizeChangeWithDelay();
   }
 
-  /** Mark the field as touched (usually triggered by onFocus) */
+  /**
+   * Mark the field as touched
+   *
+   * It's usually triggered by `onFocus`.
+   */
   @action
   markAsTouched() {
     this.#isTouched.set(true);
   }
 
-  /** Mark the field as changed (usually triggered by onChange) */
+  /**
+   * Mark the field as changed
+   *
+   * It's usually triggered by `onChange`.
+   *
+   * @param type Default to "final"
+   *
+   * @remarks
+   * - "final" immediately reports errors
+   * - "intermediate" schedules auto-finalization after delay
+   */
   @action
   markAsChanged(type: FormField.ChangeType = "final") {
     this.#changeType.set(type);
@@ -166,7 +211,7 @@ export class FormField {
 export namespace FormField {
   /** Strict field name */
   export type NameStrict<T> = keyof T & string;
-  /** Augmented field name with an arbitrary suffix followed by a colon */
+  /** Augmented field name with an arbitrary suffix */
   export type NameAugmented<T> = `${NameStrict<T>}:${string}`;
   /** Field name */
   export type Name<T> = NameStrict<T> | NameAugmented<T>;

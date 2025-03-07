@@ -2,6 +2,15 @@ import { action, makeObservable, observable, runInAction } from "mobx";
 
 const nullPayload = Symbol();
 
+/**
+ * Manages asynchronous job execution with state management and throttling
+ *
+ * Key features:
+ * - Handles job state transitions
+ * - Supports job cancellation and throttling
+ * - Provides abort signals for running jobs
+ * - Queues subsequent requests while running
+ */
 export class AsyncJob<Payload> {
   readonly scheduledRunDelayMs: number;
   readonly #handler: AsyncJob.Handler<Payload>;
@@ -25,6 +34,15 @@ export class AsyncJob<Payload> {
 
   /**
    * Request new async job to be executed
+   *
+   * @param payload Data to pass to the job handler
+   * @param opt.force Force immediate execution, bypassing throttling
+   *
+   * @remarks
+   * State transitions:
+   * - `idle` -> `running`: Executes immediately
+   * - `running` -> `scheduled`: Queues for later execution
+   * - `scheduled` -> `scheduled`: No change
    */
   request(
     payload: Payload,
@@ -56,12 +74,21 @@ export class AsyncJob<Payload> {
     }
   }
 
-  /** Reset the validator */
+  /**
+   * Reset the job state
+   *
+   * @remarks
+   * - Cancels any scheduled execution
+   * - Aborts running job if any
+   * - Clears queued payload
+   * - Returns to `idle` state
+   */
   @action
   reset() {
     this.#resetJobTimer();
     this.#abortCtrl?.abort();
     this.#state.set("idle");
+    this.#payload = nullPayload;
   }
 
   #transitionToScheduled() {
@@ -115,8 +142,20 @@ export class AsyncJob<Payload> {
 }
 
 export namespace AsyncJob {
-  /** State of the job */
+  /**
+   * State of the job
+   *
+   * - `idle`: No job is running or scheduled
+   * - `running`: Job is currently executing
+   * - `scheduled`: Job is queued to run after delay
+   */
   export type State = "idle" | "running" | "scheduled";
-  /** Handler */
+
+  /**
+   * Handler for executing the job
+   *
+   * @param payload Data passed from request()
+   * @param abortSignal Signal that is triggered when job is aborted
+   */
   export type Handler<Payload> = (payload: Payload, abortSignal: AbortSignal) => Promise<void>;
 }

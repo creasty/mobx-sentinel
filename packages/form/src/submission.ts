@@ -1,5 +1,14 @@
 import { observable, runInAction } from "mobx";
 
+/**
+ * Manages form submission lifecycle and handlers
+ *
+ * Key features:
+ * - Handles submission lifecycle (`willSubmit` -> `submit` -> `didSubmit`)
+ * - Executes handlers in registration order
+ * - Supports cancellation of in-progress submissions
+ * - Tracks submission state
+ */
 export class Submission {
   readonly #isRunning = observable.box(false);
   readonly #handlers: {
@@ -16,13 +25,28 @@ export class Submission {
     return this.#isRunning.get();
   }
 
-  /** Add a handler for the specific event */
+  /**
+   * Add a handler for submission events
+   *
+   * @returns Function to remove the handler
+   */
   addHandler<K extends keyof Submission.Handlers>(event: K, handler: Submission.Handlers[K]) {
     this.#handlers[event].add(handler);
     return (): void => void this.#handlers[event].delete(handler);
   }
 
-  /** Execute the submission */
+  /**
+   * Execute the submission process
+   *
+   * @remarks
+   * - Cancels any in-progress submission
+   * - Executes handlers in order
+   * - `submit` handlers are executed serially
+   * - Aborts if any `submit` handler returns false
+   * - Handles errors in all phases
+   *
+   * @returns `true` if submission succeeded, `false` if failed or aborted
+   */
   async exec() {
     this.#abortCtrl?.abort();
     const abortCtrl = new AbortController();

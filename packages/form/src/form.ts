@@ -10,6 +10,17 @@ const registry = new WeakMap<object, Map<symbol, Form<any>>>();
 const defaultFormKey = Symbol("form.defaultFormKey");
 const internalToken = Symbol("form.internalToken");
 
+/**
+ * Form manages submission, fields, and bindings.
+ *
+ * Key features:
+ * - Manages form fields and their states
+ * - Supports nested forms
+ * - Manages form submission lifecycle
+ * - Provides binding system for UI integration
+ * - Integrates with Watcher for change detection
+ * - Integrates with Validator for validation
+ */
 export class Form<T> {
   readonly id = uuidV4();
   readonly #formKey: symbol;
@@ -25,19 +36,18 @@ export class Form<T> {
   [k: `bind${Capitalize<string>}`]: unknown;
 
   /**
-   * Get the form instance for a subject.
+   * Get a form instance for the subject.
    *
-   * - Returns the existing form instance if the subject is already associated with one.\
-   *   Otherwise, creates a new form instance and associates it with the subject.
-   * - The form instance is cached in the internal registry,
-   *   and it will be garbage collected when the subject is no longer in use.\
-   *   In rare cases, you may need to manually dispose the form instance using {@link Form.dispose}.
+   * @remarks
+   * - Returns existing instance if one exists for the subject
+   * - Creates new instance if none exists
+   * - Instances are cached and garbage collected with their subjects
+   * - Multiple forms per subject supported via `formKey`
    *
-   * @param subject The subject to associate with the form
-   * @param formKey The key to associate with the form.
-   *   If you need to associate multiple forms with the same subject, use different keys.
+   * @param subject The model object to create form for
+   * @param formKey Optional key for multiple forms per subject
    *
-   * @throws TypeError when the subject is not an object.
+   * @throws `TypeError` if subject is not an object
    */
   static get<T extends object>(subject: T, formKey?: symbol): Form<T> {
     const form = this.getSafe(subject, formKey);
@@ -48,7 +58,7 @@ export class Form<T> {
   }
 
   /**
-   * Get the form instance for a subject.
+   * Get a form instance for the subject.
    *
    * Same as {@link Form.get} but returns null instead of throwing an error.
    */
@@ -77,7 +87,7 @@ export class Form<T> {
   }
 
   /**
-   * Manually dispose the form instance for a subject.
+   * Manually dispose the form instance for the subject.
    *
    * Use with caution.\
    * You don't usually need to use this method at all.\
@@ -248,9 +258,15 @@ export class Form<T> {
   }
 
   /**
-   * Add a handler to the form
+   * Add a submission handler
    *
-   * @returns A function to remove the handler.
+   * @remarks
+   * Handlers are called in this order:
+   * 1. `willSubmit` - Called before submission starts
+   * 2. `submit` - Async handlers that perform the submission
+   * 3. `didSubmit` - Called after submission completes
+   *
+   * @returns Function to remove the handler
    */
   addHandler: Submission["addHandler"] = (...args) => {
     return this.#submission.addHandler(...args);
@@ -321,7 +337,16 @@ export class Form<T> {
     return instance.props;
   };
 
-  /** Bind to a field or the form */
+  /**
+   * Create UI binding for form elements
+   *
+   * @remarks
+   * - Can bind to individual fields
+   * - Can bind to multiple fields
+   * - Can bind to the entire form
+   * - Bindings are cached and reused
+   * - Supports configuration via binding classes
+   */
   bind: FormBindingFunc<T> = (...args: any[]) => {
     if (typeof args[0] === "string") {
       return this.#bindToField(args[0] as any, args[1], args[2]);
@@ -333,10 +358,12 @@ export class Form<T> {
   };
 
   /**
-   * Get the error messages for a field
+   * Get error messages for a field
    *
-   * @param fieldName - The field name to get errors for.
-   * @param includePreReported - Whether to include errors that are yet to be reported.
+   * @param fieldName Field to get errors for
+   * @param includePreReported Whether to include errors not yet reported
+   *
+   * @returns Set of error messages
    */
   getErrors(fieldName: FormField.Name<T>, includePreReported = false): ReadonlySet<string> {
     const field = this.getField(fieldName);
@@ -353,7 +380,7 @@ export class Form<T> {
   /**
    * Get all error messages for the form
    *
-   * @param fieldName - The field name to get errors for. If omitted, all errors are returned.
+   * @param fieldName Field to get errors for. If omitted, all errors are returned.
    */
   getAllErrors(fieldName?: FormField.Name<T>) {
     return this.validator.getErrorMessages(fieldName ? KeyPath.build(fieldName) : KeyPath.Self, true);

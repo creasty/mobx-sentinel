@@ -11,7 +11,7 @@ import { LabelBinding } from "./LabelBinding";
  *
  * `Form` will be extended with these methods.
  *
- * @remarks This interface exists only for the sole purpose of documentation.
+ * @remarks This interface exists for the sole purpose of documentation.
  */
 export interface StandardExtensions<T> {
   /**

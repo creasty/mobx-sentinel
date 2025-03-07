@@ -98,7 +98,15 @@ export const unwatch: typeof runInUnwatch & typeof createUnwatch = (...args: any
 const watcherKey = Symbol("watcher");
 const internalToken = Symbol("watcher.internal");
 
-/** Watcher for changes to a target object */
+/**
+ * Watcher for tracking changes to observable properties
+ *
+ * - Automatically tracks `@observable` and `@computed` properties
+ * - Supports `@watch` and `@watch.ref` annotations
+ * - Can track nested objects
+ * - Provides change detection at both property and path levels
+ * - Can be temporarily disabled via `unwatch()`
+ */
 export class Watcher {
   readonly id = uuidV4();
   readonly #assumeChanged = observable.box(false);
@@ -108,9 +116,14 @@ export class Watcher {
   readonly #nestedFetcher: StandardNestedFetcher<Watcher>;
 
   /**
-   * Get a watcher for a target object
+   * Get a watcher instance for the target object.
    *
-   * @throws TypeError when the target is not an object.
+   * @remarks
+   * - Returns existing instance if one exists for the target
+   * - Creates new instance if none exists
+   * - Instances are cached and garbage collected with their targets
+   *
+   * @throws `TypeError` if the target is not an object.
    */
   static get<T extends object>(target: T): Watcher {
     const watcher = this.getSafe(target);
@@ -119,7 +132,7 @@ export class Watcher {
   }
 
   /**
-   * Get a watcher for a target object
+   * Get a watcher instance for the target object.
    *
    * Same as {@link Watcher.get} but returns null instead of throwing an error.
    */
@@ -156,10 +169,14 @@ export class Watcher {
   }
 
   /**
-   * The total number of changes have been processed
+   * The total number of changes processed
    *
-   * The value is incremented for each change and each key.
    * Observe this value to react to changes.
+   *
+   * @remarks
+   * - Incremented for each change and each affected key
+   * - Not affected by assumeChanged()
+   * - Reset to 0 when reset() is called
    */
   get changedTick() {
     return this.#changedTick.get();
@@ -174,7 +191,10 @@ export class Watcher {
   /**
    * The keys that have changed
    *
-   * Keys of nested objects are NOT included.
+   * @remarks
+   * - Does not include keys of nested objects
+   * - Cleared when reset() is called
+   * - Updated when properties are modified
    */
   @computed.struct
   get changedKeys(): ReadonlySet<KeyPath> {
@@ -202,7 +222,15 @@ export class Watcher {
     return this.#nestedFetcher.dataMap;
   }
 
-  /** Reset the changed keys */
+  /**
+   * Reset the changed state
+   *
+   * @remarks
+   * - Clears all changed keys
+   * - Resets changedTick to 0
+   * - Clears assumeChanged flag
+   * - Resets all nested watchers
+   */
   @action
   reset() {
     this.#changedKeys.clear();
