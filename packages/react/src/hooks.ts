@@ -2,12 +2,6 @@ import { Form } from "@mobx-sentinel/form";
 import { useEffect, useRef } from "react";
 
 /**
- * React hooks for form integration
- *
- * @packageDocumentation
- */
-
-/**
  * Auto reset the form when the component is mounted and unmounted
  *
  * @param form Form instance
