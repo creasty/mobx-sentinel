@@ -37,7 +37,7 @@ export const nested = Object.assign(createNested, {
    *
    * @example
    * ```typescript
-   * @nested.hoist private list: Sample[] = [];
+   * @nested.hoist @observable private list: Sample[] = [];
    * // Key path for "list.0.value" becomes "0.value"
    * ```
    */
