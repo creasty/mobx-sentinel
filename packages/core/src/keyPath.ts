@@ -1,4 +1,10 @@
-/** Key paths */
+/**
+ * Key paths represent paths to access nested properties in an object
+ *
+ * Key paths can be either:
+ * - A dot-notation string representing nested properties (e.g. "user.address.street")
+ * - A special Self symbol representing the current object
+ */
 export type KeyPath = KeyPath.Component | KeyPath.Self;
 
 export namespace KeyPath {
@@ -18,7 +24,17 @@ export namespace KeyPath {
     return keyPath === Self || keyPath === "";
   }
 
-  /** Build a key path from an array of keys */
+  /**
+   * Build a key path from an array of keys
+   *
+   * @remarks
+   * - Joins keys with dots
+   * - Ignores null values
+   * - Ignores empty strings
+   * - Handles {@link KeyPath.Self}
+   *
+   * @returns The constructed key path
+   */
   export function build(...keys: (KeyPath | string | number | null)[]): KeyPath {
     const keyPath = keys
       .flatMap((key) => {
@@ -41,9 +57,12 @@ export namespace KeyPath {
   }
 
   /**
-   * Get the relative key path from a prefix key path.
+   * Get the relative key path from a prefix key path
    *
-   * @returns The relative key path or null if the key path is not a child of the prefix key path.
+   * @returns
+   * - `null` if the key path is not a child of the prefix
+   * - {@link KeyPath.Self} if the paths are identical
+   * - The original path if the prefix is {@link KeyPath.Self}
    */
   export function getRelative(keyPath: KeyPath, prefixKeyPath: KeyPath) {
     if (isSelf(keyPath)) return Self;
@@ -64,9 +83,13 @@ export namespace KeyPath {
   }
 
   /**
-   * Iterate over all ancestors of a key path
+   * Get all ancestors of a key path
    *
-   * @returns The ancestors of the key path
+   * @param includeSelf Whether to include the path itself
+   *
+   * @returns
+   * - {@link KeyPath.Self} for single-level paths when `includeSelf` is false
+   * - Key paths starting from the closest ancestor and moving up to the root
    */
   export function* getAncestors(keyPath: KeyPath, includeSelf = true): Generator<KeyPath> {
     if (includeSelf) {
@@ -101,7 +124,7 @@ export interface ReadonlyKeyPathMultiMap<T> extends Iterable<[KeyPath, T]> {
 
 /**
  * Map to store multiple values with the same key path
- * with support for prefix matching.
+ * with prefix matching support
  */
 export class KeyPathMultiMap<T> implements ReadonlyKeyPathMultiMap<T> {
   /** Map to store key path -> values mapping */

@@ -2,9 +2,14 @@ import { Form } from "@mobx-sentinel/form";
 import { useEffect, useRef } from "react";
 
 /**
- * Auto reset the form when when the component is mounted and unmounted.
+ * Auto reset the form when the component is mounted and unmounted
  *
- * @param form The form instance.
+ * @param form Form instance
+ *
+ * @remarks
+ * - Calls `form.reset()` on mount
+ * - Calls `form.reset()` on unmount
+ * - Useful for cleaning up form state
  */
 export function useFormAutoReset(form: Form<any>) {
   useEffect(() => {
@@ -14,14 +19,14 @@ export function useFormAutoReset(form: Form<any>) {
 }
 
 /**
- * Add a handler to the form.
+ * Add a handler to the form with automatic cleanup
  *
- * It automatically removes the handler when the component is unmounted.
+ * @param form Form instance
+ * @param event Event of the handler
+ * @param handler Handler to add
  *
- * @param form The form instance.
- * @param event The event of the handler.
- * @param handler The handler.\
- *   No memoization is needed as the handler is stored in a ref internally.
+ * @remarks
+ * No memoization of the handler is needed as it is stored in a ref internally.
  */
 export function useFormHandler<T extends object, Event extends keyof Form.Handlers>(
   form: Form<T>,

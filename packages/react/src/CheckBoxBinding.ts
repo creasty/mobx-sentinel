@@ -2,7 +2,9 @@ import { FormBinding, FormField } from "@mobx-sentinel/form";
 import { makeObservable, computed, action } from "mobx";
 
 export namespace CheckBoxBinding {
+  /** @ignore */
   export type Attrs = React.InputHTMLAttributes<HTMLInputElement>;
+  /** @ignore */
   export type AttrsRequired = Required<Attrs>;
 
   export type Config = {
@@ -20,6 +22,13 @@ export namespace CheckBoxBinding {
   };
 }
 
+/**
+ * Binding for checkbox input elements
+ *
+ * Key features:
+ * - Handles boolean states
+ * - Manages error states and ARIA attributes
+ */
 export class CheckBoxBinding implements FormBinding {
   constructor(
     private readonly field: FormField,

@@ -2,7 +2,9 @@ import { FormBinding, FormField } from "@mobx-sentinel/form";
 import { makeObservable, computed, action } from "mobx";
 
 export namespace InputBinding {
+  /** @ignore */
   export type Attrs = React.InputHTMLAttributes<HTMLInputElement>;
+  /** @ignore */
   export type AttrsRequired = Required<Attrs>;
 
   type DateValueType = "date" | "datetime-local" | "month" | "time" | "week";
@@ -104,6 +106,15 @@ export namespace InputBinding {
   );
 }
 
+/**
+ * Binding for text input elements
+ *
+ * Key features:
+ * - Supports text, number, and date inputs
+ * - Handles intermediate values during typing
+ * - Auto-finalizes values on blur
+ * - Manages error states and ARIA attributes
+ */
 export class InputBinding implements FormBinding {
   constructor(
     private readonly field: FormField,

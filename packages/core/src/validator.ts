@@ -65,6 +65,14 @@ export function makeValidatable(target: object, ...args: any[]) {
   return Validator.get(target).addSyncHandler(handler, opt);
 }
 
+/**
+ * Validator for handling synchronous and asynchronous validations
+ *
+ * - Supports both sync and async validation handlers
+ * - Tracks validation state (isValidating)
+ * - Provides error access by key path
+ * - Supports nested validators
+ */
 export class Validator<T> {
   static defaultDelayMs = 100;
 
@@ -78,9 +86,14 @@ export class Validator<T> {
   readonly #jobs = observable.set<AsyncJob<any>>();
 
   /**
-   * Get a validator for a target object
+   * Get a validator instance for the target object.
    *
-   * @throws TypeError when the target is not an object.
+   * @remarks
+   * - Returns existing instance if one exists for the target
+   * - Creates new instance if none exists
+   * - Instances are cached and garbage collected with their targets
+   *
+   * @throws `TypeError` if the target is not an object.
    */
   static get<T extends object>(target: T): Validator<T> {
     const validator = this.getSafe(target);
@@ -89,7 +102,7 @@ export class Validator<T> {
   }
 
   /**
-   * Get a validator for a target object
+   * Get a validator instance for the target object.
    *
    * Same as {@link Validator.get} but returns null instead of throwing an error.
    */
@@ -196,7 +209,13 @@ export class Validator<T> {
     return false;
   }
 
-  /** Find errors for the key path */
+  /**
+   * Find errors for the key path
+   *
+   * - Can do exact or prefix matching
+   * - Returns all errors that match the key path
+   * - Includes errors from nested validators when using prefix match
+   */
   *findErrors(searchKeyPath: KeyPath, prefixMatch = false) {
     yield* this.#findErrors(searchKeyPath, prefixMatch, false);
   }
@@ -344,6 +363,11 @@ export class Validator<T> {
    * @param handler The sync handler containing observable expressions
    *
    * @returns A function to remove the handler
+   *
+   * @remarks
+   * - Handler runs immediately when added for initial validation
+   * - Handler is called when observable expressions within it change
+   * - Changes are throttled by default delay
    */
   addSyncHandler(handler: Validator.SyncHandler<T>, opt?: Validator.HandlerOptions) {
     const key = Symbol();
@@ -373,6 +397,13 @@ export class Validator<T> {
    * @param opt The handler options
    *
    * @returns A function to remove the handler
+   *
+   * @remarks
+   * - Handler runs immediately when added for initial validation
+   * - Handler is called when the watched expression changes
+   * - Changes are throttled by default delay
+   * - Provides abort signal for cancellation
+   * - Previous validations are aborted when new ones start
    */
   @action
   addAsyncHandler<Expr>(

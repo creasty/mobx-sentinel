@@ -2,7 +2,9 @@ import { Form, FormBinding } from "@mobx-sentinel/form";
 import { makeObservable, computed } from "mobx";
 
 export namespace SubmitButtonBinding {
+  /** @ignore */
   export type Attrs = React.ButtonHTMLAttributes<HTMLButtonElement>;
+  /** @ignore */
   export type AttrsRequired = Required<Attrs>;
 
   export type Config = {
@@ -13,6 +15,15 @@ export namespace SubmitButtonBinding {
   };
 }
 
+/**
+ * Binding for submit button elements
+ *
+ * Key features:
+ * - Handles form submission
+ * - Auto-disables during submission or validation, or when invalid
+ * - Reports errors on hover
+ * - Manages busy states and ARIA attributes
+ */
 export class SubmitButtonBinding implements FormBinding {
   constructor(
     private readonly form: Form<unknown>,

@@ -20,16 +20,26 @@ const createNestedHoist = createPropertyLikeAnnotation(nestedKey, () => NestedMo
 
 /**
  * Annotation for nested objects
+ *
+ * @remarks
+ * - Mixed nested modes for the same key are not allowed
  */
 export const nested = Object.assign(createNested, {
   /**
    * Annotation for nested objects that should be hoisted to the parent object
    *
-   * Properties annotated with this will be added to the parent object
-   * instead of being nested under their own key.
+   * When using hoist mode:
+   * - Nested objects are treated as part of the parent object
+   * - Changes and errors from nested objects appear on the parent
    *
-   * @example `@nested.hoist private list: Sample[] = [];`
-   *   Key path for "list.0.value" becomes "0.value".
+   * @remarks
+   * - Multiple hoisted keys within the same inheritance chain are not allowed
+   *
+   * @example
+   * ```typescript
+   * @nested.hoist @observable private list: Sample[] = [];
+   * // Key path for "list.0.value" becomes "0.value"
+   * ```
    */
   hoist: createNestedHoist,
 });
@@ -71,7 +81,14 @@ export function* getNestedAnnotations(target: object): Generator<{
 /**
  * A fetcher that returns all nested entries
  *
- * Annotation keys that are symbols are ignored.
+ * Key features:
+ * - Tracks nested objects in properties, arrays, sets, and maps
+ * - Provides access to nested objects by key path
+ * - Supports iteration over all nested objects
+ * - Maintains parent-child relationships
+ *
+ * @remarks
+ * Symbol keys are not supported
  */
 export class StandardNestedFetcher<T extends object> implements Iterable<StandardNestedFetcher.Entry<T>> {
   readonly #transform: (entry: StandardNestedFetcher.Entry<any>) => T | null;
@@ -139,11 +156,16 @@ export class StandardNestedFetcher<T extends object> implements Iterable<Standar
 }
 
 export namespace StandardNestedFetcher {
-  /** Nested entry */
+  /**
+   * Entry representing a nested object
+   *
+   * @remarks
+   * Used when iterating over nested objects to provide context about their location
+   */
   export type Entry<T extends object> = {
-    /** Name of the field that has the nested annotation */
+    /** Name of the field containing the nested object */
     readonly key: KeyPath;
-    /** Key path to the nested entry */
+    /** Full path to the nested object */
     readonly keyPath: KeyPath;
     /** Data */
     readonly data: T;

@@ -2,7 +2,9 @@ import { FormBinding, FormField } from "@mobx-sentinel/form";
 import { makeObservable, computed } from "mobx";
 
 export namespace LabelBinding {
+  /** @ignore */
   export type Attrs = React.LabelHTMLAttributes<HTMLLabelElement>;
+  /** @ignore */
   export type AttrsRequired = Required<Attrs>;
 
   export type Config = {
@@ -11,6 +13,14 @@ export namespace LabelBinding {
   };
 }
 
+/**
+ * Binding for label elements
+ *
+ * Key features:
+ * - Associates labels with form fields
+ * - Supports multiple field associations
+ * - Shows error states from associated fields
+ */
 export class LabelBinding implements FormBinding {
   constructor(
     private readonly fields: FormField[],

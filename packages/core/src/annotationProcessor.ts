@@ -1,5 +1,14 @@
 import { Decorator202112, Decorator202203, isDecorator202112, isDecorator202203 } from "./decorator";
 
+/**
+ * Processor for handling property-like annotations
+ *
+ * Key features:
+ * - Supports both stage2 and stage3 decorators
+ * - Handles inheritance correctly - annotations from parent classes are preserved
+ * - Supports property overrides in child classes
+ * - Supports private fields and methods
+ */
 export class AnnotationProcessor {
   readonly #propertyLike = new Map<
     symbol,
@@ -12,7 +21,13 @@ export class AnnotationProcessor {
     >
   >();
 
-  /** Register a property like annotation */
+  /**
+   * Register a property-like annotation
+   *
+   * @remarks
+   * - Multiple annotations can be registered for the same property
+   * - When a property is overridden in a child class, both parent and child annotations are preserved
+   */
   registerPropertyLike(
     annotationKey: symbol,
     args: {
@@ -36,12 +51,20 @@ export class AnnotationProcessor {
     propertyMetadata.data.push(args.data);
   }
 
-  /** Get all registered property like annotations */
+  /**
+   * Get all registered property-like annotations
+   *
+   * @returns Map of property keys to their metadata, or undefined if no annotations exist
+   */
   getPropertyLike(annotationKey: symbol) {
     return this.#propertyLike.get(annotationKey);
   }
 
-  /** Clone the annotation processor */
+  /**
+   * Clone the annotation processor
+   *
+   * Used when inheriting annotations from parent classes
+   */
   clone() {
     const clone = new AnnotationProcessor();
     for (const [annotationKey, properties] of this.#propertyLike) {
@@ -86,12 +109,28 @@ function createStored(target: object, clone: boolean) {
   return s.processor;
 }
 
-/** Get the annotation processor for the target */
+/**
+ * Get the annotation processor for the target object
+ *
+ * @returns The annotation processor or null if not found
+ */
 export function getAnnotationProcessor(target: object) {
   return getStored(target).processor;
 }
 
-/** Create a property like annotation */
+/**
+ * Create a property-like annotation
+ *
+ * @remarks
+ * - Stage2 annotations are processed at declaration time, not instantiation time
+ * - Stage3 annotations are processed at instantiation time
+ * - Supports both public and private class members
+ * - Works with properties, getters, and class fields
+ * - Auto accessors are not supported in stage2 decorators
+ *
+ * @param annotationKey - Unique symbol to identify this annotation type
+ * @param getData - Function to generate annotation data for a property
+ */
 export function createPropertyLikeAnnotation<T extends object, Data>(
   annotationKey: symbol,
   getData: (propertyKey: string | symbol) => Data
