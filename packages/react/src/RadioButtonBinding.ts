@@ -17,6 +17,14 @@ export namespace RadioButtonBinding {
   };
 }
 
+/**
+ * Binding for radio button input elements
+ *
+ * Key features:
+ * - Handles grouped radio buttons
+ * - Supports optional (nullable) values
+ * - Manages error states and ARIA attributes
+ */
 export class RadioButtonBinding implements FormBinding {
   constructor(
     private readonly field: FormField,

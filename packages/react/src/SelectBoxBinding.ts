@@ -31,6 +31,14 @@ export namespace SelectBoxBinding {
   );
 }
 
+/**
+ * Binding for select elements
+ *
+ * Key features:
+ * - Supports single and multiple selection
+ * - Handles option changes
+ * - Manages error states and ARIA attributes
+ */
 export class SelectBoxBinding implements FormBinding {
   constructor(
     private readonly field: FormField,

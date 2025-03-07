@@ -104,6 +104,15 @@ export namespace InputBinding {
   );
 }
 
+/**
+ * Binding for text input elements
+ *
+ * Key features:
+ * - Supports text, number, and date inputs
+ * - Handles intermediate values during typing
+ * - Auto-finalizes values on blur
+ * - Manages error states and ARIA attributes
+ */
 export class InputBinding implements FormBinding {
   constructor(
     private readonly field: FormField,

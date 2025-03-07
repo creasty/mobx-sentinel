@@ -11,6 +11,14 @@ export namespace LabelBinding {
   };
 }
 
+/**
+ * Binding for label elements
+ *
+ * Key features:
+ * - Associates labels with form fields
+ * - Supports multiple field associations
+ * - Shows error states from associated fields
+ */
 export class LabelBinding implements FormBinding {
   constructor(
     private readonly fields: FormField[],

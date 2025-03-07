@@ -20,6 +20,13 @@ export namespace CheckBoxBinding {
   };
 }
 
+/**
+ * Binding for checkbox input elements
+ *
+ * Key features:
+ * - Handles boolean states
+ * - Manages error states and ARIA attributes
+ */
 export class CheckBoxBinding implements FormBinding {
   constructor(
     private readonly field: FormField,

@@ -7,7 +7,7 @@ import { SubmitButtonBinding } from "./SubmitButtonBinding";
 import { LabelBinding } from "./LabelBinding";
 
 /**
- * Standard binding extensions.
+ * Standard binding extensions for React form elements
  *
  * `Form` will be extended with these methods.
  *
