@@ -5,8 +5,9 @@
   "includeVersion": false,
   "readme": "none",
   "router": "structure",
-  "customCss": "./script/typedoc.css",
-  "plugin": ["./script/typedoc-plugin.js"],
+  "customCss": "./script/typedoc/custom.css",
+  "customJs": "./script/typedoc/custom.js",
+  "plugin": ["./script/typedoc/plugin.js"],
   "name": "mobx-sentinel API doc",
   "navigationLinks": {
     "GitHub": "https://github.com/creasty/mobx-sentinel",
