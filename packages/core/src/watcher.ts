@@ -50,6 +50,8 @@ function runInUnwatch(action: () => void): void {
  * - `@nested` (and its variants) are considered `@watched` unless `@unwatch` is specified.
  * - If `@watch` and `@watch.ref` are specified for the same key (in the same inheritance chain),\
  *   the last annotation prevails.
+ *
+ * @function
  */
 export const watch = Object.freeze(
   Object.assign(createWatch, {
@@ -57,6 +59,8 @@ export const watch = Object.freeze(
      * Annotation for watching values with identity comparison
      *
      * It has no effect when combined with `@nested`.
+     *
+     * @function
      */
     ref: createWatchRef,
   })
@@ -87,6 +91,8 @@ export const watch = Object.freeze(
  *   });
  *   // isWatching === TRUE
  *   ```
+ *
+ * @function
  */
 export const unwatch: typeof runInUnwatch & typeof createUnwatch = (...args: any[]) => {
   if (args.length === 1 && typeof args[0] === "function") {

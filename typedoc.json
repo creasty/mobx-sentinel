@@ -4,11 +4,12 @@
   "entryPointStrategy": "packages",
   "includeVersion": false,
   "readme": "none",
+  "router": "structure",
   "customCss": "./script/typedoc.css",
+  "plugin": ["./script/typedoc-plugin.js"],
   "name": "mobx-sentinel API doc",
   "navigationLinks": {
     "GitHub": "https://github.com/creasty/mobx-sentinel",
     "Example": "https://example.mobx-sentinel.creasty.com"
-  },
-  "plugin": ["./script/typedoc-plugin.js"]
+  }
 }
