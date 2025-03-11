@@ -16,3 +16,18 @@
   margin: 16px 0;
   overflow: hidden;
 }
+
+.tsd-tag {
+  text-transform: lowercase;
+  font-weight: normal;
+  color: var(--color-text-aside);
+  margin-right: 0.5em;
+  vertical-align: 0.15em;
+}
+.tsd-tag:is([data-tag-text^="Action"], [data-tag-text="Computed"]) {
+  &:before {
+    content: "@";
+  }
+  font-weight: bold;
+  color: var(--color-text);
+}

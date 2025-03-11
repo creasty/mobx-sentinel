@@ -6,6 +6,7 @@
   "readme": "none",
   "router": "structure",
   "customCss": "./script/typedoc.css",
+  "customJs": "./script/typedoc.js",
   "plugin": ["./script/typedoc-plugin.js"],
   "name": "mobx-sentinel API doc",
   "navigationLinks": {
