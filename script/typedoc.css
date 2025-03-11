@@ -2,25 +2,17 @@
   display: none;
 }
 
-.tsd-signatures > .tsd-signature {
+.tsd-panel:not(.tsd-member) ul.tsd-signatures > li:not([class^="tsd-"]) {
   background: var(--color-background-secondary);
   padding: 16px;
-  margin: 0;
 }
-.tsd-signatures > .tsd-signature:not(:first-child) {
+.tsd-panel:not(.tsd-member) ul.tsd-signatures > li:not([class^="tsd-"]) + li {
   margin-top: 16px;
-}
-.tsd-signatures > .tsd-description {
-  background: var(--color-background-secondary);
-  padding: 16px;
-  margin: 0;
 }
 
 .tsd-member {
   background: var(--color-background-secondary);
-  padding: 16px;
+  padding: 0 16px;
   margin: 16px 0;
-}
-.tsd-member .tsd-signatures {
-  margin: 0 -16px -16px;
+  overflow: hidden;
 }
