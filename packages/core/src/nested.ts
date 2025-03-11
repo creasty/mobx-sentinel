@@ -23,6 +23,8 @@ const createNestedHoist = createPropertyLikeAnnotation(nestedKey, () => NestedMo
  *
  * @remarks
  * - Mixed nested modes for the same key are not allowed
+ *
+ * @function
  */
 export const nested = Object.assign(createNested, {
   /**
@@ -40,6 +42,8 @@ export const nested = Object.assign(createNested, {
    * @nested.hoist @observable private list: Sample[] = [];
    * // Key path for "list.0.value" becomes "0.value"
    * ```
+   *
+   * @function
    */
   hoist: createNestedHoist,
 });
