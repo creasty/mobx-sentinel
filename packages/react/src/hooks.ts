@@ -28,20 +28,27 @@ export function useFormAutoReset(form: Form<any>) {
  * @remarks
  * No memoization of the handler is needed as it is stored in a ref internally.
  */
-export function useFormHandler<T extends object, Event extends keyof Form.Handlers>(
+export function useFormHandler<T extends object>(
   form: Form<T>,
-  event: Event,
-  handler: Form.Handlers[NoInfer<Event>]
-) {
+  event: "willSubmit",
+  handler: Form.Handlers["willSubmit"]
+): void;
+export function useFormHandler<T extends object>(
+  form: Form<T>,
+  event: "submit",
+  handler: Form.Handlers["submit"]
+): void;
+export function useFormHandler<T extends object>(
+  form: Form<T>,
+  event: "didSubmit",
+  handler: Form.Handlers["didSubmit"]
+): void;
+export function useFormHandler<T extends object>(form: Form<T>, event: any, handler: any) {
   const handlerRef = useRef(handler);
   handlerRef.current = handler;
 
   useEffect(() => {
-    const dispose = form.addHandler(
-      event,
-      // eslint-disable-next-line prefer-spread, @typescript-eslint/no-unsafe-function-type
-      (...args: any[]) => (handlerRef.current as Function).apply(undefined, args) as any
-    );
+    const dispose = form.addHandler(event, (...args) => handlerRef.current(...args));
     return dispose;
   }, [form, event]);
 }

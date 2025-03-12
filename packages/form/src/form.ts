@@ -26,10 +26,10 @@ export class Form<T> {
   readonly #formKey: symbol;
   readonly watcher: Watcher;
   readonly validator: Validator<T>;
+  readonly #nestedFetcher: StandardNestedFetcher<Form<any>>;
   readonly #submission = new Submission();
   readonly #fields = new Map<string, FormField>();
   readonly #bindings = new Map<string, FormBinding>();
-  readonly #nestedFetcher: StandardNestedFetcher<Form<any>>;
   readonly #localConfig = observable.box<Partial<FormConfig>>({});
 
   /** Extension fields for bindings */
@@ -158,27 +158,47 @@ export class Form<T> {
     }
   };
 
-  /** Whether the form is dirty (including sub-forms) */
+  /**
+   * Whether the form is dirty (including sub-forms)
+   *
+   * @remarks Alias for {@link Watcher.changed}.
+   */
   get isDirty() {
     return this.watcher.changed;
   }
 
-  /** Whether the form is valid (including sub-forms) */
+  /**
+   * Whether the form is valid (including sub-forms)
+   *
+   * @remarks Alias for {@link Validator.isValid}.
+   */
   get isValid() {
     return this.validator.isValid;
   }
 
-  /** The number of invalid fields */
+  /**
+   * The number of invalid fields
+   *
+   * @remarks Alias for {@link Validator.invalidKeyCount}.
+   */
   get invalidFieldCount() {
     return this.validator.invalidKeyCount;
   }
 
-  /** The number of total invalid field paths (counts invalid fields in sub-forms) */
+  /**
+   * The number of total invalid field paths (counts invalid fields in sub-forms)
+   *
+   * @remarks Alias for {@link Validator.invalidKeyPathCount}.
+   */
   get invalidFieldPathCount() {
     return this.validator.invalidKeyPathCount;
   }
 
-  /** Whether the form is in validator state */
+  /**
+   * Whether the form is in validator state
+   *
+   * @remarks Alias for {@link Validator.isValidating}.
+   */
   get isValidating() {
     return this.validator.isValidating;
   }
@@ -194,7 +214,14 @@ export class Form<T> {
     return this.isSubmitting || this.isValidating;
   }
 
-  /** Whether the form can be submitted */
+  /**
+   * Whether the form can be submitted
+   *
+   * @remarks
+   * - Checks if the form is not busy
+   * - Checks if the form is valid or allows invalid submissions
+   * - Checks if the form is dirty or allows non-dirty submissions
+   */
   @computed
   get canSubmit() {
     return (
@@ -227,7 +254,11 @@ export class Form<T> {
   /**
    * Reset the form's state
    *
-   * It also resets the watcher but not the validator.
+   * @remarks
+   * - Resets the fields
+   * - Resets the sub-forms
+   * - Resets the watcher
+   * - Does not reset the validator
    */
   @action
   reset() {
@@ -241,8 +272,11 @@ export class Form<T> {
     }
   }
 
-  /** Mark the form as dirty */
-  @action
+  /**
+   * Mark the form as dirty
+   *
+   * @remarks Alias for {@link Watcher.assumeChanged}.
+   */
   markAsDirty() {
     this.watcher.assumeChanged();
   }
@@ -250,7 +284,17 @@ export class Form<T> {
   /**
    * Submit the form.
    *
-   * @returns true when the submission succeeded.
+   * @remarks
+   * - Checks if {@link canSubmit} is `true`
+   * - Executes handlers in order
+   * - Aborts if any `submit` handler returns `false`
+   * - Handles exceptions in all phases
+   * - Resets the form after successful submission
+   *
+   * @param args.force Whether to force submission even if {@link canSubmit} is `false`.
+   *   It cancels any in-progress submission if any.
+   *
+   * @returns `true` if submission succeeded, `false` if failed or aborted
    */
   async submit(args?: { force?: boolean }) {
     if (!args?.force && !this.canSubmit) return false;
@@ -263,16 +307,24 @@ export class Form<T> {
    * @remarks
    * Handlers are called in this order:
    * 1. `willSubmit` - Called before submission starts
-   * 2. `submit` - Async handlers that perform the submission
+   * 2. `submit` - Async handlers that perform the submission (serialized)
    * 3. `didSubmit` - Called after submission completes
+   *
+   * @see {@link Form.Handlers}
    *
    * @returns Function to remove the handler
    */
-  addHandler: Submission["addHandler"] = (...args) => {
-    return this.#submission.addHandler(...args);
-  };
+  addHandler: {
+    (event: "willSubmit", handler: Submission.Handlers["willSubmit"]): void;
+    (event: "submit", handler: Submission.Handlers["submit"]): void;
+    (event: "didSubmit", handler: Submission.Handlers["didSubmit"]): void;
+  } = (...args) => this.#submission.addHandler(...args);
 
-  /** Get a field by name */
+  /**
+   * Get a field by name
+   *
+   * @remarks Fields are cached and reused.
+   */
   getField(fieldName: FormField.Name<T>) {
     let field = this.#fields.get(fieldName);
     if (!field) {
@@ -381,12 +433,18 @@ export class Form<T> {
    * Get all error messages for the form
    *
    * @param fieldName Field to get errors for. If omitted, all errors are returned.
+   *
+   * @returns Set of error messages
    */
   getAllErrors(fieldName?: FormField.Name<T>) {
     return this.validator.getErrorMessages(fieldName ? KeyPath.build(fieldName) : KeyPath.Self, true);
   }
 
-  /** The first error message (including nested objects) */
+  /**
+   * The first error message (including nested objects)
+   *
+   * @remarks Alias for {@link Validator.firstErrorMessage}.
+   */
   @computed
   get firstErrorMessage() {
     return this.validator.firstErrorMessage;
@@ -403,6 +461,7 @@ export class Form<T> {
 }
 
 export namespace Form {
+  /** @inline */
   export type Handlers = Submission.Handlers;
 }
 
