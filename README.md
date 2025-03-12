@@ -7,7 +7,7 @@
 > [!CAUTION]
 > This library is currently in the early stage of development. User interface is subject to change without notice.
 
-A TypeScript library for non-intrusive model enhancement in MobX applications. It provides model change detection, validation, and form integration capabilities while maintaining the purity of your domain models. Think of it as a sentinel that watches and augments your models without contaminating them.
+MobX library for non-intrusive class-based model enhancement. Acting as a sentinel, it provides change detection, reactive validation, and form integration capabilities without contamination.
 
 ## Motivation
 
@@ -15,7 +15,7 @@ This library originally started with the goal of creating a form-building librar
 
 <details><summary>Read more on form management (English)</summary>
 
-In the projects I'm involved with, we deal with complex domains and promote building domain models on the frontend using MobX.<br>
+In the projects I'm involved with, we deal with complex domains and promote building view/domain models on the frontend using MobX.<br>
 We needed a solution that could work with forms while assuming business logic for how data should be displayed and updated exists as class implementations.<br>
 With models as a premise, most responsibilities can and should be placed on the model side.
 
@@ -126,22 +126,22 @@ This library aims to solve these problems through a model-centric design that pr
 ## Design principles
 
 - Model first
-  - Assumes the existence of class-based models
-  - [Form] Pushes responsibilities towards the model side, minimizing form responsibilities
-  - [Form] Not intended for simple data-first form implementations
+  - Assumes the existence of class-based models.
+  - [Form] Pushes responsibilities towards the model side, minimizing form responsibilities.
+  - [Form] Not intended for simple data-first form implementations.
 - Non-intrusive
-  - Requires models to implement as little specific interfaces as possible
-  - [Form] No direct references between forms and models
-  - [Form] Do not manage data directly
+  - Minimizes required interfaces for models, maintaining purity.
+  - [Form] No direct references between forms and models.
+  - [Form] Do not manage data directly.
 - Transparent I/O
-  - No module directly mutates models — Makes control obvious and safe
-  - [Form] No hidden magic between model ↔ input element interactions
+  - No module directly mutates models — Makes control obvious and safe.
+  - [Form] No hidden magic between model ↔ input element interactions.
 - Modular implementation
-  - Multi-package architecture with clear separation of concerns
-  - Enhances testability and extensibility
+  - Multi-package architecture with clear separation of concerns.
+  - Enhances testability and extensibility.
 - Rigorous typing
-  - Maximizes use of TypeScript's type system for error detection and code completion
-  - Improves development productivity
+  - Maximizes use of TypeScript's type system for error detection and code completion.
+  - Improves development productivity.
 
 ## Architecture
 
