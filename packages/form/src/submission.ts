@@ -43,7 +43,7 @@ export class Submission {
    * - Executes handlers in order
    * - `submit` handlers are executed serially
    * - Aborts if any `submit` handler returns false
-   * - Handles errors in all phases
+   * - Handles exceptions in all phases
    *
    * @returns `true` if submission succeeded, `false` if failed or aborted
    */
@@ -96,9 +96,22 @@ export class Submission {
 }
 
 export namespace Submission {
+  /** @inline */
   export type Handlers = {
+    /** Called before submission starts */
     willSubmit: () => void;
+    /**
+     * Async handler that perform the submission (serialized)
+     *
+     * @param abortSignal - Abort signal for the submission
+     * @returns `true` if submission succeeded, `false` if failed or aborted
+     */
     submit: (abortSignal: AbortSignal) => Promise<boolean>;
+    /**
+     * Called after submission completes
+     *
+     * @param succeed - `true` if submission succeeded, `false` if failed or aborted
+     */
     didSubmit: (succeed: boolean) => void;
   };
 }
