@@ -200,7 +200,7 @@ describe("Submission", () => {
       const submission = new Submission();
       const consoleSpy = vi.spyOn(console, "error").mockImplementation(() => {});
 
-      submission.addHandler("willSubmit", () => {
+      submission.addHandler("willSubmit", async () => {
         throw new Error("Test error");
       });
 
