@@ -395,7 +395,7 @@ describe("Form", () => {
       const form = Form.get(model);
       const internal = debugForm(form);
       const spy = vi.spyOn(internal.submission, "addHandler");
-      expect(form.addHandler("willSubmit", () => void 0)).toBeInstanceOf(Function);
+      expect(form.addHandler("willSubmit", async () => true)).toBeInstanceOf(Function);
       expect(form.addHandler("submit", async () => false)).toBeInstanceOf(Function);
       expect(form.addHandler("didSubmit", () => void 0)).toBeInstanceOf(Function);
       expect(spy).toBeCalledTimes(3);

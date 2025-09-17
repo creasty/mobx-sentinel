@@ -47,27 +47,19 @@ export class Submission {
    *
    * @returns `true` if submission succeeded, `false` if failed or aborted
    */
-  async exec() {
+  async exec(): Promise<boolean> {
     this.#abortCtrl?.abort();
     const abortCtrl = new AbortController();
     this.#abortCtrl = abortCtrl;
 
+    let succeed = true;
+
     runInAction(() => {
       this.#isRunning.set(true);
-
-      try {
-        for (const handler of this.#handlers.willSubmit) {
-          handler();
-        }
-      } catch (e) {
-        console.warn(e);
-      }
     });
 
-    let succeed = true;
     try {
-      for (const handler of this.#handlers.submit) {
-        // Serialized
+      for (const handler of this.#handlers.willSubmit) {
         if (!(await handler(abortCtrl.signal))) {
           succeed = false;
           break;
@@ -76,6 +68,21 @@ export class Submission {
     } catch (e) {
       succeed = false;
       console.error(e);
+    }
+
+    if (succeed) {
+      try {
+        for (const handler of this.#handlers.submit) {
+          // Serialized
+          if (!(await handler(abortCtrl.signal))) {
+            succeed = false;
+            break;
+          }
+        }
+      } catch (e) {
+        succeed = false;
+        console.error(e);
+      }
     }
 
     this.#abortCtrl = null;
@@ -98,8 +105,12 @@ export class Submission {
 export namespace Submission {
   /** @inline */
   export type Handlers = {
-    /** Called before submission starts */
-    willSubmit: () => void;
+    /**
+     * Called before submission starts
+     * @param abortSignal - Abort signal for the submission
+     * @returns `true` to continue submission, `false` to cancel submission
+     */
+    willSubmit: (abortSignal: AbortSignal) => Promise<boolean>;
     /**
      * Async handler that perform the submission (serialized)
      *
