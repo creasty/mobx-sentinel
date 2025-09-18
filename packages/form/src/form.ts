@@ -315,9 +315,9 @@ export class Form<T> {
    * @returns Function to remove the handler
    */
   addHandler: {
-    (event: "willSubmit", handler: Submission.Handlers["willSubmit"]): void;
-    (event: "submit", handler: Submission.Handlers["submit"]): void;
-    (event: "didSubmit", handler: Submission.Handlers["didSubmit"]): void;
+    (event: "willSubmit", handler: Submission.Handlers["willSubmit"]): () => void;
+    (event: "submit", handler: Submission.Handlers["submit"]): () => void;
+    (event: "didSubmit", handler: Submission.Handlers["didSubmit"]): () => void;
   } = (...args) => this.#submission.addHandler(...args);
 
   /**

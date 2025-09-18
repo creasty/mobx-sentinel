@@ -406,6 +406,74 @@ describe("Form", () => {
       const form = Form.get(model);
       expect(() => form.addHandler("INVALID" as any, () => void 0)).toThrow();
     });
+
+    it("returns a function that removes the handler when called", async () => {
+      const model = new SampleModel();
+      const form = Form.get(model);
+
+      // Add handlers and track if they're called
+      const willSubmitHandler = vi.fn(async () => true);
+      const submitHandler = vi.fn(async () => true);
+      const didSubmitHandler = vi.fn();
+
+      const removeWillSubmit = form.addHandler("willSubmit", willSubmitHandler);
+      const removeSubmit = form.addHandler("submit", submitHandler);
+      const removeDidSubmit = form.addHandler("didSubmit", didSubmitHandler);
+
+      // Submit form to verify handlers are called
+      form.markAsDirty();
+      await form.submit();
+
+      expect(willSubmitHandler).toHaveBeenCalledTimes(1);
+      expect(submitHandler).toHaveBeenCalledTimes(1);
+      expect(didSubmitHandler).toHaveBeenCalledTimes(1);
+
+      // Remove handlers
+      removeWillSubmit();
+      removeSubmit();
+      removeDidSubmit();
+
+      // Reset mock counts
+      willSubmitHandler.mockClear();
+      submitHandler.mockClear();
+      didSubmitHandler.mockClear();
+
+      // Submit again to verify handlers are not called
+      await form.submit();
+
+      expect(willSubmitHandler).not.toHaveBeenCalled();
+      expect(submitHandler).not.toHaveBeenCalled();
+      expect(didSubmitHandler).not.toHaveBeenCalled();
+    });
+
+    it("allows removing a single handler without affecting others", async () => {
+      const model = new SampleModel();
+      const form = Form.get(model);
+
+      const handler1 = vi.fn(async () => true);
+      const handler2 = vi.fn(async () => true);
+
+      const remove1 = form.addHandler("submit", handler1);
+      form.addHandler("submit", handler2);
+
+      form.markAsDirty();
+      await form.submit();
+
+      expect(handler1).toHaveBeenCalledTimes(1);
+      expect(handler2).toHaveBeenCalledTimes(1);
+
+      // Remove only the first handler
+      remove1();
+
+      handler1.mockClear();
+      handler2.mockClear();
+
+      // Submit again with force option
+      await form.submit({ force: true });
+
+      expect(handler1).not.toHaveBeenCalled();
+      expect(handler2).toHaveBeenCalledTimes(1);
+    });
   });
 
   describe("#bind", () => {
