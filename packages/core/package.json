@@ -1,7 +1,7 @@
 {
   "name": "@mobx-sentinel/core",
   "description": "MobX library for non-intrusive class-based model enhancement. Acting as a sentinel, it provides change detection, reactive validation, and form integration capabilities without contamination.",
-  "version": "0.2.3",
+  "version": "0.3.0",
   "author": "creasty <yuki@creasty.com>",
   "license": "MIT",
   "homepage": "https://github.com/creasty/mobx-sentinel",
