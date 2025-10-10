@@ -96,9 +96,6 @@ importers:
 
   packages/core:
     dependencies:
-      mobx:
-        specifier: ^6.12.3
-        version: 6.12.3
       uuid:
         specifier: ^11.0.4
         version: 11.0.4
@@ -109,6 +106,9 @@ importers:
       '@vitest/coverage-v8':
         specifier: ^2.1.8
         version: 2.1.8(vitest@2.1.8(@types/node@22.10.2)(jsdom@25.0.1))
+      mobx:
+        specifier: ^6.12.3
+        version: 6.12.3
       tsup:
         specifier: ^8.3.5
         version: 8.3.5(postcss@8.4.49)(typescript@5.5.2)(yaml@2.7.0)
@@ -124,9 +124,6 @@ importers:
       '@mobx-sentinel/core':
         specifier: workspace:*
         version: link:../core
-      mobx:
-        specifier: ^6.12.3
-        version: 6.12.3
       uuid:
         specifier: ^11.0.4
         version: 11.0.4
@@ -137,6 +134,9 @@ importers:
       '@vitest/coverage-v8':
         specifier: ^2.1.8
         version: 2.1.8(vitest@2.1.8(@types/node@22.10.2)(jsdom@25.0.1))
+      mobx:
+        specifier: ^6.12.3
+        version: 6.12.3
       tsup:
         specifier: ^8.3.5
         version: 8.3.5(postcss@8.4.49)(typescript@5.5.2)(yaml@2.7.0)
