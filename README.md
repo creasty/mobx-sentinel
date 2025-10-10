@@ -42,7 +42,7 @@ This library aims to solve these problems through a model-centric design that pr
 
 <details><summary>Read more on form management (Japanese)</summary>
 
-私が関わっているプロジェクトでは複雑なドメインを扱っており、フロントエンドでも MobX を用いてドメインモデルを作り込むことを推進している。<br>
+私が関わっているプロジェクトでは複雑なドメインを扱っており、フロントエンドでも MobX を用いて view/domain model を作り込むことを推進している。<br>
 データがどのように表示・更新されるべきかというビジネスロジックがクラス実装として存在する前提で、それをフォームでも使えるようにするソリューションを求めていた。<br>
 モデルがある前提では、基本的にモデル側にほとんどの責務を持たせることができるし、そうするべきである。
 
@@ -66,6 +66,135 @@ This library aims to solve these problems through a model-centric design that pr
 このライブラリはモデルを中心とした設計で、フォームの責務を適切に分離し最小限にすることで、これらの問題を解決しようとしている。
 
 </details>
+
+## Overview
+
+[apps/example/](./apps/example) is deployed at [example.mobx-sentinel.creasty.com](https://example.mobx-sentinel.creasty.com).
+
+### Model
+
+```typescript
+import { action, observable, makeObservable } from "mobx";
+import { nested, makeValidatable } from "@mobx-sentinel/core";
+
+export class Sample {
+  @observable text: string = "";
+  @observable bool: boolean = false;
+
+  // Nested/dynamic models can be tracked with @nested annotation
+  @nested @observable nested = new Other();
+  @nested @observable array = [new Other()];
+
+  constructor() {
+    makeObservable(this);
+
+    // 'Reactive validation' is implemented here
+    makeValidatable(this, (b) => {
+      if (this.text === "") b.invalidate("text", "Text is required");
+      if (this.bool === false) b.invalidate("bool", "Bool must be true");
+    });
+  }
+
+  @action.bound
+  addNewArrayItem() {
+    this.array.push(new Other());
+  }
+}
+```
+
+```typescript
+const model = new Sample();
+
+// Do something with the model...
+model.text = "hello";
+model.nested.other = "world";
+
+// Check if the model has changed
+const watcher = Watcher.get(model);
+watcher.changed //=> true
+watcher.changedKeyPaths //=> Set ["text", "nested.other"]
+
+// Check if the model is valid
+const validator = Validator.get(model);
+validator.isValid //=> false
+validator.invalidKeyPaths //=> Set ["bool", ..., "array.0.other"]
+```
+
+### Form
+
+```tsx
+import { observer } from "mobx-react-lite";
+import { Form } from "@mobx-sentinel/form";
+import { useFormHandler } from "@mobx-sentinel/react";
+
+// Optional: Make custom bind methods available via Form.
+//
+// Without the extension, use the default bind method with a binding class instead.
+// e.g., `.bind(field, InputBinding, config)` → `.bindInput(field, config)`
+import "@mobx-sentinel/react/dist/extension";
+
+const SampleForm: React.FC<{ model: Sample }> = observer(({ model }) => {
+  // Get the form instance for the model.
+  const form = Form.get(model);
+
+  // Form submission logic is implemented here.
+  useFormHandler(form, "submit", async (abortSignal) => {
+    // Serialize the model and send it to a server...
+    return true;
+  });
+
+  return (
+    <>
+      <div className="field">
+        <label {...form.bindLabel(["text", "bool"])}>Text input &amp; Checkbox</label>
+        <input
+         {...form.bindInput("text", {
+            getter: () => model.text, // Get the value from the model.
+            setter: (v) => (model.text = v), // Write the value to the model.
+          })}
+        />
+        <ErrorText errors={form.getErrors("text")} />
+        <input
+          {...form.bindCheckBox("bool", {
+            getter: () => model.bool,
+            setter: (v) => (model.bool = v),
+          })}
+        />
+        <ErrorText errors={form.getErrors("bool")} />
+      </div>
+
+      <div className="field">
+        <h4>Nested form</h4>
+        {/* No need to pass the parent form instance to the sub-form. */}
+        <OtherForm model={model.nested} />
+      </div>
+
+      <div className="field">
+        <h4>Dynamic form</h4>
+        <ErrorText errors={form.getErrors("array")} />
+
+        {model.array.map((item, i) => (
+          <OtherForm key={i} model={item} />
+        ))}
+
+        {/* Add a new form by mutating the model directly. */}
+        <button onClick={model.addNewArrayItem}>Add a new form</button>
+      </div>
+
+      <button {...form.bindSubmitButton()}>Submit</button>
+    </>
+  );
+});
+```
+
+```tsx
+const OtherForm: React.FC<{ model: Other }> = observer(({ model }) => {
+  // Forms are completely independent. No child-to-parent dependency
+  const form = Form.get(model);
+
+  return (...);
+});
+```
 
 ## Packages
 
@@ -127,14 +256,16 @@ This library aims to solve these problems through a model-centric design that pr
 
 - Model first
   - Assumes the existence of class-based models.
+  - Promotes clear separation between core business logic and application logic.
   - [Form] Pushes responsibilities towards the model side, minimizing form responsibilities.
-  - [Form] Not intended for simple data-first form implementations.
+  - [Form] Do not manage data directly; Not intended for simple data-first form implementations.
 - Non-intrusive
   - Minimizes required interfaces for models, maintaining purity.
+  - Extends model's capabilities from an "outsider" standpoint.
   - [Form] No direct references between forms and models.
-  - [Form] Do not manage data directly.
 - Transparent I/O
   - No module directly mutates models — Makes control obvious and safe.
+  - Unidirectional data flow / dependency.
   - [Form] No hidden magic between model ↔ input element interactions.
 - Modular implementation
   - Multi-package architecture with clear separation of concerns.
@@ -144,8 +275,6 @@ This library aims to solve these problems through a model-centric design that pr
   - Improves development productivity.
 
 ## Architecture
-
-<details>
 
 - `┈┈` Dashed lines indicate non-reactive relationships.
 - `──` Solid lines indicate reactive relationships.
@@ -200,153 +329,9 @@ subgraph react package
 end
 ```
 
-</details>
-
-## Overview
-
-[apps/example/](./apps/example) is deployed at [example.mobx-sentinel.creasty.com](https://example.mobx-sentinel.creasty.com).
-
-### Model
-
-```typescript
-import { action, observable, makeObservable } from "mobx";
-import { nested, makeValidatable } from "@mobx-sentinel/core";
-
-export class Sample {
-  @observable text: string = "";
-  @observable number: number | null = null;
-  @observable date: Date | null = null;
-  @observable bool: boolean = false;
-  @observable enum: SampleEnum | null = null;
-  @observable option: string | null = null;
-  @observable multiOption: string[] = [];
-
-  // Nested/dynamic models can be tracked with @nested annotation
-  @nested @observable nested = new Other();
-  @nested @observable array = [new Other()];
-
-  constructor() {
-    makeObservable(this);
-
-    // 'Reactive validation' is implemented here
-    makeValidatable(this, (b) => {
-      if (this.text === "") b.invalidate("text", "Text is required");
-      if (this.number === null) b.invalidate("number", "Number is required");
-      if (this.date === null) b.invalidate("date", "Date is required");
-      if (this.bool === false) b.invalidate("bool", "Bool must be true");
-      if (this.enum === null) b.invalidate("enum", "Enum is required");
-      if (this.option === null) b.invalidate("option", "Option is required");
-      if (this.multiOption.length === 0) b.invalidate("multiOption", "Multi option is required");
-      if (this.array.length === 0) b.invalidate("array", "Array is required");
-    });
-  }
-
-  @action.bound
-  addNewArrayItem() {
-    this.array.push(new Other());
-  }
-}
-```
-
-```typescript
-const model = new Sample();
-
-// Do something with the model...
-model.text = "hello";
-model.nested.other = "world";
-
-// Check if the model has changed
-const watcher = Watcher.get(model);
-watcher.changed //=> true
-watcher.changedKeyPaths //=> Set ["text", "nested.other"]
-
-// Check if the model is valid
-const validator = Validator.get(model);
-validator.isValid //=> false
-validator.invalidKeyPaths //=> Set ["number", "date", ..., "array.0.other"]
-```
-
-### Form
-
-```tsx
-import { observer } from "mobx-react-lite";
-import { Form } from "@mobx-sentinel/form";
-import { useFormHandler } from "@mobx-sentinel/react";
-
-// Optional: Make custom bind methods available via Form.
-//
-// Without the extension, use the default bind method with a binding class instead.
-// e.g., `.bind(field, InputBinding, config)` → `.bindInput(field, config)`
-import "@mobx-sentinel/react/dist/extension";
-
-const SampleForm: React.FC<{ model: Sample }> = observer(({ model }) => {
-  // Get the form instance for the model.
-  // You can always get the same form instance for the same model instance.
-  const form = Form.get(model);
-
-  // Form submission logic is implemented here.
-  useFormHandler(form, "submit", async (abortSignal) => {
-    // Serialize the model and send it to a server...
-    return true;
-  });
-
-  return (
-    <>
-      <div className="field">
-        <label {...form.bindLabel(["text", "bool"])}>Text input &amp; Checkbox</label>
-        <input
-         {...form.bindInput("text", {
-            getter: () => model.text, // Get the value from the model.
-            setter: (v) => (model.text = v), // Write the value to the model.
-          })}
-        />
-        <ErrorText errors={form.getErrors("text")} />
-        <input
-          {...form.bindCheckBox("bool", {
-            getter: () => model.bool,
-            setter: (v) => (model.bool = v),
-          })}
-        />
-        <ErrorText errors={form.getErrors("bool")} />
-      </div>
-
-      ...
-
-      <div className="field">
-        <h4>Nested form</h4>
-        {/* No need to pass the parent form instance to the sub-form. */}
-        <OtherForm model={model.nested} />
-      </div>
-
-      <div className="field">
-        <h4>Dynamic form</h4>
-        <ErrorText errors={form.getErrors("array")} />
-
-        {model.array.map((item, i) => (
-          <OtherForm key={i} model={item} />
-        ))}
-
-        {/* Add a new form by mutating the model directly. */}
-        <button onClick={model.addNewArrayItem}>Add a new form</button>
-      </div>
-
-      <button {...form.bindSubmitButton()}>Submit</button>
-    </>
-  );
-});
-```
-
-```tsx
-const OtherForm: React.FC<{ model: Other }> = observer(({ model }) => {
-  // Forms are completely independent.
-  // Sub-forms don't need to know its parent form.
-  const form = Form.get(model);
-
-  return (...);
-});
-```
-
 ## Alternatives
+
+### Form management
 
 Criteria:
 [**T**] Type-safe interfaces.
@@ -362,17 +347,17 @@ Criteria:
 
 | Repository | Stars | Tests | T | B | C |
 |------------|-------|-------|---|---|---|
-| ![TypeScript][img-ts] [mobx-react-form](https://github.com/foxhound87/mobx-react-form) | ![GitHub stars](https://img.shields.io/github/stars/foxhound87/mobx-react-form?style=flat-square&label&color=960) | [![Codecov Coverage](https://img.shields.io/codecov/c/github/foxhound87/mobx-react-form/master.svg)](https://codecov.io/gh/foxhound87/mobx-react-form) | | ✓ | |
-| ![TypeScript][img-ts] [formstate](https://github.com/formstate/formstate) | ![GitHub stars](https://img.shields.io/github/stars/formstate/formstate?style=flat-square&label&color=960) | ![Adequate][img-adequate] | ✓ | | |
-| ![TypeScript][img-ts] [formst](https://github.com/formstjs/formst) | ![GitHub stars](https://img.shields.io/github/stars/formstjs/formst?style=flat-square&label&color=960) | N/A | | ✓ | |
-| ![TypeScript][img-ts] [smashing-form](https://github.com/eyedea-io/smashing-form) | ![GitHub stars](https://img.shields.io/github/stars/eyedea-io/smashing-form?style=flat-square&label&color=960) | ![Sparse][img-sparse] | | ✓ | |
-| ![TypeScript][img-ts] [formstate-x](https://github.com/qiniu/formstate-x) | ![GitHub stars](https://img.shields.io/github/stars/qiniu/formstate-x?style=flat-square&label&color=960) | [![Coverage Status](https://coveralls.io/repos/github/qiniu/formstate-x/badge.svg?branch=master)](https://coveralls.io/github/qiniu/formstate-x?branch=master) | ✓ | | |
-| ![JavaScript][img-js] [mobx-form-validate](https://github.com/tdzl2003/mobx-form-validate) | ![GitHub stars](https://img.shields.io/github/stars/tdzl2003/mobx-form-validate?style=flat-square&label&color=960) | N/A | | | ✓ |
-| ![JavaScript][img-js] [mobx-form](https://github.com/kentik/mobx-form) | ![GitHub stars](https://img.shields.io/github/stars/kentik/mobx-form?style=flat-square&label&color=960) | N/A | | ✓ | |
-| ![JavaScript][img-js] [mobx-schema-form](https://github.com/alexhisen/mobx-schema-form) | ![GitHub stars](https://img.shields.io/github/stars/alexhisen/mobx-schema-form?style=flat-square&label&color=960) | ![Sparse][img-sparse] | | | |
-| ![TypeScript][img-ts] [mobx-form-schema](https://github.com/Yoskutik/mobx-form-schema) | ![GitHub stars](https://img.shields.io/github/stars/Yoskutik/mobx-form-schema?style=flat-square&label&color=960) | ![Jest coverage](https://raw.githubusercontent.com/Yoskutik/mobx-form-schema/master/badges/coverage-jest%20coverage.svg) | | | ✓ |
-| ![JavaScript][img-js] [mobx-form-store](https://github.com/alexhisen/mobx-form-store) | ![GitHub stars](https://img.shields.io/github/stars/alexhisen/mobx-form-store?style=flat-square&label&color=960) | ![Adequate][img-adequate] | | | |
-| ![TypeScript][img-ts] [mobx-form-reactions](https://github.com/marvinhagemeister/mobx-form-reactions) | ![GitHub stars](https://img.shields.io/github/stars/marvinhagemeister/mobx-form-reactions?style=flat-square&label&color=960) | N/A | | | |
+| ![TypeScript][img-ts] [mobx-react-form](https://github.com/foxhound87/mobx-react-form) | ![GitHub stars](https://img.shields.io/github/stars/foxhound87/mobx-react-form?style=flat-square&label&color=gray) | [![Codecov Coverage](https://img.shields.io/codecov/c/github/foxhound87/mobx-react-form/master.svg)](https://codecov.io/gh/foxhound87/mobx-react-form) | | ✓ | |
+| ![TypeScript][img-ts] [formstate](https://github.com/formstate/formstate) | ![GitHub stars](https://img.shields.io/github/stars/formstate/formstate?style=flat-square&label&color=gray) | ![Adequate][img-adequate] | ✓ | | |
+| ![TypeScript][img-ts] [formst](https://github.com/formstjs/formst) | ![GitHub stars](https://img.shields.io/github/stars/formstjs/formst?style=flat-square&label&color=gray) | N/A | | ✓ | |
+| ![TypeScript][img-ts] [smashing-form](https://github.com/eyedea-io/smashing-form) | ![GitHub stars](https://img.shields.io/github/stars/eyedea-io/smashing-form?style=flat-square&label&color=gray) | ![Sparse][img-sparse] | | ✓ | |
+| ![TypeScript][img-ts] [formstate-x](https://github.com/qiniu/formstate-x) | ![GitHub stars](https://img.shields.io/github/stars/qiniu/formstate-x?style=flat-square&label&color=gray) | [![Coverage Status](https://coveralls.io/repos/github/qiniu/formstate-x/badge.svg?branch=master)](https://coveralls.io/github/qiniu/formstate-x?branch=master) | ✓ | | |
+| ![JavaScript][img-js] [mobx-form-validate](https://github.com/tdzl2003/mobx-form-validate) | ![GitHub stars](https://img.shields.io/github/stars/tdzl2003/mobx-form-validate?style=flat-square&label&color=gray) | N/A | | | ✓ |
+| ![JavaScript][img-js] [mobx-form](https://github.com/kentik/mobx-form) | ![GitHub stars](https://img.shields.io/github/stars/kentik/mobx-form?style=flat-square&label&color=gray) | N/A | | ✓ | |
+| ![JavaScript][img-js] [mobx-schema-form](https://github.com/alexhisen/mobx-schema-form) | ![GitHub stars](https://img.shields.io/github/stars/alexhisen/mobx-schema-form?style=flat-square&label&color=gray) | ![Sparse][img-sparse] | | | |
+| ![TypeScript][img-ts] [mobx-form-schema](https://github.com/Yoskutik/mobx-form-schema) | ![GitHub stars](https://img.shields.io/github/stars/Yoskutik/mobx-form-schema?style=flat-square&label&color=gray) | ![Jest coverage](https://raw.githubusercontent.com/Yoskutik/mobx-form-schema/master/badges/coverage-jest%20coverage.svg) | | | ✓ |
+| ![JavaScript][img-js] [mobx-form-store](https://github.com/alexhisen/mobx-form-store) | ![GitHub stars](https://img.shields.io/github/stars/alexhisen/mobx-form-store?style=flat-square&label&color=gray) | ![Adequate][img-adequate] | | | |
+| ![TypeScript][img-ts] [mobx-form-reactions](https://github.com/marvinhagemeister/mobx-form-reactions) | ![GitHub stars](https://img.shields.io/github/stars/marvinhagemeister/mobx-form-reactions?style=flat-square&label&color=gray) | N/A | | | |
 | ...and many more | <10 | | | | | |
 
 <!-- prettier-ignore-end -->
