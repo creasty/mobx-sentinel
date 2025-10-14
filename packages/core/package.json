@@ -32,10 +32,13 @@
     "build": "tsup"
   },
   "dependencies": {
-    "mobx": "^6.12.3",
     "uuid": "^11.0.4"
   },
+  "peerDependencies": {
+    "mobx": "^6.0.0"
+  },
   "devDependencies": {
+    "mobx": "^6.12.3",
     "@types/node": "^22.10.2",
     "@vitest/coverage-v8": "^2.1.8",
     "tsup": "^8.3.5",
