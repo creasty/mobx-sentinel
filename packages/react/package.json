@@ -44,11 +44,13 @@
     "build": "tsup"
   },
   "dependencies": {
-    "@mobx-sentinel/form": "workspace:*",
-    "mobx": "^6.12.3",
-    "mobx-react-lite": "^4.0.7",
-    "react": "^18.0.0",
-    "react-dom": "^18.0.0"
+    "@mobx-sentinel/form": "workspace:*"
+  },
+  "peerDependencies": {
+    "mobx": "^6.0.0",
+    "mobx-react-lite": "^4.0.0",
+    "react": "^18.0.0 || ^19.0.0",
+    "react-dom": "^18.0.0 || ^19.0.0"
   },
   "devDependencies": {
     "@testing-library/jest-dom": "^6.6.3",
@@ -59,6 +61,10 @@
     "@types/react-dom": "^19.0.2",
     "@vitest/coverage-v8": "^2.1.8",
     "jsdom": "^25.0.1",
+    "mobx": "^6.12.3",
+    "mobx-react-lite": "^4.1.1",
+    "react": "^19.2.0",
+    "react-dom": "^19.2.0",
     "tsup": "^8.3.5",
     "typescript": "^5.5.0",
     "vitest": "^2.1.8"
