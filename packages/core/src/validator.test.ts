@@ -1325,4 +1325,76 @@ describe("Nested validations", () => {
     expect(nestedValidator.invalidKeyPathCount).toBe(3);
     expect(nestedValidator.invalidKeyPaths).toEqual(new Set(["field", "sample.field", "array.0.field"]));
   });
+
+  test("parent validator's isValidating reflects nested validators' validation state", async () => {
+    class AsyncSample {
+      @observable field = true;
+      delayMs: number;
+
+      constructor(delayMs: number) {
+        this.delayMs = delayMs;
+        makeObservable(this);
+
+        makeValidatable(
+          this,
+          () => this.field,
+          async (value, b) => {
+            await new Promise((resolve) => setTimeout(resolve, this.delayMs));
+            if (!value) {
+              b.invalidate("field", "invalid");
+            }
+          }
+        );
+      }
+    }
+
+    class ParentWithMultipleAsyncNested {
+      @nested @observable sample1 = new AsyncSample(50);
+      @nested @observable sample2 = new AsyncSample(150);
+
+      constructor() {
+        makeObservable(this);
+      }
+    }
+
+    const parent = new ParentWithMultipleAsyncNested();
+    const parentValidator = Validator.get(parent);
+    const sample1Validator = Validator.get(parent.sample1);
+    const sample2Validator = Validator.get(parent.sample2);
+
+    // Wait for initial validation
+    await vi.waitFor(() => {
+      expect(parentValidator.isValidating).toBe(false);
+    });
+
+    // Trigger validation on both nested objects
+    runInAction(() => {
+      parent.sample1.field = false;
+      parent.sample2.field = false;
+    });
+
+    // All should be validating
+    await vi.waitFor(() => {
+      expect(sample1Validator.isValidating).toBe(true);
+      expect(sample2Validator.isValidating).toBe(true);
+    });
+    expect(parentValidator.isValidating).toBe(true);
+
+    // Wait for sample1 to complete (50ms), but sample2 is still running (150ms)
+    await vi.waitFor(() => {
+      expect(sample1Validator.isValidating).toBe(false);
+    });
+
+    // Parent should still be validating because sample2 is still running
+    expect(sample2Validator.isValidating).toBe(true);
+    expect(parentValidator.isValidating).toBe(true);
+
+    // Wait for sample2 to complete
+    await vi.waitFor(() => {
+      expect(sample2Validator.isValidating).toBe(false);
+    });
+
+    // Now parent should also be done
+    expect(parentValidator.isValidating).toBe(false);
+  });
 });

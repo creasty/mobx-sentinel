@@ -306,10 +306,18 @@ export class Validator<T> {
     return count;
   }
 
-  /** Whether the validator is computing errors */
+  /** Whether the validator is computing errors (including nested validators) */
   @computed
   get isValidating() {
-    return this.reactionState > 0 || this.asyncState > 0;
+    if (this.reactionState > 0 || this.asyncState > 0) {
+      return true;
+    }
+    for (const [, validator] of this.nested) {
+      if (validator.isValidating) {
+        return true;
+      }
+    }
+    return false;
   }
 
   /** Nested validators */
