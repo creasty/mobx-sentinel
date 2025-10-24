@@ -121,13 +121,13 @@ importers:
 
   packages/form:
     dependencies:
-      '@mobx-sentinel/core':
-        specifier: workspace:*
-        version: link:../core
       uuid:
         specifier: ^11.0.4
         version: 11.0.4
     devDependencies:
+      '@mobx-sentinel/core':
+        specifier: workspace:~
+        version: link:../core
       '@types/node':
         specifier: ^22.10.2
         version: 22.10.2
@@ -148,11 +148,10 @@ importers:
         version: 2.1.8(@types/node@22.10.2)(jsdom@25.0.1)
 
   packages/react:
-    dependencies:
-      '@mobx-sentinel/form':
-        specifier: workspace:*
-        version: link:../form
     devDependencies:
+      '@mobx-sentinel/form':
+        specifier: workspace:~
+        version: link:../form
       '@testing-library/jest-dom':
         specifier: ^6.6.3
         version: 6.6.3

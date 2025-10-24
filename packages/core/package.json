@@ -1,7 +1,7 @@
 {
   "name": "@mobx-sentinel/core",
   "description": "MobX library for non-intrusive class-based model enhancement. Acting as a sentinel, it provides change detection, reactive validation, and form integration capabilities without contamination.",
-  "version": "0.3.3",
+  "version": "0.3.4",
   "author": "creasty <yuki@creasty.com>",
   "license": "MIT",
   "homepage": "https://github.com/creasty/mobx-sentinel",
@@ -38,9 +38,9 @@
     "mobx": "^6.0.0"
   },
   "devDependencies": {
-    "mobx": "^6.12.3",
     "@types/node": "^22.10.2",
     "@vitest/coverage-v8": "^2.1.8",
+    "mobx": "^6.12.3",
     "tsup": "^8.3.5",
     "typescript": "^5.5.0",
     "vitest": "^2.1.8"

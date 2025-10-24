@@ -1,7 +1,7 @@
 {
   "name": "@mobx-sentinel/react",
   "description": "MobX library for non-intrusive class-based model enhancement. Acting as a sentinel, it provides change detection, reactive validation, and form integration capabilities without contamination.",
-  "version": "0.3.3",
+  "version": "0.3.4",
   "author": "creasty <yuki@creasty.com>",
   "license": "MIT",
   "homepage": "https://github.com/creasty/mobx-sentinel",
@@ -43,16 +43,15 @@
     "test:dev": "vitest",
     "build": "tsup"
   },
-  "dependencies": {
-    "@mobx-sentinel/form": "workspace:*"
-  },
   "peerDependencies": {
+    "@mobx-sentinel/form": "workspace:~",
     "mobx": "^6.0.0",
     "mobx-react-lite": "^4.0.0",
     "react": "^18.0.0 || ^19.0.0",
     "react-dom": "^18.0.0 || ^19.0.0"
   },
   "devDependencies": {
+    "@mobx-sentinel/form": "workspace:~",
     "@testing-library/jest-dom": "^6.6.3",
     "@testing-library/react": "^16.1.0",
     "@testing-library/user-event": "^14.5.2",
