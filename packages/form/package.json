@@ -32,10 +32,10 @@
     "build": "tsup"
   },
   "dependencies": {
-    "@mobx-sentinel/core": "workspace:*",
     "uuid": "^11.0.4"
   },
   "peerDependencies": {
+    "@mobx-sentinel/core": "workspace:*",
     "mobx": "^6.0.0"
   },
   "devDependencies": {
