@@ -1,4 +1,4 @@
-# Contribution Guideline
+# Contribution Guidelines
 
 ## Reporting Issues
 
