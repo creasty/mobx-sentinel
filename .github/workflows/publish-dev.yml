@@ -17,7 +17,6 @@ jobs:
       - name: Prepare
         run: |
           ./script/bump dev
-          ./script/prepare-publish
       - run: pnpm build
 
       - uses: actions/setup-node@v4

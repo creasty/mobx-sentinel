@@ -1,6 +1,5 @@
 {
   "$schema": "https://typedoc.org/schema.json",
   "includeVersion": true,
-  "readme": "none",
   "sort": ["kind", "static-first", "alphabetical-ignoring-documents"]
 }
