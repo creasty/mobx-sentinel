@@ -1,6 +1,6 @@
 # mobx-sentinel/react
 
-Utility hooks and standard bindings for React applications using `@mobX-sentinel/form`.
+Utility hooks and standard bindings for React applications using `@mobx-sentinel/form`.
 
 ## Hooks
 
