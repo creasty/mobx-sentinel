@@ -38,9 +38,9 @@
     "mobx": "^6.0.0"
   },
   "devDependencies": {
-    "mobx": "^6.12.3",
     "@types/node": "^22.10.2",
     "@vitest/coverage-v8": "^2.1.8",
+    "mobx": "^6.12.3",
     "tsup": "^8.3.5",
     "typescript": "^5.5.0",
     "vitest": "^2.1.8"
