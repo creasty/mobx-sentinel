@@ -9,14 +9,17 @@
 
 ## Developing
 
-Before contributing, please familiarize yourself with the [Design principles](README.md#design-principles) and [Architecture](README.md#architecture) sections to understand the project's core philosophy and structure.
+Before contributing, please familiarize yourself with the [Design Principles](README.md#design-principles) and [Architecture](README.md#architecture) sections to understand the project's core philosophy and structure.
 
 ### Coding Standards
 
 - Most styles are enforced by Prettier and ESLint.
-- JSDoc/TSDoc is mandatory for public interfaces; it's advised to write them for private ones anyway.
+- JSDoc/TSDoc is mandatory for public interfaces; it's advised to write them for private ones nonetheless.
 - Write clear, concise comments where necessary.
 - Use descriptive variable and function names.
+- Ensure your code is safe at runtime, not just during type checking.
+  - e.g., Use ECMAScript private fields (`#property`) over TypeScript's `private` modifier, which only provides compile-time privacy.
+  - Another notable practice you can find in the codebase is use of internal/un-exported symbols; Grep `private constructor` and `debugWatcher` for example.
 
 ### Testing Requirements
 
@@ -27,13 +30,15 @@ Before contributing, please familiarize yourself with the [Design principles](RE
 
 ### Submitting Pull Requests
 
-1. Fork the repository and create a new branch for your feature or bugfix.
-2. Make your changes, ensuring you follow the coding standards and add/update tests as needed.
-3. Run all tests locally and ensure they pass.
-4. Update documentation if your changes affect the public API or behavior.
-5. Submit a pull request with a clear description of your changes and reference any related issues.
-6. Use self-review comments to provide additional context or highlight specific areas for reviewer attention.
-7. Be responsive to feedback and make requested changes promptly.
+1. Fork the repository.
+    - If we've worked together personally, feel free to contact me and I can invite you as a collaborator.
+1. Create a new branch for your feature or bugfix.
+1. Make your changes, ensuring you follow the coding standards and add/update tests as needed.
+1. Run all tests locally and ensure they pass.
+1. Update documentation if your changes affect the public API or behavior.
+1. Submit a pull request with a clear description of your changes and reference any related issues.
+1. Use self-review comments to provide additional context or highlight specific areas for reviewer attention.
+1. Be responsive to feedback and make requested changes promptly.
 
 <details><summary>Checklist to reduce the burden on reviewers</summary>
 
@@ -69,17 +74,19 @@ Please ensure you cover the points in the following checklist:
 
 ## [Maintainer Only] Publishing Packages
 
+Packages are published to [npm](https://www.npmjs.com/org/mobx-sentinel).
+
 ### Dev version
 
 To test a build in your app, use [publish-dev](https://github.com/creasty/mobx-sentinel/actions/workflows/publish-dev.yml).\
-Run on any branch, it will publish a dev version to npm with the corresponding commit hash (`vX.Y.Z-dev-HHHHHHHH`).
+Run on any branch, it will publish a dev version with the corresponding commit hash (`vX.Y.Z-dev-HHHHHHHH`).
 
 ### Production version
 
 To publish a production build, please follow these steps (apologies for the manual process):
 
 1. Run `./script/bump X.Y.Z` (`X.Y.Z` being a new version) on your local
-2. Include the changes in your PR
-3. Merge the PR into the `main` branch
-4. Manually trigger [publish](https://github.com/creasty/mobx-sentinel/actions/workflows/publish.yml) on the `main` branch
-5. Create a new release on GH
+1. Include the changes in your PR
+1. Merge the PR into the `main` branch
+1. Manually trigger [publish](https://github.com/creasty/mobx-sentinel/actions/workflows/publish.yml) on the `main` branch
+1. Create a new release on GitHub UI

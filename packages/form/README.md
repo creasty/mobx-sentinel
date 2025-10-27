@@ -280,6 +280,8 @@ field.reset(); // clear all state
 
 ##### Intermediate vs Final Changes
 
+Fields distinguish between "intermediate" changes (typing in progress) and "final" changes (committed), decoupling validation timing from user input for optimal UX.
+
 Mark changes as "intermediate" while the user is typing to delay validation and error reporting. Intermediate values automatically finalize after a delay (configurable via `autoFinalizationDelayMs`):
 
 ```ts

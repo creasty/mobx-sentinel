@@ -13,59 +13,24 @@ MobX library for non-intrusive class-based model enhancement. Acting as a sentin
 
 This library originally started with the goal of creating a form-building library centered around models, and evolved into a more general-purpose library that enhances model capabilities with form management being one of its applications.
 
-<details><summary>Read more on form management (English)</summary>
+### About Form Management
 
-In the projects I'm involved with, we deal with complex domains and promote building view/domain models on the frontend using MobX.<br>
-We needed a solution that could work with forms while assuming business logic for how data should be displayed and updated exists as class implementations.<br>
-With models as a premise, most responsibilities can and should be placed on the model side.
+When dealing with complex domains, we needed a solution that works with forms while assuming business logic exists as class implementations using MobX. With models as a premise, most responsibilities should be placed on the model side.
 
-While there are already many libraries for building forms using MobX, they are all designed from a data serialization perspective rather than modeling,
-and have issues either being unable to use models (classes) or not properly separating data and form state management.<br>
-Furthermore, from my research, there wasn't a single one designed to allow type-safe implementation from both model and UI ends.<br>
-(Check out the [Alternatives](#alternatives) section for more details.)
+While there are already many libraries for building forms using MobX, they are all designed from a data serialization perspective rather than modeling, and have issues either being unable to use classes or not properly separating data from form state management. Furthermore, there isn't a single one designed to allow type-safe implementation from both model and UI ends. (cf. [Alternatives](#alternatives)) \
+Additionally, showing error messages to users at appropriate times is important for user experience, yet many existing libraries lack proper design.
 
-Given this background, I believe there are two fundamental challenges in implementing forms:
+This library aims to solve these problems through a model-centric design that properly separates and breaks down responsibilities into layers:
 
-- Form-specific state management: When considering data separately, this only involves submission and validation. For example:
-  - Disabling the submit button based on submission status or validation errors.
-  - While validation itself is the model's responsibility, forms need to react to its state changes.
-- Input element connection (a.k.a. binding): Properly handling form state and UI events to update forms, models and UI.
-  - Getting values from the model and writing back on input changes.
-  - Expressing error states (red borders, displaying messages, etc.)
-
-Additionally, showing error messages to users at appropriate times is important for user experience — _Haven't you been frustrated by UIs that show errors before you've done anything, or immediately display errors while you're still typing?_<br>
-Achieving optimal experience requires coordinating multiple UI events and states, and many existing libraries lack proper design and internal implementation.
-
-This library aims to solve these problems through a model-centric design that properly separates and minimizes form responsibilities.
-
-</details>
-
-<details><summary>Read more on form management (Japanese)</summary>
-
-私が関わっているプロジェクトでは複雑なドメインを扱っており、フロントエンドでも MobX を用いて view/domain model を作り込むことを推進している。<br>
-データがどのように表示・更新されるべきかというビジネスロジックがクラス実装として存在する前提で、それをフォームでも使えるようにするソリューションを求めていた。<br>
-モデルがある前提では、基本的にモデル側にほとんどの責務を持たせることができるし、そうするべきである。
-
-すでに MobX を活用したフォーム構築のためのライブラリは多く存在しているが、どれもモデリングではなくデータシリアライズの観点で設計されており、
-モデル(クラス)を使うことができないか、データとフォームの状態管理の分離が適切にできていないかのいずれかの問題がある。
-さらに私の調べた限り、モデルと UI の両方から型安全に実装ができる設計になっているものは1つとして存在しなかった。<br>
-(詳細は [Alternatives](#alternatives) セクションを参照)
-
-ここまでの話を踏まえて、フォームを実装する上での本質的な課題は以下の2点であると考える。
-
-- フォーム自体の状態管理: データを分離して考えれば、送信やバリデーションに関わるものだけである。例えば、
-  - 送信中やエラーがある場合は送信ボタンを押せないように制御する。
-  - バリデーション自体はモデルの責務であるが、フォームはそれに応じた処理が必要である。
-- インプット要素との接続: フォームの状態と UI イベントを適切に処理し、フォームとモデルと UI をそれぞれ更新する。
-  - モデルから値を取り出し、入力変化があったらモデルに書き込む。
-  - エラー状態を表現する。(枠を赤くする、メッセージを表示する等)
-
-また、エラーメッセージをユーザに適切なタイミングで表示することはユーザ体験として重要である — _何もしていないのに最初からエラーが表示されていたり、入力途中なのに即座にエラーと表示される UI にイライラしたことはないだろうか？_<br>
-最適な体験を実現するためには、複数の UI イベントや状態を組み合わせる必要があり、多くの既存ライブラリは適切な設計・内部実装ができていない。
-
-このライブラリはモデルを中心とした設計で、フォームの責務を適切に分離し最小限にすることで、これらの問題を解決しようとしている。
-
-</details>
+- Validation = Business logic layer (Model)
+  - Provides validity state and error management
+- Form-specific state management = Application logic layer (View-Model)
+  - Handles form submission
+  - Reacts to validity state changes
+- Input element connection (a.k.a. Binding) = Presentation layer (View)
+  - Handles form state and UI events to update forms, models and UI
+  - Gets values from the model and writes back on input changes
+  - Expresses error states
 
 ## Overview
 
@@ -78,26 +43,28 @@ import { action, observable, makeObservable } from "mobx";
 import { nested, makeValidatable } from "@mobx-sentinel/core";
 
 export class Sample {
-  @observable text: string = "";
-  @observable bool: boolean = false;
+  @observable name: string = "";
+  @observable confirmed: boolean = false;
 
   // Nested/dynamic models can be tracked with @nested annotation
   @nested @observable nested = new Other();
-  @nested @observable array = [new Other()];
+  @nested @observable items = [new Other()];
 
   constructor() {
     makeObservable(this);
 
     // 'Reactive validation' is implemented here
     makeValidatable(this, (b) => {
-      if (this.text === "") b.invalidate("text", "Text is required");
-      if (this.bool === false) b.invalidate("bool", "Bool must be true");
+      if (!this.name.trim()) b.invalidate("name", "Name is required");
+      if (this.name.length > 50) b.invalidate("name", "Name is too long");
+      if (this.confirmed === false) b.invalidate("confirmed", "Confirmation is required");
+      if (this.items.length === 0) b.invalidate("items", "Select at least one item");
     });
   }
 
   @action.bound
-  addNewArrayItem() {
-    this.array.push(new Other());
+  addNewItem() {
+    this.items.push(new Other());
   }
 }
 ```
@@ -106,38 +73,35 @@ export class Sample {
 const model = new Sample();
 
 // Do something with the model...
-model.text = "hello";
-model.nested.other = "world";
+model.name = "hello";
+model.nested.title = "world";
 
 // Check if the model has changed
 const watcher = Watcher.get(model);
 watcher.changed //=> true
-watcher.changedKeyPaths //=> Set ["text", "nested.other"]
+watcher.changedKeyPaths //=> Set ["name", "nested.title"]
 
 // Check if the model is valid
 const validator = Validator.get(model);
 validator.isValid //=> false
-validator.invalidKeyPaths //=> Set ["bool", ..., "array.0.other"]
+validator.invalidKeyPaths //=> Set ["confirmed", ..., "items.0.title"]
 ```
 
 ### Form
 
 ```tsx
+import "@mobx-sentinel/react/dist/extension";
+
 import { observer } from "mobx-react-lite";
 import { Form } from "@mobx-sentinel/form";
 import { useFormHandler } from "@mobx-sentinel/react";
-
-// Optional: Make custom bind methods available via Form.
-//
-// Without the extension, use the default bind method with a binding class instead.
-// e.g., `.bind(field, InputBinding, config)` → `.bindInput(field, config)`
-import "@mobx-sentinel/react/dist/extension";
 
 const SampleForm: React.FC<{ model: Sample }> = observer(({ model }) => {
   // Get the form instance for the model.
   const form = Form.get(model);
 
   // Form submission logic is implemented here.
+  // When you have view-models, form.addHandler() API is also available.
   useFormHandler(form, "submit", async (abortSignal) => {
     // Serialize the model and send it to a server...
     return true;
@@ -146,21 +110,23 @@ const SampleForm: React.FC<{ model: Sample }> = observer(({ model }) => {
   return (
     <>
       <div className="field">
-        <label {...form.bindLabel(["text", "bool"])}>Text input &amp; Checkbox</label>
+        {/* Binding adds proper aria- attributes */}
+        <label {...form.bindLabel(["name", "confirmed"])}>Inputs</label>
         <input
-         {...form.bindInput("text", {
-            getter: () => model.text, // Get the value from the model.
-            setter: (v) => (model.text = v), // Write the value to the model.
+         {...form.bindInput("name", {
+            getter: () => model.name, // Get the value from the model.
+            setter: (v) => (model.name = v), // Write the value to the model.
           })}
         />
-        <ErrorText errors={form.getErrors("text")} />
+        {/* Displays error messages when appropriate */}
+        <ErrorText errors={form.getErrors("name")} />
         <input
-          {...form.bindCheckBox("bool", {
-            getter: () => model.bool,
-            setter: (v) => (model.bool = v),
+          {...form.bindCheckBox("confirmed", {
+            getter: () => model.confirmed,
+            setter: (v) => (model.confirmed = v),
           })}
         />
-        <ErrorText errors={form.getErrors("bool")} />
+        <ErrorText errors={form.getErrors("confirmed")} />
       </div>
 
       <div className="field">
@@ -171,14 +137,14 @@ const SampleForm: React.FC<{ model: Sample }> = observer(({ model }) => {
 
       <div className="field">
         <h4>Dynamic form</h4>
-        <ErrorText errors={form.getErrors("array")} />
+        <ErrorText errors={form.getErrors("items")} />
 
-        {model.array.map((item, i) => (
+        {model.items.map((item, i) => (
           <OtherForm key={i} model={item} />
         ))}
 
         {/* Add a new form by mutating the model directly. */}
-        <button onClick={model.addNewArrayItem}>Add a new form</button>
+        <button onClick={model.addNewItem}>Add a new form</button>
       </div>
 
       <button {...form.bindSubmitButton()}>Submit</button>
@@ -198,7 +164,9 @@ const OtherForm: React.FC<{ model: Other }> = observer(({ model }) => {
 
 ## Packages
 
-### `core` — Core functionality like Watcher and Validator
+Detailed documentation is available in the respective package directory.
+
+### `core` — Core functionality like Watcher and Validator [(read more)](./packages/core/README.md)
 
 <pre><code>npm install --save <b>@mobx-sentinel/core</b></code></pre>
 
@@ -221,7 +189,7 @@ const OtherForm: React.FC<{ model: Other }> = observer(({ model }) => {
   - Both sync and async validations are supported.
   - Async validations feature smart job scheduling and are cancellable with [AbortSignal](https://developer.mozilla.org/en-US/docs/Web/API/AbortSignal).
 
-### `form` — Form and bindings
+### `form` — Form and bindings [(read more)](./packages/form/README.md)
 
 <pre><code>npm install --save <b>@mobx-sentinel/form</b></code></pre>
 
@@ -241,7 +209,7 @@ const OtherForm: React.FC<{ model: Other }> = observer(({ model }) => {
 - Smart error reporting
   - Original validation strategy for a supreme user experience.
 
-### `react` — Standard bindings and hooks for React
+### `react` — Standard bindings and hooks for React [(read more)](./packages/react/README.md)
 
 <pre><code>npm install --save <b>@mobx-sentinel/react</b></code></pre>
 
@@ -252,7 +220,7 @@ const OtherForm: React.FC<{ model: Other }> = observer(({ model }) => {
 - React hooks that automatically handle component lifecycle under the hood.
 - Standard bindings for most common form elements.
 
-## Design principles
+## Design Principles
 
 - Model first
   - Assumes the existence of class-based models.
@@ -329,6 +297,10 @@ subgraph react package
 end
 ```
 
+## Milestones
+
+Check out https://github.com/creasty/mobx-sentinel/milestones
+
 ## Alternatives
 
 ### Form management
@@ -359,11 +331,3 @@ Criteria:
 | ...and many more | <10 | | | | | |
 
 <!-- prettier-ignore-end -->
-
-## Milestones
-
-Check out https://github.com/creasty/mobx-sentinel/milestones
-
-## License
-
-MIT

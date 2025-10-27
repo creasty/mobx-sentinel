@@ -58,6 +58,13 @@ watcher.changedKeyPaths // Set<KeyPath>
 watcher.changedTick // bigint
 ```
 
+### Starting a Watcher
+
+Watching starts immediately when the Watcher instance is created.
+The watcher begins tracking changes as soon as `Watcher.get()` is called for the first time.
+
+To set a new starting point after initialization, use the `reset()` method. For fine-grained control over what gets tracked, see [Temporarily Disable Tracking](#temporarily-disable-tracking).
+
 ### Basic Change Tracking
 
 `@observable` and `@computed` are automatically tracked unless explicitly excluded with `@unwatch`.
@@ -1011,3 +1018,12 @@ runInAction(() => {
 ```
 
 **Performance note**: Because `dataMap` uses `comparer.shallow` for structural equality, the computed property only recalculates when the map's structure changes (keys added/removed), not when individual values change. This is efficient for large nested structures.
+
+## Decorator Support
+
+This library supports both stage-2 and stage-3 decorators.
+
+- **Stage-2 (202112)**: The legacy decorator syntax supported by TypeScript with `"experimentalDecorators": true`
+- **Stage-3 (202203)**: The standardized decorator syntax supported by modern TypeScript without experimental flags
+
+You can use either decorator version depending on your TypeScript configuration. All decorators in this library work with both standards.
