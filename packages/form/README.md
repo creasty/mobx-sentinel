@@ -280,6 +280,8 @@ field.reset(); // clear all state
 
 ##### Intermediate vs Final Changes
 
+Fields distinguish between "intermediate" changes (typing in progress) and "final" changes (committed), decoupling validation timing from user input for optimal UX.
+
 Mark changes as "intermediate" while the user is typing to delay validation and error reporting. Intermediate values automatically finalize after a delay (configurable via `autoFinalizationDelayMs`):
 
 ```ts
@@ -501,6 +503,35 @@ class SubmitButtonBinding implements FormBinding {
   }
 }
 ```
+
+#### Best Practices
+
+Follow these patterns when creating bindings:
+
+1. Event Handler Patterns
+    - Accept configuration handlers as optional (`onChange?: ...`)
+    - Call configuration handlers AFTER internal logic using optional chaining (`this.config.onChange?.(e)`)
+    - This allows users to extend behavior without overriding the binding's core functionality
+1. Value Handling
+    - Provide sensible defaults for null/undefined values (e.g., `?? ""` for strings)
+    - Handle special cases like `valueAsNumber` returning `NaN` or `valueAsDate` returning `null`
+1. Field State Management
+    - Mark as touched on focus: `field.markAsTouched()`
+    - Mark as changed with appropriate finalization cf. [Intermediate vs Final Changes](#intermediate-vs-final-changes)
+    - Finalize on blur for text inputs: `field.finalizeChangeIfNeeded()`
+1. Error Reporting
+    - Check `field.isErrorReported` before showing errors
+1. ARIA Attributes
+    - Always include `aria-invalid` based on `field.isErrorReported`
+    - Include `aria-errormessage` with error text or `undefined`
+    - For form-level bindings (submit buttons), use `aria-busy` for loading states
+1. ID Management
+    - Default to `field.id` when custom ID not provided: `this.config.id ?? this.field.id`
+    - For radio buttons, support boolean ID config: `true` uses field ID, `false` omits ID
+    - Use field ID as `name` attribute for radio buttons if not specified
+1. Configuration Flexibility
+    - Make bindings reusable by accepting configuration for common variations
+    - Document configuration with JSDoc comments explaining behavior
 
 ### Using Bindings
 

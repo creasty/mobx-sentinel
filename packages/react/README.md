@@ -152,7 +152,6 @@ Binds checkbox inputs for boolean values.
 
 ```tsx
 <input
-  type="checkbox"
   {...form.bindCheckBox("subscribe", {
     getter: () => model.subscribe,
     setter: (v) => (model.subscribe = v),
@@ -161,7 +160,6 @@ Binds checkbox inputs for boolean values.
 
 // Optional boolean field
 <input
-  type="checkbox"
   {...form.bindCheckBox("agreedToTerms", {
     getter: () => model.agreedToTerms ?? false,
     setter: (v) => (model.agreedToTerms = v),
@@ -249,20 +247,6 @@ Binds submit buttons with automatic state management. The button is automaticall
 <button {...form.bindSubmitButton()}>
   Submit
 </button>
-
-// Shows errors on hover
-<button {...form.bindSubmitButton()}>
-  {form.isSubmitting ? "Saving..." : "Save"}
-</button>
-
-// With custom click handler
-<button
-  {...form.bindSubmitButton({
-    onClick: (e) => console.log("Submit clicked"),
-  })}
->
-  Submit
-</button>
 ```
 
 **ARIA attributes set:**
@@ -335,21 +319,11 @@ By default, bindings use auto-generated field IDs. You can override them:
 All bindings automatically set ARIA attributes for accessibility:
 
 ```tsx
-const MyForm = observer(({ model }) => {
-  const form = Form.get(model);
+// Binding sets aria-invalid and aria-errormessage automatically
+<input {...form.bindInput("email", { /* ... */ })} />
 
-  return (
-    <div>
-      <input {...form.bindInput("email", { /* ... */ })} />
-      {/* Binding sets aria-invalid and aria-errormessage automatically */}
-
-      {/* Optionally display errors manually */}
-      {form.field("email").isErrorReported && (
-        <div className="error">
-          {Array.from(form.field("email").errors).join(", ")}
-        </div>
-      )}
-    </div>
-  );
-});
+// Optionally display errors manually
+{Array.from(form.getErrors("email"), (error, i) => (
+  <p className="error" key={i}>{error}</p>
+))}
 ```
