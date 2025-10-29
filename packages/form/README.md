@@ -25,6 +25,8 @@ const form2 = Form.get(model);
 // form1 === form2 (same instance)
 ```
 
+⚠️ **Note:** `Form.get()` starts change tracking immediately because it creates a `Watcher` instance as part of the form initialization process. See [Starting a Watcher](../core/README.md#starting-a-watcher) for details.
+
 #### Multiple Forms Per Subject
 
 Use a symbol key to maintain multiple independent forms for the same object:
@@ -238,7 +240,7 @@ Bindings connect form state to UI components. They encapsulate the logic for cre
 
 The `@mobx-sentinel/form` package provides only the **API for creating bindings**—it does not include any pre-built binding implementations. You have two options:
 
-1. **Use [@mobx-sentinel/react](../react)** - Pre-built bindings for React components (InputBinding, CheckBoxBinding, SubmitButtonBinding, etc.)
+1. **Use `@mobx-sentinel/react`** - Pre-built bindings for React components (InputBinding, CheckBoxBinding, SubmitButtonBinding, etc.)
 2. **Build your own bindings** - Implement custom bindings for your framework or specific use cases
 
 The examples below demonstrate how to create custom bindings. They are based on the actual implementations in [@mobx-sentinel/react](../react).
@@ -282,7 +284,7 @@ field.reset(); // clear all state
 
 Fields distinguish between "intermediate" changes (typing in progress) and "final" changes (committed), decoupling validation timing from user input for optimal UX.
 
-Mark changes as "intermediate" while the user is typing to delay validation and error reporting. Intermediate values automatically finalize after a delay (configurable via `autoFinalizationDelayMs`):
+Mark changes as "intermediate" while the user is typing to delay validation and error reporting. Intermediate values automatically finalize after a delay (configurable via `autoFinalizationDelayMs`), or you can manually trigger `finalizeChangeIfNeeded()` to reflect changes immediately:
 
 ```ts
 onChange={(e) => {
@@ -508,32 +510,38 @@ class SubmitButtonBinding implements FormBinding {
 
 Follow these patterns when creating bindings:
 
-1. Event Handler Patterns
+1. Extending event handlers
     - Accept configuration handlers as optional (`onChange?: ...`)
-    - Call configuration handlers AFTER internal logic using optional chaining (`this.config.onChange?.(e)`)
+    - Call configuration handlers AFTER internal logic (`this.config.onChange?.(e)`)
     - This allows users to extend behavior without overriding the binding's core functionality
-1. Value Handling
+1. Overriding/extending props
+    - Accept props as optional (`id?: string`)
+    - Use user-specified values in conjunction with default behavior:
+      - Override with fallback: `this.config.id ?? this.field.id`
+      - Extend with combination: `this.config.disabled || this.disabled`
+1. Normalizing problematic values
     - Provide sensible defaults for null/undefined values (e.g., `?? ""` for strings)
-    - Handle special cases like `valueAsNumber` returning `NaN` or `valueAsDate` returning `null`
-1. Field State Management
+    - Handle special cases where `valueAsNumber` returns `NaN` or `valueAsDate` returns `null`
+1. Field state management
     - Mark as touched on focus: `field.markAsTouched()`
-    - Mark as changed with appropriate finalization cf. [Intermediate vs Final Changes](#intermediate-vs-final-changes)
+    - Mark as changed with appropriate finalization (see [Intermediate vs Final Changes](#intermediate-vs-final-changes))
     - Finalize on blur for text inputs: `field.finalizeChangeIfNeeded()`
-1. Error Reporting
+1. Error reporting
     - Check `field.isErrorReported` before showing errors
-1. ARIA Attributes
-    - Always include `aria-invalid` based on `field.isErrorReported`
-    - Include `aria-errormessage` with error text or `undefined`
-    - For form-level bindings (submit buttons), use `aria-busy` for loading states
-1. ID Management
-    - Default to `field.id` when custom ID not provided: `this.config.id ?? this.field.id`
-    - For radio buttons, support boolean ID config: `true` uses field ID, `false` omits ID
-    - Use field ID as `name` attribute for radio buttons if not specified
-1. Configuration Flexibility
-    - Make bindings reusable by accepting configuration for common variations
-    - Document configuration with JSDoc comments explaining behavior
+1. ARIA attributes
+    - Include `aria-invalid` based on `field.isErrorReported`
+    - Include `aria-errormessage` with error text, or `undefined` if no errors
+    - For form-level bindings (submit buttons), use `aria-busy` to indicate loading states
 
 ### Using Bindings
+
+Bindings are cached and reused. The same binding constructor with the same **binding key** returns the same instance. Configuration can be updated on subsequent calls while maintaining the same binding instance.
+
+The binding key consists of three components:
+
+- **Binding class** — e.g., InputBinding, LabelBinding, SubmitButtonBinding
+- **Subject of binding** — a single field, multiple fields, or the entire form
+- **User-specified key** (optional) — the `cacheKey` property in configuration
 
 Use `form.bind()` to create binding props and spread them directly into components:
 
@@ -560,5 +568,3 @@ const form = Form.get(model);
 {/* Bind to the form */}
 <button {...form.bind(SubmitButtonBinding)}>Submit</button>
 ```
-
-Bindings are cached and reused. The same binding constructor with the same field/configuration returns the same instance. Configuration can be updated on subsequent calls while maintaining the same binding instance.

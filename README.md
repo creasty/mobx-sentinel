@@ -71,18 +71,21 @@ export class Sample {
 
 ```typescript
 const model = new Sample();
+const watcher = Watcher.get(model);
+const validator = Validator.get(model);
 
 // Do something with the model...
-model.name = "hello";
-model.nested.title = "world";
+runInAction(() => {
+  model.name = "hello";
+  model.nested.title = "world";
+});
 
 // Check if the model has changed
-const watcher = Watcher.get(model);
 watcher.changed //=> true
 watcher.changedKeyPaths //=> Set ["name", "nested.title"]
 
 // Check if the model is valid
-const validator = Validator.get(model);
+await when(() => !validator.isValidating);
 validator.isValid //=> false
 validator.invalidKeyPaths //=> Set ["confirmed", ..., "items.0.title"]
 ```

@@ -65,6 +65,23 @@ The watcher begins tracking changes as soon as `Watcher.get()` is called for the
 
 To set a new starting point after initialization, use the `reset()` method. For fine-grained control over what gets tracked, see [Temporarily Disable Tracking](#temporarily-disable-tracking).
 
+```typescript
+const model = new Model();
+
+runInAction(() => {
+  model.name = "John"; // Not tracked: Watcher instance hasn't been created yet.
+});
+
+const watcher = Watcher.get(model); // Starts tracking from this point forward
+watcher.changed // false
+
+runInAction(() => {
+  model.name = "Not John"; // Tracked
+});
+
+watcher.changed // true
+```
+
 ### Basic Change Tracking
 
 `@observable` and `@computed` are automatically tracked unless explicitly excluded with `@unwatch`.
