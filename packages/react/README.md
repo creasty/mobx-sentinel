@@ -78,6 +78,16 @@ form.bindInput("username", config)
 form.bind("username", InputBinding, config)
 ```
 
+### Accessibility
+
+All bindings provide built-in accessibility features:
+
+- **Unique IDs** — Automatically generates unique `id` attributes for form elements, enabling proper label associations by `htmlFor`
+- **Error states** — Sets `aria-invalid` when validation errors are present
+- **Error messages** — Provides `aria-errormessage` linking to error text for screen readers
+
+These features ensure forms are accessible to users of assistive technologies without additional configuration.
+
 ### Text Input: `form.bindInput(fieldName, config)`
 
 Binds text, number, or date input fields. Handles intermediate values during typing and auto-finalizes on blur.
@@ -171,6 +181,8 @@ Binds checkbox inputs for boolean values.
 
 Binds radio button groups. The binding function returns a function that takes the value for each button.
 
+**Additional accessibility:** Each radio button receives a proper `name` attribute for grouping, and error ARIA attributes are applied to all buttons in the group when errors occur.
+
 ```tsx
 enum Role {
   ADMIN = "ADMIN",
@@ -205,6 +217,8 @@ const MyForm = observer(({ model }) => {
 ### Select Box: `form.bindSelectBox(fieldName, config)`
 
 Binds select elements for single or multiple selection.
+
+**Additional accessibility:** For multiple selection, `aria-multiselectable` is automatically set. Ensure `<option>` elements have meaningful labels.
 
 **Single selection:**
 ```tsx
@@ -243,20 +257,19 @@ Binds select elements for single or multiple selection.
 
 Binds submit buttons with automatic state management. The button is automatically disabled when the form is invalid, submitting, or validating.
 
+**Additional accessibility:** Sets `aria-busy` to indicate loading states during submission or validation. The `disabled` attribute prevents submission of invalid forms, providing clear feedback to assistive technologies about the form's current state.
+
 ```tsx
 <button {...form.bindSubmitButton()}>
   Submit
 </button>
 ```
 
-**ARIA attributes set:**
-- `aria-busy`: true when submitting or validating
-- `aria-invalid`: true when form is invalid
-- `disabled`: true when form cannot be submitted
-
 ### Label: `form.bindLabel(fieldNames, config?)`
 
 Binds label elements to form fields with error state display. Can associate with single or multiple fields.
+
+**Additional accessibility:** Automatically sets the `htmlFor` attribute to match the associated input's `id`, creating a proper semantic connection. This enables users to click the label to focus the input and ensures screen readers announce the label when the input receives focus.
 
 ```tsx
 // Single field
