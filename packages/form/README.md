@@ -526,9 +526,9 @@ Follow these patterns when creating bindings:
     - Mark as touched on focus: `field.markAsTouched()`
     - Mark as changed with appropriate finalization (see [Intermediate vs Final Changes](#intermediate-vs-final-changes))
     - Finalize on blur for text inputs: `field.finalizeChangeIfNeeded()`
-1. Error reporting
     - Check `field.isErrorReported` before showing errors
-1. ARIA attributes
+1. Accessibility
+    - Generate and manage unique element IDs for connecting labels and inputs (using `id` on inputs and `htmlFor` on labels)
     - Include `aria-invalid` based on `field.isErrorReported`
     - Include `aria-errormessage` with error text, or `undefined` if no errors
     - For form-level bindings (submit buttons), use `aria-busy` to indicate loading states
