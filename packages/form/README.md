@@ -528,7 +528,7 @@ Follow these patterns when creating bindings:
     - Finalize on blur for text inputs: `field.finalizeChangeIfNeeded()`
     - Check `field.isErrorReported` before showing errors
 1. Accessibility
-    - Generate and manage element IDs for connecting labels and inputs (e.g., `id` and `htmlFor`)
+    - Generate and manage unique element IDs for connecting labels and inputs (using `id` on inputs and `htmlFor` on labels)
     - Include `aria-invalid` based on `field.isErrorReported`
     - Include `aria-errormessage` with error text, or `undefined` if no errors
     - For form-level bindings (submit buttons), use `aria-busy` to indicate loading states
