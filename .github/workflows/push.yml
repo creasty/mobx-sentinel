@@ -5,16 +5,6 @@ on:
   push:
     branches:
       - main
-  # A pull request opened by Actions with GITHUB_TOKEN raises no `pull_request`
-  # event -- GitHub does not start workflow runs from events its own token
-  # caused -- so `test-ok` would never report on a bump PR, and a required check
-  # that never reports blocks the merge forever. `workflow_dispatch` is one of
-  # the two triggers exempt from that rule, so `publish` dispatches this
-  # workflow on the bump branch and the checks land on that head SHA as usual.
-  #
-  # Push another commit to such a branch and the new head SHA has no checks
-  # again; dispatch this workflow on it a second time.
-  workflow_dispatch:
 
 jobs:
   # The packages support a MobX range, and getMobxObservableAnnotations reads

@@ -16,16 +16,14 @@ on:
     types: [published]
 
 jobs:
-  # Cut the bump PR and leave the release notes waiting as a draft. Publishes
-  # nothing on purpose: what ships is what sits on main after review, not what
-  # this job happened to compute.
+  # Push the bump branch, leave the release notes waiting as a draft, and hand
+  # both over in the run summary. Publishes nothing on purpose: what ships is
+  # what sits on main after review, not what this job happened to compute.
   bump:
     if: github.event_name == 'workflow_dispatch' && inputs.bump_version != ''
     runs-on: ubuntu-latest
     permissions:
       contents: write # push the bump branch, create the draft release
-      pull-requests: write # open the PR and link the draft on it
-      actions: write # dispatch push.yml on the bump branch
     # Two bumps in flight would race for the same branch and draft.
     concurrency:
       group: publish-bump
@@ -89,7 +87,7 @@ jobs:
               commit --all --message "Bump version $VERSION" --message "$RUN_URL"
           git push origin "HEAD:refs/heads/$BRANCH"
 
-      - name: Open the PR and draft the release
+      - name: Draft the release and hand over the pull request
         uses: actions/github-script@v7
         env:
           VERSION: ${{ inputs.bump_version }}
@@ -99,27 +97,6 @@ jobs:
           script: |
             const { VERSION, BRANCH, RUN_URL } = process.env;
             const tag = `v${VERSION}`;
-
-            const { data: pr } = await github.rest.pulls.create({
-              ...context.repo,
-              title: `Bump version ${VERSION}`,
-              head: BRANCH,
-              base: 'main',
-              body: [
-                '## Why',
-                '',
-                `Release ${VERSION}. Opened by [publish](${RUN_URL}).`,
-                '',
-                '## What',
-                '',
-                '`version` in the three `packages/*/package.json`, and nothing else --',
-                '`script/bump` touches no other file, and the `workspace:~` specifiers carry no',
-                'version, so `pnpm-lock.yaml` is unchanged.',
-                '',
-                `Merging this does not publish anything. The ${tag} release notes are waiting as a`,
-                'draft; publishing that release is what ships to npm and creates the tag.',
-              ].join('\n'),
-            });
 
             // `body` is pre-pended to the generated notes, so the prose skeleton lands
             // above `## What's Changed` -- the shape every release here already has.
@@ -142,8 +119,8 @@ jobs:
                 target_commitish: 'main',
                 draft: true,
                 body: [
-                  `> Do not publish until #${pr.number} has merged: publishing this release is`,
-                  `> what ships ${VERSION} to npm, and it tags whatever main says at that moment.`,
+                  '> Do not publish until the bump pull request has merged: publishing this release',
+                  `> is what ships ${VERSION} to npm, and it tags whatever main says at that moment.`,
                   '',
                   '## Fixed',
                   '',
@@ -158,35 +135,49 @@ jobs:
               }));
             }
 
-            await github.rest.pulls.update({
-              ...context.repo,
-              pull_number: pr.number,
-              body: `${pr.body}\n\nDraft release: ${release.html_url}`,
-            });
+            // This job deliberately does not open the pull request. One opened with
+            // GITHUB_TOKEN raises no `pull_request` event -- GitHub starts no workflow run
+            // from an event its own token caused -- so `test-ok` would never report and
+            // Merge would stay greyed out. Opened from the link below it is an ordinary
+            // pull request instead: checks come from the `pull_request` event, and another
+            // commit to the branch re-runs them the usual way.
+            const body = [
+              '## Why',
+              '',
+              `Release ${VERSION}. Bumped by [publish](${RUN_URL}).`,
+              '',
+              '## What',
+              '',
+              '`version` in the three `packages/*/package.json`, and nothing else --',
+              '`script/bump` touches no other file, and the `workspace:~` specifiers carry no',
+              'version, so `pnpm-lock.yaml` is unchanged.',
+              '',
+              `Merging this does not publish anything. The ${tag} notes are waiting as a draft;`,
+              `publishing that release is what ships to npm and creates the tag: ${release.html_url}`,
+            ].join('\n');
 
-            // The PR raised no `pull_request` event, so nothing would report `test-ok`
-            // and a required check that never reports leaves Merge greyed out for
-            // good. See push.yml's trigger comment.
-            await github.rest.actions.createWorkflowDispatch({
-              ...context.repo,
-              workflow_id: 'push.yml',
-              ref: BRANCH,
-            });
+            // searchParams rather than encodeURIComponent: it percent-encodes parentheses
+            // too, which is what keeps the markdown link below from ending early on a body
+            // that contains any.
+            const compare = new URL(
+              `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/compare/main...${BRANCH}`,
+            );
+            compare.searchParams.set('expand', '1');
+            compare.searchParams.set('title', `Bump version ${VERSION}`);
+            compare.searchParams.set('body', body);
 
-            // Auto-merge is deliberately not enabled. GITHUB_TOKEN can turn it on, but
-            // the merge it then performs is attributed to github-actions[bot] and so
-            // starts nothing: main would get no test run and no Pages deploy, and the
-            // release would ship a commit main's own CI never saw. Merged by hand it
-            // all happens in the right order, and the cost is one click -- so this
-            // summary is the handoff.
+            // addRaw, not addList: that emits `<ul><li>`, and GitHub does not render
+            // markdown inside block HTML, so the links would come out as literal text.
             await core.summary
-              .addHeading(`Bump version ${VERSION}`, 3)
-              .addList(
+              .addRaw(
                 [
-                  `<a href="${pr.html_url}">${pr.html_url}</a> -- merge it once <code>test-ok</code> reports (just dispatched, give it a moment to appear)`,
-                  `<a href="${release.html_url}">draft ${tag}</a> -- then write the notes and publish it, which is what ships ${VERSION} to npm`,
-                ],
-                true,
+                  `### Bump version ${VERSION}`,
+                  '',
+                  `1. [Open the pull request](${compare}) -- title and body are prefilled.`,
+                  `2. Merge it once \`test-ok\` passes, then write the notes on`,
+                  `   [draft ${tag}](${release.html_url}) and publish it, which is what ships ${VERSION} to npm.`,
+                  '',
+                ].join('\n'),
               )
               .write();
 
