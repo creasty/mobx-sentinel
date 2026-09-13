@@ -10,7 +10,15 @@ export namespace InputBinding {
   type DateValueType = "date" | "datetime-local" | "month" | "time" | "week";
   type NumericValueType = "number" | "range" | DateValueType;
   type StringType =
-    "color" | "text" | "tel" | "url" | "email" | "password" | "search" | DateValueType | NumericValueType;
+    | "color"
+    | "text"
+    | "tel"
+    | "url"
+    | "email"
+    | "password"
+    | "search"
+    | DateValueType
+    | NumericValueType;
 
   export type Config = {
     /** [Override] ID of the input element */

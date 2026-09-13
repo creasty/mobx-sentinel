@@ -2,11 +2,20 @@ import type { Form } from "./form";
 import type { FormField } from "./field";
 import { v4 as uuidV4 } from "uuid";
 
-type ConfigOf<T> = T extends new (form: Form<any>, config: infer Config) => FormBinding
+type ConfigOf<T> = T extends new (
+  form: Form<any>,
+  config: infer Config
+) => FormBinding
   ? Config
-  : T extends new (field: FormField, config: infer Config) => FormBinding
+  : T extends new (
+        field: FormField,
+        config: infer Config
+      ) => FormBinding
     ? Config
-    : T extends new (fields: FormField[], config: infer Config) => FormBinding
+    : T extends new (
+          fields: FormField[],
+          config: infer Config
+        ) => FormBinding
       ? Config
       : never;
 
@@ -20,7 +29,9 @@ export interface FormBinding {
 
 /** Polymorphic constructor of binding classes */
 export type FormBindingConstructor =
-  FormBindingConstructor.ForField | FormBindingConstructor.ForMultiField | FormBindingConstructor.ForForm;
+  | FormBindingConstructor.ForField
+  | FormBindingConstructor.ForMultiField
+  | FormBindingConstructor.ForForm;
 export namespace FormBindingConstructor {
   /** Constructor for field binding classes */
   export type ForField = new (field: FormField, config?: any) => FormBinding;
@@ -48,7 +59,9 @@ const safeBindingNameCache = new WeakMap<FormBindingConstructor, string>();
 
 /** Polymorphic function of Form#bind */
 export interface FormBindingFunc<T>
-  extends FormBindingFunc.ForField<T>, FormBindingFunc.ForMultiField<T>, FormBindingFunc.ForForm<T> {}
+  extends FormBindingFunc.ForField<T>,
+    FormBindingFunc.ForMultiField<T>,
+    FormBindingFunc.ForForm<T> {}
 export namespace FormBindingFunc {
   /** Bind configuration */
   export type Config = {
