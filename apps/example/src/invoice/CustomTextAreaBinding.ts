@@ -11,6 +11,7 @@ import { action, computed, makeObservable } from "mobx";
  *
  * The `Custom` prefix is deliberate — nothing here comes from the library.
  */
+// eslint-disable-next-line @typescript-eslint/no-namespace
 export namespace CustomTextAreaBinding {
   export type Attrs = React.TextareaHTMLAttributes<HTMLTextAreaElement>;
 
