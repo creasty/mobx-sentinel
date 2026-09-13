@@ -89,11 +89,11 @@ the workflow that publishes it -- `publish.yml` and `publish-dev.yml` are separa
 package missing its entry fails with a `404` on the upload, because npm answers unauthorized writes
 to a scoped package that way rather than admitting the package exists.
 
-Both workflows install npm before publishing, which is load-bearing rather than incidental.
-`pnpm publish` resolves the `workspace:` specifiers and packs, then hands the tarball to
-`npm publish`; pnpm has no OIDC of its own, so whichever npm is on `PATH` performs the exchange.
-Trusted publishing needs npm 11.5.1 or newer, and the Node in `.node-version` ships an older one,
-so removing that step breaks publishing with the same `404`.
+`pnpm publish` performs that exchange itself, so neither workflow installs npm. That is new in pnpm
+11: through pnpm 10, `pnpm publish` packed and then handed the tarball to `npm publish`, so the
+exchange depended on an npm of 11.5.1 or newer being on `PATH`. pnpm tries OIDC before any
+configured token, the same order as the npm CLI, and the workflows pass `--provenance` explicitly
+rather than relying on pnpm's own check that the repository and package are public.
 
 ### Dev version
 
@@ -118,10 +118,11 @@ Two guards, each answering with 👎 and a one-line reason:
 
   Pushing a fork's branch to this repository turns it into a pull request `/publish-dev` will
   accept, and that push is where the trust decision actually gets made -- not the review. Even
-  `pnpm install --frozen-lockfile` runs that branch's root `prepare` script and its dependencies'
-  `postinstall` scripts, inside a job that can mint the npm token, because the trusted publisher
-  checks the workflow's OIDC claims and not the code's. So read the build scripts, not just the
-  diff, before pushing someone else's branch here.
+  `pnpm install --frozen-lockfile` runs that branch's root `prepare` script, plus the install
+  scripts of whichever dependencies its `pnpm-workspace.yaml` lists under `allowBuilds`, inside a
+  job that can mint the npm token, because the trusted publisher checks the workflow's OIDC claims
+  and not the code's. So read the build scripts and that list, not just the diff, before pushing
+  someone else's branch here.
 
 `workflow_dispatch` still works too, for a branch with no pull request open.
 

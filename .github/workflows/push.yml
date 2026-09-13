@@ -25,19 +25,32 @@ jobs:
         mobx: [lockfile, v6.11.0, v6.16.1]
     steps:
       - uses: actions/checkout@v4
-      - uses: pnpm/action-setup@v4
+      - uses: pnpm/action-setup@v6
       - uses: actions/setup-node@v4
         with:
           node-version-file: .node-version
       # An override rather than an install into each package, so the peer MobX
       # that all three packages resolve is the one under test. The version is
       # the leg itself with its `v` stripped.
+      #
+      # pnpm reads overrides from pnpm-workspace.yaml only -- since pnpm 11 the
+      # `pnpm` field in package.json is ignored with nothing but a warning --
+      # and `config set` takes no property path, hence the whole map as JSON.
       - if: matrix.mobx != 'lockfile'
         env:
           MOBX: ${{ matrix.mobx }}
-        run: pnpm pkg set "pnpm.overrides.mobx=${MOBX#v}"
+        run: pnpm config set --location=project --json overrides "{\"mobx\":\"${MOBX#v}\"}"
       # An override moves resolution, so only the lockfile leg can freeze.
       - run: pnpm install ${{ matrix.mobx == 'lockfile' && '--frozen-lockfile' || '--no-frozen-lockfile' }}
+      # An override that quietly stops applying turns every leg into another
+      # lockfile leg, all of them green. So check what the packages resolved.
+      - if: matrix.mobx != 'lockfile'
+        env:
+          MOBX: ${{ matrix.mobx }}
+        run: |
+          resolved="$(pnpm --filter './packages/*' list mobx --json | jq -r '.[].devDependencies.mobx.version' | sort -u)"
+          echo "mobx resolved by the packages: $resolved"
+          [ "$resolved" = "${MOBX#v}" ]
       - run: pnpm build
       - run: pnpm test
       # Only the lockfile leg reports. Codecov merges every upload for a commit,

@@ -34,7 +34,7 @@ jobs:
             output: apps/example/.vercel/output/static
     steps:
       - uses: actions/checkout@v4
-      - uses: pnpm/action-setup@v4
+      - uses: pnpm/action-setup@v6
       - uses: actions/setup-node@v4
         with:
           # The Pages build pinned NODE_VERSION=20.14.0, but wrangler requires

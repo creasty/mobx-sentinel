@@ -251,12 +251,10 @@ jobs:
       cancel-in-progress: false
     steps:
       - uses: actions/checkout@v4
-      - uses: pnpm/action-setup@v4
+      - uses: pnpm/action-setup@v6
       - uses: actions/setup-node@v4
         with:
           node-version-file: .node-version
-          registry-url: 'https://registry.npmjs.org'
-      - run: npm install -g npm@12.0.2
       - run: pnpm install --frozen-lockfile
 
       - run: pnpm build
@@ -266,10 +264,11 @@ jobs:
       # main's own run has not happened yet.
       - run: pnpm test
 
+      # pnpm performs the trusted publishing exchange itself -- see CONTRIBUTING.
+      # `--provenance` is a flag rather than NPM_CONFIG_PROVENANCE because pnpm
+      # reads only PNPM_CONFIG_* from the environment.
       - name: Publish packages
-        run: pnpm publish --tag latest --recursive --access public --no-git-checks
-        env:
-          NPM_CONFIG_PROVENANCE: true
+        run: pnpm publish --tag latest --recursive --access public --no-git-checks --provenance
 
       - name: Tag and draft the release
         # Dispatch path only. After the upload, not before: a tag created first
