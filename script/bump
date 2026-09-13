@@ -1,8 +1,16 @@
 #!/usr/bin/env bash
-#> Usage: ./script bump <version>
+#> Usage: ./script/bump <version>
+#>        ./script/bump dev [<sha>]
 #>
-#> ./script bump 1.2.3
-#> ./script bump dev
+#> ./script/bump 1.2.3
+#> ./script/bump dev
+#> ./script/bump dev 1a2b3c4d5e6f
+#>
+#> `dev` appends `-dev-HHHHHHHH` to the version the packages already carry. The
+#> sha is taken from the argument, or from GITHUB_SHA when it is omitted. An
+#> explicit argument matters for the `/publish-dev` path: an issue_comment run's
+#> GITHUB_SHA is the default branch's head, not the pull request's, so relying on
+#> it would stamp the wrong commit onto a version that npm then keeps forever.
 
 set -euo pipefail
 
@@ -19,12 +27,12 @@ case "${1:-}" in
     do_help
     ;;
   "dev")
-    if [ -z "${GITHUB_SHA:-}" ]; then
-      echo "GITHUB_SHA is not set"
+    SHA="${2:-${GITHUB_SHA:-}}"
+    if [ -z "$SHA" ]; then
+      echo "no sha given and GITHUB_SHA is not set"
       exit 1
-    else
-      PREID="-dev-${GITHUB_SHA:0:8}"
     fi
+    PREID="-dev-${SHA:0:8}"
     ;;
   *)
     VERSION="$1"
@@ -36,11 +44,14 @@ for dir in ./packages/*; do
     tmp="$(mktemp)"
     cat "$dir/package.json" > "$tmp"
 
+    # --arg rather than interpolating into the jq program: the version now
+    # arrives from a workflow input, and a jq program is not the place to find
+    # out what was in it.
     if [ -n "$VERSION" ]; then
-      jq ".version = \"$VERSION$PREID\"" \
+      jq --arg v "$VERSION" '.version = $v' \
         "$tmp" > "$dir/package.json"
     else
-      jq ".version = \"\(.version)$PREID\"" \
+      jq --arg s "$PREID" '.version += $s' \
         "$tmp" > "$dir/package.json"
     fi
 

@@ -2,15 +2,120 @@ name: publish-dev
 
 on:
   workflow_dispatch:
+  # `/publish-dev` on a pull request. This trigger runs the workflow file from
+  # the default branch with the full set of repository secrets, `id-token: write`
+  # among them -- npm publish rights -- so the `command` job below is a security
+  # boundary, not a convenience. `created` only: accepting `edited` would let an
+  # old innocuous comment be turned into a publish trigger later.
+  issue_comment:
+    types: [created]
+
+# Per pull request, and never cancelled: stopping `pnpm publish` between core and
+# react leaves a version half published, which npm lets nobody re-cut.
+concurrency:
+  group: publish-dev-${{ github.event.issue.number || github.ref }}
+  cancel-in-progress: false
 
 jobs:
+  # The guards, kept in their own job so the decision to publish is made -- and
+  # readable in the run -- before any of the pull request's own code is fetched.
+  # An empty `sha` output means "do not publish"; every refusal has already been
+  # answered on the comment by the time this job ends.
+  command:
+    if: >-
+      github.event_name == 'issue_comment' &&
+      github.event.issue.pull_request != null &&
+      startsWith(github.event.comment.body, '/publish-dev') &&
+      contains(fromJSON('["OWNER","MEMBER","COLLABORATOR"]'), github.event.comment.author_association)
+    runs-on: ubuntu-latest
+    permissions:
+      issues: write # the reaction and any refusal reply
+      pull-requests: read
+    outputs:
+      sha: ${{ steps.resolve.outputs.sha }}
+    steps:
+      - id: resolve
+        uses: actions/github-script@v7
+        env:
+          BODY: ${{ github.event.comment.body }}
+        with:
+          script: |
+            const refuse = async (reason) => {
+              await github.rest.reactions.createForIssueComment({
+                ...context.repo,
+                comment_id: context.payload.comment.id,
+                content: '-1',
+              });
+              await github.rest.issues.createComment({
+                ...context.repo,
+                issue_number: context.issue.number,
+                body: `\`/publish-dev\`: ${reason}`,
+              });
+              // Answered, not broken -- a red run would say the command was at fault.
+              // Never silent, either: a maintainer waiting on a comment that will never
+              // come is worse than a refusal.
+              core.info(reason);
+            };
+
+            // The job `if` above is only a cheap pre-filter that spends no runner; its
+            // `startsWith` would also admit `/publish-dev-please`. Expressions cannot
+            // regex, so the exact match happens here. Read from `env`, never
+            // interpolated into a shell.
+            const [firstLine = ''] = process.env.BODY.split(/\r?\n/);
+            if (firstLine.trimEnd() !== '/publish-dev') return;
+
+            // `author_association` cannot answer the question the pre-filter asked of
+            // it: a collaborator with read or triage access still reports COLLABORATOR.
+            // This call is the gate.
+            const { data: perm } = await github.rest.repos.getCollaboratorPermissionLevel({
+              ...context.repo,
+              username: context.payload.comment.user.login,
+            });
+            if (!['admin', 'write'].includes(perm.permission)) {
+              return refuse('write access to this repository is required.');
+            }
+
+            const { data: pr } = await github.rest.pulls.get({
+              ...context.repo,
+              pull_number: context.issue.number,
+            });
+            // The workflow file itself comes from the default branch and a pull request
+            // cannot change it -- but it can change everything the file runs:
+            // tsup.config.ts, the package scripts, dependency lifecycle scripts,
+            // script/bump. All of that would run with npm publish rights. The
+            // workflow_dispatch route never offered a fork's code either, so refusing
+            // here leaves the reach exactly where it was.
+            if (pr.head.repo.full_name !== `${context.repo.owner}/${context.repo.repo}`) {
+              return refuse('a pull request from a fork cannot be published from here.');
+            }
+
+            await github.rest.reactions.createForIssueComment({
+              ...context.repo,
+              comment_id: context.payload.comment.id,
+              content: 'eyes',
+            });
+            core.setOutput('sha', pr.head.sha);
+
   main:
+    needs: command
+    # `always()` because `command` is skipped outright on the workflow_dispatch
+    # path, and a skipped dependency would otherwise skip this too.
+    if: >-
+      always() && (
+        github.event_name == 'workflow_dispatch' ||
+        needs.command.outputs.sha != ''
+      )
     runs-on: ubuntu-latest
     permissions:
       contents: read
       id-token: write
+      issues: write # the outcome reaction and reply
     steps:
       - uses: actions/checkout@v4
+        with:
+          # Empty on the workflow_dispatch path, where checkout's default -- the
+          # dispatched ref -- is exactly what is wanted.
+          ref: ${{ needs.command.outputs.sha }}
       - uses: pnpm/action-setup@v4
       - uses: actions/setup-node@v4
         with:
@@ -20,11 +125,79 @@ jobs:
       - run: pnpm install --frozen-lockfile
 
       - name: Prepare
+        id: prepare
+        env:
+          # Empty on the workflow_dispatch path; script/bump then falls back to
+          # GITHUB_SHA, which is the dispatched ref's head and therefore right.
+          # On the issue_comment path it is not: GITHUB_SHA is the default
+          # branch's head there, so the sha has to be handed over explicitly or
+          # the version would name a commit it was not built from.
+          SHA: ${{ needs.command.outputs.sha }}
         run: |
-          ./script/bump dev
-      - run: pnpm build
+          # Catches a disagreement between the three packages while the numbers
+          # are still plain.
+          ./script/version > /dev/null
+          ./script/bump dev "$SHA"
+
+          SHA="${SHA:-$GITHUB_SHA}"
+          VERSION="$(jq -r .version packages/core/package.json)"
+          # A clean X.Y.Z published under the `dev` tag would burn that number on
+          # npm forever, so refuse anything that is not demonstrably a dev build
+          # of this commit.
+          printf '%s' "$VERSION" | grep -Eq "^[0-9]+\.[0-9]+\.[0-9]+-dev-${SHA:0:8}$"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+
+          # Re-running `/publish-dev` on an unchanged head is a normal thing to
+          # do. Say so rather than failing on EPUBLISHCONFLICT.
+          if [ -n "$(npm view "@mobx-sentinel/core@$VERSION" version 2>/dev/null || true)" ]; then
+            echo 'publish=false' >> "$GITHUB_OUTPUT"
+          else
+            echo 'publish=true' >> "$GITHUB_OUTPUT"
+          fi
+
+      - if: steps.prepare.outputs.publish == 'true'
+        run: pnpm build
 
       - name: Publish packages
+        if: steps.prepare.outputs.publish == 'true'
         run: pnpm publish --tag dev --recursive --access public --no-git-checks
         env:
           NPM_CONFIG_PROVENANCE: true
+
+      - name: Report
+        # `always()` so a publish that happened always gets a reply, and
+        # `continue-on-error` so a comment API hiccup cannot redden it.
+        if: always() && github.event_name == 'issue_comment'
+        continue-on-error: true
+        uses: actions/github-script@v7
+        env:
+          VERSION: ${{ steps.prepare.outputs.version }}
+          ALREADY: ${{ steps.prepare.outputs.publish == 'false' }}
+          STATUS: ${{ job.status }}
+        with:
+          script: |
+            const { VERSION, ALREADY, STATUS } = process.env;
+            const run = `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`;
+            const ok = STATUS === 'success' && VERSION;
+
+            const specs = ['core', 'form', 'react'].map((p) => `@mobx-sentinel/${p}@${VERSION}`);
+            const body = ok
+              ? [
+                  `${ALREADY === 'true' ? 'Already published' : 'Published'} \`${VERSION}\`. [run](${run})`,
+                  '',
+                  '```',
+                  `pnpm add ${specs.join(' ')}`,
+                  '```',
+                ].join('\n')
+              : `\`/publish-dev\` failed. [run](${run})`;
+
+            await github.rest.reactions.createForIssueComment({
+              ...context.repo,
+              comment_id: context.payload.comment.id,
+              content: ok ? 'rocket' : '-1',
+            });
+            await github.rest.issues.createComment({
+              ...context.repo,
+              issue_number: context.issue.number,
+              body,
+            });
