@@ -1,3 +1,4 @@
+// biome-ignore-all lint/correctness/noUnusedPrivateClassMembers: these private members exist to be decorated and read back through the processor
 import { AnnotationProcessor, createPropertyLikeAnnotation, getAnnotationProcessor } from "../src/annotationProcessor";
 
 const sampleKey = Symbol("sample");
@@ -37,14 +38,12 @@ describe("createPropertyLikeAnnotation", () => {
       }
 
       @sample
-      // eslint-disable-next-line no-unused-private-class-members
       #privateProperty1 = "value of privateProperty1";
 
       @sample
       accessor #privateAccessor1 = "value of privateAccessor1";
 
       @sample
-      // eslint-disable-next-line no-unused-private-class-members
       get #privateGetter1() {
         return "value of privateGetter1";
       }
@@ -123,14 +122,12 @@ describe("createPropertyLikeAnnotation", () => {
       }
 
       @sample
-      // eslint-disable-next-line no-unused-private-class-members
       #privateProperty1 = "value of privateProperty1";
 
       @sample
       accessor #privateAccessor1 = "value of privateAccessor1";
 
       @sample
-      // eslint-disable-next-line no-unused-private-class-members
       get #privateGetter1() {
         return "value of privateGetter1";
       }
@@ -149,14 +146,12 @@ describe("createPropertyLikeAnnotation", () => {
       }
 
       @sample
-      // eslint-disable-next-line no-unused-private-class-members
       #privateProperty2 = "value of privateProperty2";
 
       @sample
       accessor #privateAccessor2 = "value of privateAccessor2";
 
       @sample
-      // eslint-disable-next-line no-unused-private-class-members
       get #privateGetter2() {
         return "value of privateGetter2";
       }
@@ -309,14 +304,12 @@ describe("createPropertyLikeAnnotation", () => {
       }
 
       @sample1
-      // eslint-disable-next-line no-unused-private-class-members
       #privateProperty1 = "value of privateProperty1";
 
       @sample1
       accessor #privateAccessor1 = "value of privateAccessor1";
 
       @sample1
-      // eslint-disable-next-line no-unused-private-class-members
       get #privateGetter1() {
         return "value of privateGetter1";
       }
@@ -335,14 +328,12 @@ describe("createPropertyLikeAnnotation", () => {
       }
 
       @sample2
-      // eslint-disable-next-line no-unused-private-class-members
       override #privateProperty1 = "value of privateProperty1 (overridden)";
 
       @sample2
       override accessor #privateAccessor1 = "value of privateAccessor1 (overridden)";
 
       @sample2
-      // eslint-disable-next-line no-unused-private-class-members
       override get #privateGetter1() {
         return "value of privateGetter1 (overridden)";
       }
@@ -479,14 +470,12 @@ describe("createPropertyLikeAnnotation", () => {
       }
 
       @sample1
-      // eslint-disable-next-line no-unused-private-class-members
       #privateProperty1 = "value of privateProperty1";
 
       @sample1
       accessor #privateAccessor1 = "value of privateAccessor1";
 
       @sample1
-      // eslint-disable-next-line no-unused-private-class-members
       get #privateGetter1() {
         return "value of privateGetter1";
       }
@@ -504,14 +493,12 @@ describe("createPropertyLikeAnnotation", () => {
       }
 
       @sample2
-      // eslint-disable-next-line no-unused-private-class-members
       #privateProperty1 = "value of privateProperty1";
 
       @sample2
       accessor #privateAccessor1 = "value of privateAccessor1";
 
       @sample2
-      // eslint-disable-next-line no-unused-private-class-members
       get #privateGetter1() {
         return "value of privateGetter1";
       }

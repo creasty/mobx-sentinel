@@ -36,11 +36,11 @@ export namespace FormBindingConstructor {
  * Since Function.name is vulnerable to minification,
  * a UUID is appended to the name to ensure uniqueness.
  */
-export function getSafeBindingName(constructor: FormBindingConstructor): string {
-  let name = safeBindingNameCache.get(constructor);
+export function getSafeBindingName(bindingClass: FormBindingConstructor): string {
+  let name = safeBindingNameCache.get(bindingClass);
   if (!name) {
-    name = `${constructor.name}--${uuidV4()}`;
-    safeBindingNameCache.set(constructor, name);
+    name = `${bindingClass.name}--${uuidV4()}`;
+    safeBindingNameCache.set(bindingClass, name);
   }
   return name;
 }
