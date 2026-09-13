@@ -122,12 +122,10 @@ jobs:
           # Empty on the workflow_dispatch path, where checkout's default -- the
           # dispatched ref -- is exactly what is wanted.
           ref: ${{ needs.command.outputs.sha }}
-      - uses: pnpm/action-setup@v4
+      - uses: pnpm/action-setup@v6
       - uses: actions/setup-node@v4
         with:
           node-version-file: .node-version
-          registry-url: 'https://registry.npmjs.org'
-      - run: npm install -g npm@12.0.2
       - run: pnpm install --frozen-lockfile
 
       - name: Prepare
@@ -164,11 +162,12 @@ jobs:
       - if: steps.prepare.outputs.publish == 'true'
         run: pnpm build
 
+      # pnpm performs the trusted publishing exchange itself -- see CONTRIBUTING.
+      # `--provenance` is a flag rather than NPM_CONFIG_PROVENANCE because pnpm
+      # reads only PNPM_CONFIG_* from the environment.
       - name: Publish packages
         if: steps.prepare.outputs.publish == 'true'
-        run: pnpm publish --tag dev --recursive --access public --no-git-checks
-        env:
-          NPM_CONFIG_PROVENANCE: true
+        run: pnpm publish --tag dev --recursive --access public --no-git-checks --provenance
 
       - name: Report
         # `always()` so a publish that happened always gets a reply, and
