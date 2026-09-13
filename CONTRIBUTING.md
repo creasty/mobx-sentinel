@@ -131,13 +131,16 @@ Dispatch [publish](https://github.com/creasty/mobx-sentinel/actions/workflows/pu
 `bump_version` set to the new `X.Y.Z`, and it will
 
 1. run `./script/bump X.Y.Z` and push `bump-version-X-Y-Z`,
-1. open a `Bump version X.Y.Z` pull request with auto-merge on, and dispatch `push` on that branch
-   so its checks report,
+1. open a `Bump version X.Y.Z` pull request and dispatch `push` on that branch so its checks
+   report,
 1. draft a `vX.Y.Z` release with the `## Fixed` / `## Changed` skeleton above the generated
    `## What's Changed`.
 
-Then, once that pull request has merged: write the notes and **publish the release**. Publishing it
-is what ships to npm and creates the tag -- merging on its own publishes nothing.
+The run summary links the pull request and the draft, so neither has to be hunted for.
+
+**Merge the pull request yourself** once `test-ok` reports -- see below for why it is not
+auto-merged. Then write the notes and **publish the release**. Publishing it is what ships to npm
+and creates the tag; merging on its own publishes nothing.
 
 Leaving `bump_version` empty skips all of the above and publishes the dispatched ref's current
 version as-is. That is the repair path for a bump that merged but never shipped, and it is also
@@ -146,27 +149,28 @@ creates the tag and drafts the release itself.
 
 | Trigger | What happens |
 | ------- | ------------ |
-| `publish` dispatched with `bump_version` | bumps, opens the pull request with auto-merge on, dispatches `push` on that branch, and drafts `vX.Y.Z` -- the tag name is reserved but bound to no commit. Nothing is published. |
-| the bump pull request merging | nothing publishes. Merged by auto-merge it starts no run at all; merged by hand it starts `push` and `deploy` as usual. |
+| `publish` dispatched with `bump_version` | bumps, opens the pull request, dispatches `push` on that branch, and drafts `vX.Y.Z` -- the tag name is reserved but bound to no commit. Nothing is published, and the run summary links the pull request and the draft. |
+| the bump pull request merging | nothing publishes, but `push` and `deploy` run on `main` as usual, so the commit you are about to tag gets its tests and its Pages deploy first. |
 | the draft release being published | GitHub creates `vX.Y.Z` at main's HEAD as it stands, which fires `publish` again and ships to npm. |
 | `publish` dispatched with `bump_version` empty | publishes the dispatched ref to npm straight away, then creates `vX.Y.Z` at that commit and drafts the release. The repair path, not part of the sequence above. |
 
-#### Why the release, and not the merge
+#### Why you merge the bump by hand
 
-Auto-merge performs the merge on behalf of `GITHUB_TOKEN`, and GitHub starts no workflow run from an
-event caused by its own token. So the bump landing on `main` cannot trigger anything. The same rule
-is why
+GitHub starts no workflow run from an event caused by its own `GITHUB_TOKEN`. `GITHUB_TOKEN` can
+turn auto-merge on, but the merge it then performs is attributed to `github-actions[bot]`, so `main`
+never sees that push: no test run, no Codecov upload, and no production Pages deploy -- and with
+TypeDoc's `includeVersion`, the API doc would keep printing the previous version. Worse, the release
+would then ship a commit `main`'s own CI never ran. Dispatching those runs afterwards patches the
+symptom, in the wrong order, after the publish has already happened.
 
-- `publish` dispatches `push` on the bump branch: the pull request raised no `pull_request` event,
-  so nothing would report `test-ok`, and a required check that never reports blocks the merge
-  forever. Push another commit to a bump branch and its new head has no checks again -- dispatch
-  `push` on it a second time.
-- `publish` dispatches `push` and `deploy` on `main` after a successful publish, standing in for the
-  runs the suppressed push would have started. Without it the API doc keeps printing the previous
-  version, since TypeDoc is configured with `includeVersion`.
+Merging by hand costs one click and puts everything back in sequence: `push` and `deploy` run on the
+merge, and only then is there a release worth publishing.
 
-`workflow_dispatch` is one of only two triggers exempt from that rule, which is what makes both of
-those possible.
+The same rule is why `publish` dispatches `push` on the bump branch: the pull request was opened
+with `GITHUB_TOKEN`, so it raised no `pull_request` event, nothing would report `test-ok`, and a
+required check that never reports leaves Merge greyed out for good. `workflow_dispatch` is one of
+only two triggers exempt from the rule, which is what makes that possible. Push another commit to a
+bump branch and its new head has no checks again -- dispatch `push` on it a second time.
 
 #### What the guards refuse
 

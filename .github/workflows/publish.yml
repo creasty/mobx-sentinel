@@ -7,10 +7,11 @@ on:
         description: 'X.Y.Z to release. Leave empty to publish the current version as-is.'
         required: false
         type: string
-  # Publishing the draft release that `bump` left behind is what ships to npm.
-  # The merge that lands the bump cannot be the trigger: auto-merge performs it
-  # on behalf of GITHUB_TOKEN, and GitHub starts no workflow run from an event
-  # its own token caused, so `main` never sees that push.
+  # Publishing the draft release that `bump` left behind is what ships to npm,
+  # rather than the bump landing on main. Nothing forces that -- the bump is
+  # merged by hand, so main's push fires normally -- it is so the notes get
+  # written before the version exists on npm, and so `main` has been through its
+  # own test and deploy run by the time anything ships.
   release:
     types: [published]
 
@@ -23,7 +24,7 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write # push the bump branch, create the draft release
-      pull-requests: write # open the PR and turn auto-merge on
+      pull-requests: write # open the PR and link the draft on it
       actions: write # dispatch push.yml on the bump branch
     # Two bumps in flight would race for the same branch and draft.
     concurrency:
@@ -163,38 +164,30 @@ jobs:
               body: `${pr.body}\n\nDraft release: ${release.html_url}`,
             });
 
-            // Auto-merge before the checks are dispatched below:
-            // `enablePullRequestAutoMerge` errors with "Pull request is in clean status"
-            // when there is nothing left for it to wait on.
-            try {
-              await github.graphql(
-                `mutation($id: ID!) {
-                   enablePullRequestAutoMerge(input: { pullRequestId: $id, mergeMethod: MERGE }) {
-                     clientMutationId
-                   }
-                 }`,
-                { id: pr.node_id },
-              );
-            } catch (e) {
-              // A PR that exists is worth more than a failed run -- the repo setting may
-              // simply be off, and merging by hand works just as well.
-              core.warning(`auto-merge not enabled: ${e.message}`);
-            }
-
             // The PR raised no `pull_request` event, so nothing would report `test-ok`
-            // and the merge would be blocked forever. See push.yml's trigger comment.
+            // and a required check that never reports leaves Merge greyed out for
+            // good. See push.yml's trigger comment.
             await github.rest.actions.createWorkflowDispatch({
               ...context.repo,
               workflow_id: 'push.yml',
               ref: BRANCH,
             });
 
+            // Auto-merge is deliberately not enabled. GITHUB_TOKEN can turn it on, but
+            // the merge it then performs is attributed to github-actions[bot] and so
+            // starts nothing: main would get no test run and no Pages deploy, and the
+            // release would ship a commit main's own CI never saw. Merged by hand it
+            // all happens in the right order, and the cost is one click -- so this
+            // summary is the handoff.
             await core.summary
               .addHeading(`Bump version ${VERSION}`, 3)
-              .addList([
-                `<a href="${pr.html_url}">${pr.html_url}</a> (auto-merge, checks dispatched)`,
-                `<a href="${release.html_url}">draft ${tag}</a> -- write the notes, then publish it to ship`,
-              ])
+              .addList(
+                [
+                  `<a href="${pr.html_url}">${pr.html_url}</a> -- merge it once <code>test-ok</code> reports (just dispatched, give it a moment to appear)`,
+                  `<a href="${release.html_url}">draft ${tag}</a> -- then write the notes and publish it, which is what ships ${VERSION} to npm`,
+                ],
+                true,
+              )
               .write();
 
   # What to publish, settled before anything is built. npm is the authority on
@@ -260,7 +253,6 @@ jobs:
     permissions:
       contents: write # tag and draft the release on the dispatch path
       id-token: write # npm trusted publishing
-      actions: write # catch main up on the release path
     # Never cancelled: stopping `pnpm publish` between core and react leaves a
     # version half published, and npm lets nobody re-cut one.
     concurrency:
@@ -316,21 +308,6 @@ jobs:
                 body: '## Fixed\n\n-\n\n## Changed\n\n-\n',
                 generate_release_notes: true,
               });
-            }
-
-      - name: Catch main up
-        # The merge that landed this bump was performed by auto-merge on behalf of
-        # GITHUB_TOKEN, so main never saw its push: no test run and no Pages
-        # deploy, and typedoc's includeVersion means the API doc keeps printing the
-        # previous version until one happens. workflow_dispatch is exempt from the
-        # rule that suppressed the push in the first place.
-        if: github.event_name == 'release'
-        continue-on-error: true
-        uses: actions/github-script@v7
-        with:
-          script: |
-            for (const workflow_id of ['push.yml', 'deploy.yml']) {
-              await github.rest.actions.createWorkflowDispatch({ ...context.repo, workflow_id, ref: 'main' });
             }
 
       - name: Report
