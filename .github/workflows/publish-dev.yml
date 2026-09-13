@@ -29,8 +29,11 @@ jobs:
       contains(fromJSON('["OWNER","MEMBER","COLLABORATOR"]'), github.event.comment.author_association)
     runs-on: ubuntu-latest
     permissions:
-      issues: write # the reaction and any refusal reply
-      pull-requests: read
+      # The reaction and any refusal reply. They land on a pull request's comment,
+      # and there GitHub wants `pull-requests: write` as well: with `issues: write`
+      # alone the first reaction is refused with a 403.
+      issues: write
+      pull-requests: write
     outputs:
       sha: ${{ steps.resolve.outputs.sha }}
     steps:
@@ -109,7 +112,10 @@ jobs:
     permissions:
       contents: read
       id-token: write
-      issues: write # the outcome reaction and reply
+      # The outcome reaction and reply, on the same pull request comment -- so
+      # `pull-requests: write` as well, as in `command` above.
+      issues: write
+      pull-requests: write
     steps:
       - uses: actions/checkout@v4
         with:
