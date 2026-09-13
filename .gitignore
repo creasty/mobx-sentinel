@@ -1,6 +1,5 @@
 dist
 node_modules
-.eslintcache
 coverage
 .turbo
 docs

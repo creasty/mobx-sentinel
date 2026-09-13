@@ -1,5 +1,5 @@
 export namespace Decorator202112 {
-  /* eslint-disable @typescript-eslint/no-unsafe-function-type, @typescript-eslint/no-wrapper-object-types */
+  // biome-ignore-start lint/complexity/noBannedTypes: the same signatures as TypeScript's lib.decorators.legacy.d.ts
   export type ClassDecorator<TFunction extends Function> = (target: TFunction) => TFunction | void;
   export type PropertyDecorator<TObject extends Object> = (target: TObject, propertyKey: string | symbol) => void;
   export type MethodDecorator<TObject extends Object, T> = (
@@ -12,7 +12,7 @@ export namespace Decorator202112 {
     propertyKey: string | symbol | undefined,
     parameterIndex: number
   ) => void;
-  /* eslint-enable @typescript-eslint/no-unsafe-function-type, @typescript-eslint/no-wrapper-object-types */
+  // biome-ignore-end lint/complexity/noBannedTypes: the same signatures as TypeScript's lib.decorators.legacy.d.ts
 }
 
 export namespace Decorator202203 {

@@ -1,0 +1,29 @@
+language js
+
+// Port of eslint-plugin-mobx's `unconditional-make-observable`
+// (https://github.com/mobxjs/mobx/blob/main/packages/eslint-plugin-mobx/src/unconditional-make-observable.js).
+//
+// Inside a constructor, `makeObservable(this)` and `makeAutoObservable(this)` must be
+// statements of the constructor body itself -- not nested in a branch, a loop or a
+// callback. The walk up to the constructor stops at any function that rebinds `this`;
+// arrow functions do not stop it, the same as the original.
+//
+// The patterns name nodes of Biome's syntax tree, which can change between releases;
+// script/biome/fixtures/mobx.ts pins the expected behavior (`pnpm lint:plugins`).
+
+`$callee(this, $...)` as $call where {
+  $callee <: r"^(?:makeObservable|makeAutoObservable)$",
+  $call <: within JsConstructorClassMember(body = $body) until or {
+    JsFunctionDeclaration(),
+    JsFunctionExpression(),
+    JsFunctionExportDefaultDeclaration(),
+    JsMethodClassMember(),
+    JsGetterClassMember(),
+    JsSetterClassMember(),
+    JsMethodObjectMember(),
+    JsGetterObjectMember(),
+    JsSetterObjectMember(),
+  },
+  not $body <: JsFunctionBody(statements = some JsExpressionStatement(expression = $call)),
+  register_diagnostic(span = $call, message = "`makeObservable` must be called unconditionally inside constructor.")
+}

@@ -22,3 +22,8 @@ jobs:
         uses: reviewdog/action-suggester@v1
         with:
           tool_name: format
+      # After reviewdog, so its suggestions still land when this fails. The GritQL
+      # plugins in script/biome name nodes of Biome's syntax tree; if a Biome upgrade
+      # stops one from matching, the only symptom is an unused suppression in the
+      # fixtures, which is a warning that `pnpm format` above does not fail on.
+      - run: pnpm lint:plugins

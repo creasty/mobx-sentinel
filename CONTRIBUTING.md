@@ -13,7 +13,7 @@ Before contributing, please familiarize yourself with the [Design Principles](RE
 
 ### Coding Standards
 
-- Most styles are enforced by Prettier and ESLint.
+- Most styles are enforced by Biome.
 - JSDoc/TSDoc is mandatory for public interfaces; it's advised to write them for private ones nonetheless.
 - Write clear, concise comments where necessary.
 - Use descriptive variable and function names.

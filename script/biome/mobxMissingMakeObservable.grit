@@ -1,0 +1,54 @@
+language js
+
+// Port of eslint-plugin-mobx's `missing-make-observable`
+// (https://github.com/mobxjs/mobx/blob/main/packages/eslint-plugin-mobx/src/missing-make-observable.js).
+//
+// A class whose members carry MobX decorators must call `makeObservable(this)` as a
+// statement of its own constructor, and must not hand it an annotation map as well.
+// Like the original, decorators are recognized by name alone. The autofix is not ported.
+//
+// The patterns name nodes of Biome's syntax tree, which can change between releases;
+// script/biome/fixtures/mobx.ts pins the expected behavior (`pnpm lint:plugins`).
+
+pattern mobx_decorator() {
+  JsDecorator(expression = or {
+    JsIdentifierExpression() as $name, // @observable
+    JsStaticMemberExpression(object = $name), // @observable.ref
+    JsCallExpression(callee = $name), // @observable()
+  }) where { $name <: r"^(?:observable|computed|action|flow|override)$" }
+}
+
+pattern decorated_members() {
+  some or {
+    JsPropertyClassMember(modifiers = some mobx_decorator()),
+    JsMethodClassMember(modifiers = some mobx_decorator()),
+    JsGetterClassMember(modifiers = some mobx_decorator()),
+    JsSetterClassMember(modifiers = some mobx_decorator()),
+  }
+}
+
+or {
+  JsClassDeclaration(members = $members),
+  JsClassExpression(members = $members),
+  JsClassExportDefaultDeclaration(members = $members),
+} as $class where {
+  $members <: decorated_members(),
+  or {
+    and {
+      not $members <: some JsConstructorClassMember(body = JsFunctionBody(
+        statements = some JsExpressionStatement(expression = `makeObservable(this, $...)`)
+      )),
+      register_diagnostic(span = $class, message = "Constructor is missing `makeObservable(this)`.")
+    },
+    and {
+      $members <: some JsConstructorClassMember(body = JsFunctionBody(
+        statements = some JsExpressionStatement(expression = `makeObservable(this, $second, $...)`)
+      )),
+      not $second <: or { `null`, `undefined` },
+      register_diagnostic(
+        span = $second,
+        message = "`makeObservable`'s second argument must be nullish or not provided when using decorators."
+      )
+    }
+  }
+}

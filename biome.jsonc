@@ -1,0 +1,89 @@
+{
+  "$schema": "./node_modules/@biomejs/biome/configuration_schema.json",
+  "vcs": {
+    "enabled": true,
+    "clientKind": "git",
+    "useIgnoreFile": true
+  },
+  "files": {
+    "includes": [
+      "**/*.ts",
+      "**/*.tsx",
+      "**/*.mts",
+      "**/*.mjs",
+      "**/*.json",
+      "**/*.jsonc",
+      // Uses `override accessor`, which TypeScript accepts but Biome's parser rejects ("'accessor'
+      // cannot be used with 'override' modifier"), so Biome can neither format nor lint the file.
+      // Drop this line once Biome parses it.
+      "!packages/core/test-stage3/annotationProcessor.test.ts"
+    ]
+  },
+  "formatter": {
+    "indentStyle": "space",
+    "indentWidth": 2,
+    "lineWidth": 120,
+    "lineEnding": "lf"
+  },
+  "javascript": {
+    "formatter": {
+      "quoteStyle": "double",
+      "semicolons": "always",
+      "trailingCommas": "es5",
+      "bracketSpacing": true,
+      "bracketSameLine": false
+    }
+  },
+  "assist": {
+    "actions": {
+      "source": {
+        "organizeImports": "off"
+      }
+    }
+  },
+  "linter": {
+    // The recommended preset, adjusted to what ESLint enforced before the move: a rule whose ESLint
+    // counterpart was an error is raised to "error", and a rule that flags code ESLint never
+    // checked is "off" -- turning one of those on is a change of its own.
+    "rules": {
+      "preset": "recommended",
+      "a11y": {
+        "noLabelWithoutControl": "off",
+        "useButtonType": "off"
+      },
+      "complexity": {
+        "noBannedTypes": "error",
+        "noThisInStatic": "off",
+        "noUselessFragments": "off",
+        "useLiteralKeys": "off"
+      },
+      "correctness": {
+        "noUnusedImports": "error",
+        "noUnusedPrivateClassMembers": "error",
+        "noUnusedVariables": "error"
+      },
+      "style": {
+        "noNonNullAssertion": "off",
+        "useImportType": "off"
+      },
+      "suspicious": {
+        "noConfusingVoidType": "off",
+        "noDoubleEquals": "off",
+        "noExplicitAny": "off",
+        "noExportsInTest": "off",
+        "noGlobalIsNan": "off"
+      }
+    }
+  },
+  // Ports of eslint-plugin-mobx's rules; see script/biome.
+  "plugins": ["./script/biome/mobxMissingMakeObservable.grit", "./script/biome/mobxUnconditionalMakeObservable.grit"],
+  "overrides": [
+    {
+      // apps/example is linted by its own `next lint`, as before; Biome only formats it.
+      "includes": ["apps/**"],
+      "linter": {
+        "enabled": false
+      }
+    }
+  ]
+}

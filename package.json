@@ -18,37 +18,21 @@
     "build:apps:example": "turbo run build --filter=./apps/example",
     "doc": "typedoc",
     "test": "turbo run test",
-    "lint": "pnpm run -w --parallel --aggregate-output '/^lint:.+/'",
-    "lint:eslint": "eslint --color --cache './**/*.{ts,tsx,mts,mjs}'",
-    "lint:prettier": "prettier --color --check './**/*.{ts,tsx,mts,mjs,json}'",
-    "format": "pnpm run -w '/^format:.+/'",
-    "format:eslint": "pnpm lint:eslint --fix",
-    "format:prettier": "pnpm lint:prettier --write"
+    "lint": "biome check && pnpm lint:plugins",
+    "lint:plugins": "biome lint --error-on-warnings script/biome/fixtures",
+    "format": "biome check --write"
   },
   "lint-staged": {
-    "*.{ts,tsx,mts,mjs}": [
-      "eslint --fix",
-      "prettier --write"
-    ],
-    "*.json": [
-      "prettier --write"
-    ]
+    "*.{ts,tsx,mts,mjs,json,jsonc}": "biome check --write --no-errors-on-unmatched --files-ignore-unknown=true"
   },
   "simple-git-hooks": {
     "pre-commit": "pnpm lint-staged"
   },
   "devDependencies": {
-    "@eslint/js": "^9.39.5",
-    "eslint": "^9.39.5",
-    "eslint-config-prettier": "^10.1.8",
-    "eslint-plugin-mobx": "^0.0.14",
-    "eslint-plugin-react": "^7.37.5",
-    "eslint-plugin-react-hooks": "^7.1.1",
+    "@biomejs/biome": "2.5.13",
     "lint-staged": "^17.5.1",
-    "prettier": "^3.9.6",
     "simple-git-hooks": "^2.14.0",
     "turbo": "^2.10.12",
-    "typedoc": "^0.28.20",
-    "typescript-eslint": "^8.70.0"
+    "typedoc": "^0.28.20"
   }
 }

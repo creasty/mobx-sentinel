@@ -1,4 +1,4 @@
-/* eslint-disable mobx/missing-make-observable */
+// biome-ignore-all lint/plugin/mobxMissingMakeObservable: stage-3 decorators need no makeObservable(this)
 import { observable, computed, runInAction } from "mobx";
 import { Watcher } from "../src/watcher";
 
@@ -60,9 +60,8 @@ describe("Annotations", () => {
       class Sample {
         @observable accessor #field1 = false;
 
-        @computed
-        // eslint-disable-next-line no-unused-private-class-members
-        get #computed1() {
+        // biome-ignore lint/correctness/noUnusedPrivateClassMembers: read back through the watcher under test
+        @computed get #computed1() {
           return this.#field1;
         }
 
