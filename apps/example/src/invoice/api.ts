@@ -4,7 +4,7 @@ import { CountryCode, CurrencyCode, PaymentTerms, TaxCategory } from "./catalog"
  * A stand-in for a real backend.
  *
  * It is deliberately slow and occasionally unhappy, so the demo exercises the
- * parts of mobx-sentinel that deal with the network: cancellable asynchronous
+ * parts of mobx-sentinel that deal with the network: throttled asynchronous
  * validation, and errors that only the server can produce.
  */
 

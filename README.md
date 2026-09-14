@@ -34,7 +34,7 @@ This library aims to solve these problems through a model-centric design that pr
 
 ## Overview
 
-[apps/example/](./apps/example) is a working invoice editor — cross-field rules, a CRM lookup that cancels itself, nested and repeated sub-forms, server-reported conflicts, dirty tracking and autosave. It is deployed at [example.mobx-sentinel.creasty.com](https://example.mobx-sentinel.creasty.com). The code below is condensed from it.
+[apps/example/](./apps/example) is a working invoice editor — cross-field rules, a throttled CRM lookup, nested and repeated sub-forms, server-reported conflicts, dirty tracking and autosave. It is deployed at [example.mobx-sentinel.creasty.com](https://example.mobx-sentinel.creasty.com). The code below is condensed from it.
 
 ### Model
 
@@ -74,8 +74,9 @@ export class Invoice {
     });
 
     // Asynchronous rules compose on top of the synchronous ones.
-    // Every keystroke supersedes the request before it: the Validator throttles
-    // the calls and aborts the one still in flight.
+    // The Validator throttles the calls; a keystroke made while a request is in
+    // flight is checked after that request settles. The signal is aborted when
+    // the validator is reset or the handler is removed.
     makeValidatable(
       this,
       () => this.customerEmail,

@@ -249,8 +249,8 @@ export class Invoice {
     });
 
     // (2) An asynchronous rule, composed on top of the synchronous ones.
-    // Every keystroke supersedes the lookup before it; the Validator throttles
-    // the calls and aborts the one still in flight.
+    // The Validator throttles the calls; a keystroke made while a lookup is in
+    // flight is checked after that lookup settles.
     makeValidatable(
       this,
       () => this.customerEmail.trim().toLowerCase(),
@@ -262,7 +262,7 @@ export class Invoice {
             b.invalidate("customerEmail", "No customer in the CRM uses this address");
           }
         } catch (e) {
-          if (abortSignal.aborted) return; // superseded by a newer value
+          if (abortSignal.aborted) return; // the validator was reset or the handler removed
           throw e;
         }
       },

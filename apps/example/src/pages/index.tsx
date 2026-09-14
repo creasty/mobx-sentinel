@@ -29,9 +29,9 @@ export const Body = observer(() => {
       <hgroup>
         <h2>Invoice editor</h2>
         <p>
-          A form over a plain MobX model. Cross-field rules, a CRM lookup that cancels itself, nested and repeated
-          sub-forms, server-reported conflicts, dirty tracking and autosave — all declared on the model, none of it
-          managed by the form. The panel on the right is the library&rsquo;s own state, live.
+          A form over a plain MobX model. Cross-field rules, a throttled CRM lookup, nested and repeated sub-forms,
+          server-reported conflicts, dirty tracking and autosave — all declared on the model, none of it managed by the
+          form. The panel on the right is the library&rsquo;s own state, live.
         </p>
       </hgroup>
       <div className="layout">

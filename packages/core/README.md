@@ -436,7 +436,7 @@ watcher.changed // still true
 
 Perform synchronous and asynchronous validation on MobX models with automatic throttling.
 
-`Validator` is designed for declarative, reactive validation - such as form validation with automatic field-level and cross-field checks, debounced async API checks (e.g., username availability), complex multi-field validation with dependencies, hierarchical validation of nested structures with error aggregation, throttled real-time feedback during user input, and submission guards that prevent invalid data from being submitted.
+`Validator` is designed for declarative, reactive validation - such as form validation with automatic field-level and cross-field checks, throttled async API checks (e.g., username availability), complex multi-field validation with dependencies, hierarchical validation of nested structures with error aggregation, throttled real-time feedback during user input, and submission guards that prevent invalid data from being submitted.
 
 ### Getting a Validator Instance
 
@@ -589,13 +589,14 @@ validator.findErrors(keyPath, deep?) // Iterator<[KeyPath, ValidationError]>
 
 ### Asynchronous Validation
 
-Async validations are automatically debounced and cancellable.
+Async validations are throttled like sync validations, and changes made while one is running are queued.
 
 **Behaviors**:
-- **Previous jobs are always cancelled**: When a new async validation starts, any running validation is automatically aborted
-- The `abortSignal` parameter allows your handler to respond to cancellation
-- Use the signal with `fetch()` and other async APIs to cancel in-flight requests
 - Jobs are throttled like sync validators (default 100ms delay)
+- **Changes during a running validation are queued, not aborted**: The running handler completes, and the latest value is validated after it settles. If the change's delay has already passed by then, it is validated `delayMs` after the handler settles; otherwise, when its delay ends. Intermediate values are skipped
+- The result of the running validation is currently applied when it settles, so an error for the earlier value may show briefly until the latest value has been validated
+- The `abortSignal` is aborted when the validator is reset (`validator.reset()`) or the handler is removed (by calling the function returned from `addAsyncHandler()` or `makeValidatable()`)
+- Use the signal with `fetch()` and other async APIs to cancel in-flight requests in those cases
 
 **Error handling**:
 - Errors thrown in async handlers are logged to the console but don't break validation
@@ -613,7 +614,7 @@ class UserModel {
       this,
       () => this.username,
       async (username, builder, abortSignal) => {
-        // Automatic cancellation on new changes
+        // The signal is aborted by validator.reset() or by removing the handler
         const response = await fetch(`/api/check-username/${username}`, {
           signal: abortSignal
         });
@@ -633,16 +634,20 @@ const validator = Validator.get(user);
 runInAction(() => {
   user.username = "john";
 });
-
-// Previous job is cancelled
 runInAction(() => {
-  user.username = "jane"; // Only this value will be validated
+  user.username = "jane"; // Both changes fall within the same delay: only "jane" is validated
 });
 
 // Check validation state
 validator.isValidating // true
-validator.reactionState // 1 (sync validation pending)
-validator.asyncState // 1 (async validation running)
+validator.reactionState // 1 (waiting for the delay)
+validator.asyncState // 0 (the job starts after the delay)
+
+await when(() => validator.asyncState > 0); // "jane" is being validated
+
+runInAction(() => {
+  user.username = "jake"; // Does not abort "jane": "jake" is validated after it settles
+});
 
 await when(() => !validator.isValidating);
 
