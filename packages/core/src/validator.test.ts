@@ -1,7 +1,8 @@
-import { autorun, makeObservable, observable, runInAction } from "mobx";
+import { autorun, IEqualsComparer, makeObservable, observable, runInAction } from "mobx";
 import { Validator, makeValidatable } from "./validator";
 import { nested } from "./nested";
 import { KeyPath } from "./keyPath";
+import { ValidationError, ValidationErrorMapBuilder } from "./error";
 
 class Sample {
   @observable field1 = 0;
@@ -1396,5 +1397,1788 @@ describe("Nested validations", () => {
 
     // Now parent should also be done
     expect(parentValidator.isValidating).toBe(false);
+  });
+});
+
+/** Collect `[keyPath, message]` pairs in iteration order */
+function listErrors(iter: Iterable<[KeyPath, ValidationError]>) {
+  return Array.from(iter, ([keyPath, error]) => [keyPath, error.message]);
+}
+
+/** A promise whose settlement is controlled by the test */
+function deferred() {
+  let resolve!: () => void;
+  let reject!: (reason?: unknown) => void;
+  const promise = new Promise<void>((res, rej) => {
+    resolve = res;
+    reject = rej;
+  });
+  return { promise, resolve, reject };
+}
+
+/** Let settled promises propagate without advancing the fake clock */
+function flushMicrotasks() {
+  return vi.advanceTimersByTimeAsync(0);
+}
+
+/** A model with a sync handler that invalidates `field` when it's negative */
+function setupSyncHandler(opt?: Validator.HandlerOptions, initialValue = 0) {
+  const model = observable({ field: initialValue, other: 0 });
+  const validator = Validator.get(model);
+  const seen: number[] = [];
+  const dispose = validator.addSyncHandler((b) => {
+    seen.push(model.field);
+    if (model.field < 0) {
+      b.invalidate("field", `negative: ${model.field}`);
+    }
+  }, opt);
+  return { model, validator, seen, dispose };
+}
+
+/** A model with an async handler whose jobs are settled manually by the test */
+function setupAsyncHandler(opt?: Validator.HandlerOptions<number>, initialValue = 0) {
+  const model = observable({ field: initialValue });
+  const validator = Validator.get(model);
+  const runs: Array<{ payload: number; signal: AbortSignal; job: ReturnType<typeof deferred> }> = [];
+  const dispose = validator.addAsyncHandler(
+    () => model.field,
+    async (payload, b, signal) => {
+      const job = deferred();
+      runs.push({ payload, signal, job });
+      await job.promise;
+      if (payload < 0) {
+        b.invalidate("field", `negative: ${payload}`);
+      }
+    },
+    opt
+  );
+  return { model, validator, runs, dispose };
+}
+
+describe("makeValidatable: dispatch and return value", () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it("forwards the handler and options to addSyncHandler and returns its disposer", () => {
+    const target = { field: 0 };
+    const validator = Validator.get(target);
+    const dispose = vi.fn();
+    const spy = vi.spyOn(validator, "addSyncHandler").mockReturnValue(dispose);
+    const handler = () => {};
+    const opt = { initialRun: false, delayMs: 10 };
+
+    expect(makeValidatable(target, handler, opt)).toBe(dispose);
+    expect(spy).toHaveBeenCalledTimes(1);
+    expect(spy).toHaveBeenCalledWith(handler, opt);
+  });
+
+  it("forwards the expression, handler and options to addAsyncHandler and returns its disposer", () => {
+    const target = { field: 0 };
+    const validator = Validator.get(target);
+    const dispose = vi.fn();
+    const spy = vi.spyOn(validator, "addAsyncHandler").mockReturnValue(dispose);
+    const expr = () => target.field;
+    const handler = async () => {};
+    const opt = { initialRun: false };
+
+    expect(makeValidatable(target, expr, handler, opt)).toBe(dispose);
+    expect(spy).toHaveBeenCalledTimes(1);
+    expect(spy).toHaveBeenCalledWith(expr, handler, opt);
+  });
+
+  it("returns a disposer that removes the errors of a sync handler", () => {
+    const target = observable({ field: -1 });
+    const dispose = makeValidatable(target, (b) => {
+      if (target.field < 0) b.invalidate("field", "negative");
+    });
+    const validator = Validator.get(target);
+    expect(validator.invalidKeys).toEqual(new Set(["field"]));
+
+    dispose();
+    expect(validator.isValid).toBe(true);
+  });
+
+  it("returns a disposer that removes the errors of an async handler", async () => {
+    const target = observable({ field: -1 });
+    const dispose = makeValidatable(
+      target,
+      () => target.field,
+      async (field, b) => {
+        if (field < 0) b.invalidate("field", "negative");
+      }
+    );
+    const validator = Validator.get(target);
+    await flushMicrotasks();
+    expect(validator.invalidKeys).toEqual(new Set(["field"]));
+
+    dispose();
+    expect(validator.isValid).toBe(true);
+    expect(validator.isValidating).toBe(false);
+  });
+});
+
+describe("Validator.get / Validator.getSafe: targets", () => {
+  it("returns null from getSafe for primitives and functions", () => {
+    expect(Validator.getSafe(undefined)).toBeNull();
+    expect(Validator.getSafe("str")).toBeNull();
+    expect(Validator.getSafe(true)).toBeNull();
+    expect(Validator.getSafe(0)).toBeNull();
+    expect(Validator.getSafe(10n)).toBeNull();
+    expect(Validator.getSafe(Symbol())).toBeNull();
+    expect(Validator.getSafe(() => {})).toBeNull();
+  });
+
+  it("throws a TypeError from get for non-objects", () => {
+    expect(() => Validator.get(undefined as any)).toThrow(TypeError);
+    expect(() => Validator.get("str" as any)).toThrow(new TypeError("target: Expected an object"));
+  });
+
+  it("throws from get for functions although the signature accepts them", () => {
+    const fn = () => {};
+    // PINNED(bug): Validator.get(fn) type-checks (T extends object includes functions) but throws "target: Expected an object" at runtime. Expected: the signature and the runtime check agree (reject functions at the type level, or support them). Flip this assertion when fixing.
+    expect(() => Validator.get(fn)).toThrow(TypeError);
+  });
+
+  it("throws from getSafe for a non-extensible object", () => {
+    const target = Object.freeze({ field: 1 });
+    // PINNED(bug): getSafe() defines a symbol property on the target, which throws "Cannot define property Symbol(validator), object is not extensible" for frozen/sealed/non-extensible objects. Expected: getSafe never throws for objects ("returns null instead of throwing an error"); e.g. keep validators in a WeakMap or return null. Flip this assertion when fixing.
+    expect(() => Validator.getSafe(target)).toThrow(TypeError);
+  });
+
+  it("shares the validator of a prototype with the objects inheriting from it", () => {
+    const proto = {};
+    const protoValidator = Validator.get(proto);
+
+    class Model {}
+    const classProtoValidator = Validator.get(Model.prototype);
+
+    // PINNED(bug): The cached validator is read through the prototype chain, so Object.create(proto) and instances of a class whose prototype was passed to get() reuse that validator. Expected: every target gets its own validator ("Returns existing instance if one exists for the target"). Flip these assertions (toBe -> not.toBe) when fixing.
+    expect(Validator.get(Object.create(proto) as object)).toBe(protoValidator);
+    expect(Validator.get(new Model())).toBe(classProtoValidator);
+  });
+
+  it("creates separate validators for instances of the same class", () => {
+    class Base {}
+    class Derived extends Base {}
+    expect(Validator.get(new Derived())).not.toBe(Validator.get(new Derived()));
+  });
+
+  it("supports arrays and observable object proxies", () => {
+    const array: string[] = [];
+    expect(Validator.get(array)).toBe(Validator.get(array));
+
+    const proxy = observable({ field: 1 });
+    const validator = Validator.get(proxy);
+    expect(Validator.get(proxy)).toBe(validator);
+    // A spread copies enumerable symbol properties, so the cached validator must not travel with it
+    expect(Validator.get({ ...proxy })).not.toBe(validator);
+  });
+
+  it("does not add enumerable properties to the target", () => {
+    const target = { field: 1 };
+    const validator = Validator.get(target);
+    expect(Object.keys(target)).toEqual(["field"]);
+    expect(JSON.stringify(target)).toBe('{"field":1}');
+    const symbols = Object.getOwnPropertySymbols(target);
+    expect(symbols).toHaveLength(1);
+    expect(Object.prototype.propertyIsEnumerable.call(target, symbols[0])).toBe(false);
+
+    const copy = { ...target };
+    expect(Validator.get(copy)).not.toBe(validator);
+  });
+
+  it("assigns a UUID v4 as the id", () => {
+    expect(Validator.get({}).id).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/);
+  });
+
+  it("requires Validator as the receiver of the static methods", () => {
+    const { get, getSafe } = Validator;
+    // PINNED(quirk): The static methods use `this` (this.getSafe / new this()), so calling them detached throws a TypeError. Decide: should they reference Validator explicitly so `const { get } = Validator` works?
+    expect(() => get({})).toThrow(TypeError);
+    expect(() => getSafe({})).toThrow(TypeError);
+  });
+});
+
+describe("Validator: error bookkeeping", () => {
+  describe("#updateErrors", () => {
+    it("propagates an exception thrown by the handler and keeps the previous errors of the key", () => {
+      const validator = Validator.get({ field: 0 });
+      const key = Symbol();
+      validator.updateErrors(key, (b) => b.invalidate("field", "kept"));
+
+      expect(() =>
+        validator.updateErrors(key, (b) => {
+          b.invalidate("field", "discarded");
+          throw new Error("handler failure");
+        })
+      ).toThrow("handler failure");
+      expect(validator.getErrorMessages("field" as KeyPath)).toEqual(new Set(["kept"]));
+    });
+
+    it("removes the existing errors of the key when the handler reports none", () => {
+      const validator = Validator.get({ field: 0 });
+      const key = Symbol();
+      validator.updateErrors(key, (b) => b.invalidate("field", "invalid"));
+
+      validator.updateErrors(key, () => {});
+      expect(validator.isValid).toBe(true);
+      expect(validator.invalidKeyCount).toBe(0);
+    });
+
+    it("lets a stale disposer remove the errors set by a later call with the same key", () => {
+      const validator = Validator.get({ field1: 0, field2: 0 });
+      const key = Symbol();
+      const staleDispose = validator.updateErrors(key, (b) => b.invalidate("field1", "first"));
+      validator.updateErrors(key, (b) => b.invalidate("field2", "second"));
+
+      staleDispose();
+      // PINNED(quirk): A disposer deletes whatever is stored under its key, including errors from a later updateErrors() call with the same key. Decide: should a disposer only remove the errors of the call that returned it?
+      expect(validator.hasErrors("field2" as KeyPath)).toBe(false);
+    });
+
+    it("keeps an Error reason as the cause of the validation error", () => {
+      const validator = Validator.get({ field: 0 });
+      const reason = new Error("from an Error");
+      validator.updateErrors(Symbol(), (b) => b.invalidate("field", reason));
+
+      const [[keyPath, error]] = [...validator.findErrors("field" as KeyPath)];
+      expect(keyPath).toBe("field");
+      expect(error).toBeInstanceOf(ValidationError);
+      expect(error.message).toBe("from an Error");
+      expect(error.cause).toBe(reason);
+      expect(error.key).toBe("field");
+      expect(error.keyPath).toBe("field");
+    });
+
+    it("does not notify observers of isValid or invalidKeys when only the messages change", () => {
+      const validator = Validator.get({ field: 0 });
+      const key = Symbol();
+      validator.updateErrors(key, (b) => b.invalidate("field", "message 1"));
+
+      const isValidObserver = vi.fn();
+      const invalidKeysObserver = vi.fn();
+      const disposers = [
+        autorun(() => isValidObserver(validator.isValid)),
+        autorun(() => invalidKeysObserver(validator.invalidKeys)),
+      ];
+
+      validator.updateErrors(key, (b) => b.invalidate("field", "message 2"));
+      expect(isValidObserver).toHaveBeenCalledTimes(1);
+      expect(invalidKeysObserver).toHaveBeenCalledTimes(1);
+
+      validator.updateErrors(key, () => {});
+      expect(isValidObserver).toHaveBeenCalledTimes(2);
+      expect(isValidObserver).toHaveBeenLastCalledWith(true);
+      expect(invalidKeysObserver).toHaveBeenCalledTimes(2);
+
+      for (const dispose of disposers) dispose();
+    });
+  });
+
+  describe("ordering and duplicates", () => {
+    it("groups errors by key path in first-insertion order and keeps duplicate messages as separate errors", () => {
+      const validator = Validator.get({ a: 0, b: 0 });
+      validator.updateErrors(Symbol(), (b) => {
+        b.invalidate("a", "1");
+        b.invalidate("b", "2");
+        b.invalidate("a", "3");
+        b.invalidate("a", "1");
+        b.invalidateSelf("self");
+      });
+
+      expect(listErrors(validator.findErrors(KeyPath.Self))).toEqual([
+        ["a", "1"],
+        ["a", "3"],
+        ["a", "1"],
+        ["b", "2"],
+        [KeyPath.Self, "self"],
+      ]);
+      expect(validator.getErrorMessages("a" as KeyPath)).toEqual(new Set(["1", "3"]));
+      expect(validator.invalidKeyPathCount).toBe(3);
+    });
+
+    it("orders errors from different keys by when each key last became invalid", () => {
+      const validator = Validator.get({ a: 0, b: 0 });
+      const keyA = Symbol();
+      const keyB = Symbol();
+      validator.updateErrors(keyA, (b) => b.invalidate("a", "A1"));
+      validator.updateErrors(keyB, (b) => b.invalidate("b", "B"));
+      expect(validator.firstErrorMessage).toBe("A1");
+
+      // Replacing non-empty errors keeps the position
+      validator.updateErrors(keyA, (b) => b.invalidate("a", "A2"));
+      expect(validator.firstErrorMessage).toBe("A2");
+
+      validator.updateErrors(keyA, () => {});
+      validator.updateErrors(keyA, (b) => b.invalidate("a", "A3"));
+      // PINNED(quirk): A key whose errors were cleared and set again moves behind the other keys, so firstErrorMessage depends on the history of validity transitions rather than on handler/key registration order. Decide: should errors be ordered by the registration order of their source?
+      expect(validator.firstErrorMessage).toBe("B");
+    });
+
+    it("moves the errors of a sync or async handler behind other handlers once they were cleared and reported again", async () => {
+      vi.useFakeTimers();
+      try {
+        const model = observable({ a: -1, b: -1, c: -1 });
+        const validator = Validator.get(model);
+        validator.addSyncHandler((b) => {
+          if (model.a < 0) b.invalidate("a", "A");
+        });
+        validator.addAsyncHandler(
+          () => model.b,
+          async (value, b) => {
+            if (value < 0) b.invalidate("b", "B");
+          }
+        );
+        validator.addSyncHandler((b) => {
+          if (model.c < 0) b.invalidate("c", "C");
+        });
+        await flushMicrotasks();
+        expect(validator.getErrorMessages(KeyPath.Self)).toEqual(new Set(["A", "C", "B"]));
+
+        // Still invalid, but reported again: the position is kept
+        runInAction(() => {
+          model.a = -2;
+        });
+        await vi.advanceTimersByTimeAsync(100);
+        expect(validator.firstErrorMessage).toBe("A");
+
+        runInAction(() => {
+          model.a = 0;
+          model.b = 0;
+        });
+        await vi.advanceTimersByTimeAsync(100);
+        expect(validator.getErrorMessages(KeyPath.Self)).toEqual(new Set(["C"]));
+        runInAction(() => {
+          model.a = -1;
+          model.b = -1;
+        });
+        await vi.advanceTimersByTimeAsync(100);
+        // PINNED(quirk): Same as for updateErrors(): a handler whose errors were cleared (its entry is deleted, not emptied) is re-inserted after the other handlers, so the first error message changes from "A" to "C". Decide: should errors be ordered by the registration order of their source?
+        expect(listErrors(validator.findErrors(KeyPath.Self))).toEqual([
+          ["c", "C"],
+          ["a", "A"],
+          ["b", "B"],
+        ]);
+        expect(validator.firstErrorMessage).toBe("C");
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+  });
+
+  describe("#invalidKeys", () => {
+    it("includes KeyPath.Self when the target itself is invalidated", () => {
+      const validator = Validator.get({ field: 0 });
+      validator.updateErrors(Symbol(), (b) => {
+        b.invalidateSelf("self");
+        b.invalidate("field", "field");
+      });
+
+      // PINNED(quirk): invalidKeys/invalidKeyCount count a self error as the key KeyPath.Self, while the README describes invalidKeys as "direct property errors only". Decide: should self errors be excluded from invalidKeys and invalidKeyCount?
+      expect(validator.invalidKeys).toEqual(new Set([KeyPath.Self, "field"]));
+      expect(validator.invalidKeyCount).toBe(2);
+    });
+
+    it("returns a frozen Set whose contents can still be mutated", () => {
+      const validator = Validator.get({ field: 0 });
+      const observed: ReadonlySet<KeyPath>[] = [];
+      const dispose = autorun(() => {
+        observed.push(validator.invalidKeys);
+      });
+      const keys = observed[0];
+      expect(Object.isFrozen(keys)).toBe(true);
+
+      (keys as Set<KeyPath>).add("injected" as KeyPath);
+      // PINNED(quirk): Object.freeze() does not protect a Set's entries, so a consumer casting away ReadonlySet can corrupt the cached computed value. Decide: return a truly immutable view (or a fresh copy)?
+      expect(validator.invalidKeys.has("injected" as KeyPath)).toBe(true);
+      dispose();
+    });
+  });
+
+  describe("#getErrorMessages / #hasErrors", () => {
+    it("treats an empty string key path as KeyPath.Self", () => {
+      const validator = Validator.get({ field: 0 });
+      validator.updateErrors(Symbol(), (b) => {
+        b.invalidateSelf("self");
+        b.invalidate("field", "field");
+      });
+      expect(validator.getErrorMessages("" as KeyPath)).toEqual(new Set(["self", "field"]));
+      expect(validator.hasErrors("" as KeyPath)).toBe(true);
+    });
+
+    it("returns a new Set on every call", () => {
+      const validator = Validator.get({ field: 0 });
+      expect(validator.getErrorMessages(KeyPath.Self)).not.toBe(validator.getErrorMessages(KeyPath.Self));
+    });
+
+    it("returns nothing for a key path without errors", () => {
+      const validator = Validator.get({ field1: 0, field2: 0 });
+      validator.updateErrors(Symbol(), (b) => b.invalidate("field1", "invalid"));
+      expect(validator.getErrorMessages("field2" as KeyPath, true)).toEqual(new Set());
+      expect(validator.hasErrors("field2" as KeyPath, true)).toBe(false);
+      expect(validator.hasErrors("field1.sub" as KeyPath, true)).toBe(false);
+    });
+  });
+});
+
+describe("Validator: sync handler scheduling", () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it("uses 100ms as the default delay", () => {
+    expect(Validator.defaultDelayMs).toBe(100);
+
+    const env = setupSyncHandler();
+    runInAction(() => {
+      env.model.field = -1;
+    });
+    vi.advanceTimersByTime(99);
+    expect(env.validator.isValid).toBe(true);
+    vi.advanceTimersByTime(1);
+    expect(env.validator.isValid).toBe(false);
+  });
+
+  it("throttles: the first change starts the delay and later changes are folded into that run", () => {
+    const env = setupSyncHandler({ initialRun: false });
+    expect(env.seen).toEqual([0]); // evaluated once for tracking, without applying errors
+
+    runInAction(() => {
+      env.model.field = -1;
+    });
+    vi.advanceTimersByTime(60);
+    runInAction(() => {
+      env.model.field = -2;
+    });
+    vi.advanceTimersByTime(39);
+    expect(env.seen).toEqual([0]);
+    expect(env.validator.reactionState).toBe(1);
+
+    vi.advanceTimersByTime(1);
+    expect(env.seen).toEqual([0, -2]);
+    expect(env.validator.reactionState).toBe(0);
+    expect(env.validator.getErrorMessages("field" as KeyPath)).toEqual(new Set(["negative: -2"]));
+
+    runInAction(() => {
+      env.model.field = -3;
+    });
+    vi.advanceTimersByTime(100);
+    expect(env.seen).toEqual([0, -2, -3]);
+  });
+
+  it("honors the delayMs option", () => {
+    const env = setupSyncHandler({ delayMs: 30 });
+    runInAction(() => {
+      env.model.field = -1;
+    });
+    vi.advanceTimersByTime(29);
+    expect(env.validator.isValid).toBe(true);
+    expect(env.validator.reactionState).toBe(1);
+
+    vi.advanceTimersByTime(1);
+    expect(env.validator.isValid).toBe(false);
+    expect(env.validator.reactionState).toBe(0);
+  });
+
+  it("still defers to a timer when delayMs is 0", () => {
+    const env = setupSyncHandler({ delayMs: 0 });
+    runInAction(() => {
+      env.model.field = -1;
+    });
+    expect(env.validator.reactionState).toBe(1);
+    expect(env.validator.isValid).toBe(true);
+
+    vi.advanceTimersByTime(0);
+    expect(env.validator.reactionState).toBe(0);
+    expect(env.validator.isValid).toBe(false);
+  });
+
+  it("captures Validator.defaultDelayMs when the handler is added", () => {
+    const original = Validator.defaultDelayMs;
+    try {
+      Validator.defaultDelayMs = 30;
+      const env = setupSyncHandler();
+      Validator.defaultDelayMs = 500;
+
+      runInAction(() => {
+        env.model.field = -1;
+      });
+      vi.advanceTimersByTime(30);
+      expect(env.validator.isValid).toBe(false);
+    } finally {
+      Validator.defaultDelayMs = original;
+    }
+  });
+
+  it("does not schedule a reaction when an observable is set to its current value", () => {
+    const env = setupSyncHandler();
+    runInAction(() => {
+      env.model.field = 0;
+      env.model.other = 1;
+    });
+    expect(env.validator.reactionState).toBe(0);
+    expect(env.seen).toEqual([0]);
+  });
+
+  it("counts pending reactions per handler", () => {
+    const env = setupSyncHandler();
+    env.validator.addSyncHandler(() => {
+      void env.model.field;
+    });
+
+    runInAction(() => {
+      env.model.field = 1;
+    });
+    expect(env.validator.reactionState).toBe(2);
+    expect(env.validator.isValidating).toBe(true);
+
+    vi.advanceTimersByTime(100);
+    expect(env.validator.reactionState).toBe(0);
+    expect(env.validator.isValidating).toBe(false);
+  });
+
+  it("defers the initial run until the outermost action ends", () => {
+    const model = observable({ field: -1 });
+    const validator = Validator.get(model);
+    const handler = vi.fn();
+
+    runInAction(() => {
+      validator.addSyncHandler((b) => {
+        handler();
+        if (model.field < 0) b.invalidate("field", "negative");
+      });
+      expect(handler).not.toHaveBeenCalled();
+      expect(validator.isValid).toBe(true);
+    });
+    expect(handler).toHaveBeenCalledTimes(1);
+    expect(validator.isValid).toBe(false);
+  });
+});
+
+describe("Validator: sync handler failures", () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+    vi.restoreAllMocks();
+  });
+
+  it("does not propagate an exception thrown on the initial run", () => {
+    const consoleError = vi.spyOn(console, "error").mockImplementation(() => {});
+    const model = observable({ field: 0 });
+    const validator = Validator.get(model);
+    const failure = new Error("handler failure");
+
+    expect(() =>
+      validator.addSyncHandler(() => {
+        if (model.field === 0) throw failure;
+      })
+    ).not.toThrow();
+    expect(consoleError.mock.calls.some((args) => args.includes(failure))).toBe(true);
+    // PINNED(quirk): After the handler fails on its initial run, the effect is still invoked with an undefined result and crashes with a TypeError, which MobX logs as a second error. Decide: should the effect skip failed evaluations?
+    expect(consoleError.mock.calls.some((args) => args.some((arg) => arg instanceof TypeError))).toBe(true);
+    expect(validator.isValid).toBe(true);
+    expect(validator.reactionState).toBe(0);
+  });
+
+  it("stays in the validating state after the handler throws on a scheduled run", () => {
+    const consoleError = vi.spyOn(console, "error").mockImplementation(() => {});
+    const model = observable({ field: 0 });
+    const validator = Validator.get(model);
+    const failure = new Error("handler failure");
+    validator.addSyncHandler((b) => {
+      if (model.field === 1) throw failure;
+      if (model.field < 0) b.invalidate("field", "negative");
+    });
+
+    runInAction(() => {
+      model.field = -1;
+    });
+    vi.advanceTimersByTime(100);
+    expect(validator.isValid).toBe(false);
+    expect(consoleError).not.toHaveBeenCalled();
+
+    runInAction(() => {
+      model.field = 1;
+    });
+    vi.advanceTimersByTime(100);
+    expect(consoleError.mock.calls.some((args) => args.includes(failure))).toBe(true);
+    // PINNED(quirk): The errors of the last successful run are kept when the handler throws. Decide: should a failing handler clear its errors, keep them, or surface the exception as an error?
+    expect(validator.getErrorMessages("field" as KeyPath)).toEqual(new Set(["negative"]));
+    // PINNED(bug): The reaction's timer id is only removed by the effect, which is skipped when the handler throws, so reactionState stays 1 and isValidating stays true until the next successful run (`await when(() => !validator.isValidating)` hangs). Expected: reactionState returns to 0 once the scheduled run finishes, even if it failed. Flip these assertions when fixing.
+    expect(validator.reactionState).toBe(1);
+    expect(validator.isValidating).toBe(true);
+    vi.advanceTimersByTime(1000);
+    expect(validator.reactionState).toBe(1);
+
+    runInAction(() => {
+      model.field = 2;
+    });
+    vi.advanceTimersByTime(100);
+    expect(validator.reactionState).toBe(0);
+    expect(validator.isValid).toBe(true);
+  });
+});
+
+describe("Validator: async handler scheduling", () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it("starts the initial job synchronously with the current value and a live signal", async () => {
+    const env = setupAsyncHandler();
+    expect(env.runs.map((run) => run.payload)).toEqual([0]);
+    expect(env.runs[0].signal.aborted).toBe(false);
+    expect(env.validator.asyncState).toBe(1);
+    expect(env.validator.reactionState).toBe(0);
+
+    env.runs[0].job.resolve();
+    await flushMicrotasks();
+    expect(env.validator.asyncState).toBe(0);
+    expect(env.runs[0].signal.aborted).toBe(false);
+  });
+
+  it("applies errors only after the handler settles", async () => {
+    const model = observable({ field: -1 });
+    const validator = Validator.get(model);
+    const job = deferred();
+    validator.addAsyncHandler(
+      () => model.field,
+      async (_, b) => {
+        b.invalidate("field", "negative");
+        await job.promise;
+      }
+    );
+    await flushMicrotasks();
+    expect(validator.isValid).toBe(true);
+    expect(validator.isValidating).toBe(true);
+
+    job.resolve();
+    await flushMicrotasks();
+    expect(validator.isValid).toBe(false);
+    expect(validator.isValidating).toBe(false);
+  });
+
+  it("starts a job as soon as the reaction delay elapses when no job is running", async () => {
+    const env = setupAsyncHandler({ initialRun: false, delayMs: 50 });
+    runInAction(() => {
+      env.model.field = -1;
+    });
+    await vi.advanceTimersByTimeAsync(49);
+    expect(env.runs).toHaveLength(0);
+    expect(env.validator.reactionState).toBe(1);
+    expect(env.validator.asyncState).toBe(0);
+
+    await vi.advanceTimersByTimeAsync(1);
+    expect(env.runs.map((run) => run.payload)).toEqual([-1]);
+    expect(env.validator.reactionState).toBe(0);
+    expect(env.validator.asyncState).toBe(1);
+
+    env.runs[0].job.resolve();
+    await flushMicrotasks();
+    expect(env.validator.getErrorMessages("field" as KeyPath)).toEqual(new Set(["negative: -1"]));
+    expect(env.validator.asyncState).toBe(0);
+  });
+
+  it("lets the running job finish and then runs one follow-up job with the latest value", async () => {
+    const env = setupAsyncHandler({ initialRun: false });
+    runInAction(() => {
+      env.model.field = -1;
+    });
+    await vi.advanceTimersByTimeAsync(100);
+    expect(env.runs.map((run) => run.payload)).toEqual([-1]);
+
+    runInAction(() => {
+      env.model.field = -2;
+    });
+    await vi.advanceTimersByTimeAsync(100);
+    runInAction(() => {
+      env.model.field = -3;
+    });
+    await vi.advanceTimersByTimeAsync(100);
+    expect(env.runs).toHaveLength(1);
+    expect(env.validator.asyncState).toBe(1);
+    // PINNED(bug): A newer value does not abort the running job, contradicting the README ("Previous jobs are always cancelled: When a new async validation starts, any running validation is automatically aborted"; "Automatic cancellation on new changes"). Expected: the running job's signal is aborted once a newer value is requested. Flip this assertion when fixing.
+    expect(env.runs[0].signal.aborted).toBe(false);
+
+    env.runs[0].job.resolve();
+    await flushMicrotasks();
+    // PINNED(bug): The outdated job's result (for -1) is committed while the follow-up job is still pending. Expected: results of a superseded job are discarded. Flip this assertion when fixing.
+    expect(env.validator.getErrorMessages("field" as KeyPath)).toEqual(new Set(["negative: -1"]));
+    expect(env.validator.asyncState).toBe(1); // scheduled
+
+    await vi.advanceTimersByTimeAsync(99);
+    expect(env.runs).toHaveLength(1);
+    await vi.advanceTimersByTimeAsync(1);
+    expect(env.runs.map((run) => run.payload)).toEqual([-1, -3]);
+
+    env.runs[1].job.resolve();
+    await flushMicrotasks();
+    expect(env.validator.getErrorMessages("field" as KeyPath)).toEqual(new Set(["negative: -3"]));
+    expect(env.validator.asyncState).toBe(0);
+    expect(env.validator.isValidating).toBe(false);
+  });
+
+  it("ignores the equals option", async () => {
+    const model = observable({ field: 1 });
+    const validator = Validator.get(model);
+    const handler = vi.fn(async () => {});
+    validator.addAsyncHandler(() => ({ positive: model.field > 0 }), handler, {
+      equals: (a, b) => a.positive === b.positive,
+    });
+    await flushMicrotasks();
+    expect(handler).toHaveBeenCalledTimes(1);
+
+    runInAction(() => {
+      model.field = 2;
+    });
+    // The reaction is scheduled when a dependency changes, before the expression is re-evaluated,
+    // so this holds whether or not the comparer is honored.
+    expect(validator.reactionState).toBe(1);
+    await vi.advanceTimersByTimeAsync(100);
+    // PINNED(bug): HandlerOptions.equals is documented as "The equality comparer for the expression" but is never passed to reaction(), so an expression result that is equal by the comparer still re-runs the handler. Expected: the handler is called only once (toHaveBeenCalledTimes(2) -> toHaveBeenCalledTimes(1)). Flip this assertion when fixing.
+    expect(handler).toHaveBeenCalledTimes(2);
+  });
+
+  it("counts the job of each handler in asyncState", async () => {
+    const model = observable({ field: 0 });
+    const validator = Validator.get(model);
+    const job1 = deferred();
+    const job2 = deferred();
+    validator.addAsyncHandler(
+      () => model.field,
+      () => job1.promise
+    );
+    validator.addAsyncHandler(
+      () => model.field,
+      () => job2.promise
+    );
+    expect(validator.asyncState).toBe(2);
+
+    job1.resolve();
+    await flushMicrotasks();
+    expect(validator.asyncState).toBe(1);
+
+    job2.resolve();
+    await flushMicrotasks();
+    expect(validator.asyncState).toBe(0);
+  });
+});
+
+describe("Validator: async handler failures and cancellation", () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+    vi.restoreAllMocks();
+  });
+
+  it("logs an exception thrown by the handler and commits the errors collected before it", async () => {
+    const consoleError = vi.spyOn(console, "error").mockImplementation(() => {});
+    const model = observable({ field: 0 });
+    const validator = Validator.get(model);
+    const failure = new Error("handler failure");
+    validator.addAsyncHandler(
+      () => model.field,
+      async (_, b) => {
+        b.invalidate("field", "collected before the failure");
+        throw failure;
+      }
+    );
+    await flushMicrotasks();
+
+    expect(consoleError).toHaveBeenCalledWith(failure);
+    expect(validator.asyncState).toBe(0);
+    // PINNED(quirk): Errors added to the builder before the handler threw are committed (the commit runs in a finally block). Decide: should a failed async validation discard partial errors, keep them, or keep the previous result?
+    expect(validator.getErrorMessages("field" as KeyPath)).toEqual(new Set(["collected before the failure"]));
+  });
+
+  it("aborts the running job when the handler is disposed, but commits its result if the handler ignores the signal", async () => {
+    const env = setupAsyncHandler(undefined, -1);
+    env.dispose();
+    expect(env.runs[0].signal.aborted).toBe(true);
+    expect(env.validator.asyncState).toBe(0);
+    expect(env.validator.isValidating).toBe(false);
+    expect(env.validator.isValid).toBe(true);
+
+    env.runs[0].job.resolve();
+    await flushMicrotasks();
+    // PINNED(bug): The aborted job still commits its errors under the disposed handler's key when it settles, and nothing but reset() can remove them afterwards. Expected: results of an aborted job are discarded and isValid stays true. Flip this assertion when fixing.
+    expect(env.validator.isValid).toBe(false);
+  });
+
+  it("aborts the running job on reset, but commits its result if the handler ignores the signal", async () => {
+    const env = setupAsyncHandler(undefined, -1);
+    env.validator.reset();
+    expect(env.runs[0].signal.aborted).toBe(true);
+    expect(env.validator.asyncState).toBe(0);
+    expect(env.validator.isValid).toBe(true);
+
+    env.runs[0].job.resolve();
+    await flushMicrotasks();
+    // PINNED(bug): Errors of the job aborted by reset() reappear once it settles, without any change to the model. Expected: results of an aborted job are discarded and isValid stays true. Flip this assertion when fixing.
+    expect(env.validator.isValid).toBe(false);
+  });
+
+  it("logs the rejection of a handler that honors the abort signal", async () => {
+    const consoleError = vi.spyOn(console, "error").mockImplementation(() => {});
+    const model = observable({ field: 0 });
+    const validator = Validator.get(model);
+    const dispose = validator.addAsyncHandler(
+      () => model.field,
+      (_, __, signal) =>
+        new Promise<void>((_resolve, reject) => {
+          signal.addEventListener("abort", () => reject(signal.reason));
+        })
+    );
+
+    dispose();
+    await flushMicrotasks();
+    // PINNED(quirk): An AbortError from a handler that honors its signal (e.g. fetch(url, { signal })) is reported via console.error like any other failure. Decide: should aborts be swallowed silently?
+    expect(consoleError).toHaveBeenCalledTimes(1);
+    expect(consoleError.mock.calls[0][0]).toMatchObject({ name: "AbortError" });
+    expect(validator.isValid).toBe(true);
+  });
+
+  it("does not run a queued job after the handler is disposed", async () => {
+    const env = setupAsyncHandler({ initialRun: false });
+    runInAction(() => {
+      env.model.field = -1;
+    });
+    await vi.advanceTimersByTimeAsync(100);
+    runInAction(() => {
+      env.model.field = -2;
+    });
+    await vi.advanceTimersByTimeAsync(100);
+    env.runs[0].job.resolve();
+    await flushMicrotasks();
+    expect(env.validator.asyncState).toBe(1); // scheduled
+    expect(env.validator.isValid).toBe(false);
+
+    env.dispose();
+    expect(env.validator.asyncState).toBe(0);
+    expect(env.validator.isValid).toBe(true);
+
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(env.runs).toHaveLength(1);
+  });
+});
+
+describe("Validator: handler disposal", () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it("removes the errors of a sync handler and stops reacting", () => {
+    const env = setupSyncHandler(undefined, -1);
+    expect(env.validator.isValid).toBe(false);
+
+    env.dispose();
+    expect(env.validator.isValid).toBe(true);
+
+    runInAction(() => {
+      env.model.field = -2;
+    });
+    expect(env.validator.reactionState).toBe(0);
+    vi.advanceTimersByTime(100);
+    expect(env.validator.isValid).toBe(true);
+    expect(env.seen).toEqual([-1]);
+  });
+
+  it("clears a pending reaction", () => {
+    const env = setupSyncHandler();
+    runInAction(() => {
+      env.model.field = -1;
+    });
+    expect(env.validator.reactionState).toBe(1);
+
+    env.dispose();
+    expect(env.validator.reactionState).toBe(0);
+    vi.advanceTimersByTime(100);
+    expect(env.seen).toEqual([0]);
+    expect(env.validator.isValid).toBe(true);
+  });
+
+  it("only removes the errors of the disposed handler", () => {
+    const model = observable({ field: -1 });
+    const validator = Validator.get(model);
+    const disposeA = validator.addSyncHandler((b) => {
+      if (model.field < 0) b.invalidate("field", "A");
+    });
+    validator.addSyncHandler((b) => {
+      if (model.field < 0) b.invalidate("field", "B");
+    });
+    validator.updateErrors(Symbol(), (b) => b.invalidate("field", "manual"));
+    expect(validator.getErrorMessages("field" as KeyPath)).toEqual(new Set(["A", "B", "manual"]));
+
+    disposeA();
+    expect(validator.getErrorMessages("field" as KeyPath)).toEqual(new Set(["B", "manual"]));
+    expect(validator.invalidKeyCount).toBe(1);
+  });
+
+  it("can be called more than once", () => {
+    const sync = setupSyncHandler(undefined, -1);
+    sync.dispose();
+    expect(() => sync.dispose()).not.toThrow();
+    expect(sync.validator.isValid).toBe(true);
+
+    const async = setupAsyncHandler(undefined, -1);
+    async.dispose();
+    expect(() => async.dispose()).not.toThrow();
+    expect(async.validator.asyncState).toBe(0);
+  });
+});
+
+describe("Validator: #reset edge cases", () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it("keeps errors away until a relevant change even if the handler would still report them", () => {
+    const env = setupSyncHandler(undefined, -1);
+    expect(env.validator.isValid).toBe(false);
+
+    env.validator.reset();
+    expect(env.validator.isValid).toBe(true);
+    vi.advanceTimersByTime(1000);
+    expect(env.validator.isValid).toBe(true);
+
+    runInAction(() => {
+      env.model.field = -2;
+    });
+    vi.advanceTimersByTime(100);
+    expect(env.validator.isValid).toBe(false);
+  });
+
+  it("evaluates a pending sync handler immediately and discards its result", () => {
+    const env = setupSyncHandler();
+    runInAction(() => {
+      env.model.field = -1;
+    });
+    expect(env.validator.reactionState).toBe(1);
+
+    env.validator.reset();
+    // reset() deliberately runs the pending reaction (the scheduler's reset callback calls fn(), which MobX
+    // needs so that the reaction can be scheduled again), and the effect guard drops the result.
+    expect(env.seen).toEqual([0, -1]);
+    expect(env.validator.isValid).toBe(true);
+    expect(env.validator.reactionState).toBe(0);
+
+    vi.advanceTimersByTime(100);
+    expect(env.seen).toEqual([0, -1]);
+  });
+
+  it("re-evaluates a sync handler whose scheduled reaction has already run", () => {
+    const env = setupSyncHandler();
+    runInAction(() => {
+      env.model.field = -1;
+    });
+    vi.advanceTimersByTime(100);
+    expect(env.seen).toEqual([0, -1]);
+
+    env.validator.reset();
+    // PINNED(quirk): The reset callback stored when a reaction is scheduled is not removed after the scheduled run, so the next reset() re-runs the handler although nothing is pending. Decide: should the callback be dropped once the scheduled reaction has run?
+    expect(env.seen).toEqual([0, -1, -1]);
+
+    env.validator.reset();
+    expect(env.seen).toEqual([0, -1, -1]);
+  });
+
+  it("goes back to the validating state after reset when a request was queued behind the running job", async () => {
+    const env = setupAsyncHandler({ initialRun: false });
+    runInAction(() => {
+      env.model.field = -1;
+    });
+    await vi.advanceTimersByTimeAsync(100);
+    runInAction(() => {
+      env.model.field = -2;
+    });
+    await vi.advanceTimersByTimeAsync(100);
+    expect(env.runs).toHaveLength(1);
+
+    env.validator.reset();
+    expect(env.validator.asyncState).toBe(0);
+    expect(env.validator.isValidating).toBe(false);
+
+    env.runs[0].job.resolve();
+    await flushMicrotasks();
+    // PINNED(bug): AsyncJob.reset() does not clear the "next job requested" flag, so when the aborted job settles the job re-enters the scheduled state and isValidating flips back to true for delayMs without any change. Expected: asyncState stays 0 after reset(). Flip this assertion when fixing.
+    expect(env.validator.asyncState).toBe(1);
+
+    await vi.advanceTimersByTimeAsync(100);
+    expect(env.validator.asyncState).toBe(0);
+    expect(env.runs).toHaveLength(1); // the queued payload was cleared, so the handler is not called
+  });
+
+  it("does not reset nested validators", () => {
+    class Child {
+      @observable field = true;
+
+      constructor() {
+        makeObservable(this);
+      }
+    }
+    class Parent {
+      @nested child = new Child();
+    }
+    const parent = new Parent();
+    Validator.get(parent.child).updateErrors(Symbol(), (b) => b.invalidate("field", "invalid"));
+    const validator = Validator.get(parent);
+    expect(validator.isValid).toBe(false);
+
+    validator.reset();
+    // PINNED(quirk): reset() only clears the validator's own errors, reactions and jobs; nested validators keep their errors, so the parent stays invalid (unlike Watcher#reset(), which resets nested watchers). Decide: should reset() cascade to nested validators?
+    expect(validator.isValid).toBe(false);
+    expect(Validator.get(parent.child).isValid).toBe(false);
+  });
+});
+
+describe("Validator: nested key paths", () => {
+  class Leaf {
+    @observable field = true;
+
+    constructor() {
+      makeObservable(this);
+    }
+  }
+
+  class Container {
+    @nested @observable items = [new Leaf(), new Leaf()];
+    @nested @observable maybe: Leaf | null = null;
+    @nested @observable map = new Map([["key", new Leaf()]]);
+    @nested @observable set = new Set([new Leaf()]);
+
+    constructor() {
+      makeObservable(this);
+    }
+  }
+
+  class HoistedObject {
+    @nested.hoist inner = new Leaf();
+  }
+
+  class HoistedArray {
+    @nested.hoist list = [new Leaf(), new Leaf()];
+  }
+
+  const invalidateLeaf = (leaf: Leaf, message: string) =>
+    Validator.get(leaf).updateErrors(Symbol(), (b) => b.invalidate("field", message));
+
+  it("exposes nested validators by key path and skips non-object values", () => {
+    const container = new Container();
+    const validator = Validator.get(container);
+    expect([...validator.nested.keys()]).toEqual(["items.0", "items.1", "map.key", "set.0"]);
+    expect(validator.nested.get("items.1" as KeyPath)).toBe(Validator.get(container.items[1]));
+    expect(validator.nested.get("set.0" as KeyPath)).toBe(Validator.get([...container.set][0]));
+  });
+
+  it("builds key paths of array, map and set elements", () => {
+    const container = new Container();
+    const validator = Validator.get(container);
+    invalidateLeaf(container.items[1], "item");
+    invalidateLeaf(container.map.get("key")!, "map");
+    invalidateLeaf([...container.set][0], "set");
+
+    expect(validator.isValid).toBe(false);
+    expect(validator.invalidKeyPaths).toEqual(new Set(["items.1.field", "map.key.field", "set.0.field"]));
+    expect(validator.invalidKeyPathCount).toBe(3);
+    expect(validator.invalidKeys).toEqual(new Set());
+    expect(validator.invalidKeyCount).toBe(0);
+    expect(validator.getErrorMessages("map.key.field" as KeyPath)).toEqual(new Set(["map"]));
+    expect(validator.getErrorMessages("set.0.field" as KeyPath)).toEqual(new Set(["set"]));
+  });
+
+  it("counts a key path reported by both the parent and a nested validator once", () => {
+    class Parent {
+      @nested child = new Leaf();
+    }
+    const parent = new Parent();
+    const validator = Validator.get(parent);
+    validator.updateErrors(Symbol(), (b) => b.invalidate("child", "from parent"));
+    Validator.get(parent.child).updateErrors(Symbol(), (b) => b.invalidateSelf("from child"));
+
+    expect(validator.invalidKeyPaths).toEqual(new Set(["child"]));
+    expect(validator.invalidKeyPathCount).toBe(1);
+    expect(validator.getErrorMessages("child" as KeyPath)).toEqual(new Set(["from parent", "from child"]));
+  });
+
+  it("uses a nested error as the first error message when the parent has none", () => {
+    const container = new Container();
+    invalidateLeaf(container.items[1], "second item");
+    expect(Validator.get(container).firstErrorMessage).toBe("second item");
+  });
+
+  it("updates reactively when nested objects are added, replaced or removed", () => {
+    const container = new Container();
+    const validator = Validator.get(container);
+    const invalid = new Leaf();
+    invalidateLeaf(invalid, "invalid");
+
+    const observed: number[] = [];
+    const dispose = autorun(() => {
+      observed.push(validator.invalidKeyPathCount);
+    });
+    runInAction(() => {
+      container.maybe = invalid;
+    });
+    runInAction(() => {
+      container.items.push(invalid);
+    });
+    runInAction(() => {
+      container.maybe = null;
+    });
+    runInAction(() => {
+      container.items.splice(2, 1);
+    });
+    dispose();
+
+    expect(observed).toEqual([0, 1, 2, 1, 0]);
+  });
+
+  it("finds errors of a specific array element with an exact search", () => {
+    const container = new Container();
+    const validator = Validator.get(container);
+    invalidateLeaf(container.items[0], "first item");
+    invalidateLeaf(container.items[1], "second item");
+
+    expect(listErrors(validator.findErrors("items.1" as KeyPath))).toEqual([["items.1.field", "second item"]]);
+    expect(listErrors(validator.findErrors("items.1.field" as KeyPath))).toEqual([["items.1.field", "second item"]]);
+  });
+
+  it("stops at the first array element with a prefix search on the array", () => {
+    const container = new Container();
+    const validator = Validator.get(container);
+    invalidateLeaf(container.items[0], "first item");
+    invalidateLeaf(container.items[1], "second item");
+
+    // PINNED(bug): #findErrors breaks out of the ancestor loop after the first element of "items", so the errors of items.1 are missing. Expected: [["items.0.field", "first item"], ["items.1.field", "second item"]] ("Includes errors from nested validators when using prefix match"). Flip this assertion when fixing.
+    expect(listErrors(validator.findErrors("items" as KeyPath, true))).toEqual([["items.0.field", "first item"]]);
+  });
+
+  it("misses an invalid later array element in prefix-matched hasErrors/getErrorMessages", () => {
+    const container = new Container();
+    const validator = Validator.get(container);
+    invalidateLeaf(container.items[1], "second item");
+    expect(validator.invalidKeyPaths).toEqual(new Set(["items.1.field"]));
+
+    // PINNED(bug): Only the first element under "items" is searched with prefixMatch, so an error on items.1 is not found. Expected: hasErrors("items", true) is true and getErrorMessages("items", true) is Set(["second item"]). Flip these assertions when fixing.
+    expect(validator.hasErrors("items" as KeyPath, true)).toBe(false);
+    expect(validator.getErrorMessages("items" as KeyPath, true)).toEqual(new Set());
+  });
+
+  it("returns the errors of the first element when prefix-searching another element", () => {
+    const container = new Container();
+    const validator = Validator.get(container);
+    invalidateLeaf(container.items[0], "first item");
+    invalidateLeaf(container.items[1], "second item");
+
+    // PINNED(bug): With prefixMatch, the relative path of every element under an array key is replaced by KeyPath.Self, so searching "items.1" yields the errors of items.0. Expected: [["items.1.field", "second item"]]. Flip this assertion when fixing.
+    expect(listErrors(validator.findErrors("items.1" as KeyPath, true))).toEqual([["items.0.field", "first item"]]);
+  });
+
+  it("returns every error of an array element when prefix-searching a key path below it", () => {
+    class Row {
+      @observable field = 0;
+      @observable other = 0;
+
+      constructor() {
+        makeObservable(this);
+      }
+    }
+    class Table {
+      @nested @observable rows = [new Row()];
+
+      constructor() {
+        makeObservable(this);
+      }
+    }
+    const table = new Table();
+    const validator = Validator.get(table);
+    Validator.get(table.rows[0]).updateErrors(Symbol(), (b) => b.invalidate("other", "other"));
+
+    expect(validator.hasErrors("rows.0.field" as KeyPath)).toBe(false);
+    expect(listErrors(validator.findErrors("rows.0" as KeyPath, true))).toEqual([["rows.0.other", "other"]]);
+    // PINNED(bug): With prefixMatch, the path below an array element is replaced by KeyPath.Self, so searching "rows.0.field" yields the errors of "rows.0.other" too. Expected: findErrors("rows.0.field", true) is empty and hasErrors("rows.0.field", true) is false. Flip these assertions when fixing.
+    expect(listErrors(validator.findErrors("rows.0.field" as KeyPath, true))).toEqual([["rows.0.other", "other"]]);
+    expect(validator.hasErrors("rows.0.field" as KeyPath, true)).toBe(true);
+  });
+
+  it("includes errors of a hoisted object in findErrors(Self) but not in lookups by key path", () => {
+    const hoisted = new HoistedObject();
+    const validator = Validator.get(hoisted);
+    invalidateLeaf(hoisted.inner, "hoisted");
+
+    expect(listErrors(validator.findErrors(KeyPath.Self))).toEqual([["field", "hoisted"]]);
+    expect(validator.invalidKeyPaths).toEqual(new Set(["field"]));
+    expect(validator.firstErrorMessage).toBe("hoisted");
+    // PINNED(quirk): invalidKeys/invalidKeyCount ignore hoisted errors although hoisted objects are "treated as part of the parent object". Decide: should hoisted keys count as the parent's own keys?
+    expect(validator.invalidKeys).toEqual(new Set());
+    expect(validator.invalidKeyCount).toBe(0);
+    // PINNED(bug): Lookups by key path only consult fetchers for the ancestors of the searched path and never the hoisted (KeyPath.Self) one, so "field" of the hoisted object is not found although invalidKeyPaths lists it. Expected: hasErrors("field") is true and getErrorMessages("field") is Set(["hoisted"]) ("Changes and errors from nested objects appear on the parent"). Flip these assertions when fixing.
+    expect(validator.hasErrors("field" as KeyPath)).toBe(false);
+    expect(validator.hasErrors("field" as KeyPath, true)).toBe(false);
+    expect(validator.getErrorMessages("field" as KeyPath)).toEqual(new Set());
+  });
+
+  it("includes errors of hoisted array elements only in a prefix search from Self", () => {
+    const hoisted = new HoistedArray();
+    const validator = Validator.get(hoisted);
+    invalidateLeaf(hoisted.list[1], "second");
+
+    expect(validator.invalidKeyPaths).toEqual(new Set(["1.field"]));
+    expect(listErrors(validator.findErrors(KeyPath.Self, true))).toEqual([["1.field", "second"]]);
+    expect(listErrors(validator.findErrors(KeyPath.Self))).toEqual([]); // only self errors of hoisted elements
+    // PINNED(bug): Same as for hoisted objects: key path lookups never consult the hoisted fetcher, so "1.field" and the prefix "1" are not found. Expected: [["1.field", "second"]] and hasErrors("1", true) === true. Flip these assertions when fixing.
+    expect(listErrors(validator.findErrors("1.field" as KeyPath))).toEqual([]);
+    expect(validator.hasErrors("1" as KeyPath, true)).toBe(false);
+  });
+
+  it("reports isValidating while a reaction of a nested validator is pending", () => {
+    vi.useFakeTimers();
+    try {
+      class ValidatedLeaf {
+        @observable field = true;
+
+        constructor() {
+          makeObservable(this);
+          makeValidatable(this, (b) => {
+            if (!this.field) b.invalidate("field", "invalid");
+          });
+        }
+      }
+      class Holder {
+        @nested @observable child = new ValidatedLeaf();
+
+        constructor() {
+          makeObservable(this);
+        }
+      }
+      const holder = new Holder();
+      const validator = Validator.get(holder);
+
+      runInAction(() => {
+        holder.child.field = false;
+      });
+      expect(validator.reactionState).toBe(0);
+      expect(validator.isValidating).toBe(true);
+      expect(validator.isValid).toBe(true);
+
+      vi.advanceTimersByTime(100);
+      expect(validator.isValidating).toBe(false);
+      expect(validator.invalidKeyPaths).toEqual(new Set(["child.field"]));
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("throws a MobX cycle error when nested objects reference each other", () => {
+    class LinkedNode {
+      @nested @observable next: LinkedNode | null = null;
+
+      constructor() {
+        makeObservable(this);
+      }
+    }
+    const a = new LinkedNode();
+    const b = new LinkedNode();
+    runInAction(() => {
+      a.next = b;
+      b.next = a;
+    });
+
+    // PINNED(quirk): Cyclic @nested graphs are unsupported: the aggregating computeds recurse into themselves and MobX throws "Cycle detected in computation". Decide: should cycles be detected and skipped (e.g. by tracking visited validators)?
+    expect(() => Validator.get(a).isValid).toThrow(/Cycle detected/);
+    expect(() => Validator.get(a).isValidating).toThrow(/Cycle detected/);
+  });
+});
+
+describe("Validator: types", () => {
+  it("types the accessors", () => {
+    const target = { field: 0 };
+    expectTypeOf(Validator.get(target)).toEqualTypeOf<Validator<{ field: number }>>();
+    expectTypeOf(Validator.getSafe(target)).toEqualTypeOf<Validator<{ field: number }> | null>();
+    expectTypeOf(Validator.getSafe(1)).toEqualTypeOf<Validator<number> | null>();
+    // @ts-expect-error primitives are rejected by get()
+    expect(() => Validator.get(1)).toThrow(TypeError);
+    // @ts-expect-error the constructor is private
+    expect(() => new Validator()).toThrow("private constructor");
+    expectTypeOf(Validator.defaultDelayMs).toEqualTypeOf<number>();
+  });
+
+  it("types the handler registration APIs", () => {
+    const model = observable({ field: 0, name: "" });
+    const validator = Validator.get(model);
+    const disposers: Array<() => void> = [];
+
+    const disposeSync = validator.addSyncHandler((b) => {
+      expectTypeOf(b).toEqualTypeOf<ValidationErrorMapBuilder<typeof model>>();
+      b.invalidate("field", "ok");
+      // @ts-expect-error unknown keys are rejected
+      b.invalidate("unknown", "ng");
+    });
+    expectTypeOf(disposeSync).toEqualTypeOf<() => void>();
+    disposers.push(disposeSync);
+
+    const disposeAsync = validator.addAsyncHandler(
+      () => model.name,
+      async (name, b, signal) => {
+        expectTypeOf(name).toEqualTypeOf<string>();
+        expectTypeOf(b).toEqualTypeOf<ValidationErrorMapBuilder<typeof model>>();
+        expectTypeOf(signal).toEqualTypeOf<AbortSignal>();
+      },
+      {
+        equals: (a, b) => {
+          expectTypeOf(a).toEqualTypeOf<string>();
+          return a === b;
+        },
+      }
+    );
+    expectTypeOf(disposeAsync).toEqualTypeOf<() => void>();
+    disposers.push(disposeAsync);
+
+    disposers.push(
+      validator.addAsyncHandler(
+        () => model.name,
+        // @ts-expect-error the handler cannot change the type inferred from the expression
+        async (_name: number) => {}
+      )
+    );
+
+    const disposeMakeSync = makeValidatable(model, () => {});
+    expectTypeOf(disposeMakeSync).toEqualTypeOf<() => void>();
+    disposers.push(disposeMakeSync);
+
+    const disposeMakeAsync = makeValidatable(
+      model,
+      () => model.field,
+      async (field) => {
+        expectTypeOf(field).toEqualTypeOf<number>();
+      }
+    );
+    expectTypeOf(disposeMakeAsync).toEqualTypeOf<() => void>();
+    disposers.push(disposeMakeAsync);
+
+    expectTypeOf(validator.updateErrors(Symbol(), () => {})).toEqualTypeOf<() => void>();
+    expectTypeOf<Validator.HandlerOptions<string>>().toEqualTypeOf<{
+      initialRun?: boolean;
+      delayMs?: number;
+      equals?: IEqualsComparer<string>;
+    }>();
+
+    for (const dispose of disposers) dispose();
+  });
+
+  it("types the query APIs", () => {
+    const validator = Validator.get({ field: 0 });
+    expectTypeOf(validator.id).toEqualTypeOf<string>();
+    expectTypeOf(validator.isValid).toEqualTypeOf<boolean>();
+    expectTypeOf(validator.isValidating).toEqualTypeOf<boolean>();
+    expectTypeOf(validator.reactionState).toEqualTypeOf<number>();
+    expectTypeOf(validator.asyncState).toEqualTypeOf<number>();
+    expectTypeOf(validator.invalidKeys).toEqualTypeOf<ReadonlySet<KeyPath>>();
+    expectTypeOf(validator.invalidKeyPaths).toEqualTypeOf<ReadonlySet<KeyPath>>();
+    expectTypeOf(validator.invalidKeyCount).toEqualTypeOf<number>();
+    expectTypeOf(validator.invalidKeyPathCount).toEqualTypeOf<number>();
+    expectTypeOf(validator.nested).toEqualTypeOf<ReadonlyMap<KeyPath, Validator<any>>>();
+    expectTypeOf(validator.getErrorMessages(KeyPath.Self)).toEqualTypeOf<Set<string>>();
+    expectTypeOf(validator.hasErrors(KeyPath.Self)).toEqualTypeOf<boolean>();
+    expectTypeOf(validator.findErrors(KeyPath.Self)).toMatchTypeOf<Iterable<[KeyPath, ValidationError]>>();
+    // `null` is intended (see "#firstErrorMessage returns null when there are no errors"); the README's "string | undefined" is outdated.
+    expectTypeOf(validator.firstErrorMessage).toEqualTypeOf<string | null>();
+    expect(validator.firstErrorMessage).toBeNull();
+  });
+
+  it("types the makeValidatable overloads and handler signatures", () => {
+    const model = observable({ field: 0, name: "" });
+    const disposers: Array<() => void> = [];
+
+    // @ts-expect-error primitives are rejected as the target
+    expect(() => makeValidatable(1, () => {})).toThrow(TypeError);
+
+    disposers.push(
+      makeValidatable(model, (b) => {
+        expectTypeOf(b).toEqualTypeOf<ValidationErrorMapBuilder<typeof model>>();
+        // @ts-expect-error unknown keys are rejected
+        b.invalidate("unknown", "ng");
+      })
+    );
+    disposers.push(
+      makeValidatable(
+        model,
+        () => model.name,
+        async (name, b, signal) => {
+          expectTypeOf(name).toEqualTypeOf<string>();
+          expectTypeOf(b).toEqualTypeOf<ValidationErrorMapBuilder<typeof model>>();
+          expectTypeOf(signal).toEqualTypeOf<AbortSignal>();
+        },
+        { delayMs: 10, equals: (a, b) => a === b }
+      )
+    );
+    disposers.push(
+      Validator.get(model).addAsyncHandler(
+        () => model.name,
+        // @ts-expect-error async handlers must return a promise
+        () => {}
+      )
+    );
+
+    expectTypeOf<Validator.SyncHandler<typeof model>>().toEqualTypeOf<
+      (builder: ValidationErrorMapBuilder<typeof model>) => void
+    >();
+    expectTypeOf<Validator.InstantHandler<typeof model>>().toEqualTypeOf<Validator.SyncHandler<typeof model>>();
+    expectTypeOf<Validator.AsyncHandler<typeof model, string>>().toEqualTypeOf<
+      (expr: string, builder: ValidationErrorMapBuilder<typeof model>, abortSignal: AbortSignal) => Promise<void>
+    >();
+    Validator.get(model).updateErrors(Symbol(), (b) => {
+      expectTypeOf(b).toEqualTypeOf<ValidationErrorMapBuilder<typeof model>>();
+    });
+
+    for (const dispose of disposers) dispose();
+  });
+});
+
+describe("Validator: key names containing dots", () => {
+  it("treats the part before the first dot as the key of an error", () => {
+    const target = { a: 0, "a.b": 0 };
+    const validator = Validator.get(target);
+    validator.updateErrors(Symbol(), (b) => {
+      b.invalidate("a.b", "dotted");
+    });
+
+    expect(validator.invalidKeyPaths).toEqual(new Set(["a.b"]));
+    // PINNED(quirk): invalidate() does not escape dots, so a property named "a.b" is recorded as the nested key path a.b: invalidKeys reports "a" (which has no error of its own) and an exact lookup of "a" finds nothing while a prefix lookup does. Decide: should dotted property names be escaped or rejected, so that invalidKeys reports "a.b"?
+    expect(validator.invalidKeys).toEqual(new Set(["a"]));
+    expect(validator.hasErrors("a" as KeyPath)).toBe(false);
+    expect(listErrors(validator.findErrors("a" as KeyPath, true))).toEqual([["a.b", "dotted"]]);
+    expect(listErrors(validator.findErrors("a.b" as KeyPath))).toEqual([["a.b", "dotted"]]);
+
+    validator.updateErrors(Symbol(), (b) => {
+      b.invalidate("a", "plain");
+    });
+    expect(validator.invalidKeyCount).toBe(1);
+    expect(validator.invalidKeyPathCount).toBe(2);
+  });
+
+  it("reports the full key path of a dotted key found through a nested validator", () => {
+    class Leaf {
+      "x.y" = 0;
+    }
+    class Parent {
+      @nested child = new Leaf();
+    }
+    const parent = new Parent();
+    Validator.get(parent.child).updateErrors(Symbol(), (b) => b.invalidate("x.y", "deep"));
+    const validator = Validator.get(parent);
+
+    expect(validator.invalidKeyPaths).toEqual(new Set(["child.x.y"]));
+    expect(listErrors(validator.findErrors("child.x" as KeyPath, true))).toEqual([["child.x.y", "deep"]]);
+    expect(listErrors(validator.findErrors("child" as KeyPath))).toEqual([["child.x.y", "deep"]]);
+    expect(listErrors(validator.findErrors("child.x" as KeyPath))).toEqual([]);
+  });
+});
+
+describe("Validator: change notifications", () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it("does not notify observers of invalidKeyPaths when only the messages of own or nested errors change", () => {
+    class Leaf {
+      @observable field = 0;
+
+      constructor() {
+        makeObservable(this);
+      }
+    }
+    class Parent {
+      @nested child = new Leaf();
+    }
+    const parent = new Parent();
+    const validator = Validator.get(parent);
+    const childValidator = Validator.get(parent.child);
+    const key = Symbol();
+    validator.updateErrors(key, (b) => b.invalidate("child", "parent 1"));
+    childValidator.updateErrors(key, (b) => b.invalidate("field", "child 1"));
+
+    const observer = vi.fn();
+    const dispose = autorun(() => observer(validator.invalidKeyPaths));
+    validator.updateErrors(key, (b) => b.invalidate("child", "parent 2"));
+    childValidator.updateErrors(key, (b) => b.invalidate("field", "child 2"));
+    expect(observer).toHaveBeenCalledTimes(1);
+
+    childValidator.updateErrors(key, () => {});
+    expect(observer).toHaveBeenCalledTimes(2);
+    expect(observer).toHaveBeenLastCalledWith(new Set(["child"]));
+    dispose();
+  });
+
+  it("notifies observers once for all the state changes made by reset()", () => {
+    const env = setupSyncHandler(undefined, -1);
+    const observed: Array<[boolean, number]> = [];
+    const dispose = autorun(() => {
+      observed.push([env.validator.isValid, env.validator.reactionState]);
+    });
+    runInAction(() => {
+      env.model.field = -2;
+    });
+    expect(observed).toEqual([
+      [false, 0],
+      [false, 1],
+    ]);
+
+    env.validator.reset();
+    expect(observed).toEqual([
+      [false, 0],
+      [false, 1],
+      [true, 0],
+    ]);
+    dispose();
+  });
+
+  it("notifies observers once for all the state changes made by a handler disposer", () => {
+    const env = setupSyncHandler(undefined, -1);
+    const observed: Array<[boolean, number]> = [];
+    const dispose = autorun(() => {
+      observed.push([env.validator.isValid, env.validator.reactionState]);
+    });
+    runInAction(() => {
+      env.model.field = -2;
+    });
+
+    env.dispose();
+    expect(observed).toEqual([
+      [false, 0],
+      [false, 1],
+      [true, 0],
+    ]);
+    dispose();
+  });
+});
+
+describe("Validator: timers and pending reactions", () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it("clears the reaction timer when the handler is disposed or the validator is reset", () => {
+    const disposed = setupSyncHandler();
+    runInAction(() => {
+      disposed.model.field = -1;
+    });
+    expect(vi.getTimerCount()).toBe(1);
+    disposed.dispose();
+    expect(vi.getTimerCount()).toBe(0);
+
+    const reset = setupSyncHandler();
+    runInAction(() => {
+      reset.model.field = -1;
+    });
+    expect(vi.getTimerCount()).toBe(1);
+    reset.validator.reset();
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
+  it.each([
+    { name: "after the initial run", opt: undefined, initialRuns: 1 },
+    { name: "when initialRun is false", opt: { initialRun: false }, initialRuns: 0 },
+  ])("does not start an async job for a reaction pending at reset() ($name)", async ({ opt, initialRuns }) => {
+    const env = setupAsyncHandler(opt);
+    for (const run of env.runs) run.job.resolve();
+    await flushMicrotasks();
+
+    runInAction(() => {
+      env.model.field = -1;
+    });
+    expect(env.validator.reactionState).toBe(1);
+
+    env.validator.reset();
+    expect(env.runs).toHaveLength(initialRuns);
+    expect(env.validator.asyncState).toBe(0);
+    expect(env.validator.isValidating).toBe(false);
+
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(env.runs).toHaveLength(initialRuns);
+    expect(env.validator.isValid).toBe(true);
+  });
+
+  it("stays in the validating state when an async expression returns to its previous value before the delay elapses", async () => {
+    const env = setupAsyncHandler({ initialRun: false });
+    runInAction(() => {
+      env.model.field = -1;
+    });
+    runInAction(() => {
+      env.model.field = 0;
+    });
+    expect(env.validator.reactionState).toBe(1);
+
+    await vi.advanceTimersByTimeAsync(100);
+    expect(env.runs).toHaveLength(0);
+    expect(vi.getTimerCount()).toBe(0);
+    // PINNED(bug): MobX skips the effect when the expression value is unchanged, and the effect is the only place that removes the reaction's timer id, so reactionState stays 1 and isValidating stays true although nothing is pending (`await when(() => !validator.isValidating)` hangs). Expected: reactionState returns to 0 once the scheduled run has fired. Flip these assertions when fixing.
+    expect(env.validator.reactionState).toBe(1);
+    expect(env.validator.isValidating).toBe(true);
+
+    // A later change of the value recovers the state
+    runInAction(() => {
+      env.model.field = -2;
+    });
+    await vi.advanceTimersByTimeAsync(100);
+    expect(env.runs.map((run) => run.payload)).toEqual([-2]);
+    expect(env.validator.reactionState).toBe(0);
+  });
+
+  it("stays in the validating state when a derived async expression does not change", async () => {
+    const model = observable({ field: 1 });
+    const validator = Validator.get(model);
+    const handler = vi.fn(async () => {});
+    validator.addAsyncHandler(() => model.field > 0, handler);
+    await flushMicrotasks();
+    expect(validator.isValidating).toBe(false);
+
+    runInAction(() => {
+      model.field = 2;
+    });
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(handler).toHaveBeenCalledTimes(1);
+    // PINNED(bug): Same as above: the expression (`field > 0`) stays true, the effect is skipped and the timer id is never removed, so isValidating stays true after an unrelated change of the observed field. Expected: reactionState 0 and isValidating false. Flip these assertions when fixing.
+    expect(validator.reactionState).toBe(1);
+    expect(validator.isValidating).toBe(true);
+
+    // reset() recovers the state
+    validator.reset();
+    expect(validator.isValidating).toBe(false);
+  });
+});
+
+describe("Validator: async job lifecycle", () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it("honors the delayMs option for the follow-up job queued behind a running job", async () => {
+    const env = setupAsyncHandler({ initialRun: false, delayMs: 30 });
+    runInAction(() => {
+      env.model.field = -1;
+    });
+    await vi.advanceTimersByTimeAsync(30);
+    runInAction(() => {
+      env.model.field = -2;
+    });
+    await vi.advanceTimersByTimeAsync(30);
+    expect(env.runs).toHaveLength(1);
+
+    env.runs[0].job.resolve();
+    await flushMicrotasks();
+    await vi.advanceTimersByTimeAsync(29);
+    expect(env.runs).toHaveLength(1);
+    await vi.advanceTimersByTimeAsync(1);
+    expect(env.runs.map((run) => run.payload)).toEqual([-1, -2]);
+  });
+
+  it("does not count or run the job of a handler disposed while a follow-up job was queued behind the running one", async () => {
+    const env = setupAsyncHandler({ initialRun: false });
+    runInAction(() => {
+      env.model.field = -1;
+    });
+    await vi.advanceTimersByTimeAsync(100);
+    runInAction(() => {
+      env.model.field = -2;
+    });
+    await vi.advanceTimersByTimeAsync(100);
+    expect(env.runs).toHaveLength(1);
+    expect(env.validator.asyncState).toBe(1);
+
+    env.dispose();
+    env.runs[0].job.resolve();
+    await flushMicrotasks();
+    expect(env.validator.asyncState).toBe(0);
+    expect(env.validator.isValidating).toBe(false);
+
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(env.runs).toHaveLength(1);
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
+  it("goes through create, change, reset, change and dispose with sync and async handlers on the same validator", async () => {
+    const env = setupAsyncHandler(undefined, -1);
+    const disposeSync = env.validator.addSyncHandler((b) => {
+      if (env.model.field < 0) b.invalidate("field", `sync: ${env.model.field}`);
+    });
+
+    // create: the sync handler reports immediately, the async job is running
+    expect(env.validator.getErrorMessages("field" as KeyPath)).toEqual(new Set(["sync: -1"]));
+    expect(env.validator.asyncState).toBe(1);
+    env.runs[0].job.resolve();
+    await flushMicrotasks();
+    expect(env.validator.getErrorMessages("field" as KeyPath)).toEqual(new Set(["sync: -1", "negative: -1"]));
+    expect(env.validator.isValidating).toBe(false);
+
+    // change
+    runInAction(() => {
+      env.model.field = -2;
+    });
+    expect(env.validator.reactionState).toBe(2);
+    await vi.advanceTimersByTimeAsync(100);
+    expect(env.validator.reactionState).toBe(0);
+    expect(env.validator.asyncState).toBe(1);
+    expect(env.validator.getErrorMessages("field" as KeyPath)).toEqual(new Set(["negative: -1", "sync: -2"]));
+
+    // reset: everything is cleared and the running job is aborted
+    env.validator.reset();
+    expect(env.runs[1].signal.aborted).toBe(true);
+    expect(env.validator.isValid).toBe(true);
+    expect(env.validator.isValidating).toBe(false);
+
+    // change: both handlers resume
+    runInAction(() => {
+      env.model.field = -3;
+    });
+    await vi.advanceTimersByTimeAsync(100);
+    expect(env.runs.map((run) => run.payload)).toEqual([-1, -2, -3]);
+    expect(env.runs[2].signal.aborted).toBe(false);
+    env.runs[2].job.resolve();
+    await flushMicrotasks();
+    expect(env.validator.getErrorMessages("field" as KeyPath)).toEqual(new Set(["sync: -3", "negative: -3"]));
+    expect(env.validator.isValidating).toBe(false);
+
+    // dispose: errors are removed and further changes are ignored
+    env.dispose();
+    disposeSync();
+    expect(env.validator.isValid).toBe(true);
+    runInAction(() => {
+      env.model.field = -4;
+    });
+    expect(env.validator.reactionState).toBe(0);
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(env.runs).toHaveLength(3);
+    expect(env.validator.isValid).toBe(true);
+    expect(env.validator.isValidating).toBe(false);
   });
 });
