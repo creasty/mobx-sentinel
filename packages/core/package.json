@@ -27,7 +27,7 @@
     "dist"
   ],
   "scripts": {
-    "test": "vitest run --coverage",
+    "test": "tsc -p test-stage3/tsconfig.json && vitest run --coverage",
     "test:dev": "vitest",
     "build": "tsup"
   },

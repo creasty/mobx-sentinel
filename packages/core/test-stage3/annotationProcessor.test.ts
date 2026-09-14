@@ -327,13 +327,19 @@ describe("createPropertyLikeAnnotation", () => {
         return "value of getter1 (overridden)";
       }
 
+      // A #private name belongs to the class that declares it, so these three override nothing and TypeScript
+      // rejects `override` (TS4113). They are kept as written: the processor keys annotations by name, so it
+      // still merges them with the parent's -- the collision the snapshots below pin.
       @sample2
+      // @ts-expect-error TS4113: see above
       override #privateProperty1 = "value of privateProperty1 (overridden)";
 
       @sample2
+      // @ts-expect-error TS4113: see above
       override accessor #privateAccessor1 = "value of privateAccessor1 (overridden)";
 
       @sample2
+      // @ts-expect-error TS4113: see above
       override get #privateGetter1() {
         return "value of privateGetter1 (overridden)";
       }

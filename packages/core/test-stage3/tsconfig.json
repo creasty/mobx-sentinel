@@ -1,12 +1,19 @@
+// Type-checks the stage-3 decorator tests (and the library source they import) under stage-3 settings, via
+// `tsc -p test-stage3/tsconfig.json` in the package's `test` script. Vite's esbuild transform also reads this file
+// for the files in this directory, which is what makes their decorators run with stage-3 semantics.
 {
   "extends": "../../../tsconfig.json",
   "compilerOptions": {
-    "outDir": "dist",
-    "moduleResolution": "node",
-    "module": "commonjs",
+    // TypeScript 6 defaults rootDir to this file's directory, which would reject `../src`.
+    "rootDir": "..",
+    "noEmit": true,
+    "moduleResolution": "bundler",
+    "module": "esnext",
     "types": ["vitest/globals"],
     "experimentalDecorators": false,
     "emitDecoratorMetadata": false
   },
-  "include": ["../src", "."]
+  "include": ["../src", "."],
+  // Those tests use legacy decorators and are checked by ../tsconfig.json instead.
+  "exclude": ["../src/**/*.test.ts"]
 }
