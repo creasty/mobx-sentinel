@@ -1150,12 +1150,12 @@ describe("Submission", () => {
       const promise2 = submission.exec();
       calls[0].result.resolve(!calls[0].signal.aborted);
       await expect(promise1).resolves.toBe(false);
-      // Superseded runs notify didSubmit too; see "invokes didSubmit handlers once per run, including superseded runs"
-      expect(didSubmit.mock.calls).toEqual([[false]]);
+      // A superseded run leaves didSubmit to the newer run
+      expect(didSubmit).not.toBeCalled();
 
       calls[1].result.resolve(true);
       await expect(promise2).resolves.toBe(true);
-      expect(didSubmit.mock.calls).toEqual([[false], [true]]);
+      expect(didSubmit.mock.calls).toEqual([[true]]);
     });
 
     it("resolves a superseded run with false even when its handlers ignore the abort signal", async () => {
@@ -1168,11 +1168,11 @@ describe("Submission", () => {
       const promise2 = submission.exec();
       calls[0].result.resolve(true);
       const result = await promise1;
-      expect({ result, didSubmitArgs }).toEqual({ result: false, didSubmitArgs: [false] });
+      expect({ result, didSubmitArgs }).toEqual({ result: false, didSubmitArgs: [] });
 
       calls[1].result.resolve(true);
       await expect(promise2).resolves.toBe(true);
-      expect(didSubmitArgs).toEqual([false, true]);
+      expect(didSubmitArgs).toEqual([true]);
     });
 
     it("resolves a superseded run with false when it is aborted after its last handler settled", async () => {
@@ -1187,12 +1187,12 @@ describe("Submission", () => {
       const promise2 = submission.exec();
       expect(calls[0].signal.aborted).toBe(true);
       await expect(promise1).resolves.toBe(false);
-      expect(didSubmitArgs).toEqual([false]);
+      expect(didSubmitArgs).toEqual([]);
       expect(submission.isRunning).toBe(true);
 
       calls[1].result.resolve(true);
       await expect(promise2).resolves.toBe(true);
-      expect(didSubmitArgs).toEqual([false, true]);
+      expect(didSubmitArgs).toEqual([true]);
       expect(submission.isRunning).toBe(false);
     });
 
@@ -1357,7 +1357,7 @@ describe("Submission", () => {
       await expect(Promise.all([promise2, promise3])).resolves.toEqual([false, true]);
     });
 
-    it("invokes didSubmit handlers once per run, including superseded runs", async () => {
+    it("invokes didSubmit handlers only for the latest run, even when a superseded run settles after it", async () => {
       const submission = new Submission();
       const { calls } = addControlledSubmitHandler(submission);
       const didSubmit = vi.fn();
@@ -1366,14 +1366,50 @@ describe("Submission", () => {
       const promise1 = submission.exec();
       const promise2 = submission.exec();
       calls[1].result.resolve(true);
-      await promise2;
-      calls[0].result.resolve(false);
-      await promise1;
+      await expect(promise2).resolves.toBe(true);
+      expect(didSubmit.mock.calls).toEqual([[true]]);
 
-      // PINNED(quirk): a superseded run still notifies didSubmit when it settles, even after the newer run has
-      // finished (for Form, this can report a failure after a success). Decide: should superseded runs skip didSubmit
-      // (flip to [[true]])?
-      expect(didSubmit.mock.calls).toEqual([[true], [false]]);
+      calls[0].result.resolve(false);
+      await expect(promise1).resolves.toBe(false);
+      // Intended: the newer run always reports the outcome, so a superseded run's late false must not follow its true
+      expect(didSubmit.mock.calls).toEqual([[true]]);
+    });
+
+    it("leaves didSubmit to the run that took over the controller from a run started by an abort listener", async () => {
+      const submission = new Submission();
+      const { calls } = addControlledSubmitHandler(submission);
+      const didSubmitSeen: { succeed: boolean; isRunning: boolean }[] = [];
+      submission.addHandler("didSubmit", (succeed) => {
+        didSubmitSeen.push({ succeed, isRunning: submission.isRunning });
+      });
+
+      const promise1 = submission.exec();
+      let promise2: Promise<boolean> | undefined;
+      calls[0].signal.addEventListener("abort", () => {
+        promise2 = submission.exec();
+      });
+      // Aborting run 1 synchronously starts run 2 from the listener, then run 3 takes over the controller
+      const promise3 = submission.exec();
+      expect(calls).toHaveLength(3);
+      // PINNED(quirk): run 3 only aborts the controller it replaced (run 1's), so run 2 is replaced without ever being
+      // aborted and keeps its live signal. Decide: should exec also abort a run that took over the controller while it
+      // was aborting the previous one (flip to [true, true, false])?
+      expect(calls.map((call) => call.signal.aborted)).toEqual([true, false, false]);
+
+      // Run 2 is not aborted, so it resolves with its handler's result, but it no longer owns the submission:
+      // notifying didSubmit(true) here would let Form reset while run 3 is still in flight
+      calls[1].result.resolve(true);
+      await expect(promise2).resolves.toBe(true);
+      expect(didSubmitSeen).toEqual([]);
+      expect(submission.isRunning).toBe(true);
+
+      calls[2].result.resolve(true);
+      await expect(promise3).resolves.toBe(true);
+      expect(didSubmitSeen).toEqual([{ succeed: true, isRunning: false }]);
+
+      calls[0].result.resolve(false);
+      await expect(promise1).resolves.toBe(false);
+      expect(didSubmitSeen).toEqual([{ succeed: true, isRunning: false }]);
     });
   });
 

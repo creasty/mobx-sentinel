@@ -2209,7 +2209,7 @@ describe("Form (details)", () => {
         calls[1].result.resolve(true);
         await expect(first).resolves.toBe(false);
         await expect(second).resolves.toBe(true);
-        expect(didSubmit.mock.calls).toEqual([[false], [true]]);
+        expect(didSubmit.mock.calls).toEqual([[true]]); // The cancelled submission does not call didSubmit
         expect(form.isSubmitting).toBe(false);
       });
 
@@ -2274,13 +2274,13 @@ describe("Form (details)", () => {
         results[0].resolve(true);
         await expect(first).resolves.toBe(false);
         expect(calls).toEqual(["submit1(aborted=false)", "submit1(aborted=false)"]);
-        expect(didSubmit.mock.calls).toEqual([[false]]);
+        expect(didSubmit).not.toBeCalled();
         expect(form.isDirty).toBe(true);
 
         results[1].resolve(true);
         await expect(second).resolves.toBe(true);
         expect(calls).toEqual(["submit1(aborted=false)", "submit1(aborted=false)", "submit2(aborted=false)"]);
-        expect(didSubmit.mock.calls).toEqual([[false], [true]]);
+        expect(didSubmit.mock.calls).toEqual([[true]]);
         expect(form.isDirty).toBe(false);
       });
 
@@ -2315,17 +2315,86 @@ describe("Form (details)", () => {
           requests[0].resolve(true); // The first request succeeds anyway (no-op if already settled)
 
           await expect(first).resolves.toBe(false);
-          expect(didSubmit.mock.calls).toEqual([[false]]);
+          expect(didSubmit).not.toBeCalled();
           expect(form.isDirty).toBe(true);
           expect(form.isSubmitting).toBe(true);
 
           requests[1].resolve(false); // The forced submission fails
           await expect(second).resolves.toBe(false);
-          expect(didSubmit.mock.calls).toEqual([[false], [false]]);
+          expect(didSubmit.mock.calls).toEqual([[false]]);
           expect(form.isDirty).toBe(true);
           expect(form.canSubmit).toBe(true);
         }
       );
+
+      it("does not call didSubmit for the cancelled submission, so a didSubmit handler reports no error mid-flight", async () => {
+        const { form, calls, didSubmit } = setupEnv();
+        const reportError = vi.spyOn(form, "reportError");
+        // Like apps/example: report errors from didSubmit when a submission fails
+        form.addHandler("didSubmit", (succeed) => {
+          if (!succeed) form.reportError();
+        });
+
+        const first = form.submit();
+        const second = form.submit({ force: true });
+        calls[0].result.resolve(false); // The cancelled request rejects on abort, and its handler returns false
+        await expect(first).resolves.toBe(false);
+        expect(didSubmit).not.toBeCalled();
+        expect(reportError).not.toBeCalled();
+        expect(form.isSubmitting).toBe(true);
+
+        calls[1].result.resolve(false);
+        await expect(second).resolves.toBe(false);
+        expect(didSubmit.mock.calls).toEqual([[false]]);
+        expect(reportError).toHaveBeenCalledTimes(1); // Once, for the forced submission that actually failed
+      });
+
+      it.each([{ lateResult: false }, { lateResult: true }])(
+        "calls didSubmit only for the forced submission when the cancelled one settles after it with $lateResult",
+        async ({ lateResult }) => {
+          const { form, calls, didSubmit } = setupEnv();
+
+          const first = form.submit();
+          const second = form.submit({ force: true });
+          calls[1].result.resolve(true);
+          await expect(second).resolves.toBe(true);
+          expect(didSubmit.mock.calls).toEqual([[true]]);
+          expect(form.isSubmitting).toBe(false);
+          expect(form.isDirty).toBe(false);
+
+          form.markAsDirty(); // A change made after the forced submission succeeded
+          calls[0].result.resolve(lateResult);
+          await expect(first).resolves.toBe(false);
+          expect(didSubmit.mock.calls).toEqual([[true]]);
+          expect(form.isDirty).toBe(true);
+          expect(form.isSubmitting).toBe(false);
+        }
+      );
+
+      it("calls a didSubmit success listener that checks succeed once, only for the successful latest submission", async () => {
+        const { form, calls } = setupEnv();
+        const onSuccess = vi.fn();
+        // Like the useFormHandler example in packages/react/README.md
+        form.addHandler("didSubmit", (succeed) => {
+          if (succeed) onSuccess();
+        });
+
+        const first = form.submit();
+        const second = form.submit({ force: true });
+        calls[0].result.resolve(true); // The cancelled request succeeds anyway, as its handler ignores the signal
+        await expect(first).resolves.toBe(false);
+        expect(onSuccess).not.toBeCalled();
+
+        calls[1].result.resolve(true);
+        await expect(second).resolves.toBe(true);
+        expect(onSuccess).toHaveBeenCalledTimes(1);
+
+        form.markAsDirty();
+        const third = form.submit();
+        calls[2].result.resolve(false); // A later submission that fails
+        await expect(third).resolves.toBe(false);
+        expect(onSuccess).toHaveBeenCalledTimes(1);
+      });
 
       describe("with a submit handler around a request that honors the abort signal", () => {
         const setupRequestEnv = () => {
@@ -2363,7 +2432,7 @@ describe("Form (details)", () => {
           await vi.advanceTimersByTimeAsync(400);
           const second = form.submit({ force: true });
           await expect(first).resolves.toBe(false);
-          expect(didSubmit.mock.calls).toEqual([[false]]);
+          expect(didSubmit).not.toBeCalled();
           expect(form.isSubmitting).toBe(true);
           expect(form.isBusy).toBe(true);
           expect(form.canSubmit).toBe(false);
@@ -2379,7 +2448,7 @@ describe("Form (details)", () => {
 
           await vi.advanceTimersByTimeAsync(1);
           await expect(second).resolves.toBe(true);
-          expect(didSubmit.mock.calls).toEqual([[false], [true]]);
+          expect(didSubmit.mock.calls).toEqual([[true]]);
           expect(form.isSubmitting).toBe(false);
           expect(form.isDirty).toBe(false);
         });
@@ -2395,12 +2464,13 @@ describe("Form (details)", () => {
           expect(signals).toHaveLength(3);
           expect(signals[1].aborted).toBe(true);
           await expect(second).resolves.toBe(false);
+          expect(didSubmit).not.toBeCalled();
           expect(form.isSubmitting).toBe(true);
           expect(form.isDirty).toBe(true);
 
           await vi.advanceTimersByTimeAsync(1000);
           await expect(third).resolves.toBe(true);
-          expect(didSubmit.mock.calls).toEqual([[false], [false], [true]]);
+          expect(didSubmit.mock.calls).toEqual([[true]]);
           expect(form.isSubmitting).toBe(false);
           expect(form.isDirty).toBe(false);
         });

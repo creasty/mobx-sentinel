@@ -44,8 +44,8 @@ export class Submission {
    * - `submit` handlers are executed serially
    * - Aborts if any `submit` handler returns false
    * - Handles exceptions in all phases
-   * - A cancelled submission invokes no further `willSubmit`/`submit` handlers,
-   *   notifies `didSubmit` handlers with `false`, and leaves {@link isRunning} to the newer submission
+   * - A cancelled submission invokes no further `willSubmit`/`submit` handlers and resolves `false`
+   *   without notifying `didSubmit` handlers, leaving {@link isRunning} and `didSubmit` to the newer submission
    *
    * @returns `true` if submission succeeded, `false` if failed or aborted
    */
@@ -94,15 +94,16 @@ export class Submission {
       succeed = false;
     }
 
-    // Only the latest run owns the shared state; a superseded run must not clear the newer run's
-    const isCurrent = this.#abortCtrl === abortCtrl;
-    if (isCurrent) {
-      this.#abortCtrl = null;
+    // Only the latest run owns the shared state and reports the outcome. A superseded run leaves
+    // isRunning, the controller and didSubmit to the run that replaced it, which notifies once it settles.
+    // An aborted run is never the current one, so this also covers cancellation.
+    if (this.#abortCtrl !== abortCtrl) {
+      return succeed;
     }
+
+    this.#abortCtrl = null;
     runInAction(() => {
-      if (isCurrent) {
-        this.#isRunning.set(false);
-      }
+      this.#isRunning.set(false);
 
       try {
         for (const handler of this.#handlers.didSubmit) {
@@ -136,7 +137,9 @@ export namespace Submission {
     /**
      * Called after submission completes
      *
-     * @param succeed - `true` if submission succeeded, `false` if failed or aborted
+     * Not called for a submission cancelled by a newer one; the newer submission reports the outcome instead.
+     *
+     * @param succeed - `true` if submission succeeded, `false` if failed
      */
     didSubmit: (succeed: boolean) => void;
   };

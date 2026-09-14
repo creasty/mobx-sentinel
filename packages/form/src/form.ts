@@ -293,6 +293,7 @@ export class Form<T> {
    *
    * @param args.force Whether to force submission even if {@link canSubmit} is `false`.
    *   It cancels any in-progress submission if any.
+   *   The cancelled submission resolves `false` without calling `didSubmit` handlers.
    *
    * @returns `true` if submission succeeded, `false` if failed or aborted
    */
@@ -308,7 +309,7 @@ export class Form<T> {
    * Handlers are called in this order:
    * 1. `willSubmit` - Called before submission starts
    * 2. `submit` - Async handlers that perform the submission (serialized)
-   * 3. `didSubmit` - Called after submission completes
+   * 3. `didSubmit` - Called after submission completes, except for a submission cancelled by a newer one
    *
    * @see {@link Form.Handlers}
    *
