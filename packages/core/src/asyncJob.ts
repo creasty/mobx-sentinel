@@ -42,7 +42,7 @@ export class AsyncJob<Payload> {
    * State transitions:
    * - `idle` -> `running`: Executes immediately
    * - `running` -> `scheduled`: Queues for later execution
-   * - `scheduled` -> `scheduled`: No change
+   * - `scheduled` -> `scheduled`: No change; the payload is replaced, and the scheduled run keeps its original deadline (throttling)
    */
   request(
     payload: Payload,
@@ -80,7 +80,7 @@ export class AsyncJob<Payload> {
    * @remarks
    * - Cancels any scheduled execution
    * - Aborts running job if any
-   * - Clears queued payload
+   * - Clears queued payload and queued request
    * - Returns to `idle` state
    */
   @action

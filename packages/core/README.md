@@ -595,7 +595,7 @@ Async validations are throttled like sync validations, and changes made while on
 - Jobs are throttled like sync validators (default 100ms delay)
 - **Changes during a running validation are queued, not aborted**: The running handler completes, and the latest value is validated after it settles. If the change's delay has already passed by then, it is validated `delayMs` after the handler settles; otherwise, when its delay ends. Intermediate values are skipped
 - The result of the running validation is currently applied when it settles, so an error for the earlier value may show briefly until the latest value has been validated
-- The `abortSignal` is aborted when the validator is reset (`validator.reset()`) or the handler is removed (by calling the function returned from `addAsyncHandler()` or `makeValidatable()`)
+- The `abortSignal` is aborted when the validator is reset (`validator.reset()`) or the handler is removed (by calling the function returned from `addAsyncHandler()` or `makeValidatable()`). The result of an aborted run is discarded, so errors it collected are not applied, even if the handler ignores the signal
 - Use the signal with `fetch()` and other async APIs to cancel in-flight requests in those cases
 
 **Error handling**:
