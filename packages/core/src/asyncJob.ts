@@ -42,7 +42,7 @@ export class AsyncJob<Payload> {
    * State transitions:
    * - `idle` -> `running`: Executes immediately
    * - `running` -> `scheduled`: Queues for later execution
-   * - `scheduled` -> `scheduled`: No change
+   * - `scheduled` -> `scheduled`: No change; the payload is replaced, and the scheduled run keeps its original deadline (throttling)
    */
   request(
     payload: Payload,
@@ -68,7 +68,7 @@ export class AsyncJob<Payload> {
         break;
       }
       case "scheduled": {
-        this.#transitionToScheduled(); // Throttling
+        // The payload is updated above, and the original deadline is kept (throttling)
         break;
       }
     }
@@ -80,13 +80,15 @@ export class AsyncJob<Payload> {
    * @remarks
    * - Cancels any scheduled execution
    * - Aborts running job if any
-   * - Clears queued payload
+   * - Clears queued payload and queued request
    * - Returns to `idle` state
    */
   @action
   reset() {
     this.#resetJobTimer();
     this.#abortCtrl?.abort();
+    this.#abortCtrl = null;
+    this.#nextJobRequested = false;
     this.#state.set("idle");
     this.#payload = nullPayload;
   }
@@ -95,6 +97,7 @@ export class AsyncJob<Payload> {
     runInAction(() => {
       this.#state.set("scheduled");
     });
+    this.#resetJobTimer(); // Never keep more than one job timer
     this.#jobTimerId = +setTimeout(() => {
       this.#runJob();
     }, this.scheduledRunDelayMs);
@@ -128,6 +131,9 @@ export class AsyncJob<Payload> {
         console.error(e);
       }
     }
+
+    // A newer run or reset() has taken over the job, so leave its state alone
+    if (this.#abortCtrl !== abortCtrl) return;
     this.#abortCtrl = null;
 
     runInAction(() => {

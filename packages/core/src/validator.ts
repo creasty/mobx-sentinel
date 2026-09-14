@@ -329,7 +329,8 @@ export class Validator<T> {
    * Reset the validator
    *
    * Use with caution.\
-   * Since validation is reactive, errors won't reappear until you make some changes.
+   * Since validation is reactive, errors won't reappear until you make some changes.\
+   * Running async validations are aborted, and their results are discarded.
    */
   @action
   reset() {
@@ -412,7 +413,8 @@ export class Validator<T> {
    * - Changes are throttled by default delay
    * - Changes made while the handler is running are queued, not aborted:
    *   the latest value is validated after the running handler settles
-   * - Provides abort signal, which is aborted when the validator is reset or the handler is removed
+   * - Provides abort signal, which is aborted when the validator is reset or the handler is removed;
+   *   the result of an aborted run is discarded, so the errors it collected are not applied
    */
   @action
   addAsyncHandler<Expr>(
@@ -429,14 +431,17 @@ export class Validator<T> {
         try {
           await handler(expr, builder, abortSignal);
         } finally {
-          runInAction(() => {
-            const result = ValidationErrorMapBuilder.build(builder);
-            if (result.size > 0) {
-              this.#errors.set(key, result);
-            } else {
-              this.#errors.delete(key);
-            }
-          });
+          // Discard the result of an aborted job (e.g. by reset() or disposal), so cleared errors do not come back
+          if (!abortSignal.aborted) {
+            runInAction(() => {
+              const result = ValidationErrorMapBuilder.build(builder);
+              if (result.size > 0) {
+                this.#errors.set(key, result);
+              } else {
+                this.#errors.delete(key);
+              }
+            });
+          }
         }
       },
       scheduledRunDelayMs: delayMs,

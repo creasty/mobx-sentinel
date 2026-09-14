@@ -2205,7 +2205,7 @@ describe("Validator: async handler failures and cancellation", () => {
     expect(validator.getErrorMessages("field" as KeyPath)).toEqual(new Set(["collected before the failure"]));
   });
 
-  it("aborts the running job when the handler is disposed, but commits its result if the handler ignores the signal", async () => {
+  it("aborts the running job when the handler is disposed, and discards its result even if the handler ignores the signal", async () => {
     const env = setupAsyncHandler(undefined, -1);
     env.dispose();
     expect(env.runs[0].signal.aborted).toBe(true);
@@ -2215,11 +2215,10 @@ describe("Validator: async handler failures and cancellation", () => {
 
     env.runs[0].job.resolve();
     await flushMicrotasks();
-    // PINNED(bug): The aborted job still commits its errors under the disposed handler's key when it settles, and nothing but reset() can remove them afterwards. Expected: results of an aborted job are discarded and isValid stays true. Flip this assertion when fixing.
-    expect(env.validator.isValid).toBe(false);
+    expect(env.validator.isValid).toBe(true);
   });
 
-  it("aborts the running job on reset, but commits its result if the handler ignores the signal", async () => {
+  it("aborts the running job on reset, and discards its result even if the handler ignores the signal", async () => {
     const env = setupAsyncHandler(undefined, -1);
     env.validator.reset();
     expect(env.runs[0].signal.aborted).toBe(true);
@@ -2228,8 +2227,7 @@ describe("Validator: async handler failures and cancellation", () => {
 
     env.runs[0].job.resolve();
     await flushMicrotasks();
-    // PINNED(bug): Errors of the job aborted by reset() reappear once it settles, without any change to the model. Expected: results of an aborted job are discarded and isValid stays true. Flip this assertion when fixing.
-    expect(env.validator.isValid).toBe(false);
+    expect(env.validator.isValid).toBe(true);
   });
 
   it("logs the rejection of a handler that honors the abort signal", async () => {
@@ -2273,6 +2271,56 @@ describe("Validator: async handler failures and cancellation", () => {
 
     await vi.advanceTimersByTimeAsync(1000);
     expect(env.runs).toHaveLength(1);
+  });
+
+  describe("with handlers that honor the signal but still report errors when aborted", () => {
+    /** Stand-in for fetch(url, { signal }): stays pending and rejects with the AbortError on abort */
+    const abortableCall = (signal: AbortSignal) =>
+      new Promise<void>((_resolve, reject) => {
+        signal.addEventListener("abort", () => reject(signal.reason));
+      });
+
+    const handlers = {
+      "adds errors before the call": async (_, b, signal) => {
+        b.invalidate("field", "checked before the call");
+        await abortableCall(signal);
+      },
+      "adds errors when the call rejects": async (_, b, signal) => {
+        try {
+          await abortableCall(signal);
+        } catch {
+          b.invalidate("field", "could not verify");
+        }
+      },
+    } satisfies Record<string, Validator.AsyncHandler<{ field: number }, number>>;
+
+    it.each([
+      { shape: "adds errors before the call", abortBy: "reset" },
+      { shape: "adds errors before the call", abortBy: "dispose" },
+      { shape: "adds errors when the call rejects", abortBy: "reset" },
+      { shape: "adds errors when the call rejects", abortBy: "dispose" },
+    ] as const)("discards the result of a handler that $shape when aborted by $abortBy", async ({ shape, abortBy }) => {
+      vi.spyOn(console, "error").mockImplementation(() => {}); // A rethrown AbortError is logged
+      const model = observable({ field: 0 });
+      const validator = Validator.get(model);
+      const dispose = validator.addAsyncHandler(() => model.field, handlers[shape]);
+      await flushMicrotasks();
+      expect(validator.isValidating).toBe(true);
+
+      if (abortBy === "reset") {
+        validator.reset();
+      } else {
+        dispose();
+      }
+      expect(validator.isValid).toBe(true);
+
+      await flushMicrotasks(); // The aborted call rejects
+      expect(validator.isValid).toBe(true);
+      expect(validator.isValidating).toBe(false);
+
+      await vi.advanceTimersByTimeAsync(1000);
+      expect(validator.isValid).toBe(true);
+    });
   });
 });
 
@@ -2402,7 +2450,7 @@ describe("Validator: #reset edge cases", () => {
     expect(env.seen).toEqual([0, -1, -1]);
   });
 
-  it("goes back to the validating state after reset when a request was queued behind the running job", async () => {
+  it("stays out of the validating state after reset when a request was queued behind the running job", async () => {
     const env = setupAsyncHandler({ initialRun: false });
     runInAction(() => {
       env.model.field = -1;
@@ -2420,12 +2468,100 @@ describe("Validator: #reset edge cases", () => {
 
     env.runs[0].job.resolve();
     await flushMicrotasks();
-    // PINNED(bug): AsyncJob.reset() does not clear the "next job requested" flag, so when the aborted job settles the job re-enters the scheduled state and isValidating flips back to true for delayMs without any change. Expected: asyncState stays 0 after reset(). Flip this assertion when fixing.
-    expect(env.validator.asyncState).toBe(1);
+    expect(env.validator.asyncState).toBe(0);
+    expect(vi.getTimerCount()).toBe(0);
 
     await vi.advanceTimersByTimeAsync(100);
     expect(env.validator.asyncState).toBe(0);
     expect(env.runs).toHaveLength(1); // the queued payload was cleared, so the handler is not called
+  });
+
+  it("stays out of the validating state after reset when a handler that honors the signal was running with a request queued behind it", async () => {
+    const consoleError = vi.spyOn(console, "error").mockImplementation(() => {}); // The AbortError is logged
+    onTestFinished(() => {
+      consoleError.mockRestore();
+    });
+    const model = observable({ field: 0 });
+    const validator = Validator.get(model);
+    const handler = vi.fn(
+      (_: number, __: unknown, signal: AbortSignal) =>
+        new Promise<void>((_resolve, reject) => {
+          signal.addEventListener("abort", () => reject(signal.reason));
+        })
+    );
+    validator.addAsyncHandler(() => model.field, handler);
+    runInAction(() => {
+      model.field = 1;
+    });
+    await vi.advanceTimersByTimeAsync(100); // queued behind the initial run
+    expect(handler).toHaveBeenCalledTimes(1);
+
+    validator.reset();
+    expect(validator.isValidating).toBe(false);
+
+    await flushMicrotasks(); // The aborted handler rejects
+    expect(validator.isValidating).toBe(false);
+    expect(vi.getTimerCount()).toBe(0);
+
+    await vi.advanceTimersByTimeAsync(100);
+    expect(validator.isValidating).toBe(false);
+    expect(handler).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not carry a request queued before reset over to the job started after it", async () => {
+    const env = setupAsyncHandler({ initialRun: false });
+    runInAction(() => {
+      env.model.field = -1;
+    });
+    await vi.advanceTimersByTimeAsync(100);
+    runInAction(() => {
+      env.model.field = -2;
+    });
+    await vi.advanceTimersByTimeAsync(100); // queued behind the running job
+
+    env.validator.reset(); // The aborted job never settles
+    runInAction(() => {
+      env.model.field = -3;
+    });
+    await vi.advanceTimersByTimeAsync(100);
+    expect(env.runs.map((run) => run.payload)).toEqual([-1, -3]);
+
+    env.runs[1].job.resolve();
+    await flushMicrotasks();
+    expect(env.validator.getErrorMessages("field" as KeyPath)).toEqual(new Set(["negative: -3"]));
+    expect(env.validator.asyncState).toBe(0);
+    expect(env.validator.isValidating).toBe(false);
+
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(env.runs).toHaveLength(2);
+  });
+
+  it("keeps the job started after reset in charge when the job aborted by reset settles later", async () => {
+    const env = setupAsyncHandler(); // The handler ignores its signal
+    expect(env.runs.map((run) => run.payload)).toEqual([0]);
+
+    env.validator.reset();
+    runInAction(() => {
+      env.model.field = -1;
+    });
+    await vi.advanceTimersByTimeAsync(100);
+    expect(env.runs.map((run) => run.payload)).toEqual([0, -1]);
+    expect(env.validator.isValidating).toBe(true);
+
+    env.runs[0].job.resolve(); // The aborted job settles while the new one is running
+    await flushMicrotasks();
+    expect(env.validator.asyncState).toBe(1);
+    expect(env.validator.isValidating).toBe(true);
+
+    runInAction(() => {
+      env.model.field = -2;
+    });
+    await vi.advanceTimersByTimeAsync(100);
+    expect(env.runs).toHaveLength(2); // queued behind the running job
+
+    env.validator.reset();
+    expect(env.runs[1].signal.aborted).toBe(true);
+    expect(env.validator.isValidating).toBe(false);
   });
 
   it("does not reset nested validators", () => {
@@ -3100,6 +3236,60 @@ describe("Validator: async job lifecycle", () => {
     expect(env.runs).toHaveLength(1);
     await vi.advanceTimersByTimeAsync(1);
     expect(env.runs.map((run) => run.payload)).toEqual([-1, -2]);
+  });
+
+  it("validates the latest value when it changes more than once while the follow-up job is scheduled", async () => {
+    const consoleError = vi.spyOn(console, "error").mockImplementation(() => {});
+    onTestFinished(() => {
+      consoleError.mockRestore();
+    });
+    const model = observable({ name: "" });
+    const runs: Array<{ name: string; signal: AbortSignal }> = [];
+    makeValidatable(
+      model,
+      () => model.name,
+      (name, b, signal) =>
+        new Promise<void>((resolve, reject) => {
+          runs.push({ name, signal });
+          const timerId = setTimeout(() => {
+            if (name === "taken") b.invalidate("name", "already taken");
+            resolve();
+          }, 10);
+          signal.addEventListener("abort", () => {
+            clearTimeout(timerId);
+            reject(signal.reason);
+          });
+        }),
+      // With fake timers, a 0ms timer created inside a timer callback is due 1ms later, while the reaction
+      // timers created below are due immediately, so each change reaches the job while it is scheduled
+      { delayMs: 0 }
+    );
+    const validator = Validator.get(model);
+
+    await vi.advanceTimersByTimeAsync(5);
+    runInAction(() => {
+      model.name = "a"; // queued behind the initial run
+    });
+    await vi.advanceTimersByTimeAsync(5); // t=10: the initial run settles and the follow-up job is scheduled
+    runInAction(() => {
+      model.name = "tak";
+    });
+    await vi.advanceTimersByTimeAsync(0);
+    runInAction(() => {
+      model.name = "taken";
+    });
+    await vi.advanceTimersByTimeAsync(0);
+
+    await vi.advanceTimersByTimeAsync(1); // t=11: the follow-up job starts
+    expect(runs.map((run) => run.name)).toEqual(["", "taken"]);
+    expect(runs[1].signal.aborted).toBe(false);
+    expect(validator.isValidating).toBe(true);
+
+    await vi.advanceTimersByTimeAsync(10); // t=21
+    expect(validator.isValidating).toBe(false);
+    expect(validator.getErrorMessages("name" as KeyPath)).toEqual(new Set(["already taken"]));
+    expect(consoleError).not.toHaveBeenCalled();
+    expect(vi.getTimerCount()).toBe(0);
   });
 
   it("does not count or run the job of a handler disposed while a follow-up job was queued behind the running one", async () => {
