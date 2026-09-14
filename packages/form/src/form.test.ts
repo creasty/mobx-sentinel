@@ -2213,7 +2213,7 @@ describe("Form (details)", () => {
         expect(form.isSubmitting).toBe(false);
       });
 
-      it("reports not submitting once the aborted submission settles while the forced one is still running", async () => {
+      it("keeps submitting until the forced submission settles, even after the aborted one settles", async () => {
         const { form, calls } = setupEnv();
 
         const first = form.submit();
@@ -2221,16 +2221,15 @@ describe("Form (details)", () => {
         calls[0].result.resolve(false);
         await expect(first).resolves.toBe(false);
 
-        // PINNED(bug): The aborted submission clears the shared running flag when it settles, although the forced submission is still in flight. Expected: isSubmitting stays true (and canSubmit false) until the latest submission settles. Flip these assertions when fixing.
-        expect(form.isSubmitting).toBe(false);
-        expect(form.canSubmit).toBe(true);
+        expect(form.isSubmitting).toBe(true);
+        expect(form.canSubmit).toBe(false);
 
         calls[1].result.resolve(true);
         await expect(second).resolves.toBe(true);
         expect(form.isSubmitting).toBe(false);
       });
 
-      it("cannot abort the forced submission after the aborted one settles", async () => {
+      it("aborts the forced submission with a later forced submit after the aborted one settles", async () => {
         const { form, calls } = setupEnv();
 
         const first = form.submit();
@@ -2240,17 +2239,16 @@ describe("Form (details)", () => {
 
         const third = form.submit({ force: true });
         expect(calls).toHaveLength(3);
-        // PINNED(bug): The aborted submission nulls the shared AbortController when it settles, so a later forced submit cannot abort the still-running second submission. Expected: true, as the `force` option is documented to cancel any in-progress submission. Flip this assertion when fixing.
-        expect(calls[1].signal.aborted).toBe(false);
+        expect(calls[1].signal.aborted).toBe(true);
         expect(calls[2].signal.aborted).toBe(false);
 
         calls[1].result.resolve(true);
         calls[2].result.resolve(true);
-        await expect(second).resolves.toBe(true);
+        await expect(second).resolves.toBe(false); // Aborted, even though its handler resolved true
         await expect(third).resolves.toBe(true);
       });
 
-      it("treats an aborted submission as succeeded when its handlers resolve true", async () => {
+      it("treats an aborted submission as failed even when its handlers resolve true", async () => {
         const form = Form.get(new SampleModel());
         form.markAsDirty();
 
@@ -2274,15 +2272,138 @@ describe("Form (details)", () => {
         form.markAsDirty(); // A change made while the forced submission is running
 
         results[0].resolve(true);
-        // PINNED(bug): Submission never checks the abort signal itself, so an aborted submission whose handler ignores the signal continues to the next submit handler, resolves true, calls didSubmit(true), and resets the form while the forced submission is still running (same root cause as the abort bugs in submission.test.ts). Expected: the aborted submission resolves false without running further submit handlers, calling didSubmit(true), or resetting the form, as Form#submit documents "`false` if failed or aborted" and `force` "cancels any in-progress submission". Flip these assertions when fixing.
-        await expect(first).resolves.toBe(true);
-        expect(calls).toEqual(["submit1(aborted=false)", "submit1(aborted=false)", "submit2(aborted=true)"]);
-        expect(didSubmit.mock.calls).toEqual([[true]]);
-        expect(form.isDirty).toBe(false);
+        await expect(first).resolves.toBe(false);
+        expect(calls).toEqual(["submit1(aborted=false)", "submit1(aborted=false)"]);
+        expect(didSubmit.mock.calls).toEqual([[false]]);
+        expect(form.isDirty).toBe(true);
 
         results[1].resolve(true);
         await expect(second).resolves.toBe(true);
-        expect(didSubmit.mock.calls).toEqual([[true], [true]]);
+        expect(calls).toEqual(["submit1(aborted=false)", "submit1(aborted=false)", "submit2(aborted=false)"]);
+        expect(didSubmit.mock.calls).toEqual([[false], [true]]);
+        expect(form.isDirty).toBe(false);
+      });
+
+      it.each([
+        { handler: "honors the abort signal", honorsSignal: true, settlesWithForce: false },
+        { handler: "ignores the abort signal", honorsSignal: false, settlesWithForce: false },
+        { handler: "settles in the same tick as the force", honorsSignal: true, settlesWithForce: true },
+      ])(
+        "keeps the form dirty and submittable when the aborted submission's handler $handler and the forced one fails",
+        async ({ honorsSignal, settlesWithForce }) => {
+          const form = Form.get(new SampleModel());
+          form.markAsDirty();
+
+          const requests: Deferred<boolean>[] = [];
+          form.addHandler("submit", (signal) => {
+            const request = deferred<boolean>();
+            requests.push(request);
+            if (honorsSignal) {
+              // Like a try/catch handler around fetch(url, { signal }): resolve false as soon as the signal aborts
+              signal.addEventListener("abort", () => request.resolve(false));
+            }
+            return request.promise;
+          });
+          const didSubmit = vi.fn();
+          form.addHandler("didSubmit", didSubmit);
+
+          const first = form.submit();
+          if (settlesWithForce) {
+            requests[0].resolve(true); // The response arrives in the same tick as the force
+          }
+          const second = form.submit({ force: true });
+          requests[0].resolve(true); // The first request succeeds anyway (no-op if already settled)
+
+          await expect(first).resolves.toBe(false);
+          expect(didSubmit.mock.calls).toEqual([[false]]);
+          expect(form.isDirty).toBe(true);
+          expect(form.isSubmitting).toBe(true);
+
+          requests[1].resolve(false); // The forced submission fails
+          await expect(second).resolves.toBe(false);
+          expect(didSubmit.mock.calls).toEqual([[false], [false]]);
+          expect(form.isDirty).toBe(true);
+          expect(form.canSubmit).toBe(true);
+        }
+      );
+
+      describe("with a submit handler around a request that honors the abort signal", () => {
+        const setupRequestEnv = () => {
+          vi.useFakeTimers();
+          const form = Form.get(new SampleModel());
+          form.markAsDirty();
+
+          // README-style submit handler around a fetch-like request that rejects as soon as its signal aborts
+          const signals: AbortSignal[] = [];
+          form.addHandler("submit", async (signal) => {
+            signals.push(signal);
+            try {
+              await new Promise<void>((resolve, reject) => {
+                const timerId = setTimeout(resolve, 1000);
+                signal.addEventListener("abort", () => {
+                  clearTimeout(timerId);
+                  reject(signal.reason);
+                });
+              });
+              return true;
+            } catch {
+              return false;
+            }
+          });
+          const didSubmit = vi.fn();
+          form.addHandler("didSubmit", didSubmit);
+
+          return { form, signals, didSubmit };
+        };
+
+        it("stays busy while the forced request is in flight and resets only once it succeeds", async () => {
+          const { form, signals, didSubmit } = setupRequestEnv();
+
+          const first = form.submit();
+          await vi.advanceTimersByTimeAsync(400);
+          const second = form.submit({ force: true });
+          await expect(first).resolves.toBe(false);
+          expect(didSubmit.mock.calls).toEqual([[false]]);
+          expect(form.isSubmitting).toBe(true);
+          expect(form.isBusy).toBe(true);
+          expect(form.canSubmit).toBe(false);
+
+          // A plain submit, as SubmitButtonBinding calls it, does not start a concurrent request
+          await expect(form.submit()).resolves.toBe(false);
+          expect(signals).toHaveLength(2);
+          expect(signals[1].aborted).toBe(false);
+
+          await vi.advanceTimersByTimeAsync(999);
+          expect(form.isSubmitting).toBe(true);
+          expect(form.isDirty).toBe(true);
+
+          await vi.advanceTimersByTimeAsync(1);
+          await expect(second).resolves.toBe(true);
+          expect(didSubmit.mock.calls).toEqual([[false], [true]]);
+          expect(form.isSubmitting).toBe(false);
+          expect(form.isDirty).toBe(false);
+        });
+
+        it("lets a later forced submit abort the in-flight request after the aborted one settles", async () => {
+          const { form, signals, didSubmit } = setupRequestEnv();
+
+          const first = form.submit();
+          const second = form.submit({ force: true });
+          await expect(first).resolves.toBe(false);
+
+          const third = form.submit({ force: true });
+          expect(signals).toHaveLength(3);
+          expect(signals[1].aborted).toBe(true);
+          await expect(second).resolves.toBe(false);
+          expect(form.isSubmitting).toBe(true);
+          expect(form.isDirty).toBe(true);
+
+          await vi.advanceTimersByTimeAsync(1000);
+          await expect(third).resolves.toBe(true);
+          expect(didSubmit.mock.calls).toEqual([[false], [false], [true]]);
+          expect(form.isSubmitting).toBe(false);
+          expect(form.isDirty).toBe(false);
+        });
       });
     });
   });

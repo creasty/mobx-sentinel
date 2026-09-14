@@ -44,6 +44,8 @@ export class Submission {
    * - `submit` handlers are executed serially
    * - Aborts if any `submit` handler returns false
    * - Handles exceptions in all phases
+   * - A cancelled submission invokes no further `willSubmit`/`submit` handlers,
+   *   notifies `didSubmit` handlers with `false`, and leaves {@link isRunning} to the newer submission
    *
    * @returns `true` if submission succeeded, `false` if failed or aborted
    */
@@ -51,6 +53,7 @@ export class Submission {
     this.#abortCtrl?.abort();
     const abortCtrl = new AbortController();
     this.#abortCtrl = abortCtrl;
+    const { signal } = abortCtrl;
 
     let succeed = true;
 
@@ -60,7 +63,7 @@ export class Submission {
 
     try {
       for (const handler of this.#handlers.willSubmit) {
-        if (!(await handler(abortCtrl.signal))) {
+        if (signal.aborted || !(await handler(signal))) {
           succeed = false;
           break;
         }
@@ -74,7 +77,7 @@ export class Submission {
       try {
         for (const handler of this.#handlers.submit) {
           // Serialized
-          if (!(await handler(abortCtrl.signal))) {
+          if (signal.aborted || !(await handler(signal))) {
             succeed = false;
             break;
           }
@@ -85,9 +88,21 @@ export class Submission {
       }
     }
 
-    this.#abortCtrl = null;
+    // An aborted run never succeeds, even if its handlers ignored the signal
+    // or it was aborted after its last handler settled
+    if (signal.aborted) {
+      succeed = false;
+    }
+
+    // Only the latest run owns the shared state; a superseded run must not clear the newer run's
+    const isCurrent = this.#abortCtrl === abortCtrl;
+    if (isCurrent) {
+      this.#abortCtrl = null;
+    }
     runInAction(() => {
-      this.#isRunning.set(false);
+      if (isCurrent) {
+        this.#isRunning.set(false);
+      }
 
       try {
         for (const handler of this.#handlers.didSubmit) {

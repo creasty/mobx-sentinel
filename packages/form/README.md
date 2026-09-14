@@ -187,7 +187,7 @@ The submission process executes handlers in three phases:
 
 3. **`didSubmit`** - Called after submission completes (success or failure). Receives a boolean indicating whether submission succeeded. These handlers run synchronously within a MobX action.
 
-The submission can be cancelled mid-flight by calling `form.submit({ force: true })`, which aborts the current submission via the `AbortSignal` and starts a new one.
+The submission can be cancelled mid-flight by calling `form.submit({ force: true })`, which aborts the current submission via the `AbortSignal` and starts a new one. The aborted submission skips its remaining `willSubmit` and `submit` handlers and resolves `false` (`didSubmit` handlers receive `false` for it), while `isSubmitting` stays `true` until the latest submission settles.
 
 After successful submission, forms automatically reset (clearing dirty state and field states).
 
