@@ -429,14 +429,17 @@ export class Validator<T> {
         try {
           await handler(expr, builder, abortSignal);
         } finally {
-          runInAction(() => {
-            const result = ValidationErrorMapBuilder.build(builder);
-            if (result.size > 0) {
-              this.#errors.set(key, result);
-            } else {
-              this.#errors.delete(key);
-            }
-          });
+          // Discard the result of an aborted job (e.g. by reset() or disposal), so cleared errors do not come back
+          if (!abortSignal.aborted) {
+            runInAction(() => {
+              const result = ValidationErrorMapBuilder.build(builder);
+              if (result.size > 0) {
+                this.#errors.set(key, result);
+              } else {
+                this.#errors.delete(key);
+              }
+            });
+          }
         }
       },
       scheduledRunDelayMs: delayMs,

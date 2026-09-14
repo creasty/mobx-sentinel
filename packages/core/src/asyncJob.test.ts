@@ -311,7 +311,6 @@ describe("AsyncJob", () => {
       job.request(4);
       await waitFor("idle");
       // payload 2, 3 are discarded
-      // PINNED(bug): each request() while scheduled starts another timer without clearing the previous one; a leftover timer fires during job 2 and aborts it ("job aborted 2") although nothing forced or reset it. Expected: "job end 2" instead of "job aborted 2". Flip this snapshot line when fixing.
       expect(timeline).toMatchInlineSnapshot(`
         [
           "state: idle",
@@ -321,7 +320,7 @@ describe("AsyncJob", () => {
           "state: scheduled",
           "state: running",
           "job start 2 with payload 4",
-          "job aborted 2",
+          "job end 2",
           "state: idle",
         ]
       `);
@@ -501,7 +500,7 @@ describe("AsyncJob", () => {
         expect(vi.getTimerCount()).toBe(0);
       });
 
-      it("leaves an extra timer behind when requested twice while scheduled, which later aborts the running job", async () => {
+      it("does not start another timer when requested twice while scheduled, so the running job is not aborted", async () => {
         const { job, calls } = setupControlledEnv({ scheduledRunDelayMs: 100 });
 
         job.request(1);
@@ -511,25 +510,24 @@ describe("AsyncJob", () => {
         expect(job.state).toBe("scheduled"); // t=0: timer A due at t=100
 
         vi.advanceTimersByTime(20);
-        job.request(3); // t=20: timer B due at t=120
+        job.request(3); // t=20: only the payload is replaced
         vi.advanceTimersByTime(10);
-        job.request(4); // t=30: timer C due at t=130 (tracked; B is no longer tracked)
+        job.request(4); // t=30: only the payload is replaced
+        expect(vi.getTimerCount()).toBe(1);
 
-        vi.advanceTimersByTime(70); // t=100: timer A fires and clears C
+        vi.advanceTimersByTime(70); // t=100: timer A fires
         expect(job.state).toBe("running");
         expect(calls).toHaveLength(2);
         expect(calls[1].payload).toBe(4);
-        // PINNED(bug): request() while scheduled starts another timer without clearing the previous one (JSDoc says "scheduled -> scheduled: No change"), and only the latest timer id is tracked, so timer B survives the run. Expected: no pending timer while the job is running. Flip this assertion when fixing.
-        expect(vi.getTimerCount()).toBe(1);
+        expect(vi.getTimerCount()).toBe(0);
 
-        vi.advanceTimersByTime(20); // t=120: timer B fires
-        // PINNED(bug): the leftover timer runs an empty job that aborts the running job and forces the state to idle while its handler is still pending. Expected: the job keeps running (signal not aborted, state "running"). Flip these assertions when fixing.
-        expect(calls[1].signal.aborted).toBe(true);
-        expect(job.state).toBe("idle");
+        vi.advanceTimersByTime(20); // t=120
+        expect(calls[1].signal.aborted).toBe(false);
+        expect(job.state).toBe("running");
         expect(calls).toHaveLength(2);
       });
 
-      it("lets an extra timer left by repeated requests while scheduled run a later scheduled job early", async () => {
+      it("runs a later scheduled job at its own deadline after repeated requests while scheduled", async () => {
         const { job, calls } = setupControlledEnv({ scheduledRunDelayMs: 100 });
 
         job.request(1);
@@ -537,19 +535,23 @@ describe("AsyncJob", () => {
         calls[0].resolve();
         await flushMicrotasks(); // t=0: timer A due at t=100
         vi.advanceTimersByTime(20);
-        job.request(3); // t=20: timer B due at t=120
+        job.request(3); // t=20
         vi.advanceTimersByTime(10);
-        job.request(4); // t=30: timer C due at t=130 (tracked; B is no longer tracked)
-        vi.advanceTimersByTime(70); // t=100: timer A fires and clears C
+        job.request(4); // t=30
+        vi.advanceTimersByTime(70); // t=100: timer A fires
         expect(calls).toHaveLength(2);
 
         job.request(5); // queued
         calls[1].resolve();
-        await flushMicrotasks(); // t=100: timer D due at t=200
+        await flushMicrotasks(); // t=100: timer B due at t=200
         expect(job.state).toBe("scheduled");
 
-        vi.advanceTimersByTime(20); // t=120: timer B fires
-        // PINNED(bug): the leftover timer runs the scheduled job 80ms before its deadline (and clears timer D), which breaks the throttling. Expected: still "scheduled", payloads [1, 4], and timer D still pending (1) until t=200. Flip these assertions when fixing.
+        vi.advanceTimersByTime(20); // t=120
+        expect(job.state).toBe("scheduled");
+        expect(calls.map((c) => c.payload)).toEqual([1, 4]);
+        expect(vi.getTimerCount()).toBe(1);
+
+        vi.advanceTimersByTime(80); // t=200: timer B fires
         expect(job.state).toBe("running");
         expect(calls.map((c) => c.payload)).toEqual([1, 4, 5]);
         expect(vi.getTimerCount()).toBe(0);
@@ -760,7 +762,7 @@ describe("AsyncJob", () => {
         expect(states).toEqual(["idle", "running", "scheduled", "idle"]);
       });
 
-      it("lets the aborted job overwrite the state and abort controller of the forced job when it settles later", async () => {
+      it("keeps the state and abort controller of the forced job when the aborted job settles later", async () => {
         const spy = silenceConsoleError();
         const { job, calls } = setupControlledEnv({ rejectOnAbort: true });
 
@@ -771,19 +773,16 @@ describe("AsyncJob", () => {
         await flushMicrotasks(); // The first handler rejects with the AbortError
         // PINNED(quirk): the rejection caused by AsyncJob's own abort is reported through console.error like any other failure. Decide: should rejections of an aborted run be swallowed?
         expect(spy.mock.calls).toEqual([[calls[0].signal.reason]]);
-        // PINNED(bug): the continuation of the aborted run sets the state to "idle" although the forced run is still pending. Expected: "running". Flip this assertion when fixing.
-        expect(job.state).toBe("idle");
+        expect(job.state).toBe("running");
 
         job.request(3);
-        // PINNED(bug): because the state is "idle", a normal request starts a concurrent run instead of being queued. Expected: 2 (queued until the forced run settles). Flip this assertion when fixing.
-        expect(calls).toHaveLength(3);
+        expect(calls).toHaveLength(2); // queued until the forced run settles
 
         job.reset();
-        // PINNED(bug): the continuation of the aborted run also dropped the forced run's AbortController, so nothing can abort the forced run anymore. Expected: true. Flip this assertion when fixing.
-        expect(calls[1].signal.aborted).toBe(false);
+        expect(calls[1].signal.aborted).toBe(true);
       });
 
-      it("lets the aborted job overwrite the scheduled state of the forced job when it settles later", async () => {
+      it("keeps the scheduled state of the forced job when the aborted job settles later", async () => {
         const { job, calls, states } = setupControlledEnv();
 
         job.request(1);
@@ -795,19 +794,17 @@ describe("AsyncJob", () => {
 
         calls[0].resolve(); // The aborted run ignores its signal and completes
         await flushMicrotasks();
-        // PINNED(bug): the continuation of the aborted run sets the state to "idle" although a run is still scheduled (its timer is pending). Expected: "scheduled". Flip this assertion when fixing.
-        expect(job.state).toBe("idle");
+        expect(job.state).toBe("scheduled");
         expect(vi.getTimerCount()).toBe(1);
 
         vi.advanceTimersByTime(100);
         expect(job.state).toBe("running");
         expect(calls).toHaveLength(3);
         expect(calls[2].payload).toBe(3);
-        // PINNED(bug): see above; the history shows "idle" between "scheduled" and "running". Expected: ["idle", "running", "scheduled", "running"]. Flip this assertion when fixing.
-        expect(states).toEqual(["idle", "running", "scheduled", "idle", "running"]);
+        expect(states).toEqual(["idle", "running", "scheduled", "running"]);
       });
 
-      it("lets the aborted job take over the request queued behind the forced job, which then runs concurrently with the forced job", async () => {
+      it("keeps the request queued behind the forced job until the forced job settles, even when the aborted job settles first", async () => {
         const { job, calls } = setupControlledEnv();
 
         job.request(1);
@@ -817,19 +814,19 @@ describe("AsyncJob", () => {
 
         calls[0].resolve(); // The aborted run ignores its signal and completes
         await flushMicrotasks();
-        // PINNED(bug): the continuation of the aborted run consumes the queued request and enters "scheduled" although the forced run is still pending. Expected: "running". Flip this assertion when fixing.
-        expect(job.state).toBe("scheduled");
+        expect(job.state).toBe("running");
 
         vi.advanceTimersByTime(100);
-        // PINNED(bug): the scheduled run starts while the forced run is still pending, so two handlers run concurrently (class JSDoc: "Queues subsequent requests while running"). Expected: payloads [1, 2] (run 3 waits until the forced run settles). Flip this assertion when fixing.
-        expect(calls.map((c) => c.payload)).toEqual([1, 2, 3]);
-        // The continuation of the aborted run dropped the forced run's AbortController, so starting run 3 does not abort it
+        expect(calls.map((c) => c.payload)).toEqual([1, 2]); // no concurrent run
         expect(calls[1].signal.aborted).toBe(false);
 
         calls[1].resolve();
         await flushMicrotasks();
-        // PINNED(bug): the continuation of the forced run sets the state to "idle" although run 3 is pending here. Expected: once fixed, run 3 has not started at this point and the queued request is now "scheduled". Flip this assertion when fixing.
-        expect(job.state).toBe("idle");
+        expect(job.state).toBe("scheduled");
+
+        vi.advanceTimersByTime(100);
+        expect(job.state).toBe("running");
+        expect(calls.map((c) => c.payload)).toEqual([1, 2, 3]);
       });
     });
   });
@@ -954,26 +951,25 @@ describe("AsyncJob", () => {
         expect(states).toEqual(["idle", "running", "idle"]);
       });
 
-      it("clears the pending payload, so a timer left behind by repeated requests runs nothing", async () => {
+      it("cancels the scheduled run and clears the pending payload after repeated requests while scheduled", async () => {
         const { job, calls, states } = setupControlledEnv({ scheduledRunDelayMs: 100 });
 
         job.request(1);
         job.request(2);
         calls[0].resolve();
-        await flushMicrotasks(); // timer A (untracked after the next request)
-        job.request(3); // timer B (tracked)
+        await flushMicrotasks(); // timer A
+        job.request(3); // only the payload is replaced
         job.reset();
-        // PINNED(bug): reset() does not cancel timer A, which was left untracked by the repeated request (JSDoc: "Cancels any scheduled execution"). Expected: 0. Flip this assertion when fixing.
-        expect(vi.getTimerCount()).toBe(1);
+        expect(vi.getTimerCount()).toBe(0);
 
-        vi.advanceTimersByTime(100); // timer A fires
+        vi.advanceTimersByTime(100);
         expect(calls).toHaveLength(1);
         expect(job.state).toBe("idle");
         expect(states).toEqual(["idle", "running", "scheduled", "idle"]);
         expect(vi.getTimerCount()).toBe(0);
       });
 
-      it("does not clear a queued request, so the aborted job schedules an empty run when it settles", async () => {
+      it("clears a queued request, so the aborted job does not schedule a run when it settles", async () => {
         silenceConsoleError();
         const { job, calls, states } = setupControlledEnv({ rejectOnAbort: true });
 
@@ -983,17 +979,16 @@ describe("AsyncJob", () => {
         expect(job.state).toBe("idle");
 
         await flushMicrotasks(); // The aborted handler rejects
-        // PINNED(bug): reset() leaves the queued-request flag set, so the continuation of the aborted run moves the state back to "scheduled" (JSDoc: "Clears queued payload", "Returns to idle state"). Expected: "idle". Flip this assertion when fixing.
-        expect(job.state).toBe("scheduled");
+        expect(job.state).toBe("idle");
+        expect(vi.getTimerCount()).toBe(0);
 
         vi.advanceTimersByTime(100);
         expect(job.state).toBe("idle");
         expect(calls).toHaveLength(1);
-        // PINNED(bug): see above. Expected: ["idle", "running", "idle"]. Flip this assertion when fixing.
-        expect(states).toEqual(["idle", "running", "idle", "scheduled", "idle"]);
+        expect(states).toEqual(["idle", "running", "idle"]);
       });
 
-      it("carries a queued request over to the next run when the aborted job never settles", async () => {
+      it("does not carry a queued request over to the next run when the aborted job never settles", async () => {
         const { job, calls } = setupControlledEnv();
 
         job.request(1);
@@ -1005,15 +1000,14 @@ describe("AsyncJob", () => {
 
         calls[1].resolve();
         await flushMicrotasks();
-        // PINNED(bug): the queued-request flag survived reset(), so completing the unrelated run 3 enters "scheduled" (JSDoc of reset: "Clears queued payload"). Expected: "idle". Flip this assertion when fixing.
-        expect(job.state).toBe("scheduled");
+        expect(job.state).toBe("idle");
 
         vi.advanceTimersByTime(100);
         expect(job.state).toBe("idle");
         expect(calls).toHaveLength(2);
       });
 
-      it("lets the aborted job overwrite the state and abort controller of a run started after reset", async () => {
+      it("keeps the state and abort controller of a run started after reset when the aborted job settles later", async () => {
         silenceConsoleError();
         const { job, calls } = setupControlledEnv({ rejectOnAbort: true });
 
@@ -1023,35 +1017,31 @@ describe("AsyncJob", () => {
         expect(job.state).toBe("running");
 
         await flushMicrotasks(); // The aborted handler rejects
-        // PINNED(bug): the continuation of the aborted run sets the state to "idle" although run 2 is still pending. Expected: "running". Flip this assertion when fixing.
-        expect(job.state).toBe("idle");
+        expect(job.state).toBe("running");
 
         job.reset();
-        // PINNED(bug): the continuation of the aborted run also dropped run 2's AbortController, so reset() cannot abort it. Expected: true. Flip this assertion when fixing.
-        expect(calls[1].signal.aborted).toBe(false);
+        expect(calls[1].signal.aborted).toBe(true);
       });
 
-      it("does not cancel an untracked timer left by repeated requests while scheduled", async () => {
+      it("leaves no timer behind after repeated requests while scheduled, so a run started after reset is not aborted", async () => {
         const { job, calls } = setupControlledEnv({ scheduledRunDelayMs: 100 });
 
         job.request(1);
         job.request(2);
         calls[0].resolve();
         await flushMicrotasks();
-        expect(job.state).toBe("scheduled"); // timer A (untracked after the next request)
-        job.request(3); // timer B (tracked)
+        expect(job.state).toBe("scheduled"); // timer A
+        job.request(3); // only the payload is replaced
 
         job.reset();
-        // PINNED(bug): reset() only clears the latest timer, so timer A survives (JSDoc: "Cancels any scheduled execution"). Expected: 0. Flip this assertion when fixing.
-        expect(vi.getTimerCount()).toBe(1);
+        expect(vi.getTimerCount()).toBe(0);
 
         job.request(4);
         expect(calls).toHaveLength(2);
 
-        vi.advanceTimersByTime(100); // timer A fires
-        // PINNED(bug): the leftover timer aborts run 4 and forces the state to "idle" while its handler is pending. Expected: not aborted and still "running". Flip these assertions when fixing.
-        expect(calls[1].signal.aborted).toBe(true);
-        expect(job.state).toBe("idle");
+        vi.advanceTimersByTime(100);
+        expect(calls[1].signal.aborted).toBe(false);
+        expect(job.state).toBe("running");
       });
     });
   });
