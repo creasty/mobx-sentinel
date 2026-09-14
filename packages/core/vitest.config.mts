@@ -9,7 +9,10 @@ export default defineConfig({
     clearMocks: false,
     typecheck: {
       enabled: true,
-      include: ["**/src/**/*.test.ts", "**/test-stage3/**/*.test.ts"],
+      // Only files in the program of ./tsconfig.json get checked; any other matched file just passes. So
+      // test-stage3 is not listed here: it needs stage-3 settings, and the `test` script runs tsc on
+      // test-stage3/tsconfig.json for it.
+      include: ["**/src/**/*.test.ts"],
     },
   },
 });
