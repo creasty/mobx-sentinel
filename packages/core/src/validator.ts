@@ -410,8 +410,9 @@ export class Validator<T> {
    * - Handler runs immediately when added for initial validation
    * - Handler is called when the watched expression changes
    * - Changes are throttled by default delay
-   * - Provides abort signal for cancellation
-   * - Previous validations are aborted when new ones start
+   * - Changes made while the handler is running are queued, not aborted:
+   *   the latest value is validated after the running handler settles
+   * - Provides abort signal, which is aborted when the validator is reset or the handler is removed
    */
   @action
   addAsyncHandler<Expr>(

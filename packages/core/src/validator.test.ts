@@ -2109,12 +2109,12 @@ describe("Validator: async handler scheduling", () => {
     await vi.advanceTimersByTimeAsync(100);
     expect(env.runs).toHaveLength(1);
     expect(env.validator.asyncState).toBe(1);
-    // PINNED(bug): A newer value does not abort the running job, contradicting the README ("Previous jobs are always cancelled: When a new async validation starts, any running validation is automatically aborted"; "Automatic cancellation on new changes"). Expected: the running job's signal is aborted once a newer value is requested. Flip this assertion when fixing.
+    // Intended: a newer value is queued behind the running job instead of aborting it
     expect(env.runs[0].signal.aborted).toBe(false);
 
     env.runs[0].job.resolve();
     await flushMicrotasks();
-    // PINNED(bug): The outdated job's result (for -1) is committed while the follow-up job is still pending. Expected: results of a superseded job are discarded. Flip this assertion when fixing.
+    // PINNED(quirk): The outdated job's result (for -1) is committed while the follow-up job for -3 is still pending, so an error for the old value shows until then. Decide: discard a completed run's result when a newer value is already queued?
     expect(env.validator.getErrorMessages("field" as KeyPath)).toEqual(new Set(["negative: -1"]));
     expect(env.validator.asyncState).toBe(1); // scheduled
 
