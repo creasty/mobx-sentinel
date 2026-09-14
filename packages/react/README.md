@@ -41,8 +41,8 @@ const MyFormComponent = observer(({ model, onSuccess }) => {
     return true; // Return true to indicate success
   });
 
-  useFormHandler(form, "didSubmit", () => {
-    onSuccess(); // This always uses the latest onSuccess callback
+  useFormHandler(form, "didSubmit", (succeed) => {
+    if (succeed) onSuccess(); // Only on success, and always with the latest onSuccess callback
   });
 
   return <div>{/* your form fields */}</div>;
