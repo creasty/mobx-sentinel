@@ -134,16 +134,15 @@ Dispatch [publish](https://github.com/creasty/mobx-sentinel/actions/workflows/pu
 `bump_version` set to the new `X.Y.Z`, and it will
 
 1. run `./script/bump X.Y.Z` and push `bump-version-X-Y-Z`,
-1. draft a `vX.Y.Z` release with the sections of `.github/release-notes-template.md` above the
-   generated `## What's Changed`, which `.github/release.yml` groups under the same titles.
+1. draft a `vX.Y.Z` release with the notes GitHub generates from the merged pull requests,
+   grouped as [Release notes](#release-notes) describes.
 
 The run summary then hands you two links: a pull request form with the title, body and
 `skip-release-notes` label already filled in, and the draft.
 
 **Open the pull request from that link, and merge it yourself** once `test-ok` passes -- see below
-for why the workflow does neither. Then [write the notes](#writing-the-release-notes) and **publish
-the release**. Publishing it is what ships to npm and creates the tag; merging on its own publishes
-nothing.
+for why the workflow does neither. Then check the notes and **publish the release**. Publishing it
+is what ships to npm and creates the tag; merging on its own publishes nothing.
 
 Leaving `bump_version` empty skips all of the above and publishes the dispatched ref's current
 version as-is. That is the repair path for a bump that merged but never shipped, and it is also
@@ -157,36 +156,23 @@ creates the tag and drafts the release itself.
 | the draft release being published | GitHub creates `vX.Y.Z` at main's HEAD as it stands, which fires `publish` again and ships to npm. |
 | `publish` dispatched with `bump_version` empty | publishes the dispatched ref to npm straight away, then creates `vX.Y.Z` at that commit and drafts the release. The repair path, not part of the sequence above. |
 
-#### Writing the release notes
+#### Release notes
 
-The draft opens with five sections for your own words, ordered by how urgently a reader needs them,
-and closes with GitHub's list of the merged pull requests under the same five titles: the notes,
-then their index. [v0.3.5](https://github.com/creasty/mobx-sentinel/releases/tag/v0.3.5) sets the
-style -- one bullet per change a user would notice, opening with a bold sentence that says what
-changed, followed by why and what to do about it.
+The notes are GitHub's list of the pull requests merged since the last release, grouped by label as
+`.github/release.yml` sets out. A pull request lands under the first section whose label it carries:
 
-The list is grouped by label. A pull request lands under the first section whose label it carries,
-so `breaking-change` wins over any other.
+| Section | Label |
+| ------- | ----- |
+| Breaking changes | `breaking-change` |
+| Features | `enhancement` |
+| Improvements | `improvement` |
+| Bug fixes | `bug` |
+| Other changes | any other, or none |
+| *(left out)* | `skip-release-notes`, which the bump pull request gets from the prefilled form |
 
-| Section | Label | What goes there |
-| ------- | ----- | --------------- |
-| Breaking changes | `breaking-change` | Anything that makes users change their code, types or dependencies to upgrade: a removed or renamed API, a changed default or behavior, a raised peer dependency floor. Say who is affected and how to migrate, with a before/after snippet when code has to change. Deprecations go last, each opening with **Deprecated:** and naming its replacement. |
-| Features | `enhancement` | Something new: an API, an option, a decorator, a hook. |
-| Improvements | `improvement` | Something that already exists, made better without breaking it: behavior, types, performance, error messages. |
-| Bug fixes | `bug` | Behavior that was wrong. |
-| Other changes | any other, or none | Dependency updates, documentation, anything else worth a line. |
-| *(left out)* | `skip-release-notes` | Version bumps and CI-only changes. The bump pull request gets it from the prefilled form. |
-
-**Label each pull request when you merge it.** The list is generated once, when `publish` creates
-the draft, so a label added afterwards regroups nothing. If one came late, generate the list again
-and paste it over the one in the draft:
-
-```sh
-gh api repos/creasty/mobx-sentinel/releases/generate-notes -f tag_name=vX.Y.Z -f target_commitish=main --jq .body
-```
-
-Before publishing, delete the "Do not publish" note and every section you have nothing for; GitHub
-already leaves empty groups out of its list.
+Label pull requests as you merge them: the list is generated once, when the draft is created. From
+then on the draft is plain text, so fix anything by hand before publishing -- move a line to another
+section, or add migration steps under a breaking change.
 
 #### Why you open the pull request, and merge it, yourself
 

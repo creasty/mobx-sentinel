@@ -98,11 +98,9 @@ jobs:
             const { VERSION, BRANCH, RUN_URL } = process.env;
             const tag = `v${VERSION}`;
 
-            // `body` is pre-pended to the generated notes, so the sections of
-            // .github/release-notes-template.md land above `## What's Changed`, which
-            // .github/release.yml groups under the same titles. GitHub has no release
-            // template of its own, hence the file, which the repair path in `publish`
-            // drafts from as well.
+            // The notes are GitHub's generated list, grouped by .github/release.yml, and
+            // `body` is pre-pended to it -- so all the body carries is a warning for
+            // whoever opens the draft.
             //
             // Drafted before the merge, which is deliberate: notes generated now cover
             // the previous tag through main as it stands, which is what keeps
@@ -114,7 +112,6 @@ jobs:
             const { data: releases } = await github.rest.repos.listReleases({ ...context.repo, per_page: 100 });
             let release = releases.find((r) => r.tag_name === tag);
             if (!release) {
-              const skeleton = require('fs').readFileSync('.github/release-notes-template.md', 'utf8');
               ({ data: release } = await github.rest.repos.createRelease({
                 ...context.repo,
                 tag_name: tag,
@@ -126,7 +123,6 @@ jobs:
                   '> Do not publish until the bump pull request has merged: publishing this release',
                   `> is what ships ${VERSION} to npm, and it tags whatever main says at that moment.`,
                   '',
-                  skeleton,
                 ].join('\n'),
                 generate_release_notes: true,
               }));
@@ -162,10 +158,9 @@ jobs:
             compare.searchParams.set('expand', '1');
             compare.searchParams.set('title', `Bump version ${VERSION}`);
             compare.searchParams.set('body', body);
-            // Keeps the bump itself out of notes generated after it merges: the repair
-            // path's draft, or a list regenerated for a label that came late. If this link
-            // ever answers 404, check the label still exists -- GitHub documents a 404 for
-            // query parameters it finds invalid.
+            // Keeps the bump itself out of notes generated after it merges, as the repair
+            // path's are. If this link ever answers 404, check the label still exists --
+            // GitHub documents a 404 for query parameters it finds invalid.
             compare.searchParams.set('labels', 'skip-release-notes');
 
             // addRaw, not addList: that emits `<ul><li>`, and GitHub does not render
@@ -176,7 +171,7 @@ jobs:
                   `### Bump version ${VERSION}`,
                   '',
                   `1. [Open the pull request](${compare}) -- title, body and label are prefilled.`,
-                  `2. Merge it once \`test-ok\` passes, then write the notes on`,
+                  `2. Merge it once \`test-ok\` passes, then check the notes on`,
                   `   [draft ${tag}](${release.html_url}) and publish it, which is what ships ${VERSION} to npm.`,
                   '',
                 ].join('\n'),
@@ -291,10 +286,6 @@ jobs:
 
             const { data: releases } = await github.rest.repos.listReleases({ ...context.repo, per_page: 100 });
             if (!releases.some((r) => r.tag_name === TAG)) {
-              // The same skeleton the bump drafts from, read here -- after the tag exists --
-              // so a failed read costs the draft and never the tag: a re-run skips outright
-              // once npm has the version.
-              //
               // The bump pull request has merged by now, so it falls in range; the
               // `skip-release-notes` label from the bump link keeps it out. A pull request
               // that only bumps the version by hand needs that label added.
@@ -303,7 +294,6 @@ jobs:
                 tag_name: TAG,
                 name: TAG,
                 draft: true,
-                body: require('fs').readFileSync('.github/release-notes-template.md', 'utf8'),
                 generate_release_notes: true,
               });
             }

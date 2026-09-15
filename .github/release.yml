@@ -1,5 +1,5 @@
-# Groups the pull request list GitHub appends to the drafts publish.yml creates,
-# under the same titles, in the same order, as .github/release-notes-template.md.
+# Groups the list of merged pull requests GitHub generates as the release notes
+# for the drafts publish.yml creates.
 #
 # Read once, when a draft is created, so a label added afterwards regroups nothing.
 # A pull request lands in the first category whose labels match, which is what
