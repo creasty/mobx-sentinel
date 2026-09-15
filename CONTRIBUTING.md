@@ -27,6 +27,7 @@ Before contributing, please familiarize yourself with the [Design Principles](RE
 - Use the existing test framework (vitest) and ensure all tests pass before submitting a PR.
 - Test files should be placed alongside source files with `.test.ts` or `.test.tsx` extension (e.g., `foo.ts` and `foo.test.ts`).
 - Memory leaks are tested in each package's `memory.test.ts` (`.tsx` in react) by checking whether objects get garbage collected. See `isCollected` there for how to keep a test from retaining the objects it checks.
+- Integration tests live in [apps/example/](./apps/example), beside the invoice editor they drive. Each one uses the editor the way a person would, so it runs through `core`, `form` and `react` together, built as an application gets them. `pnpm test` runs them after the packages' own tests.
 - Coverage rate is enforced by Codecov.
 
 ### Submitting Pull Requests
