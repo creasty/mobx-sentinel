@@ -1,6 +1,6 @@
 import { action, comparer, computed, IEqualsComparer, makeObservable, observable, reaction, runInAction } from "mobx";
 import { v4 as uuidV4 } from "uuid";
-import { ValidationError, ValidationErrorMapBuilder } from "./error";
+import { ValidationError, type ValidationErrorMapBuilder, ValidationErrorMapBuilderImpl } from "./error";
 import { StandardNestedFetcher } from "./nested";
 import { KeyPath, ReadonlyKeyPathMultiMap } from "./keyPath";
 import { AsyncJob } from "./asyncJob";
@@ -353,9 +353,9 @@ export class Validator<T> {
    */
   @action
   updateErrors(key: symbol, handler: Validator.InstantHandler<T>) {
-    const builder = new ValidationErrorMapBuilder();
+    const builder = new ValidationErrorMapBuilderImpl();
     handler(builder);
-    const result = ValidationErrorMapBuilder.build(builder);
+    const result = ValidationErrorMapBuilderImpl.build(builder);
     if (result.size > 0) {
       this.#errors.set(key, result);
     } else {
@@ -384,9 +384,9 @@ export class Validator<T> {
       key,
       opt,
       expr: () => {
-        const builder = new ValidationErrorMapBuilder();
+        const builder = new ValidationErrorMapBuilderImpl();
         handler(builder);
-        return ValidationErrorMapBuilder.build(builder);
+        return ValidationErrorMapBuilderImpl.build(builder);
       },
       effect: (result) => {
         if (result.size > 0) {
@@ -427,14 +427,14 @@ export class Validator<T> {
     const key = Symbol();
     const job = new AsyncJob<Expr>({
       handler: async (expr, abortSignal) => {
-        const builder = new ValidationErrorMapBuilder();
+        const builder = new ValidationErrorMapBuilderImpl();
         try {
           await handler(expr, builder, abortSignal);
         } finally {
           // Discard the result of an aborted job (e.g. by reset() or disposal), so cleared errors do not come back
           if (!abortSignal.aborted) {
             runInAction(() => {
-              const result = ValidationErrorMapBuilder.build(builder);
+              const result = ValidationErrorMapBuilderImpl.build(builder);
               if (result.size > 0) {
                 this.#errors.set(key, result);
               } else {
