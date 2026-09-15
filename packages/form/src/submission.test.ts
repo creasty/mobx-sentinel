@@ -470,10 +470,7 @@ describe("Submission", () => {
 
       const promise = submission.exec();
       await flushMicrotasks();
-      // PINNED(quirk): willSubmit handlers run serially, like submit handlers (the original test "processes willSubmit
-      // handlers serially regardless of timing" asserts this too). Decide: the README says "All handlers run in
-      // parallel" for willSubmit (and the Handlers JSDoc only marks `submit` as serialized) — run willSubmit handlers
-      // concurrently (flip to toHaveBeenCalledTimes(1)) or correct the README?
+      // willSubmit handlers run serially, like submit handlers, as documented.
       expect(second).toHaveBeenCalledTimes(0);
 
       first.resolve(true);

@@ -285,17 +285,17 @@ export class Form<T> {
    * Submit the form.
    *
    * @remarks
-   * - Checks if {@link canSubmit} is `true`
-   * - Executes handlers in order
-   * - Aborts if any `submit` handler returns `false`
+   * - Checks if {@link canSubmit} is `true`, and returns `false` without running any handler if not
+   * - Executes handlers in order (see {@link addHandler})
+   * - Fails if any `willSubmit` or `submit` handler returns `false`
    * - Handles exceptions in all phases
    * - Resets the form after successful submission
    *
    * @param args.force Whether to force submission even if {@link canSubmit} is `false`.
-   *   It cancels any in-progress submission if any.
+   *   It cancels the submission in progress, if any.
    *   The cancelled submission resolves `false` without calling `didSubmit` handlers.
    *
-   * @returns `true` if submission succeeded, `false` if failed or aborted
+   * @returns `true` if submission succeeded, `false` if failed or cancelled
    */
   async submit(args?: { force?: boolean }) {
     if (!args?.force && !this.canSubmit) return false;
@@ -307,9 +307,10 @@ export class Form<T> {
    *
    * @remarks
    * Handlers are called in this order:
-   * 1. `willSubmit` - Called before submission starts
-   * 2. `submit` - Async handlers that perform the submission (serialized)
-   * 3. `didSubmit` - Called after submission completes, except for a submission cancelled by a newer one
+   * 1. `willSubmit` - Called before submission starts, to veto or prepare it (serialized; `false` stops the submission)
+   * 2. `submit` - Async handlers that perform the submission and return whether it succeeded (serialized)
+   * 3. `didSubmit` - Called once with the outcome after submission completes,
+   *    except for a submission cancelled by a newer one
    *
    * @see {@link Form.Handlers}
    *

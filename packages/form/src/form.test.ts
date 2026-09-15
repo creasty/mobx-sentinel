@@ -1942,7 +1942,7 @@ describe("Form (details)", () => {
 
       const promise = form.submit();
       await flushMicrotasks();
-      // PINNED(quirk): willSubmit handlers are awaited one by one, so the second handler does not start until the first settles. The README states that all willSubmit handlers run in parallel, but the original Submission test "processes willSubmit handlers serially regardless of timing" asserts serial order (same root cause as the willSubmit quirk in submission.test.ts). Decide: run willSubmit handlers concurrently (flip to ["willSubmit1", "willSubmit2"]) or correct the README?
+      // willSubmit handlers are awaited one by one, as documented, so the second handler does not start until the first settles.
       expect(calls).toEqual(["willSubmit1"]);
 
       first.resolve(true);
