@@ -1,0 +1,27 @@
+# Groups the pull request list GitHub appends to the drafts publish.yml creates,
+# under the same titles, in the same order, as .github/release-notes-template.md.
+#
+# Read once, when a draft is created, so a label added afterwards regroups nothing.
+# A pull request lands in the first category whose labels match, which is what
+# lets `breaking-change` win over any other label, and why '*' stays last -- quoted,
+# since a bare * is a YAML alias.
+changelog:
+  exclude:
+    labels:
+      - skip-release-notes
+  categories:
+    - title: Breaking changes
+      labels:
+        - breaking-change
+    - title: Features
+      labels:
+        - enhancement
+    - title: Improvements
+      labels:
+        - improvement
+    - title: Bug fixes
+      labels:
+        - bug
+    - title: Other changes
+      labels:
+        - '*'
