@@ -134,14 +134,14 @@ Dispatch [publish](https://github.com/creasty/mobx-sentinel/actions/workflows/pu
 `bump_version` set to the new `X.Y.Z`, and it will
 
 1. run `./script/bump X.Y.Z` and push `bump-version-X-Y-Z`,
-1. draft a `vX.Y.Z` release with the `## Fixed` / `## Changed` skeleton above the generated
-   `## What's Changed`.
+1. draft a `vX.Y.Z` release with the notes GitHub generates from the merged pull requests,
+   grouped as [Release notes](#release-notes) describes.
 
-The run summary then hands you two links: a pull request form with the title and body already
-filled in, and the draft.
+The run summary then hands you two links: a pull request form with the title, body and
+`skip-release-notes` label already filled in, and the draft.
 
 **Open the pull request from that link, and merge it yourself** once `test-ok` passes -- see below
-for why the workflow does neither. Then write the notes and **publish the release**. Publishing it
+for why the workflow does neither. Then check the notes and **publish the release**. Publishing it
 is what ships to npm and creates the tag; merging on its own publishes nothing.
 
 Leaving `bump_version` empty skips all of the above and publishes the dispatched ref's current
@@ -155,6 +155,24 @@ creates the tag and drafts the release itself.
 | the bump pull request merging | nothing publishes, but `push` and `deploy` run on `main` as usual, so the commit you are about to tag gets its tests and its Pages deploy first. |
 | the draft release being published | GitHub creates `vX.Y.Z` at main's HEAD as it stands, which fires `publish` again and ships to npm. |
 | `publish` dispatched with `bump_version` empty | publishes the dispatched ref to npm straight away, then creates `vX.Y.Z` at that commit and drafts the release. The repair path, not part of the sequence above. |
+
+#### Release notes
+
+The notes are GitHub's list of the pull requests merged since the last release, grouped by label as
+`.github/release.yml` sets out. A pull request lands under the first section whose label it carries:
+
+| Section | Label |
+| ------- | ----- |
+| Breaking changes | `breaking-change` |
+| Features | `enhancement` |
+| Improvements | `improvement` |
+| Bug fixes | `bug` |
+| Other changes | any other, or none |
+| *(left out)* | `skip-release-notes`, which the bump pull request gets from the prefilled form |
+
+Label pull requests as you merge them: the list is generated once, when the draft is created. From
+then on the draft is plain text, so fix anything by hand before publishing -- move a line to another
+section, or add migration steps under a breaking change.
 
 #### Why you open the pull request, and merge it, yourself
 
@@ -196,7 +214,7 @@ keeps a `-dev-` tree away from the `latest` tag. On top of that:
 That last one is the sharp edge of publishing on the release: publish the draft before the bump
 pull request has merged and GitHub tags a `main` that still carries the old version. To recover,
 merge the pull request, delete the tag and the release, then dispatch `publish` with `bump_version`
-empty. The draft carries that warning in a note above the release notes.
+empty. The draft carries that warning in a note above the release notes; delete it as you publish.
 
 ## [Maintainer Only] Deployments
 

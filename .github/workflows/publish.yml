@@ -98,8 +98,9 @@ jobs:
             const { VERSION, BRANCH, RUN_URL } = process.env;
             const tag = `v${VERSION}`;
 
-            // `body` is pre-pended to the generated notes, so the prose skeleton lands
-            // above `## What's Changed` -- the shape every release here already has.
+            // The notes are GitHub's generated list, grouped by .github/release.yml, and
+            // `body` is pre-pended to it -- so all the body carries is a warning for
+            // whoever opens the draft.
             //
             // Drafted before the merge, which is deliberate: notes generated now cover
             // the previous tag through main as it stands, which is what keeps
@@ -121,14 +122,6 @@ jobs:
                 body: [
                   '> Do not publish until the bump pull request has merged: publishing this release',
                   `> is what ships ${VERSION} to npm, and it tags whatever main says at that moment.`,
-                  '',
-                  '## Fixed',
-                  '',
-                  '-',
-                  '',
-                  '## Changed',
-                  '',
-                  '-',
                   '',
                 ].join('\n'),
                 generate_release_notes: true,
@@ -165,6 +158,10 @@ jobs:
             compare.searchParams.set('expand', '1');
             compare.searchParams.set('title', `Bump version ${VERSION}`);
             compare.searchParams.set('body', body);
+            // Keeps the bump itself out of notes generated after it merges, as the repair
+            // path's are. If this link ever answers 404, check the label still exists --
+            // GitHub documents a 404 for query parameters it finds invalid.
+            compare.searchParams.set('labels', 'skip-release-notes');
 
             // addRaw, not addList: that emits `<ul><li>`, and GitHub does not render
             // markdown inside block HTML, so the links would come out as literal text.
@@ -173,8 +170,8 @@ jobs:
                 [
                   `### Bump version ${VERSION}`,
                   '',
-                  `1. [Open the pull request](${compare}) -- title and body are prefilled.`,
-                  `2. Merge it once \`test-ok\` passes, then write the notes on`,
+                  `1. [Open the pull request](${compare}) -- title, body and label are prefilled.`,
+                  `2. Merge it once \`test-ok\` passes, then check the notes on`,
                   `   [draft ${tag}](${release.html_url}) and publish it, which is what ships ${VERSION} to npm.`,
                   '',
                 ].join('\n'),
@@ -289,13 +286,14 @@ jobs:
 
             const { data: releases } = await github.rest.repos.listReleases({ ...context.repo, per_page: 100 });
             if (!releases.some((r) => r.tag_name === TAG)) {
-              // Notes generated here do include the bump PR, since it has merged by now.
+              // The bump pull request has merged by now, so it falls in range; the
+              // `skip-release-notes` label from the bump link keeps it out. A pull request
+              // that only bumps the version by hand needs that label added.
               await github.rest.repos.createRelease({
                 ...context.repo,
                 tag_name: TAG,
                 name: TAG,
                 draft: true,
-                body: '## Fixed\n\n-\n\n## Changed\n\n-\n',
                 generate_release_notes: true,
               });
             }
