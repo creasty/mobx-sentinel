@@ -22,6 +22,7 @@ export class FormField {
   readonly #changeType = observable.box<FormField.ChangeType | null>(null);
   readonly #isReported = observable.box(false);
   readonly #isReportedDelayed = observable.box(false);
+  #isReportPending = false;
   #timerId: number | null = null;
 
   /** @ignore */
@@ -30,17 +31,6 @@ export class FormField {
     this.fieldName = args.fieldName;
     this.validator = args.validator;
     this.#getFinalizationDelayMs = args.getFinalizationDelayMs;
-
-    // Delay the error reporting until the validation is up-to-date.
-    reaction(
-      () => [this.#isReported.get(), this.validator.isValidating] as const,
-      ([isReported, isValidating]) => {
-        if (!isValidating) {
-          this.#isReportedDelayed.set(isReported);
-        }
-      },
-      { equals: comparer.shallow }
-    );
   }
 
   /**
@@ -126,7 +116,7 @@ export class FormField {
   reset() {
     this.#changeType.set(null);
     this.#isTouched.set(false);
-    this.#isReported.set(false);
+    this.#setReported(false);
     this.#cancelFinalizeChangeWithDelay();
   }
 
@@ -175,7 +165,7 @@ export class FormField {
    */
   @action
   reportError() {
-    this.#isReported.set(true);
+    this.#setReported(true);
   }
 
   /** Finalize the intermediate change if needed (usually triggered by onBlur) */
@@ -184,6 +174,33 @@ export class FormField {
     if (this.isIntermediate) {
       this.markAsChanged("final");
     }
+  }
+
+  /**
+   * Set whether the errors are reported, and reflect it in {@link isErrorReported} once the validation is up-to-date.
+   *
+   * Waiting means observing the validator, and what a reaction observes references it, so the subject, and the objects
+   * nested in it, would keep the field and its form alive. The reaction therefore lives only while a change waits, and
+   * disposes itself once the change is reflected.
+   */
+  #setReported(value: boolean) {
+    this.#isReported.set(value);
+    if (this.#isReportPending || value === this.#isReportedDelayed.get()) return;
+
+    this.#isReportPending = true;
+    reaction(
+      () => [this.#isReported.get(), this.validator.isValidating] as const,
+      ([isReported, isValidating], _, r) => {
+        if (!isValidating) {
+          this.#isReportedDelayed.set(isReported);
+        }
+        if (isReported === this.#isReportedDelayed.get()) {
+          this.#isReportPending = false;
+          r.dispose();
+        }
+      },
+      { fireImmediately: true, equals: comparer.shallow }
+    );
   }
 
   #finalizeChangeWithDelay() {

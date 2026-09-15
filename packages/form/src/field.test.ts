@@ -1,4 +1,12 @@
-import { autorun, configure as configureMobx, makeObservable, observable, reaction, runInAction } from "mobx";
+import {
+  autorun,
+  configure as configureMobx,
+  getObserverTree,
+  makeObservable,
+  observable,
+  reaction,
+  runInAction,
+} from "mobx";
 import { Form } from "./form";
 import { debugFormField, FormField } from "./field";
 import { KeyPath, nested, Validator } from "@mobx-sentinel/core";
@@ -979,6 +987,53 @@ describe("FormField", () => {
       await waitForDelay();
       expect(field.isIntermediate).toBe(false);
       expect(field.isChanged).toBe(true);
+    });
+  });
+
+  describe("Observing the validator", () => {
+    /** Whether anything observes validator.isValidating, such as the reaction that delays the error reporting */
+    const isValidatingObserved = (validator: Validator<any>) => !!getObserverTree(validator, "isValidating").observers;
+
+    it("does not observe the validator while no report waits for a validation", () => {
+      const { field, validator, updateErrors } = setupEnv();
+      expect(isValidatingObserved(validator)).toBe(false);
+
+      updateErrors((b) => b.invalidate("test", "error"));
+      field.reportError();
+      expect(field.isErrorReported).toBe(true);
+      expect(isValidatingObserved(validator)).toBe(false);
+
+      field.reset();
+      expect(field.isErrorReported).toBe(undefined);
+      expect(isValidatingObserved(validator)).toBe(false);
+    });
+
+    it("observes the validator while a report waits for the validation to settle", () => {
+      const { field, validator, setValue, settleValidation } = setupValidationEnv();
+
+      setValue("invalid");
+      field.reportError();
+      expect(field.isErrorReported).toBe(undefined);
+      expect(isValidatingObserved(validator)).toBe(true);
+
+      settleValidation();
+      expect(field.isErrorReported).toBe(true);
+      expect(isValidatingObserved(validator)).toBe(false);
+    });
+
+    it("stops observing the validator when the report is withdrawn before the validation settles", () => {
+      const { field, validator, setValue, settleValidation } = setupValidationEnv();
+
+      setValue("invalid");
+      field.reportError();
+      expect(isValidatingObserved(validator)).toBe(true);
+
+      field.reset();
+      expect(validator.isValidating).toBe(true);
+      expect(isValidatingObserved(validator)).toBe(false);
+
+      settleValidation();
+      expect(field.isErrorReported).toBe(undefined);
     });
   });
 

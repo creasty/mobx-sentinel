@@ -125,17 +125,37 @@ describe("Form", () => {
 
   it("releases a disposed form while the subject lives on", async () => {
     const model = new SampleModel();
-    const create = (withField: boolean) => {
-      const form = Form.get(model);
-      if (withField) form.getField("field");
-      Form.dispose(model);
+    const create = (formKey: symbol | undefined, setup: (form: Form<SampleModel>) => void) => {
+      const form = Form.get(model, formKey);
+      setup(form);
+      Form.dispose(model, formKey);
       return new WeakRef(form);
     };
-    const withoutFields = create(false);
-    const withField = create(true);
+    const withoutFields = create(undefined, () => {});
+    const withReportedField = create(undefined, (form) => form.getField("field").reportError());
+    const keyedWithReportedField = create(Symbol("keyed"), (form) => form.getField("field").reportError());
+    const awaitingFinalization = create(undefined, (form) => {
+      form.configure({ autoFinalizationDelayMs: 60_000 }); // Long enough not to elapse during the test
+      form.getField("field").markAsChanged("intermediate");
+    });
+    const awaitingValidation = create(undefined, (form) => {
+      form.validator.addSyncHandler(() => void model.otherField, { delayMs: 60_000 });
+      runInAction(() => {
+        model.otherField = "value"; // Schedules a validation that does not settle during the test
+      });
+      form.getField("field").reportError();
+    });
     expect(await isCollected(withoutFields)).toBe(true);
-    // PINNED(bug): Form.dispose only removes the form from the registry. Each field observes the validator of the subject with a reaction that is never disposed, and the field references its form (to read the auto-finalization delay), so the subject keeps a disposed form alive once the form has a field, and each Form.get/Form.dispose cycle on a long-lived subject leaves one more behind. Expected: collected like the disposed form without fields, as the JSDoc says Form.dispose disposes "the form instance for the subject". Flip this assertion when fixing.
-    expect(await isCollected(withField)).toBe(false);
+    expect(await isCollected(withReportedField)).toBe(true);
+    expect(await isCollected(keyedWithReportedField)).toBe(true);
+    // The timer of the auto-finalization references the field, and so the form, until it fires
+    expect(await isCollected(awaitingFinalization)).toBe(false);
+    awaitingFinalization.deref()!.reset(); // Cancel the timer
+    expect(await isCollected(awaitingFinalization)).toBe(true);
+    // A field observes the validator only while its report waits for the validation to settle
+    expect(await isCollected(awaitingValidation)).toBe(false);
+    awaitingValidation.deref()!.validator.reset(); // Cancel the validation, which settles the report
+    expect(await isCollected(awaitingValidation)).toBe(true);
     expect(model.field).toBe("");
   });
 
@@ -181,23 +201,23 @@ describe("Form", () => {
       }
     }
 
-    it("keeps the subject alive through its watcher, and through its fields", async () => {
+    it("keeps the subject alive through its watcher, but not through its fields", async () => {
       const shared = new ChildModel();
-      const create = (Model: typeof ParentModel | typeof UnwatchedParentModel, withField: boolean) => {
+      const create = (Model: typeof ParentModel | typeof UnwatchedParentModel, withReportedField: boolean) => {
         const model = new Model(shared);
         const form = Form.get(model);
-        if (withField) form.getField("field");
+        if (withReportedField) form.getField("field").reportError();
         return new WeakRef(model);
       };
       const watched = create(ParentModel, false);
       const unwatched = create(UnwatchedParentModel, false);
-      const unwatchedWithField = create(UnwatchedParentModel, true);
+      const unwatchedWithReportedField = create(UnwatchedParentModel, true);
       // With @unwatch, the watcher does not observe the nested object
       expect(await isCollected(unwatched)).toBe(true);
       // PINNED(quirk): The watcher of the subject observes the watchers of its @nested objects with reactions that cannot be disposed (see memory.test.ts in core), so a nested object that outlives the subject (here `shared`) keeps the subject and its forms alive, although MobX alone would let the subject go. Decide: should Watcher reactions be disposable, or stop observing state outside the subject?
       expect(await isCollected(watched)).toBe(false);
-      // PINNED(quirk): Each field observes validator.isValidating, which reads the validators of the @nested objects, with a reaction that cannot be disposed, so once the form has a field, a nested object that outlives the subject keeps the subject and its form alive, even when @unwatch keeps the watcher away from it. Decide: should field reactions be disposable, or stop observing the validation state of nested objects that outlive the subject?
-      expect(await isCollected(unwatchedWithField)).toBe(false);
+      // A field observes validator.isValidating, which reads the validators of the @nested objects, only while its report waits for the validation to settle
+      expect(await isCollected(unwatchedWithReportedField)).toBe(true);
       expect(shared.value).toBe("");
     });
   });
