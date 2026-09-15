@@ -23,13 +23,15 @@ const model = new MyModel();
 const watcher = Watcher.get(model);
 ```
 
-Watcher instances are cached and automatically garbage collected with their targets. The same object always returns the same watcher instance:
+Watcher instances are cached. The same object always returns the same watcher instance:
 
 ```typescript
 const watcher1 = Watcher.get(model);
 const watcher2 = Watcher.get(model);
 // watcher1 === watcher2 (same instance)
 ```
+
+A watcher observes its target through MobX reactions, so it follows the rule for [any reaction](https://mobx.js.org/reactions.html#always-dispose-of-reactions): it is garbage collected together with its target only if everything it observes is too. A `@computed` that reads a store, an `@observable` holding an observable array, set or map that other objects share, or a `@nested` object that outlives the target keeps the watcher alive, and the watcher keeps the target alive. MobX alone would let such a target go, as a `@computed` observes the store only while something observes the computed, and only the watcher reads the elements of the collection or observes the `@nested` object. A watcher cannot be disposed; to let such a target go, exclude the property with `@unwatch`, which also stops tracking its changes.
 
 Use `Watcher.getSafe()` to get a watcher without throwing errors for non-objects:
 
@@ -447,13 +449,15 @@ const model = new MyModel();
 const validator = Validator.get(model);
 ```
 
-Validator instances are cached and automatically garbage collected with their targets. The same object always returns the same validator instance:
+Validator instances are cached. The same object always returns the same validator instance:
 
 ```typescript
 const validator1 = Validator.get(model);
 const validator2 = Validator.get(model);
 // validator1 === validator2 (same instance)
 ```
+
+Validation handlers are MobX reactions, so a validator is garbage collected together with its target only if everything its handlers observe is too, as with [any reaction](https://mobx.js.org/reactions.html#always-dispose-of-reactions). Dispose a handler that reads something outliving the target, such as a store, with the function that `makeValidatable`, `addSyncHandler` or `addAsyncHandler` returns.
 
 Use `Validator.getSafe()` to get a validator without throwing errors for non-objects:
 

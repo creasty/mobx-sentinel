@@ -9,7 +9,8 @@
     "noEmit": true,
     "moduleResolution": "bundler",
     "module": "esnext",
-    "types": ["vitest/globals"],
+    // "node" declares the `gc()` that memory.test.ts calls.
+    "types": ["vitest/globals", "node"],
     "experimentalDecorators": false,
     "emitDecoratorMetadata": false
   },

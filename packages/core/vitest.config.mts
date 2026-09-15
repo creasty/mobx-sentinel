@@ -4,6 +4,9 @@ export default defineConfig({
   test: {
     globals: true,
     environment: "node",
+    // memory.test.ts forces garbage collection with `gc()`, which Node only exposes with this flag. Worker threads reject
+    // the flag, so this needs a pool of child processes, like the default `forks`.
+    execArgv: ["--expose-gc"],
     // Vitest 5 clears spies before each test. The annotation tests assert on calls that
     // decorators make while the class body is evaluated, which happens at import time.
     clearMocks: false,
