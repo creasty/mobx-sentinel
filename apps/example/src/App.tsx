@@ -1,17 +1,12 @@
 import { observer } from "mobx-react-lite";
-import Head from "next/head";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { Debugger } from "@/helpers/Debugger";
 import { InvoiceForm } from "@/invoice/form";
 import { Invoice } from "@/invoice/models";
 
-export default function Home() {
+export function App() {
   return (
     <div className="picocss-scope">
-      <Head>
-        <title>mobx-sentinel example — invoice editor</title>
-        <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@picocss/pico@2/css/pico.min.css" />
-      </Head>
       <Body />
     </div>
   );
@@ -19,10 +14,6 @@ export default function Home() {
 
 export const Body = observer(() => {
   const [invoice] = useState(() => new Invoice());
-
-  const [isClient, setIsClient] = useState(false);
-  useEffect(() => setIsClient(true), []);
-  if (!isClient) return null;
 
   return (
     <>

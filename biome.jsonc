@@ -67,6 +67,7 @@
         "useImportType": "off"
       },
       "suspicious": {
+        "noArrayIndexKey": "off",
         "noConfusingVoidType": "off",
         "noDoubleEquals": "off",
         "noExplicitAny": "off",
@@ -76,14 +77,5 @@
     }
   },
   // Ports of eslint-plugin-mobx's rules; see script/biome.
-  "plugins": ["./script/biome/mobxMissingMakeObservable.grit", "./script/biome/mobxUnconditionalMakeObservable.grit"],
-  "overrides": [
-    {
-      // apps/example is linted by its own `next lint`, as before; Biome only formats it.
-      "includes": ["apps/**"],
-      "linter": {
-        "enabled": false
-      }
-    }
-  ]
+  "plugins": ["./script/biome/mobxMissingMakeObservable.grit", "./script/biome/mobxUnconditionalMakeObservable.grit"]
 }

@@ -2,12 +2,11 @@
   "name": "example",
   "version": "0.1.0",
   "private": true,
+  "type": "module",
   "scripts": {
-    "dev": "next dev --turbopack",
-    "build": "next build",
-    "pages:build": "pnpm dlx @cloudflare/next-on-pages@1.13.16",
-    "start": "next start",
-    "lint": "next lint"
+    "dev": "vite",
+    "build": "tsc && vite build",
+    "preview": "vite preview"
   },
   "dependencies": {
     "@mobx-sentinel/core": "workspace:*",
@@ -15,17 +14,15 @@
     "@mobx-sentinel/react": "workspace:*",
     "mobx": "^6.16.1",
     "mobx-react-lite": "^4.1.1",
-    "next": "15.5.25",
     "react": "^19.3.0",
     "react-dom": "^19.3.0"
   },
   "devDependencies": {
-    "@eslint/eslintrc": "^3.3.7",
     "@types/node": "^22.20.2",
     "@types/react": "^19.3.0",
     "@types/react-dom": "^19.3.0",
-    "eslint": "^9.39.5",
-    "eslint-config-next": "15.5.25",
-    "typescript": "^6.0.3"
+    "@vitejs/plugin-react": "^6.1.1",
+    "typescript": "^6.0.3",
+    "vite": "^8.3.0"
   }
 }
