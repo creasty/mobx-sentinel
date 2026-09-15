@@ -149,7 +149,7 @@ watcher.changed //=> false — the invoice is populated, the form is still prist
 The form layer is the last mile: it knows when to show an error, when the submit button may be pressed, and how to attach a value to an input. It holds no data of its own.
 
 ```tsx
-import "@mobx-sentinel/react/dist/extension";
+import "@mobx-sentinel/react/extension";
 
 import { observer } from "mobx-react-lite";
 import { Form } from "@mobx-sentinel/form";
