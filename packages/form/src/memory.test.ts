@@ -194,9 +194,9 @@ describe("Form", () => {
       const unwatchedWithField = create(UnwatchedParentModel, true);
       // With @unwatch, the watcher does not observe the nested object
       expect(await isCollected(unwatched)).toBe(true);
-      // PINNED(bug): The watcher of the subject observes the watchers of its @nested objects with reactions that are never disposed (see memory.test.ts in core), so a nested object that outlives the subject (here `shared`) keeps the subject and its forms alive. Expected: collected like `unwatched`, as the README says Form instances are "automatically garbage collected with their subjects". Flip this assertion when fixing.
+      // Intended: the watcher of the subject observes the watchers of its @nested objects (see memory.test.ts in core), so a nested object that outlives the subject (here `shared`) keeps the subject and its forms alive
       expect(await isCollected(watched)).toBe(false);
-      // PINNED(bug): The reaction of each field observes validator.isValidating, which reads isValidating of the validators of the @nested objects, and it is never disposed, so a nested object that outlives the subject keeps the subject and its form alive once the form has a field, even when the watcher does not observe the object. Expected: collected like `unwatched`, as the README says Form instances are "automatically garbage collected with their subjects". Flip this assertion when fixing.
+      // Intended: each field observes validator.isValidating, which reads the validators of the @nested objects, so once the form has a field, a nested object that outlives the subject keeps the subject and its form alive, even when @unwatch keeps the watcher away from it
       expect(await isCollected(unwatchedWithField)).toBe(false);
       expect(shared.value).toBe("");
     });

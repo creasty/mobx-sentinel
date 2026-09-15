@@ -133,7 +133,7 @@ describe("Watcher", () => {
       const withoutWatcher = create(() => new Parent(shared), false);
       const withWatcher = create(() => new Parent(shared), true);
       expect(await isCollected(withoutWatcher)).toBe(true);
-      // PINNED(bug): The reactions of a Watcher are never disposed, and the one for a @nested property observes the watchers of the nested objects, so a nested object that outlives the target (here `shared`) keeps the target and its watcher alive. Expected: collected like the target without a watcher, as the README says Watcher instances are "automatically garbage collected with their targets". Flip this assertion when fixing.
+      // Intended: a watcher observes the watchers of its @nested objects, and like any MobX reaction it is referenced by what it observes, so a nested object that outlives the target (here `shared`) keeps the watcher and the target alive
       expect(await isCollected(withWatcher)).toBe(false);
       expect(shared.value).toBe(0);
     });
@@ -143,7 +143,7 @@ describe("Watcher", () => {
       const withoutWatcher = create(() => new Counter(limit), false);
       const withWatcher = create(() => new Counter(limit), true);
       expect(await isCollected(withoutWatcher)).toBe(true);
-      // PINNED(bug): A Watcher observes each @observable and @computed of the target with a reaction that is never disposed, so an observable that a @computed reads (here `limit`) keeps the target and its watcher alive. Expected: collected like the target without a watcher, as the README says Watcher instances are "automatically garbage collected with their targets". Flip this assertion when fixing.
+      // Intended: a watcher observes each @observable and @computed of the target, and like any MobX reaction it is referenced by what it observes, so an outer observable that a @computed reads (here `limit`) keeps the watcher and the target alive
       expect(await isCollected(withWatcher)).toBe(false);
       expect(limit.value).toBe(10);
     });
@@ -153,7 +153,7 @@ describe("Watcher", () => {
       const withoutWatcher = create(() => new Tagged(tags), false);
       const withWatcher = create(() => new Tagged(tags), true);
       expect(await isCollected(withoutWatcher)).toBe(true);
-      // PINNED(bug): To detect shallow changes, a Watcher reads the elements of an observable array, set or map held by an @observable property with a reaction that is never disposed, so such a collection that outlives the target (here `tags`) keeps the target and its watcher alive. Expected: collected like the target without a watcher, as the README says Watcher instances are "automatically garbage collected with their targets". Flip this assertion when fixing.
+      // Intended: to detect shallow changes, a watcher reads the elements of an observable array, set or map held by an @observable, and like any MobX reaction it is referenced by what it observes, so such a collection that outlives the target (here `tags`) keeps the watcher and the target alive
       expect(await isCollected(withWatcher)).toBe(false);
       expect(tags.length).toBe(2);
     });

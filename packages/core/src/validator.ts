@@ -91,7 +91,7 @@ export class Validator<T> {
    * @remarks
    * - Returns existing instance if one exists for the target
    * - Creates new instance if none exists
-   * - Instances are cached and garbage collected with their targets
+   * - Instances are cached, and garbage collected with the target only if everything their handlers observe is too
    *
    * @throws `TypeError` if the target is not an object.
    */

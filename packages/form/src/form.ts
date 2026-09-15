@@ -41,7 +41,7 @@ export class Form<T> {
    * @remarks
    * - Returns existing instance if one exists for the subject
    * - Creates new instance if none exists
-   * - Instances are cached and garbage collected with their subjects
+   * - Instances are cached, and garbage collected with the subject only if everything they observe is too
    * - Multiple forms per subject supported via `formKey`
    *
    * @param subject The model object to create form for
