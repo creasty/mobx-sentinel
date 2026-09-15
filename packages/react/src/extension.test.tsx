@@ -142,9 +142,8 @@ describe("package exports", () => {
 
     expect(Object.keys(pkg.exports)).toEqual([".", "./extension", "./dist/extension"]);
     expect(pkg.exports["./extension"]).toEqual({
-      types: "./dist/extension.d.ts",
-      import: "./dist/extension.mjs",
-      require: "./dist/extension.js",
+      import: { types: "./dist/extension.d.mts", default: "./dist/extension.mjs" },
+      require: { types: "./dist/extension.d.ts", default: "./dist/extension.js" },
     });
   });
 
@@ -156,6 +155,23 @@ describe("package exports", () => {
     expect(pkg.exports["./dist/extension"]).toEqual(pkg.exports["./extension"]);
   });
 
+  test("gives each module format the declaration file next to the JavaScript it loads", () => {
+    const pkg = JSON.parse(readText("../package.json"));
+
+    for (const conditions of Object.values<Record<string, Record<string, string>>>(pkg.exports)) {
+      // A "types" beside "import" and "require" would win for both, and without "type": "module" TypeScript reads a .d.ts as CommonJS.
+      // ESM importers under node16/nodenext then type-check a default import that Node rejects, as the .mjs has no default export.
+      expect(Object.keys(conditions)).toEqual(["import", "require"]);
+      // "types" first, as resolvers take the first condition that matches and "default" always does
+      expect(Object.keys(conditions.import)).toEqual(["types", "default"]);
+      expect(Object.keys(conditions.require)).toEqual(["types", "default"]);
+      expect(conditions.import.default).toMatch(/\.mjs$/);
+      expect(conditions.import.types).toBe(conditions.import.default.replace(/\.mjs$/, ".d.mts"));
+      expect(conditions.require.default).toMatch(/\.js$/);
+      expect(conditions.require.types).toBe(conditions.require.default.replace(/\.js$/, ".d.ts"));
+    }
+  });
+
   test("points resolvers that ignore exports at the same files through extension/package.json", () => {
     const pkg = JSON.parse(readText("../package.json"));
     const stub = JSON.parse(readText("../extension/package.json"));
@@ -165,9 +181,10 @@ describe("package exports", () => {
     // for it, and Jest 27 and webpack 4 cannot resolve it
     expect(pkg.files).toContain("extension");
     expect(Object.keys(stub).sort()).toEqual(["main", "module", "types"]);
-    expect(fromPackageRoot(stub.types)).toBe(pkg.exports["./extension"].types);
-    expect(fromPackageRoot(stub.module)).toBe(pkg.exports["./extension"].import);
-    expect(fromPackageRoot(stub.main)).toBe(pkg.exports["./extension"].require);
+    // TypeScript's node10 resolves import and require alike, so "types" goes with "main", the CommonJS build
+    expect(fromPackageRoot(stub.types)).toBe(pkg.exports["./extension"].require.types);
+    expect(fromPackageRoot(stub.module)).toBe(pkg.exports["./extension"].import.default);
+    expect(fromPackageRoot(stub.main)).toBe(pkg.exports["./extension"].require.default);
   });
 
   test("documents only import paths for the extension that the exports map exposes", () => {
