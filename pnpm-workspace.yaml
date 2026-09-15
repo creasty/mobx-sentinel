@@ -8,5 +8,3 @@ allowBuilds:
   esbuild: true
   # Would install the git hook that the root `prepare` script already installs.
   simple-git-hooks: false
-  # Only under the example app's ESLint; its native binding is an optional dependency.
-  unrs-resolver: false

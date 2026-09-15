@@ -30,8 +30,8 @@ jobs:
             output: docs
           - name: example
             project: mobx-sentinel-example
-            build: pnpm --filter example pages:build
-            output: apps/example/.vercel/output/static
+            build: pnpm --filter example build
+            output: apps/example/dist
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v6

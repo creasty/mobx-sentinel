@@ -1,0 +1,4 @@
+# Read by Cloudflare Pages. Vite fingerprints everything under /assets, so none of it ever
+# changes in place -- the same caching next-on-pages used to set for /_next/static.
+/assets/*
+  Cache-Control: public, max-age=31536000, immutable
