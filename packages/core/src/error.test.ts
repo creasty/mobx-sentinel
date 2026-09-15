@@ -1,4 +1,4 @@
-import { ValidationError, ValidationErrorMapBuilder } from "./error";
+import { ValidationError, type ValidationErrorMapBuilder, ValidationErrorMapBuilderImpl } from "./error";
 import { KeyPath, KeyPathMultiMap, type ReadonlyKeyPathMultiMap } from "./keyPath";
 
 describe("ValidationError", () => {
@@ -21,14 +21,14 @@ describe("ValidationError", () => {
 
 describe("ValidationErrorMapBuilder", () => {
   it("can be created", () => {
-    const builder = new ValidationErrorMapBuilder<unknown>();
+    const builder = new ValidationErrorMapBuilderImpl<unknown>();
     expect(builder.hasError).toBe(false);
   });
 
   describe(".build", () => {
     it("returns a frozen array", () => {
-      const builder = new ValidationErrorMapBuilder<unknown>();
-      const result = ValidationErrorMapBuilder.build(builder);
+      const builder = new ValidationErrorMapBuilderImpl<unknown>();
+      const result = ValidationErrorMapBuilderImpl.build(builder);
       expect(result).toBeInstanceOf(KeyPathMultiMap);
       expect(Object.isFrozen(result)).toBe(true);
     });
@@ -36,11 +36,11 @@ describe("ValidationErrorMapBuilder", () => {
 
   describe("#invalidate", () => {
     it("adds an error for the given key", () => {
-      const builder = new ValidationErrorMapBuilder<{ key1: number; key2: number }>();
+      const builder = new ValidationErrorMapBuilderImpl<{ key1: number; key2: number }>();
       builder.invalidate("key1", "reason");
       expect(builder.hasError).toBe(true);
 
-      const result = ValidationErrorMapBuilder.build(builder);
+      const result = ValidationErrorMapBuilderImpl.build(builder);
       expect(result.size).toEqual(1);
       expect(result.get(KeyPath.build("key1"))).toEqual(
         new Set([new ValidationError({ keyPath: KeyPath.build("key1"), reason: "reason" })])
@@ -48,12 +48,12 @@ describe("ValidationErrorMapBuilder", () => {
     });
 
     it("adds another error for the same key", () => {
-      const builder = new ValidationErrorMapBuilder<{ key1: number; key2: number }>();
+      const builder = new ValidationErrorMapBuilderImpl<{ key1: number; key2: number }>();
       builder.invalidate("key1", "reason1");
       builder.invalidate("key1", "reason2");
       expect(builder.hasError).toBe(true);
 
-      const result = ValidationErrorMapBuilder.build(builder);
+      const result = ValidationErrorMapBuilderImpl.build(builder);
       expect(result.size).toEqual(1);
       expect(result.get(KeyPath.build("key1"))).toEqual(
         new Set([
@@ -64,12 +64,12 @@ describe("ValidationErrorMapBuilder", () => {
     });
 
     it("adds an error for a different key", () => {
-      const builder = new ValidationErrorMapBuilder<{ key1: number; key2: number }>();
+      const builder = new ValidationErrorMapBuilderImpl<{ key1: number; key2: number }>();
       builder.invalidate("key1", "reasonA");
       builder.invalidate("key2", "reasonB");
       expect(builder.hasError).toBe(true);
 
-      const result = ValidationErrorMapBuilder.build(builder);
+      const result = ValidationErrorMapBuilderImpl.build(builder);
       expect(result.size).toEqual(2);
       expect(result.get(KeyPath.build("key1"))).toEqual(
         new Set([new ValidationError({ keyPath: KeyPath.build("key1"), reason: "reasonA" })])
@@ -82,11 +82,11 @@ describe("ValidationErrorMapBuilder", () => {
 
   describe("#invalidateSelf", () => {
     it("adds an error for the target object itself", () => {
-      const builder = new ValidationErrorMapBuilder<{ key1: number; key2: number }>();
+      const builder = new ValidationErrorMapBuilderImpl<{ key1: number; key2: number }>();
       builder.invalidateSelf("reason");
       expect(builder.hasError).toBe(true);
 
-      const result = ValidationErrorMapBuilder.build(builder);
+      const result = ValidationErrorMapBuilderImpl.build(builder);
       expect(result.size).toEqual(1);
       expect(result.get(KeyPath.Self)).toEqual(
         new Set([new ValidationError({ keyPath: KeyPath.Self, reason: "reason" })])
@@ -261,33 +261,33 @@ describe("ValidationErrorMapBuilder (details)", () => {
       [reason: string | Error]
     >();
     expectTypeOf<ValidationErrorMapBuilder<unknown>["hasError"]>().toEqualTypeOf<boolean>();
-    expectTypeOf(ValidationErrorMapBuilder.build).returns.toEqualTypeOf<ReadonlyKeyPathMultiMap<ValidationError>>();
+    expectTypeOf(ValidationErrorMapBuilderImpl.build).returns.toEqualTypeOf<ReadonlyKeyPathMultiMap<ValidationError>>();
   });
 
   it("rejects keys that are not string keys of the target at the type level", () => {
-    const builder = new ValidationErrorMapBuilder<{ key1: number }>();
+    const builder = new ValidationErrorMapBuilderImpl<{ key1: number }>();
     // @ts-expect-error - "unknown" is not a key of the target
     builder.invalidate("unknown", "reason");
     // Runtime does not validate the key
-    expect(Array.from(ValidationErrorMapBuilder.build(builder)).map(([keyPath]) => keyPath)).toEqual(["unknown"]);
+    expect(Array.from(ValidationErrorMapBuilderImpl.build(builder)).map(([keyPath]) => keyPath)).toEqual(["unknown"]);
   });
 
   it("stores an Error reason as the cause", () => {
-    const builder = new ValidationErrorMapBuilder<{ key1: number }>();
+    const builder = new ValidationErrorMapBuilderImpl<{ key1: number }>();
     const reason = new Error("reason");
     builder.invalidate("key1", reason);
 
-    const [error] = ValidationErrorMapBuilder.build(builder).get(KeyPath.build("key1"));
+    const [error] = ValidationErrorMapBuilderImpl.build(builder).get(KeyPath.build("key1"));
     expect(error.message).toBe("reason");
     expect(error.cause).toBe(reason);
   });
 
   it("stores an Error reason as the cause for self errors", () => {
-    const builder = new ValidationErrorMapBuilder<{ key1: number }>();
+    const builder = new ValidationErrorMapBuilderImpl<{ key1: number }>();
     const reason = new Error("reason");
     builder.invalidateSelf(reason);
 
-    const [error] = ValidationErrorMapBuilder.build(builder).get(KeyPath.Self);
+    const [error] = ValidationErrorMapBuilderImpl.build(builder).get(KeyPath.Self);
     expect(error.key).toBe(KeyPath.Self);
     expect(error.keyPath).toBe(KeyPath.Self);
     expect(error.message).toBe("reason");
@@ -295,26 +295,26 @@ describe("ValidationErrorMapBuilder (details)", () => {
   });
 
   it("keeps separate errors for identical reasons on the same key", () => {
-    const builder = new ValidationErrorMapBuilder<{ key1: number }>();
+    const builder = new ValidationErrorMapBuilderImpl<{ key1: number }>();
     builder.invalidate("key1", "same");
     builder.invalidate("key1", "same");
     builder.invalidateSelf("same");
     builder.invalidateSelf("same");
 
-    const result = ValidationErrorMapBuilder.build(builder);
+    const result = ValidationErrorMapBuilderImpl.build(builder);
     expect(result.size).toBe(2);
     expect(result.get(KeyPath.build("key1")).size).toBe(2);
     expect(result.get(KeyPath.Self).size).toBe(2);
   });
 
   it("keeps key and self errors side by side in insertion order", () => {
-    const builder = new ValidationErrorMapBuilder<{ key1: number; key2: number }>();
+    const builder = new ValidationErrorMapBuilderImpl<{ key1: number; key2: number }>();
     builder.invalidate("key1", "a");
     builder.invalidateSelf("b");
     builder.invalidate("key2", "c");
     builder.invalidate("key1", "d");
 
-    const result = ValidationErrorMapBuilder.build(builder);
+    const result = ValidationErrorMapBuilderImpl.build(builder);
     expect(Array.from(result).map(([keyPath, error]) => [keyPath, error.keyPath, error.message])).toEqual([
       ["key1", "key1", "a"],
       ["key1", "key1", "d"],
@@ -324,10 +324,10 @@ describe("ValidationErrorMapBuilder (details)", () => {
   });
 
   it("treats dots in the key as a nested key path", () => {
-    const builder = new ValidationErrorMapBuilder<{ "a.b": number }>();
+    const builder = new ValidationErrorMapBuilderImpl<{ "a.b": number }>();
     builder.invalidate("a.b", "reason");
 
-    const result = ValidationErrorMapBuilder.build(builder);
+    const result = ValidationErrorMapBuilderImpl.build(builder);
     const [error] = result.get(KeyPath.build("a.b"));
     // PINNED(quirk): a property name containing "." is recorded as the nested path "a.b" under key "a", so it reads as an error on a child of property "a". Decide: should invalidate escape dotted keys (flip key to toBe("a.b") and findPrefix("a") to toEqual([])) or reject them?
     expect(error.key).toBe("a");
@@ -337,31 +337,31 @@ describe("ValidationErrorMapBuilder (details)", () => {
   });
 
   it("merges errors for an empty-string key into self errors", () => {
-    const builder = new ValidationErrorMapBuilder<{ "": number }>();
+    const builder = new ValidationErrorMapBuilderImpl<{ "": number }>();
     builder.invalidate("", "empty key");
     builder.invalidateSelf("self");
 
-    const result = ValidationErrorMapBuilder.build(builder);
+    const result = ValidationErrorMapBuilderImpl.build(builder);
     // PINNED(quirk): KeyPath.build("") is KeyPath.Self, so invalidate("") is indistinguishable from invalidateSelf(). Decide: should an empty property name be kept as its own key (flip size to 2 and the self messages to ["self"])?
     expect(result.size).toBe(1);
     expect(Array.from(result.get(KeyPath.Self)).map((error) => error.message)).toEqual(["empty key", "self"]);
   });
 
   it("returns the same frozen map on every build", () => {
-    const builder = new ValidationErrorMapBuilder<{ key1: number }>();
+    const builder = new ValidationErrorMapBuilderImpl<{ key1: number }>();
     builder.invalidate("key1", "reason");
 
-    const first = ValidationErrorMapBuilder.build(builder);
-    const second = ValidationErrorMapBuilder.build(builder);
+    const first = ValidationErrorMapBuilderImpl.build(builder);
+    const second = ValidationErrorMapBuilderImpl.build(builder);
     expect(second).toBe(first);
     expect(Object.isFrozen(first)).toBe(true);
     expect(Object.isFrozen(builder)).toBe(false);
   });
 
   it("throws when invalidating after build", () => {
-    const builder = new ValidationErrorMapBuilder<{ key1: number }>();
+    const builder = new ValidationErrorMapBuilderImpl<{ key1: number }>();
     builder.invalidate("key1", "reason");
-    const result = ValidationErrorMapBuilder.build(builder);
+    const result = ValidationErrorMapBuilderImpl.build(builder);
 
     // PINNED(quirk): build() freezes the builder's own map, so the builder cannot be reused and throws a KeyPathMultiMap error. Decide: should build() snapshot a copy (flip to not.toThrow()) or should the builder report a builder-specific error?
     expect(() => builder.invalidate("key1", "late")).toThrow(new Error("Cannot modify frozen KeyPathMultiMap"));
@@ -372,35 +372,35 @@ describe("ValidationErrorMapBuilder (details)", () => {
   });
 
   it("builds an empty frozen map when nothing was invalidated", () => {
-    const builder = new ValidationErrorMapBuilder<{ key1: number }>();
-    const result = ValidationErrorMapBuilder.build(builder);
+    const builder = new ValidationErrorMapBuilderImpl<{ key1: number }>();
+    const result = ValidationErrorMapBuilderImpl.build(builder);
     expect(result.size).toBe(0);
     expect(Array.from(result)).toEqual([]);
     expect(builder.hasError).toBe(false);
   });
 
   it("throws a TypeError when build is given something other than a builder", () => {
-    expect(() => ValidationErrorMapBuilder.build({} as ValidationErrorMapBuilder<unknown>)).toThrow(TypeError);
+    expect(() => ValidationErrorMapBuilderImpl.build({} as ValidationErrorMapBuilderImpl<unknown>)).toThrow(TypeError);
   });
 
   it("keeps builders independent of each other", () => {
-    const first = new ValidationErrorMapBuilder<{ key1: number }>();
-    const second = new ValidationErrorMapBuilder<{ key1: number }>();
+    const first = new ValidationErrorMapBuilderImpl<{ key1: number }>();
+    const second = new ValidationErrorMapBuilderImpl<{ key1: number }>();
     first.invalidate("key1", "reason");
     expect(second.hasError).toBe(false);
 
-    ValidationErrorMapBuilder.build(first);
+    ValidationErrorMapBuilderImpl.build(first);
     expect(() => second.invalidate("key1", "reason")).not.toThrow();
-    expect(ValidationErrorMapBuilder.build(second)).not.toBe(ValidationErrorMapBuilder.build(first));
+    expect(ValidationErrorMapBuilderImpl.build(second)).not.toBe(ValidationErrorMapBuilderImpl.build(first));
   });
 
   it("supports prefix and self lookups on the built map", () => {
-    const builder = new ValidationErrorMapBuilder<{ key1: number; key2: number }>();
+    const builder = new ValidationErrorMapBuilderImpl<{ key1: number; key2: number }>();
     builder.invalidate("key1", "a");
     builder.invalidate("key2", "b");
     builder.invalidateSelf("c");
 
-    const result = ValidationErrorMapBuilder.build(builder);
+    const result = ValidationErrorMapBuilderImpl.build(builder);
     expect(Array.from(result.findPrefix(KeyPath.build("key1"))).map((error) => error.message)).toEqual(["a"]);
     expect(Array.from(result.findPrefix(KeyPath.Self)).map((error) => error.message)).toEqual(["a", "b", "c"]);
     expect(Array.from(result.findExact(KeyPath.Self)).map((error) => error.message)).toEqual(["c"]);
@@ -419,10 +419,10 @@ describe("ValidationErrorMapBuilder (details)", () => {
   });
 
   it("merges a symbol key passed at runtime into self errors", () => {
-    const builder = new ValidationErrorMapBuilder<{ key1: number }>();
+    const builder = new ValidationErrorMapBuilderImpl<{ key1: number }>();
     builder.invalidate(Symbol("key") as unknown as "key1", "reason");
 
-    const result = ValidationErrorMapBuilder.build(builder);
+    const result = ValidationErrorMapBuilderImpl.build(builder);
     const [error] = result.get(KeyPath.Self);
     expect(result.size).toBe(1);
     expect(error.key).toBe(KeyPath.Self);
