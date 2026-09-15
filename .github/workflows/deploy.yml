@@ -33,9 +33,9 @@ jobs:
             build: pnpm --filter example build
             output: apps/example/dist
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: pnpm/action-setup@v6
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           # The Pages build pinned NODE_VERSION=20.14.0, but wrangler requires
           # >=22 and Node 20 is EOL, so both builds move up. The version now
@@ -75,7 +75,7 @@ jobs:
       - name: Report
         if: steps.deploy.outputs.url != ''
         continue-on-error: true
-        uses: actions/github-script@v7
+        uses: actions/github-script@v9
         env:
           NAME: ${{ matrix.name }}
           ENVIRONMENT: ${{ steps.deploy.outputs.environment }}

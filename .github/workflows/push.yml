@@ -24,9 +24,9 @@ jobs:
         # values, so these read as `test (lockfile)`, `test (v6.11.0)`, ...
         mobx: [lockfile, v6.11.0, v6.16.1]
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: pnpm/action-setup@v6
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version-file: .node-version
       # An override rather than an install into each package, so the peer MobX
@@ -57,7 +57,7 @@ jobs:
       # so letting the other legs report would blend coverage measured against
       # three different MobX versions into one number.
       - if: matrix.mobx == 'lockfile'
-        uses: codecov/codecov-action@v5
+        uses: codecov/codecov-action@v7
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
 
