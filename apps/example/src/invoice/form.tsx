@@ -29,7 +29,9 @@ export const InvoiceForm: React.FC<{ model: Invoice }> = observer(({ model }) =>
 
   const [issued, setIssued] = useState<string | null>(null);
 
-  // `submit` handlers run serially and receive an AbortSignal.
+  // `submit` handlers run serially, receive an AbortSignal, and return whether the
+  // submission succeeded. `didSubmit` receives that boolean, and the form resets
+  // itself only on `true`.
   useFormHandler(form, "submit", async (abortSignal) => {
     const result = await api.submitInvoice(model.toJSON(), abortSignal);
     if (!result.ok) {
@@ -38,11 +40,12 @@ export const InvoiceForm: React.FC<{ model: Invoice }> = observer(({ model }) =>
       model.rejectPurchaseOrder(result.conflict);
       return false;
     }
+    // `didSubmit` only learns the outcome, so keep what the next step needs here.
     setIssued(result.invoiceNumber);
     return true;
   });
 
-  // `didSubmit` runs whether or not the submission succeeded.
+  // `didSubmit` receives the outcome once the submission finishes, successful or not.
   useFormHandler(form, "didSubmit", (succeed) => {
     if (!succeed) form.reportError();
   });

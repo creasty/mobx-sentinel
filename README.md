@@ -161,15 +161,16 @@ const InvoiceForm: React.FC<{ model: Invoice }> = observer(({ model }) => {
   const form = Form.get(model);
 
   // Submission is a lifecycle rather than a callback: `willSubmit` can veto it,
-  // `submit` handlers run serially with an AbortSignal, `didSubmit` sees the outcome.
+  // `submit` handlers run serially with an AbortSignal and report whether the submission succeeded,
+  // `didSubmit` reacts to the outcome.
   // When you have view-models, form.addHandler() API is also available.
   useFormHandler(form, "submit", async (abortSignal) => {
     const response = await fetch("/api/invoices", {
       method: "POST",
       body: JSON.stringify(model),
-      signal: abortSignal,
+      signal: abortSignal, // Cancels the request when a newer submission replaces this one.
     });
-    return response.ok;
+    return response.ok; // didSubmit receives this, and the form resets itself only on true.
   });
 
   return (

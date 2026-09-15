@@ -19,10 +19,10 @@ export function useFormAutoReset(form: Form<any>) {
 }
 
 /**
- * Add a handler to the form with automatic cleanup
+ * Add a submission handler to the form with automatic cleanup
  *
  * @param form Form instance
- * @param event Event of the handler
+ * @param event Submission phase of the handler (`willSubmit`, `submit` or `didSubmit`)
  * @param handler Handler to add
  *
  * @remarks
