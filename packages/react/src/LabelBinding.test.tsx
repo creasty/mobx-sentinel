@@ -227,7 +227,7 @@ describe("LabelBinding", () => {
       expect(env.field2.isErrorReported).toBe(true);
       expect(env.binding.firstErrorMessage).toBe("");
 
-      // PINNED(bug): both associated fields are reported invalid, but the empty first message makes aria-invalid false. Expected: true, as the README says aria-invalid is set "when validation errors are present". Flip this assertion when fixing.
+      // PINNED(bug): both associated fields are reported invalid, but the empty first message makes aria-invalid false. Expected: true, as the README says aria-invalid is set "once a field's errors are reported". Flip this assertion when fixing.
       expect(env.binding.props["aria-invalid"]).toBe(false);
     });
   });

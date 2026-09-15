@@ -84,14 +84,14 @@ form.bind("username", InputBinding, config)
 All bindings provide built-in accessibility features:
 
 - **Unique IDs** — Automatically generates unique `id` attributes for form elements, enabling proper label associations by `htmlFor`
-- **Error states** — Sets `aria-invalid` when validation errors are present
+- **Error states** — Sets `aria-invalid` once a field's errors are reported (see [Smart Error Reporting](../form/README.md#smart-error-reporting))
 - **Error messages** — Provides `aria-errormessage` linking to error text for screen readers
 
 These features ensure forms are accessible to users of assistive technologies without additional configuration.
 
 ### Text Input: `form.bindInput(fieldName, config)`
 
-Binds text, number, or date input fields. Handles intermediate values during typing and auto-finalizes on blur.
+Binds text, number, or date input fields. Typing makes intermediate changes, which are finalized, and their errors reported, when the input loses focus or after a pause (`autoFinalizationDelayMs`).
 
 **String inputs:**
 ```tsx
@@ -256,7 +256,7 @@ Binds select elements for single or multiple selection.
 
 ### Submit Button: `form.bindSubmitButton(config?)`
 
-Binds submit buttons with automatic state management. The button is automatically disabled when the form is invalid, submitting, or validating.
+Binds submit buttons with automatic state management. The button is automatically disabled when the form is invalid, unchanged, submitting, or validating. Hovering it reports every error of the form, even while it is disabled, so users can see what keeps them from submitting (see [Smart Error Reporting](../form/README.md#smart-error-reporting)).
 
 **Additional accessibility:** Sets `aria-busy` to indicate loading states during submission or validation. The `disabled` attribute prevents submission of invalid forms, providing clear feedback to assistive technologies about the form's current state.
 
@@ -330,13 +330,13 @@ By default, bindings use auto-generated field IDs. You can override them:
 
 ### Error Display
 
-All bindings automatically set ARIA attributes for accessibility:
+All bindings automatically set ARIA attributes for accessibility. Like `form.getErrors()`, they expose a field's errors only once the errors have been reported; see [Smart Error Reporting](../form/README.md#smart-error-reporting) for when that happens.
 
 ```tsx
 // Binding sets aria-invalid and aria-errormessage automatically
 <input {...form.bindInput("email", { /* ... */ })} />
 
-// Optionally display errors manually
+// Optionally display errors manually (empty until reported)
 {Array.from(form.getErrors("email"), (error, i) => (
   <p className="error" key={i}>{error}</p>
 ))}
