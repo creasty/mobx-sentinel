@@ -1,4 +1,5 @@
 import { readFileSync } from "node:fs";
+import { posix } from "node:path";
 import React from "react";
 import "@testing-library/jest-dom/vitest";
 import { fireEvent, render, screen } from "@testing-library/react";
@@ -139,7 +140,7 @@ describe("package exports", () => {
   test("exposes the extension at the ./extension subpath", () => {
     const pkg = JSON.parse(readText("../package.json"));
 
-    expect(Object.keys(pkg.exports)).toEqual([".", "./extension"]);
+    expect(Object.keys(pkg.exports)).toEqual([".", "./extension", "./dist/extension"]);
     expect(pkg.exports["./extension"]).toEqual({
       types: "./dist/extension.d.ts",
       import: "./dist/extension.mjs",
@@ -147,7 +148,29 @@ describe("package exports", () => {
     });
   });
 
-  test("documents an import path for the extension that the exports map does not expose", () => {
+  test("also exposes the extension at ./dist/extension, the path the READMEs used to document", () => {
+    const pkg = JSON.parse(readText("../package.json"));
+
+    // Resolvers that ignore "exports" (TypeScript's node10, Jest 27, webpack 4) reach dist/extension as a plain file.
+    // This entry is for the ones that honor it (Node, Vite, webpack 5, Jest 28+, TypeScript's bundler and node16)
+    expect(pkg.exports["./dist/extension"]).toEqual(pkg.exports["./extension"]);
+  });
+
+  test("points resolvers that ignore exports at the same files through extension/package.json", () => {
+    const pkg = JSON.parse(readText("../package.json"));
+    const stub = JSON.parse(readText("../extension/package.json"));
+    const fromPackageRoot = (path: string) => `./${posix.join("extension", path)}`;
+
+    // Without this directory, the ./extension subpath exists only in "exports": TypeScript's node10 finds no types
+    // for it, and Jest 27 and webpack 4 cannot resolve it
+    expect(pkg.files).toContain("extension");
+    expect(Object.keys(stub).sort()).toEqual(["main", "module", "types"]);
+    expect(fromPackageRoot(stub.types)).toBe(pkg.exports["./extension"].types);
+    expect(fromPackageRoot(stub.module)).toBe(pkg.exports["./extension"].import);
+    expect(fromPackageRoot(stub.main)).toBe(pkg.exports["./extension"].require);
+  });
+
+  test("documents only import paths for the extension that the exports map exposes", () => {
     const pkg = JSON.parse(readText("../package.json"));
     const exportedSubpaths = Object.keys(pkg.exports);
 
@@ -155,8 +178,7 @@ describe("package exports", () => {
       const documented = [...readme.matchAll(/import "@mobx-sentinel\/react(\/[^"]*)"/g)].map((m) => `.${m[1]}`);
       // Guard against a vacuous pass if the import line is reworded
       expect(documented.length).toBeGreaterThan(0);
-      // PINNED(bug): both READMEs say `import "@mobx-sentinel/react/dist/extension"`, but package.json "exports" only has "./extension", so Node (verified with require.resolve) and exports-aware bundlers fail with ERR_PACKAGE_PATH_NOT_EXPORTED. Expected: every documented subpath is exported (fix the READMEs to "@mobx-sentinel/react/extension", or export the dist path). Flip this assertion when fixing.
-      expect(documented.every((subpath) => exportedSubpaths.includes(subpath))).toBe(false);
+      expect(documented.filter((subpath) => !exportedSubpaths.includes(subpath))).toEqual([]);
     }
   });
 });

@@ -66,7 +66,7 @@ All binding methods are called on the form instance and automatically handle:
 To use the convenient `bindInput()`, `bindCheckBox()`, etc. methods, import the extension:
 
 ```tsx
-import "@mobx-sentinel/react/dist/extension";
+import "@mobx-sentinel/react/extension";
 ```
 
 This extends the `Form` class with custom bind methods. Without the extension, you can still use the default `bind()` method with binding classes:
@@ -78,6 +78,8 @@ form.bindInput("username", config)
 // Without extension
 form.bind("username", InputBinding, config)
 ```
+
+Imports of `@mobx-sentinel/react/dist/extension`, the path the docs used to show, load the same module.
 
 ### Accessibility
 
