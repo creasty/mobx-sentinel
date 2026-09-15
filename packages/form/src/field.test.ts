@@ -824,7 +824,7 @@ describe("FormField", () => {
         field.markAsChanged("intermediate");
         expect(field.isIntermediate).toBe(true);
         expect(field.isChanged).toBe(true);
-        // PINNED(quirk): an intermediate change does not withdraw an earlier report, so errors for partial input stay visible while typing (README: mark changes as "intermediate" while typing "to delay validation and error reporting"). Decide: should markAsChanged("intermediate") hide the report until the change is finalized?
+        // An intermediate change does not withdraw an earlier report: once shown, errors keep following the value while typing (README: "Errors Follow the Value Once Shown")
         expect(field.isErrorReported).toBe(true);
 
         await waitForDelay();
