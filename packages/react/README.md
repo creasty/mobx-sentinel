@@ -79,8 +79,6 @@ form.bindInput("username", config)
 form.bind("username", InputBinding, config)
 ```
 
-Imports of `@mobx-sentinel/react/dist/extension`, the path the docs used to show, load the same module.
-
 ### Accessibility
 
 All bindings provide built-in accessibility features:
