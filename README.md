@@ -18,7 +18,7 @@ This library originally started with the goal of creating a form-building librar
 When dealing with complex domains, we needed a solution that works with forms while assuming business logic exists as class implementations using MobX. With models as a premise, most responsibilities should be placed on the model side.
 
 While there are already many libraries for building forms using MobX, they are all designed from a data serialization perspective rather than modeling, and have issues either being unable to use classes or not properly separating data from form state management. Furthermore, there isn't a single one designed to allow type-safe implementation from both model and UI ends. (cf. [Alternatives](#alternatives)) \
-Additionally, showing error messages to users at appropriate times is important for user experience, yet many existing libraries lack proper design.
+Additionally, showing error messages to users at appropriate times is important for user experience, yet many existing libraries lack proper design. (cf. [Smart Error Reporting](./packages/form/README.md#smart-error-reporting))
 
 This library aims to solve these problems through a model-centric design that properly separates and breaks down responsibilities into layers:
 
@@ -259,8 +259,10 @@ Detailed documentation is available in the respective package directory.
 - Custom bindings
   - Flexible and easy-to-create.
   - Most cases can be implemented in less than 50 lines.
-- Smart error reporting
-  - Original validation strategy for a supreme user experience.
+- Smart error reporting [(read more)](./packages/form/README.md#smart-error-reporting)
+  - Validation is always up to date; reporting decides when users see the errors.
+  - Errors wait until the user leaves a field or pauses typing, then follow every fix.
+  - Fields and sub-forms that appear later start clean, even after the whole form has been reported.
 
 ### `react` — Standard bindings and hooks for React [(read more)](./packages/react/README.md)
 
@@ -357,6 +359,8 @@ Check out https://github.com/creasty/mobx-sentinel/milestones
 ## Alternatives
 
 ### Form management
+
+For how error reporting compares with these and with other popular form libraries, see [How It Differs from Other Libraries](./packages/form/README.md#how-it-differs-from-other-libraries).
 
 Criteria:
 [**T**] Type-safe interfaces.
