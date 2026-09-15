@@ -26,6 +26,7 @@ Before contributing, please familiarize yourself with the [Design Principles](RE
 - All new features and bug fixes must include appropriate unit and/or integration tests.
 - Use the existing test framework (vitest) and ensure all tests pass before submitting a PR.
 - Test files should be placed alongside source files with `.test.ts` or `.test.tsx` extension (e.g., `foo.ts` and `foo.test.ts`).
+- Memory leaks are tested in each package's `memory.test.ts` (`.tsx` in react) by checking whether objects get garbage collected. See `isCollected` there for how to keep a test from retaining the objects it checks.
 - Coverage rate is enforced by Codecov.
 
 ### Submitting Pull Requests
