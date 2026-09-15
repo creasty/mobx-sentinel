@@ -2371,7 +2371,7 @@ describe("Form (details)", () => {
         }
       );
 
-      it("calls a didSubmit success listener that checks succeed once, only for the successful latest submission", async () => {
+      it("calls a didSubmit listener guarded by succeed exactly once, for the successful forced submission", async () => {
         const { form, calls } = setupEnv();
         const onSuccess = vi.fn();
         // Like the useFormHandler example in packages/react/README.md

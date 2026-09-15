@@ -162,7 +162,7 @@ const dispose2 = form.addHandler('submit', async (abortSignal) => {
   }
 });
 
-// Post-submission cleanup
+// Post-submission handling
 const dispose3 = form.addHandler('didSubmit', (succeed) => {
   if (succeed) {
     console.log('Saved successfully!');
@@ -187,7 +187,7 @@ The submission process executes handlers in three phases:
 
 3. **`didSubmit`** - Called after submission completes (success or failure), unless the submission was cancelled by a newer one. Receives a boolean indicating whether submission succeeded. These handlers run synchronously within a MobX action.
 
-The submission can be cancelled mid-flight by calling `form.submit({ force: true })`, which aborts the current submission via the `AbortSignal` and starts a new one. The aborted submission skips its remaining `willSubmit` and `submit` handlers and resolves `false` without calling `didSubmit` handlers, while `isSubmitting` stays `true` until the latest submission settles. The newer submission reports the outcome, so `didSubmit` is called once for it, even if the aborted submission settles later. For cleanup that must run after every attempt, including cancelled ones, use a `finally` block inside the `submit` handler.
+The submission can be cancelled mid-flight by calling `form.submit({ force: true })`, which aborts the current submission via the `AbortSignal` and starts a new one. The aborted submission skips its remaining `willSubmit` and `submit` handlers and resolves `false` without calling `didSubmit` handlers, while `isSubmitting` stays `true` until the latest submission settles. The latest submission reports the outcome, so `didSubmit` is called once for it, even if the aborted submission settles later. To clean up work a handler started, including when its submission is cancelled, use a `finally` block inside that handler.
 
 After successful submission, forms automatically reset (clearing dirty state and field states).
 

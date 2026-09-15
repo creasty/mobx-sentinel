@@ -95,7 +95,7 @@ export class Submission {
     }
 
     // Only the latest run owns the shared state and reports the outcome. A superseded run leaves
-    // isRunning, the controller and didSubmit to the run that replaced it, which notifies once it settles.
+    // isRunning, the controller and didSubmit to the latest run.
     // An aborted run is never the current one, so this also covers cancellation.
     if (this.#abortCtrl !== abortCtrl) {
       return succeed;

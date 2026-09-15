@@ -1312,6 +1312,30 @@ describe("Submission", () => {
       await expect(promise2).resolves.toBe(true);
     });
 
+    it("does not notify didSubmit for a run superseded during willSubmit", async () => {
+      const submission = new Submission();
+      const willSubmitResults: Deferred<boolean>[] = [];
+      const didSubmitArgs: boolean[] = [];
+      submission.addHandler("willSubmit", () => {
+        const result = deferred<boolean>();
+        willSubmitResults.push(result);
+        return result.promise;
+      });
+      submission.addHandler("didSubmit", (succeed) => didSubmitArgs.push(succeed));
+
+      const promise1 = submission.exec();
+      const promise2 = submission.exec();
+      willSubmitResults[0].resolve(true);
+      await expect(promise1).resolves.toBe(false);
+      expect(didSubmitArgs).toEqual([]);
+      expect(submission.isRunning).toBe(true);
+
+      willSubmitResults[1].resolve(true);
+      await expect(promise2).resolves.toBe(true);
+      expect(didSubmitArgs).toEqual([true]);
+      expect(submission.isRunning).toBe(false);
+    });
+
     it("keeps isRunning true when a superseded run settles while the newer run is still running", async () => {
       const submission = new Submission();
       const { calls } = addControlledSubmitHandler(submission);
@@ -1371,11 +1395,11 @@ describe("Submission", () => {
 
       calls[0].result.resolve(false);
       await expect(promise1).resolves.toBe(false);
-      // Intended: the newer run always reports the outcome, so a superseded run's late false must not follow its true
+      // Intended: the newer run reports the outcome, so the superseded run's late false must not follow the newer run's true
       expect(didSubmit.mock.calls).toEqual([[true]]);
     });
 
-    it("leaves didSubmit to the run that took over the controller from a run started by an abort listener", async () => {
+    it("does not notify didSubmit for a run started by an abort listener and replaced without being aborted", async () => {
       const submission = new Submission();
       const { calls } = addControlledSubmitHandler(submission);
       const didSubmitSeen: { succeed: boolean; isRunning: boolean }[] = [];
@@ -1496,6 +1520,38 @@ describe("Submission", () => {
       calls[1].result.resolve(false);
       calls[2].result.resolve(true);
       await expect(Promise.all([innerPromise, promise3])).resolves.toEqual([false, true]);
+    });
+
+    it("keeps a run started from the newer run's didSubmit handler when a superseded run settles afterwards", async () => {
+      const submission = new Submission();
+      const { calls } = addControlledSubmitHandler(submission);
+      const didSubmitArgs: boolean[] = [];
+      let innerPromise: Promise<boolean> | undefined;
+      submission.addHandler("didSubmit", (succeed) => {
+        didSubmitArgs.push(succeed);
+        if (innerPromise) return;
+        innerPromise = submission.exec();
+      });
+
+      const promise1 = submission.exec();
+      const promise2 = submission.exec();
+      calls[1].result.resolve(true);
+      await expect(promise2).resolves.toBe(true);
+      expect(calls).toHaveLength(3);
+      expect(didSubmitArgs).toEqual([true]);
+      expect(submission.isRunning).toBe(true);
+
+      // The superseded run settles while the inner run is in flight: it neither notifies nor touches the inner run
+      calls[0].result.resolve(true);
+      await expect(promise1).resolves.toBe(false);
+      expect(didSubmitArgs).toEqual([true]);
+      expect(submission.isRunning).toBe(true);
+      expect(calls[2].signal.aborted).toBe(false);
+
+      calls[2].result.resolve(false);
+      await expect(innerPromise).resolves.toBe(false);
+      expect(didSubmitArgs).toEqual([true, false]);
+      expect(submission.isRunning).toBe(false);
     });
   });
 
