@@ -2,6 +2,42 @@ packages:
   - 'packages/*'
   - 'apps/*'
 
+# Ranges that more than one package.json names, referenced there as `catalog:`
+# so they cannot drift apart. `pnpm publish` writes the ranges themselves into
+# the published manifests. A dependency only one package names keeps its range
+# inline.
+catalog:
+  '@testing-library/jest-dom': ^7.0.1
+  '@testing-library/react': ^16.3.3
+  '@testing-library/user-event': ^14.6.7
+  '@types/node': ^22.20.2
+  '@types/react': ^19.3.0
+  '@types/react-dom': ^19.3.0
+  '@vitest/coverage-v8': ^5.0.0
+  jsdom: ^30.0.1
+  mobx: ^6.16.1
+  mobx-react-lite: ^4.1.1
+  react: ^19.3.0
+  react-dom: ^19.3.0
+  tsup: ^8.5.1
+  typescript: ^6.0.3
+  uuid: ^11.1.1
+  # One Vite for the whole workspace, held at 7. Vite 8 compiles TypeScript
+  # with Oxc, which does not lower standard decorators, so core's test-stage3
+  # fails to parse on it (oxc-project/oxc#9170). Nothing can move to 8 alone
+  # either: a second Vite major means a second Vitest build, pnpm links the
+  # shared jest-dom to it, and packages/react loses jest-dom's matchers from
+  # its type checks (#152).
+  vite: ^7.3.6
+  vitest: ^5.0.0
+
+catalogs:
+  # The MobX the packages accept, as opposed to the one they develop against
+  # above. .github/workflows/push.yml tests both ends of this range, so its
+  # matrix moves with it.
+  peer:
+    mobx: ^6.11.0
+
 # pnpm 11 refuses to install while a dependency's build script is undecided.
 allowBuilds:
   # Checks the platform binary that esbuild ships as an optional dependency.
