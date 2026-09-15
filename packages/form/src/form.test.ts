@@ -1057,6 +1057,19 @@ describe("Form (details)", () => {
       expect(Form.get(model, key)).not.toBe(formWithKey);
     });
 
+    it("leaves the fields of the disposed form working", () => {
+      vi.useFakeTimers();
+      const model = new SampleModel();
+      const form = Form.get(model);
+      const field = form.getField("field");
+      field.markAsChanged("intermediate");
+
+      Form.dispose(model);
+      vi.advanceTimersByTime(form.config.autoFinalizationDelayMs);
+      expect(field.isIntermediate).toBe(false);
+      expect(field.isErrorReported).toBe(false);
+    });
+
     it("does not carry fields over to the re-created form", () => {
       const model = new SampleModel();
       const form = Form.get(model);
