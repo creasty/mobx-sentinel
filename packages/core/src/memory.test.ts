@@ -133,7 +133,7 @@ describe("Watcher", () => {
       const withoutWatcher = create(() => new Parent(shared), false);
       const withWatcher = create(() => new Parent(shared), true);
       expect(await isCollected(withoutWatcher)).toBe(true);
-      // Intended: a watcher observes the watchers of its @nested objects, and like any MobX reaction it is referenced by what it observes, so a nested object that outlives the target (here `shared`) keeps the watcher and the target alive
+      // PINNED(quirk): A watcher observes the watchers of its @nested objects with reactions that cannot be disposed, so a nested object that outlives the target (here `shared`) keeps the watcher and the target alive, although MobX alone would let the target go. Decide: should Watcher reactions be disposable, or stop observing state outside the target?
       expect(await isCollected(withWatcher)).toBe(false);
       expect(shared.value).toBe(0);
     });
@@ -143,7 +143,7 @@ describe("Watcher", () => {
       const withoutWatcher = create(() => new Counter(limit), false);
       const withWatcher = create(() => new Counter(limit), true);
       expect(await isCollected(withoutWatcher)).toBe(true);
-      // Intended: a watcher observes each @observable and @computed of the target, and like any MobX reaction it is referenced by what it observes, so an outer observable that a @computed reads (here `limit`) keeps the watcher and the target alive
+      // PINNED(quirk): A watcher observes each @computed of the target with a reaction that cannot be disposed, which keeps the computed observing what it reads, so an outer observable (here `limit`) keeps the watcher and the target alive, although MobX alone would let the target go, as a computed that nothing observes does not observe what it reads. Decide: should Watcher reactions be disposable, or stop observing state outside the target?
       expect(await isCollected(withWatcher)).toBe(false);
       expect(limit.value).toBe(10);
     });
@@ -153,7 +153,7 @@ describe("Watcher", () => {
       const withoutWatcher = create(() => new Tagged(tags), false);
       const withWatcher = create(() => new Tagged(tags), true);
       expect(await isCollected(withoutWatcher)).toBe(true);
-      // Intended: to detect shallow changes, a watcher reads the elements of an observable array, set or map held by an @observable, and like any MobX reaction it is referenced by what it observes, so such a collection that outlives the target (here `tags`) keeps the watcher and the target alive
+      // PINNED(quirk): To detect shallow changes, a watcher reads the elements of an observable array, set or map held by an @observable with a reaction that cannot be disposed, so such a collection that outlives the target (here `tags`) keeps the watcher and the target alive, although MobX alone would let the target go. Decide: should Watcher reactions be disposable, or stop observing state outside the target?
       expect(await isCollected(withWatcher)).toBe(false);
       expect(tags.length).toBe(2);
     });

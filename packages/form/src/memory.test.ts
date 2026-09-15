@@ -194,9 +194,9 @@ describe("Form", () => {
       const unwatchedWithField = create(UnwatchedParentModel, true);
       // With @unwatch, the watcher does not observe the nested object
       expect(await isCollected(unwatched)).toBe(true);
-      // Intended: the watcher of the subject observes the watchers of its @nested objects (see memory.test.ts in core), so a nested object that outlives the subject (here `shared`) keeps the subject and its forms alive
+      // PINNED(quirk): The watcher of the subject observes the watchers of its @nested objects with reactions that cannot be disposed (see memory.test.ts in core), so a nested object that outlives the subject (here `shared`) keeps the subject and its forms alive, although MobX alone would let the subject go. Decide: should Watcher reactions be disposable, or stop observing state outside the subject?
       expect(await isCollected(watched)).toBe(false);
-      // Intended: each field observes validator.isValidating, which reads the validators of the @nested objects, so once the form has a field, a nested object that outlives the subject keeps the subject and its form alive, even when @unwatch keeps the watcher away from it
+      // PINNED(quirk): Each field observes validator.isValidating, which reads the validators of the @nested objects, with a reaction that cannot be disposed, so once the form has a field, a nested object that outlives the subject keeps the subject and its form alive, even when @unwatch keeps the watcher away from it. Decide: should field reactions be disposable, or stop observing the validation state of nested objects that outlive the subject?
       expect(await isCollected(unwatchedWithField)).toBe(false);
       expect(shared.value).toBe("");
     });
