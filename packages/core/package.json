@@ -32,18 +32,18 @@
     "build": "tsup"
   },
   "dependencies": {
-    "uuid": "^11.1.1"
+    "uuid": "catalog:"
   },
   "peerDependencies": {
-    "mobx": "^6.11.0"
+    "mobx": "catalog:peer"
   },
   "devDependencies": {
-    "@types/node": "^22.20.2",
-    "@vitest/coverage-v8": "^5.0.0",
-    "mobx": "^6.16.1",
-    "tsup": "^8.5.1",
-    "typescript": "^6.0.3",
-    "vite": "^7.3.6",
-    "vitest": "^5.0.0"
+    "@types/node": "catalog:",
+    "@vitest/coverage-v8": "catalog:",
+    "mobx": "catalog:",
+    "tsup": "catalog:",
+    "typescript": "catalog:",
+    "vite": "catalog:",
+    "vitest": "catalog:"
   }
 }
