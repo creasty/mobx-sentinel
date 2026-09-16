@@ -30,10 +30,14 @@ export default defineConfig({
             ...conversionOptions,
             // Defined by plugin.mjs: the default router, changed to render merged members on their new parent's page.
             router: "merged-member",
-            // starlight-typedoc deletes every nested README.md when `readme` is unset, and README.md is the default name
-            // of each package's landing page, so the package links on /apis/ would all 404. index.md is kept, and it is
-            // what Starlight serves at the directory's own URL.
+            // starlight-typedoc deletes every nested README.md when `readme` is unset, and README.md is the default
+            // name of each package's landing page, so the package links on /apis/ would all 404. index.md is kept, and
+            // it is what Starlight serves at the directory's own URL.
             entryFileName: "index.md",
+            // Writes a package's pages to `react/`, not `@mobx-sentinel/react/`. starlight-typedoc assumes a package's
+            // directory is one path segment when it builds the sidebar for a module inside it, so under the scoped,
+            // two-segment one, react's `extension` entry point got an empty group and StandardExtensions no entry.
+            excludeScopesInPaths: true,
           },
         }),
         flattenApiSidebar(apiSidebarLabel),

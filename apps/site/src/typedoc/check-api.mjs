@@ -11,6 +11,7 @@ import { conversionOptions, entryPoints } from "./options.mjs";
 import { decoratorTagHtml, decoratorTags } from "./plugin.mjs";
 
 const apisDir = fileURLToPath(new URL("../content/docs/apis", import.meta.url));
+const apisIndexHtml = fileURLToPath(new URL("../../dist/apis/index.html", import.meta.url));
 
 /** @type string[] */
 const failures = [];
@@ -30,6 +31,7 @@ if (!existsSync(apisDir)) {
   const pages = readPages(apisDir);
   checkEveryCommentRendered(pages);
   checkEveryDecoratorTagRendered(pages);
+  checkEveryPageInSidebar(pages);
 }
 
 if (failures.length > 0) {
@@ -205,13 +207,18 @@ function checkEveryDecoratorTagRendered(pages) {
       owner = owner.parent;
     }
     if (!owner) continue;
+    // A module is a directory named after it, without its package's scope (excludeScopesInPaths); a declaration
+    // sits in a directory for its kind. Entry points like react's `extension` are modules inside the package's.
     const path = [];
-    let ancestor = /** @type {td.Reflection | undefined} */ (owner);
-    for (; ancestor && !ancestor.kindOf(td.ReflectionKind.Module); ancestor = ancestor.parent) {
-      path.unshift(`${directories.get(ancestor.kind)}/${ancestor.name}`);
+    for (let ancestor = /** @type {td.Reflection | undefined} */ (owner); ancestor && !ancestor.isProject(); ) {
+      path.unshift(
+        ancestor.kindOf(td.ReflectionKind.Module)
+          ? ancestor.name.replace(/^@[^/]+\//, "")
+          : `${directories.get(ancestor.kind)}/${ancestor.name}`
+      );
+      ancestor = ancestor.parent;
     }
-    if (!ancestor) continue;
-    const file = `${ancestor.name}/${path.join("/")}.md`;
+    const file = `${path.join("/")}.md`;
 
     const counts = expected.get(file) ?? new Map();
     for (const tag of tags) {
@@ -232,6 +239,35 @@ function checkEveryDecoratorTagRendered(pages) {
         failures.push(`${file} renders ${got} \`${tag}\` tag(s), expected ${want}`);
       }
     }
+  }
+}
+
+/**
+ * Every declaration's page is linked from the sidebar. Built from starlight-typedoc's groups, the sidebar can drop a
+ * page that exists, as it did StandardExtensions until the package directories lost their scope.
+ *
+ * @param {Map<string, string>} pages
+ */
+function checkEveryPageInSidebar(pages) {
+  if (!existsSync(apisIndexHtml)) {
+    failures.push(`${apisIndexHtml} does not exist; run \`astro build\` first`);
+    return;
+  }
+  const html = readFileSync(apisIndexHtml, "utf8");
+  const nav = html.slice(html.indexOf('class="sidebar'));
+  const linked = new Set([...nav.slice(0, nav.indexOf("</nav>")).matchAll(/href="([^"]+)"/g)].map((m) => m[1]));
+  const kindDirectories = /(^|\/)(classes|interfaces|enums|type-aliases|functions|variables|namespaces)\//;
+  for (const file of pages.keys()) {
+    // Package and entry point pages, index.md, are reached from the package's page rather than listed.
+    if (!kindDirectories.test(file)) continue;
+    // Starlight's URL for the page. Its slugs lowercase each segment and drop punctuation, like a scope's `@`, which
+    // is all it takes for these plain ASCII names.
+    const slugs = file
+      .replace(/\.md$/, "")
+      .split("/")
+      .map((segment) => segment.toLowerCase().replace(/[^\w-]/g, ""));
+    const url = `/apis/${slugs.join("/")}/`;
+    if (!linked.has(url)) failures.push(`${url} is generated but not in the sidebar`);
   }
 }
 
