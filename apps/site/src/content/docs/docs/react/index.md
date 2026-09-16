@@ -8,6 +8,6 @@ sidebar:
 
 Utility hooks and standard bindings for React applications using `@mobx-sentinel/form`.
 
-- [Hooks](/docs/react/hooks/) — `useFormAutoReset` and `useFormHandler`
+- [Hooks](/docs/react/hooks/) — `useFormAutoReset`, `useFormSSR` and `useFormHandler`
 - [Standard Bindings](/docs/react/bindings/) — inputs, checkboxes, radio buttons, select boxes, submit buttons and labels
 - [Advanced Bindings](/docs/react/advanced-bindings/) — extending handlers, custom IDs and error display

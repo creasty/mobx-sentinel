@@ -61,7 +61,7 @@ class InputBinding implements FormBinding {
     return {
       type: 'text',
       value: this.value,
-      id: this.config.id ?? this.field.id,
+      id: this.config.id ?? this.field.stableId,
       onChange: this.onChange,
       onFocus: this.onFocus,
       onBlur: this.onBlur,
@@ -117,7 +117,7 @@ class CheckBoxBinding implements FormBinding {
   get props() {
     return {
       type: 'checkbox',
-      id: this.config.id ?? this.field.id,
+      id: this.config.id ?? this.field.stableId,
       checked: this.checked,
       onChange: this.onChange,
       onFocus: this.onFocus,
@@ -143,9 +143,10 @@ class LabelBinding implements FormBinding {
     makeObservable(this);
   }
 
-  @computed
-  get firstFieldId() {
-    return this.fields.at(0)?.id;
+  // Not @computed: `stableId` is composed from a plain field on the form,
+  // so while observed, a computed would keep the first id it saw
+  get firstFieldStableId() {
+    return this.fields.at(0)?.stableId;
   }
 
   @computed
@@ -161,7 +162,7 @@ class LabelBinding implements FormBinding {
 
   get props() {
     return {
-      htmlFor: this.config.htmlFor ?? this.firstFieldId,
+      htmlFor: this.config.htmlFor ?? this.firstFieldStableId,
       'aria-invalid': !!this.firstErrorMessage,
       'aria-errormessage': this.firstErrorMessage ?? undefined,
     };
@@ -225,7 +226,7 @@ Follow these patterns when creating bindings:
 1. Overriding/extending props
     - Accept props as optional (`id?: string`)
     - Use user-specified values in conjunction with default behavior:
-      - Override with fallback: `this.config.id ?? this.field.id`
+      - Override with fallback: `this.config.id ?? this.field.stableId` (`stableId`, not `id` -- see [Element IDs](/docs/form/error-reporting/#element-ids))
       - Extend with combination: `this.config.disabled || this.disabled`
 1. Normalizing problematic values
     - Provide sensible defaults for null/undefined values (e.g., `?? ""` for strings)

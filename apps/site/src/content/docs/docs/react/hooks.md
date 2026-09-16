@@ -1,6 +1,6 @@
 ---
 title: "Hooks"
-description: "Reset a form when its component mounts, and subscribe to form events."
+description: "Reset a form when its component mounts, prepare it for server-side rendering, and subscribe to form events."
 sidebar:
   order: 1
 ---
@@ -22,6 +22,37 @@ const MyFormComponent = observer(({ model }) => {
   return <div>{/* your form fields */}</div>;
 });
 ```
+
+## `useFormSSR(form)`
+
+Prepares the form for server-side rendering, so the markup the server sends and the client render that hydrates it agree. A client-rendered app doesn't need it, and calling it there is harmless.
+
+What it takes care of:
+
+- **Element ids.** The ids the bindings render -- `id`, `htmlFor`, and a radio group's `name` -- build on React's `useId()`. Without it they are unique but freshly generated in each process, and React reports a hydration mismatch. On unmount, the form gets its own id back, unless something else has assigned it another in the meantime.
+
+```tsx
+import { observer } from "mobx-react-lite";
+import { useFormSSR } from "@mobx-sentinel/react";
+
+const AddressForm = observer(({ model }) => {
+  const form = Form.get(model);
+
+  // Call it before any bind*()
+  useFormSSR(form);
+
+  return (
+    <>
+      <label {...form.bindLabel(["city"])}>City</label>
+      <input {...form.bindInput("city", { getter: () => model.city, setter: (v) => (model.city = v) })} />
+    </>
+  );
+});
+```
+
+It covers that one form. A sub-form is a separate instance, and the component that renders it calls the hook for itself -- so no component has to know whether an ancestor already did.
+
+For ids of your own, such as an error message's, build on the field's: `` `${form.getField("city").stableId}:error` ``.
 
 ## `useFormHandler(form, event, handler)`
 
