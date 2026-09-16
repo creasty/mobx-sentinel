@@ -363,7 +363,7 @@ form.getField('customerEmail').stableId; // "invoice-form-42:customerEmail"
 
 For anything that reaches the DOM, use `stableId` rather than `id`, so it keeps matching once the form's stable id is assigned.
 
-The id is used as is, so nothing else on the page may use it. In React, `useFormSSR` from `@mobx-sentinel/react` assigns `useId()`, which guarantees that: no other call returns the same value, so nothing in the model has to be involved. A key from your own data works too, as long as it is unique on the page. Assign it before binding: bindings read the stable id as they are called, and it is not reactive.
+The id is used as is, so nothing else on the page may use it. In React, `useFormSSR` from `@mobx-sentinel/react` assigns `useId()`, which guarantees that: no other call returns the same value, so nothing in the model has to be involved. It gives the form its own id back when the component unmounts. A key from your own data works too, as long as it is unique on the page. Assign it before binding: bindings read the stable id as they are called, and it is not reactive.
 
 A sub-form is a separate instance with its own stable id. Assign it where the sub-form is rendered, so no component has to know what its ancestors did.
 

@@ -774,12 +774,15 @@ describe("useFormSSR", () => {
     act(() => {
       root = hydrateRoot(container, render());
     });
+    // Not before the test has looked at the client's form: unmounting gives it its own id back
+    onTestFinished(() => {
+      act(() => root.unmount());
+      container.remove();
+    });
 
     const clientId = container.querySelector("input")?.id;
     const errors = errorSpy.mock.calls.map((call) => String(call[0]));
     errorSpy.mockRestore();
-    act(() => root.unmount());
-    container.remove();
 
     return { serverId, clientId, errors };
   };
@@ -855,6 +858,94 @@ describe("useFormSSR", () => {
 
     expect(form.stableId).toBe(first);
     expect(container.querySelector("input")!.id).toBe(`${first}:field`);
+  });
+
+  test("gives the form its own id back on unmount", () => {
+    const model = new IdModel();
+    const form = Form.get(model);
+    const { unmount } = render(<FormWithHook model={model} />);
+    expect(form.stableId).not.toBe(form.id);
+
+    unmount();
+
+    expect(form.stableId).toBe(form.id);
+    expect(form.getField("field").stableId).toBe(form.getField("field").id);
+  });
+
+  test("leaves an id assigned by something else in place on unmount", () => {
+    const model = new IdModel();
+    const form = Form.get(model);
+    const { unmount } = render(<FormWithHook model={model} />);
+
+    form.stableId = "assigned-elsewhere";
+    unmount();
+
+    expect(form.stableId).toBe("assigned-elsewhere");
+  });
+
+  test("keeps the stable id while mounted under StrictMode, which cleans up effects and runs them again", () => {
+    const model = new IdModel();
+    const form = Form.get(model);
+
+    // Not an observer: mobx-react-lite renders an observer again after StrictMode's remount, which
+    // would put the id back by itself and hide whether the effect does
+    let renders = 0;
+    const PlainForm: React.FC = () => {
+      renders++;
+      useFormSSR(form);
+      return (
+        <input
+          {...form.bindInput("field", {
+            getter: () => model.field,
+            setter: (v) => (model.field = v),
+          })}
+        />
+      );
+    };
+    const { container, unmount } = render(
+      <StrictMode>
+        <PlainForm />
+      </StrictMode>
+    );
+
+    // StrictMode's double render, and nothing after its cleanup, so only the effect can have put it back
+    expect(renders).toBe(2);
+    expect(form.stableId).not.toBe(form.id);
+    expect(container.querySelector("input")!.id).toBe(`${form.stableId}:field`);
+
+    unmount();
+    expect(form.stableId).toBe(form.id);
+  });
+
+  test("hands the form over to the component that renders it next", () => {
+    const model = new IdModel();
+    const form = Form.get(model);
+
+    const Switcher: React.FC = () => {
+      const [second, setSecond] = useState(false);
+      return (
+        <>
+          <button onClick={() => setSecond(true)}>Switch</button>
+          {second ? (
+            // Deeper in the tree, so useId() hands the second component an id of its own
+            <div>
+              <FormWithHook model={model} />
+            </div>
+          ) : (
+            <FormWithHook model={model} />
+          )}
+        </>
+      );
+    };
+    const { container } = render(<Switcher />);
+    const first = form.stableId;
+
+    act(() => container.querySelector("button")!.click());
+
+    // The first component's cleanup runs after the second has rendered, and must not take the id back
+    expect(form.stableId).not.toBe(first);
+    expect(form.stableId).not.toBe(form.id);
+    expect(container.querySelector("input")!.id).toBe(`${form.stableId}:field`);
   });
 
   test("renders ids that hydration reproduces", () => {

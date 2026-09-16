@@ -28,7 +28,7 @@ Prepares the form for server-side rendering, so the markup the server sends and 
 
 What it takes care of:
 
-- **Element ids.** The ids the bindings render -- `id`, `htmlFor`, and a radio group's `name` -- build on React's `useId()`. Without it they are unique but freshly generated in each process, and React reports a hydration mismatch.
+- **Element ids.** The ids the bindings render -- `id`, `htmlFor`, and a radio group's `name` -- build on React's `useId()`. Without it they are unique but freshly generated in each process, and React reports a hydration mismatch. On unmount, the form gets its own id back, unless something else has assigned it another in the meantime.
 
 ```tsx
 import { observer } from "mobx-react-lite";
