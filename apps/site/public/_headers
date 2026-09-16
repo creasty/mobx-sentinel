@@ -1,0 +1,4 @@
+# Read by Cloudflare Pages. Astro fingerprints everything under /_astro, so none of it ever
+# changes in place -- the same rule apps/example sets for Vite's /assets.
+/_astro/*
+  Cache-Control: public, max-age=31536000, immutable

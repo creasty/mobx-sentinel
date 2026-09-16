@@ -1,0 +1,7 @@
+/* The MobX decorator tags on API reference pages, written by src/typedoc/plugin.mjs. */
+.sl-markdown-content .api-tag {
+  font-family: var(--sl-font-mono);
+  font-size: var(--sl-text-sm);
+  font-weight: 600;
+  color: var(--sl-color-text-accent);
+}

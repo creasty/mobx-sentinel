@@ -2,5 +2,11 @@ dist
 node_modules
 coverage
 .turbo
-docs
+# Anchored: TypeDoc's output at the root. Unanchored, it would also swallow the site's
+# src/content/docs/, which is where Starlight requires its pages to live.
+/docs
 tsconfig.vitest-temp.json
+# Astro's generated types and content cache
+apps/site/.astro
+# The API reference, generated from packages/*/src on every site build
+apps/site/src/content/docs/apis

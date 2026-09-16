@@ -218,19 +218,39 @@ empty. The draft carries that warning in a note above the release notes; delete 
 
 ## [Maintainer Only] Deployments
 
-Two sites are deployed to Cloudflare Pages by the [deploy](https://github.com/creasty/mobx-sentinel/actions/workflows/deploy.yml) workflow:
+Three sites are deployed to Cloudflare Pages by the [deploy](https://github.com/creasty/mobx-sentinel/actions/workflows/deploy.yml) workflow:
 
 | Pages project | Source | Built by | Deployed to |
 | ------------- | ------ | -------- | ----------- |
 | `mobx-sentinel-apidoc` | `packages/*` (TSDoc) | `pnpm doc` | [mobx-sentinel.creasty.com](https://mobx-sentinel.creasty.com) |
 | `mobx-sentinel-example` | [apps/example/](./apps/example) | `pnpm --filter example build` | [example.mobx-sentinel.creasty.com](https://example.mobx-sentinel.creasty.com) |
+| `mobx-sentinel-site` | [apps/site/](./apps/site) | `pnpm --filter site build` | [mobx-sentinel-site.pages.dev](https://mobx-sentinel-site.pages.dev), until it replaces `mobx-sentinel-apidoc` |
 
-Every branch push deploys both. Pushes to `main` go to production; every other branch gets a
+Every branch push deploys all three. Pushes to `main` go to production; every other branch gets a
 preview deployment, whose URL is reported back on the commit and on the pull request.
+
+The site's leg also runs `pnpm --filter site check:api`, which fails the deploy when the API reference
+loses what `apps/site/src/typedoc/plugin.mjs` adds to it: namespaces merged into their same-named class,
+interface or type alias, and the `@action`/`@computed` tags. It needs the site built first.
 
 Deployments are direct uploads via [wrangler](https://developers.cloudflare.com/workers/wrangler/),
 so they require two repository secrets: `CLOUDFLARE_ACCOUNT_ID` and `CLOUDFLARE_API_TOKEN`
 (an account token with the *Cloudflare Pages: Edit* permission).
+
+A project must exist before its first deploy, or that leg fails. Create one with wrangler; its
+custom domain has no wrangler command, so attach that through the API (or the dashboard).
+`--allow-build` is for pnpm 12, which `pnpm dlx` can resolve to locally and which refuses to install
+wrangler while its dependencies' build scripts are unapproved; the workflow's pnpm 11 does not ask.
+
+```sh
+pnpm dlx --allow-build=esbuild --allow-build=workerd wrangler@4 pages project create mobx-sentinel-site --production-branch=main
+curl -X POST "https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/pages/projects/mobx-sentinel-site/domains" \
+  -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" -H "Content-Type: application/json" \
+  -d '{"name":"<hostname>"}'
+```
+
+If Cloudflare does not also create the hostname's proxied `CNAME` to `mobx-sentinel-site.pages.dev`,
+adding it takes *Zone → DNS → Edit*, beyond the *Cloudflare Pages: Edit* the deploy token is described with above.
 
 Everything else -- custom domains, production branch, compatibility flags -- remains a per-project
 setting in the Cloudflare dashboard. Build-time settings do not: the Node version lives in the

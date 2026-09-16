@@ -1,0 +1,95 @@
+---
+title: mobx-sentinel
+description: MobX library for non-intrusive class-based model enhancement. Acting as a sentinel, it provides change detection, reactive validation, and form integration capabilities without contamination.
+template: splash
+hero:
+  tagline: Change detection, reactive validation, and form integration for class-based MobX models — added from the outside, without contaminating the models themselves.
+  actions:
+    - text: Get started
+      link: /docs/
+      icon: right-arrow
+    - text: API reference
+      link: /apis/
+      variant: minimal
+    - text: GitHub
+      link: https://github.com/creasty/mobx-sentinel
+      icon: external
+      variant: minimal
+---
+
+import { Aside, Card, CardGrid, LinkButton } from "@astrojs/starlight/components";
+
+<Aside type="caution">
+  This library is in an early stage of development. Its interface may change without notice.
+</Aside>
+
+## Packages
+
+<CardGrid>
+  <Card title="@mobx-sentinel/core" icon="setting">
+    `Watcher` detects changes in models, `Validator` validates them reactively — sync or async, cancellable, composable
+    from many sources — and `@nested` tracks models inside models.
+
+    [Read more](/docs/core/)
+  </Card>
+  <Card title="@mobx-sentinel/form" icon="list-format">
+    Asynchronous submission, nested and array forms, custom bindings in under 50 lines, and error reporting that shows
+    errors when users are ready for them.
+
+    [Read more](/docs/form/)
+  </Card>
+  <Card title="@mobx-sentinel/react" icon="seti:react">
+    Hooks that handle component lifecycle for you, and standard bindings for the most common form elements.
+
+    [Read more](/docs/react/)
+  </Card>
+</CardGrid>
+
+## Why mobx-sentinel
+
+It began as a form library built around models, and grew into a general way to enhance models, with forms as one
+application.
+
+Complex domains keep their business logic in MobX classes, so most responsibilities belong on the model side. Existing
+MobX form libraries are designed around serializing data rather than modeling it: they either cannot use classes or do
+not separate data from form state, none of them is type-safe from both the model and the UI, and many show error
+messages at the wrong time.
+
+mobx-sentinel instead splits the responsibilities into layers:
+
+- **Validation** belongs to the business logic layer, the model. It provides validity state and error management.
+- **Form state** belongs to the application logic layer, the view-model. It handles submission and reacts to changes
+  in validity.
+- **Bindings** belong to the presentation layer, the view. They get values from the model, write changes back, and
+  express error states.
+
+## Design Principles
+
+- Model first
+  - Assumes the existence of class-based models.
+  - Promotes clear separation between core business logic and application logic.
+  - [Form] Pushes responsibilities towards the model side, minimizing form responsibilities.
+  - [Form] Do not manage data directly; Not intended for simple data-first form implementations.
+- Non-intrusive
+  - Minimizes required interfaces for models, maintaining purity.
+  - Extends model's capabilities from an "outsider" standpoint.
+  - [Form] No direct references between forms and models.
+- Transparent I/O
+  - No module directly mutates models — Makes control obvious and safe.
+  - Unidirectional data flow / dependency.
+  - [Form] No hidden magic between model ↔ input element interactions.
+- Modular implementation
+  - Multi-package architecture with clear separation of concerns.
+  - Enhances testability and extensibility.
+- Rigorous typing
+  - Maximizes use of TypeScript's type system for error detection and code completion.
+  - Improves development productivity.
+
+## How it compares
+
+See how mobx-sentinel differs from other MobX form libraries in type safety, UI bindings and class-based design, and
+how its error reporting differs from popular form libraries.
+
+<LinkButton href="/docs/alternatives/" variant="secondary" icon="right-arrow">
+  Alternatives
+</LinkButton>
