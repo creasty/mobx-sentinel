@@ -1,6 +1,7 @@
 // @ts-check
 import starlight from "@astrojs/starlight";
 import { defineConfig } from "astro/config";
+import mermaid from "astro-mermaid";
 import starlightLinksValidator from "starlight-links-validator";
 import starlightTypeDoc, { typeDocSidebarGroup } from "starlight-typedoc";
 import { flattenApiSidebar } from "./src/typedoc/flatten-sidebar.mjs";
@@ -11,6 +12,9 @@ const apiSidebarLabel = "API reference";
 export default defineConfig({
   site: "https://mobx-sentinel.creasty.com",
   integrations: [
+    // Renders ```mermaid blocks in the browser, loading mermaid only on pages that have one, and re-renders them when
+    // the theme switches. It must come before starlight, whose code-block rendering would otherwise take them.
+    mermaid(),
     starlight({
       title: "mobx-sentinel",
       description:

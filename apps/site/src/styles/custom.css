@@ -5,9 +5,3 @@
   font-weight: 600;
   color: var(--sl-color-text-accent);
 }
-
-/* Diagrams come rendered for both themes (see src/diagrams/); show the one matching the current theme. */
-:root[data-theme="light"] .diagram-dark,
-:root[data-theme="dark"] .diagram-light {
-  display: none;
-}

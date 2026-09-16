@@ -15,6 +15,45 @@ Key points:
 - Form has no reactive dependencies on FormField/FormBinding.
 - State synchronization is only broadcast from Form to FormField (and Watcher).
 
-<!-- Rendered from src/diagrams/architecture.mmd; custom.css shows the variant matching the theme. -->
-<img class="diagram-light" src="/diagrams/architecture-light.svg" alt="Architecture diagram. In the core package, Watcher and Validator observe models; both use StandardNestedFetcher, which retrieves @nested annotations; Validator delegates to the internal AsyncJob. In the form package, Form manages FormField and FormBinding, relies on Watcher and Validator, and delegates to the internal Submission. In the react package, hooks update Form, and bindings implement FormBinding." />
-<img class="diagram-dark" src="/diagrams/architecture-dark.svg" alt="Architecture diagram. In the core package, Watcher and Validator observe models; both use StandardNestedFetcher, which retrieves @nested annotations; Validator delegates to the internal AsyncJob. In the form package, Form manages FormField and FormBinding, relies on Watcher and Validator, and delegates to the internal Submission. In the react package, hooks update Form, and bindings implement FormBinding." />
+```mermaid
+graph TB
+
+%%subgraph external
+%%  Object((Object))
+%%end
+
+subgraph core package
+  nested(["@nested"])
+  StandardNestedFetcher -.-> |retrieves| nested
+  %%StandardNestedFetcher -.-> |reads| Object
+
+  watch(["@watch, @watch.ref, @unwatch"])
+  Watcher -.-> |retrieves| watch
+  Watcher -.-> |uses| StandardNestedFetcher
+  %%Watcher --> |observes| Object
+
+  Validator
+  Validator --> |delegates| AsyncJob["AsyncJob<br>(internal)"]
+  Validator -.-> |uses| StandardNestedFetcher
+  %%Validator --> |observes| Object
+
+  watch & Watcher & nested & StandardNestedFetcher -.-> |uses| AnnotationProcessor["AnnotationProcessor<br>(internal)"]
+end
+
+subgraph form package
+  Form -.-> |manages/updates| FormField
+  Form -.-> |manages| FormBinding["&lt;&lt;interface&gt;&gt;<br>FormBinding"]
+  %%FormBinding -.-> |references| Form & FormField
+  Form ==> Watcher
+  FormField & Form  ==> Validator
+  Form -.-> |uses| StandardNestedFetcher
+  Form --> |delegates| Submission["Submission<br>(internal)"]
+end
+
+subgraph react package
+  Hooks --> |updates| Form
+
+  Bindings -.-> |implements| FormBinding
+  Bindings ==> Form & FormField
+end
+```
