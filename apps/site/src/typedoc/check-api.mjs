@@ -185,10 +185,10 @@ function checkEveryDecoratorTagRendered(pages) {
     const tags = decoratorTagsOf(reflection);
     if (tags.length === 0) continue;
 
-    // The page a member renders on. MergedMemberRouter gives a page only to a declaration directly in a module or
-    // namespace; anything deeper, including what the merge moved into a class, renders on that declaration's page.
+    // The page a member renders on. MergedMemberRouter gives a page only to a declaration directly in a module;
+    // anything deeper, including what the merge moved into a class, renders on that declaration's page.
     let owner = reflection.parent;
-    while (owner && !(owner.kindOf(pageKinds) && owner.parent?.kindOf(td.ReflectionKind.SomeModule))) {
+    while (owner && !(owner.kindOf(pageKinds) && owner.parent?.kindOf(td.ReflectionKind.Module))) {
       owner = owner.parent;
     }
     if (!owner) continue;
@@ -198,8 +198,7 @@ function checkEveryDecoratorTagRendered(pages) {
       path.unshift(`${directories.get(ancestor.kind)}/${ancestor.name}`);
     }
     if (!ancestor) continue;
-    // A namespace's own page is its directory's index; everything else is a file named after the declaration.
-    const file = `${ancestor.name}/${path.join("/")}${owner.kindOf(td.ReflectionKind.Namespace) ? "/index" : ""}.md`;
+    const file = `${ancestor.name}/${path.join("/")}.md`;
 
     const counts = expected.get(file) ?? new Map();
     for (const tag of tags) {

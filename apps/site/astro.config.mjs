@@ -3,7 +3,10 @@ import starlight from "@astrojs/starlight";
 import { defineConfig } from "astro/config";
 import starlightLinksValidator from "starlight-links-validator";
 import starlightTypeDoc, { typeDocSidebarGroup } from "starlight-typedoc";
+import { flattenApiSidebar } from "./src/typedoc/flatten-sidebar.mjs";
 import { conversionOptions, entryPoints } from "./src/typedoc/options.mjs";
+
+const apiSidebarLabel = "API reference";
 
 export default defineConfig({
   site: "https://mobx-sentinel.creasty.com",
@@ -18,10 +21,10 @@ export default defineConfig({
         starlightTypeDoc({
           output: "apis",
           entryPoints,
-          sidebar: { label: "API reference", collapsed: true },
+          sidebar: { label: apiSidebarLabel, collapsed: true },
           typeDoc: {
             ...conversionOptions,
-            // Defined by plugin.mjs: the default router, fixed to nest merged members under their new parent.
+            // Defined by plugin.mjs: the default router, changed to render merged members on their new parent's page.
             router: "merged-member",
             // starlight-typedoc deletes every nested README.md when `readme` is unset, and README.md is the default name
             // of each package's landing page, so the package links on /apis/ would all 404. index.md is kept, and it is
@@ -29,6 +32,7 @@ export default defineConfig({
             entryFileName: "index.md",
           },
         }),
+        flattenApiSidebar(apiSidebarLabel),
         // Fails the build on a broken internal link or a missing #anchor, which is what keeps the guides, split from
         // four READMEs across many pages, from rotting as they are edited.
         starlightLinksValidator({ errorOnInvalidHashes: true }),

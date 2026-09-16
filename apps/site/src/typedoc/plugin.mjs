@@ -24,15 +24,17 @@ export function load(app) {
   // typedoc-plugin-markdown creates its hooks when it loads, and starlight-typedoc always loads it last.
   app.on(td.Application.EVENT_BOOTSTRAP_END, () => {
     // Absent when only converting, as check-api.mjs does.
-    app.renderer.markdownHooks?.on("page.begin", renderSkippedMembers);
+    app.renderer.markdownHooks?.on("page.begin", extendPartials);
   });
 }
 
 /**
- * Render what typedoc-plugin-markdown leaves out but TypeDoc's HTML theme shows, by extending two of the page's
- * partials before anything on it renders. Extending the partials rather than appending to the page is what covers
- * members rendered inline on another declaration's page, like `InputBinding.Config` on `InputBinding`'s.
+ * Change how typedoc-plugin-markdown renders a page by extending its partials before anything on the page renders.
+ * Extending the partials rather than appending to the page is what also covers members rendered on another
+ * declaration's page, like `InputBinding.Config` on `InputBinding`'s.
  *
+ * Two render what the theme leaves out but TypeDoc's HTML theme shows (if a later typedoc-plugin-markdown renders
+ * them itself, they will show twice):
  * - Properties of a function built with `Object.assign`, such as `nested.hoist` and `watch.ref`. The theme renders only
  *   a function's signatures.
  * - The members of a union inside an intersection, as in `InputBinding.Config`
@@ -40,15 +42,23 @@ export function load(app) {
  *   object parts of an intersection and the members of a top-level union, but not a union nested in an intersection,
  *   so each variant's `getter`, `setter` and `valueAs` would lose their descriptions and decorator tags.
  *
- * If a later typedoc-plugin-markdown renders either of these itself, they will show twice.
+ * The third drops the heading per kind (Classes, Functions; Constructors, Accessors, Methods), keeping the order the
+ * theme would group them in. A package lists its exports as one list. A class, interface, type alias or namespace
+ * lists its members under a single Members heading, their own subsections a level below, so the table of contents
+ * still has one entry per member.
  *
  * @param {import("typedoc-plugin-markdown").MarkdownThemeContext} context
  */
-function renderSkippedMembers(context) {
+function extendPartials(context) {
   const { partials } = context;
-  const { member, declaration } = partials;
+  const { member, declaration, body } = partials;
 
   partials.member = (model, options) => {
+    // The theme renders only packages, classes, interfaces, enums and type aliases with members this way. A namespace
+    // on another's page would otherwise go through the declaration partial and lose its members.
+    if (model.kindOf(td.ReflectionKind.Namespace)) {
+      return partials.memberWithGroups(model, { headingLevel: options.headingLevel + 1 });
+    }
     const md = member(model, options);
     if (!model.kindOf(td.ReflectionKind.Function) || !model.children?.length) return md;
     return [
@@ -74,19 +84,41 @@ function renderSkippedMembers(context) {
     ].join("\n\n");
   };
 
+  partials.body = (model, options) => {
+    // The root page lists the packages under its own heading, with their versions. Categories are left alone too.
+    if (model.kindOf(td.ReflectionKind.Project) || !model.groups?.length || model.categories?.length) {
+      return body(model, options);
+    }
+    const children = model.groups.flatMap((group) => group.children);
+    const withPages = children.filter((child) => context.router.hasOwnDocument(child));
+    // A package links to its exports' pages. The theme's hideGroupHeadings option does not help: it still heads a
+    // list of links with its kind, and drops headings only between members rendered on the page.
+    if (withPages.length === children.length) return partials.groupIndex({ children });
+    if (withPages.length > 0) return body(model, options);
+
+    const members = children.filter((child) => child.isDeclaration());
+    // A namespace rendered on another declaration's page is already under its own heading.
+    if (model !== context.page.model) return partials.members(members, { headingLevel: options.headingLevel });
+    return [
+      `${"#".repeat(options.headingLevel)} Members`,
+      partials.members(members, { headingLevel: options.headingLevel + 1 }),
+    ].join("\n\n");
+  };
+
   // A hook's return value is inserted into the page; this one only extends the partials.
   return "";
 }
 
 /**
- * typedoc-plugin-markdown's default router, changed to render a merged namespace's members on the page of the
- * declaration they were merged into, rather than on pages of their own.
+ * typedoc-plugin-markdown's default router, changed to give pages only to what a package's entry points export. A
+ * merged namespace's members, and a namespace's own, render on the page of the declaration they belong to.
  *
- * MemberRouter gives a page to every class, interface, type alias, function and variable. Before the merge, none of
- * those sat inside a class, interface or type alias, so it never had to place such a page, and it cannot: it would put
- * `KeyPath`'s functions at the output root, as `KeyPath/functions/`. Giving them anchors on the parent's page instead
- * also makes the theme render them in full there, the way it renders properties and methods, since it lists a group
- * as links only when every member of the group has a page of its own.
+ * MemberRouter gives a page to every class, interface, type alias, function, variable and namespace. Before the merge,
+ * none of those sat inside a class, interface or type alias, so it never had to place such a page, and it cannot: it
+ * would put `KeyPath`'s functions at the output root, as `KeyPath/functions/`. Giving them anchors on the parent's page
+ * instead also makes the theme render them in full there, the way it renders properties and methods, since it lists a
+ * group as links only when every member of the group has a page of its own. Doing the same inside a namespace keeps its
+ * members out of per-kind directories, which the sidebar would show as `type-aliases` and `namespaces` groups.
  */
 class MergedMemberRouter extends MemberRouter {
   /**
@@ -95,11 +127,22 @@ class MergedMemberRouter extends MemberRouter {
    */
   buildChildPages(reflection, outPages) {
     const { parent } = reflection;
-    if (parent instanceof td.DeclarationReflection && !parent.kindOf(td.ReflectionKind.SomeModule)) {
+    if (parent instanceof td.DeclarationReflection && !parent.kindOf(td.ReflectionKind.Module)) {
       this.buildAnchors(reflection, parent);
       return;
     }
     super.buildChildPages(reflection, outPages);
+  }
+
+  /**
+   * A namespace gets a page like a class's, `namespaces/Name.md`, rather than a directory for its members' pages with
+   * its own as the index, which would appear in the sidebar as a group holding one page.
+   *
+   * @param {td.Reflection} reflection
+   */
+  getIdealBaseName(reflection) {
+    if (!reflection.kindOf(td.ReflectionKind.Namespace)) return super.getIdealBaseName(reflection);
+    return `${this.getReflectionDirectory(reflection)}/${this.getReflectionFileName(reflection)}`.replace(/ /g, "-");
   }
 }
 
