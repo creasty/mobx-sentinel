@@ -63,7 +63,7 @@ export class CheckBoxBinding implements FormBinding {
   get props() {
     return {
       type: "checkbox",
-      id: this.config.id ?? this.field.id,
+      id: this.config.id ?? this.field.stableId,
       checked: this.checked,
       onChange: this.onChange,
       onFocus: this.onFocus,

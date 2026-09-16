@@ -1,5 +1,54 @@
 import { Form } from "@mobx-sentinel/form";
-import { useEffect, useRef } from "react";
+import { useEffect, useId, useRef } from "react";
+
+/**
+ * Prepare the form for server-side rendering
+ *
+ * @param form Form instance
+ *
+ * @remarks
+ * Makes what the server renders agree with the client render that hydrates it:
+ * - Element ids: assigns React's `useId()` to the form's {@link Form.stableId}, which the
+ *   stable ids of its fields build on. On unmount, it gives the form its own id back, unless
+ *   something else has assigned another in the meantime, so a form that outlives the component
+ *   doesn't keep an id tied to it.
+ *
+ * Call it at the top of each component that renders a form, before any `bind*` call.
+ * It covers that form only: a sub-form rendered by its own component calls it for itself,
+ * so no component has to know what its ancestors did.
+ *
+ * Harmless in a client-rendered app, so shared components can call it unconditionally.
+ * Anything it takes care of in the future has to keep it that way.
+ *
+ * @example
+ * ```tsx
+ * const AddressForm: React.FC<{ model: PostalAddress }> = observer(({ model }) => {
+ *   const form = Form.get(model);
+ *   useFormSSR(form);
+ *   return (...);
+ * });
+ * ```
+ */
+export function useFormSSR(form: Form<any>): void {
+  const id = useId();
+  // Assigned during render so the bindings called later in this same render can see it, and so
+  // it happens on the server, where effects never run. stableId is a plain field rather than an
+  // observable, so the write notifies nothing, and useId() hands back the same string on every
+  // render of this component -- including the second one StrictMode performs.
+  form.stableId = id;
+
+  useEffect(() => {
+    // Again on mount, because StrictMode runs the cleanup below and then this effect again
+    // without rendering in between, which would otherwise leave the form without its id.
+    form.stableId = id;
+    return () => {
+      // Another component may have taken the form over by now; its id stays.
+      if (form.stableId === id) {
+        form.stableId = form.id;
+      }
+    };
+  }, [form, id]);
+}
 
 /**
  * Auto reset the form when the component is mounted and unmounted
