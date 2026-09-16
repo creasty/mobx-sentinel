@@ -14,7 +14,7 @@ import { LabelBinding } from "./LabelBinding";
 import { RadioButtonBinding } from "./RadioButtonBinding";
 import { SelectBoxBinding } from "./SelectBoxBinding";
 import { SubmitButtonBinding } from "./SubmitButtonBinding";
-import { useFormAutoReset, useFormHandler } from "./hooks";
+import { useFormAutoReset, useFormHandler, useFormSSR } from "./hooks";
 
 class SampleModel {
   @observable text = "hello";
@@ -122,6 +122,7 @@ describe("package entry point", () => {
       "SubmitButtonBinding",
       "useFormAutoReset",
       "useFormHandler",
+      "useFormSSR",
     ]);
     expect(indexModule.CheckBoxBinding).toBe(CheckBoxBinding);
     expect(indexModule.InputBinding).toBe(InputBinding);
@@ -131,6 +132,7 @@ describe("package entry point", () => {
     expect(indexModule.SubmitButtonBinding).toBe(SubmitButtonBinding);
     expect(indexModule.useFormAutoReset).toBe(useFormAutoReset);
     expect(indexModule.useFormHandler).toBe(useFormHandler);
+    expect(indexModule.useFormSSR).toBe(useFormSSR);
   });
 });
 

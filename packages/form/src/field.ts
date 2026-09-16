@@ -14,10 +14,19 @@ const internalToken = Symbol("formField.internal");
  * - Supports auto-finalization of intermediate values
  */
 export class FormField {
+  /**
+   * Identity of the field instance
+   *
+   * @remarks
+   * Unique per instance and fixed for its lifetime, but not reproducible:
+   * a server render and the client render that hydrates it produce different values.
+   * For an id that reaches the DOM, use {@link stableId} instead.
+   */
   readonly id = uuidV4();
   readonly fieldName: string;
   readonly validator: Validator<any>;
   readonly #getFinalizationDelayMs: () => number;
+  readonly #getFormStableIdIfSet: () => string | null;
   readonly #isTouched = observable.box(false);
   readonly #changeType = observable.box<FormField.ChangeType | null>(null);
   readonly #isReported = observable.box(false);
@@ -26,11 +35,36 @@ export class FormField {
   #timerId: number | null = null;
 
   /** @ignore */
-  constructor(args: { fieldName: string; validator: Validator<any>; getFinalizationDelayMs: () => number }) {
+  constructor(args: {
+    fieldName: string;
+    validator: Validator<any>;
+    getFinalizationDelayMs: () => number;
+    /** @default `() => null` -- a field with no form has nothing to build on */
+    getFormStableIdIfSet?: () => string | null;
+  }) {
     makeObservable(this);
     this.fieldName = args.fieldName;
     this.validator = args.validator;
     this.#getFinalizationDelayMs = args.getFinalizationDelayMs;
+    this.#getFormStableIdIfSet = args.getFormStableIdIfSet ?? (() => null);
+  }
+
+  /**
+   * Id for associating a label with the field's form control
+   *
+   * @remarks
+   * - Once the form's {@link Form.stableId} is assigned an id of its own, that id and
+   *   {@link fieldName}, joined by `:`
+   * - Until then, the field's own {@link id}: unique on the page, but different between
+   *   a server render and the client render that hydrates it
+   * - Use this, not {@link id}, for anything that reaches the DOM
+   *
+   * @see {@link Form.stableId}
+   */
+  get stableId() {
+    const formStableId = this.#getFormStableIdIfSet();
+    if (formStableId === null) return this.id;
+    return `${formStableId}:${this.fieldName}`;
   }
 
   /**

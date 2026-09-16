@@ -177,6 +177,66 @@ describe("Form", () => {
     });
   });
 
+  describe("#stableId", () => {
+    it("starts as the form's own id", () => {
+      const form = Form.get(new SampleModel());
+      expect(form.stableId).toBe(form.id);
+    });
+
+    it("takes an assigned id as is, and hands it to the fields", () => {
+      const form = Form.get(new SampleModel());
+      form.stableId = "_R_0_";
+
+      expect(form.stableId).toBe("_R_0_");
+      expect(form.getField("field").stableId).toBe("_R_0_:field");
+    });
+
+    it("leaves the form's own identity alone", () => {
+      const form = Form.get(new SampleModel());
+      const id = form.id;
+      form.stableId = "_R_0_";
+
+      expect(form.id).toBe(id);
+      expect(form.getField("field").id).not.toContain("_R_0_");
+    });
+
+    it("leaves the fields on their own ids when assigned the form's own id back", () => {
+      const form = Form.get(new SampleModel());
+      const field = form.getField("field");
+      form.stableId = "_R_0_";
+      expect(field.stableId).toBe("_R_0_:field");
+
+      form.stableId = form.id;
+      expect(field.stableId).toBe(field.id);
+    });
+
+    it("applies to a sub-form only when that sub-form is assigned its own", () => {
+      const form = Form.get(new NestedModel());
+      const subForm = form.subForms.get(KeyPath.build("sample"));
+      expect(subForm).toBeDefined();
+
+      form.stableId = "_R_0_";
+      expect(subForm!.stableId).toBe(subForm!.id);
+      expect(subForm!.getField("field").stableId).toBe(subForm!.getField("field").id);
+
+      subForm!.stableId = "_R_1_";
+      expect(subForm!.getField("field").stableId).toBe("_R_1_:field");
+      // The parent keeps its own
+      expect(form.getField("field").stableId).toBe("_R_0_:field");
+    });
+
+    it("is not reactive", () => {
+      const form = Form.get(new SampleModel());
+      const timeline: string[] = [];
+      autorun(() => timeline.push(form.getField("field").stableId));
+
+      const initial = timeline[0];
+      form.stableId = "_R_0_";
+      // Bindings re-read the id as they are called; nothing observes it
+      expect(timeline).toEqual([initial]);
+    });
+  });
+
   describe("#subForms", () => {
     it("does not collect sub-forms from objects without @nested", () => {
       const model = new SampleModel();
@@ -2561,6 +2621,9 @@ describe("Form (details)", () => {
     test("properties", () => {
       const form = Form.get(new TypedModel());
       expectTypeOf(form.id).toEqualTypeOf<string>();
+      expectTypeOf(form.stableId).toEqualTypeOf<string>();
+      // A plain mutable field, unlike id
+      expectTypeOf<Pick<Form<TypedModel>, "stableId">>().toEqualTypeOf<{ stableId: string }>();
       expectTypeOf(form.watcher).toEqualTypeOf<Watcher>();
       expectTypeOf(form.validator).toEqualTypeOf<Validator<TypedModel>>();
       expectTypeOf(form.config).toEqualTypeOf<Readonly<FormConfig>>();

@@ -79,7 +79,7 @@ export class SelectBoxBinding implements FormBinding {
 
   get props() {
     return {
-      id: this.config.id ?? this.field.id,
+      id: this.config.id ?? this.field.stableId,
       multiple: this.config.multiple,
       value: this.value,
       onChange: this.onChange,

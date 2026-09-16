@@ -180,7 +180,7 @@ export class InputBinding implements FormBinding {
     return {
       type: this.type,
       value: this.value,
-      id: this.config.id ?? this.field.id,
+      id: this.config.id ?? this.field.stableId,
       onChange: this.onChange,
       onFocus: this.onFocus,
       onBlur: this.onBlur,

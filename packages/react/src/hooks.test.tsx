@@ -6,7 +6,9 @@ import { makeObservable, observable } from "mobx";
 import { Form } from "@mobx-sentinel/form";
 import "./extension";
 import { observer } from "mobx-react-lite";
-import { useFormAutoReset, useFormHandler } from "./hooks";
+import { hydrateRoot } from "react-dom/client";
+import { renderToString } from "react-dom/server";
+import { useFormAutoReset, useFormHandler, useFormSSR } from "./hooks";
 
 class SampleModel {
   @observable field = "hello";
@@ -705,6 +707,290 @@ describe("useFormHandler", () => {
       // PINNED(quirk): each event has its own overload, so a union of events is rejected even when every member takes the same handler type (the Handler test component above needs a cast for this). Decide: should there be a generic signature keyed by `keyof Form.Handlers`? The flip is deleting the @ts-expect-error below.
       // @ts-expect-error no overload accepts a union of events
       useFormHandler(form, events, async () => true);
+    };
+    expectTypeOf(typeOnly).toBeFunction();
+  });
+});
+
+describe("useFormSSR", () => {
+  class IdModel {
+    @observable field = "hello";
+
+    constructor() {
+      makeObservable(this);
+    }
+  }
+
+  /** The convention the hook is built around: every form component calls it for its own form */
+  const FormWithHook: React.FC<{ model: IdModel }> = observer(({ model }) => {
+    const form = Form.get(model);
+    useFormSSR(form);
+
+    return (
+      <>
+        <label {...form.bindLabel(["field"])}>Label</label>
+        <input
+          {...form.bindInput("field", {
+            getter: () => model.field,
+            setter: (v) => (model.field = v),
+          })}
+        />
+      </>
+    );
+  });
+
+  /** The same form without the hook, to show what the hook is for */
+  const FormWithoutHook: React.FC<{ model: IdModel }> = observer(({ model }) => {
+    const form = Form.get(model);
+
+    return (
+      <>
+        <label {...form.bindLabel(["field"])}>Label</label>
+        <input
+          {...form.bindInput("field", {
+            getter: () => model.field,
+            setter: (v) => (model.field = v),
+          })}
+        />
+      </>
+    );
+  });
+
+  /** Renders on the "server" and hydrates on the "client", each with a model instance of its own */
+  const hydrate = (render: () => React.ReactElement) => {
+    const container = document.createElement("div");
+    document.body.appendChild(container);
+    container.innerHTML = renderToString(render());
+
+    const input = container.querySelector("input");
+    const label = container.querySelector("label");
+    const serverId = input?.id;
+    expect(label?.getAttribute("for")).toBe(serverId);
+
+    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    // A second call, so the client gets its own model -- as a browser does when it
+    // rebuilds one from serialized state rather than sharing the server's instance
+    let root!: ReturnType<typeof hydrateRoot>;
+    act(() => {
+      root = hydrateRoot(container, render());
+    });
+    // Not before the test has looked at the client's form: unmounting gives it its own id back
+    onTestFinished(() => {
+      act(() => root.unmount());
+      container.remove();
+    });
+
+    const clientId = container.querySelector("input")?.id;
+    const errors = errorSpy.mock.calls.map((call) => String(call[0]));
+    errorSpy.mockRestore();
+
+    return { serverId, clientId, errors };
+  };
+
+  test("sets the form's stable id during render, in time for the bindings that follow", () => {
+    const form = Form.get(new IdModel());
+    expect(form.stableId).toBe(form.id);
+
+    const seen: string[] = [];
+    const Probe: React.FC = () => {
+      useFormSSR(form);
+      // Where the bind*() calls of a real form component would run
+      seen.push(form.stableId);
+      return null;
+    };
+    render(<Probe />);
+
+    expect(seen[0]).toBeTruthy();
+    expect(seen[0]).not.toBe(form.id);
+    expect(form.stableId).toBe(seen[0]);
+  });
+
+  test("ties the label to the input through the form's stable id", () => {
+    const model = new IdModel();
+    const form = Form.get(model);
+    const { container } = render(<FormWithHook model={model} />);
+
+    const input = container.querySelector("input")!;
+    const label = container.querySelector("label")!;
+
+    expect(input.id).toBe(`${form.stableId}:field`);
+    expect(label.getAttribute("for")).toBe(input.id);
+    // No longer built on the form's uuid
+    expect(input.id).not.toContain(form.id);
+  });
+
+  test("gives separate forms separate stable ids", () => {
+    const model1 = new IdModel();
+    const model2 = new IdModel();
+    const { container } = render(
+      <>
+        <FormWithHook model={model1} />
+        <FormWithHook model={model2} />
+      </>
+    );
+
+    const [input1, input2] = Array.from(container.querySelectorAll("input"));
+    expect(Form.get(model1).stableId).not.toBe(Form.get(model2).stableId);
+    expect(input1.id).not.toBe(input2.id);
+  });
+
+  test("keeps the form's stable id across re-renders and under StrictMode", () => {
+    const model = new IdModel();
+    const form = Form.get(model);
+
+    const Wrapper: React.FC = () => {
+      const [counter, setCounter] = useState(0);
+      return (
+        <>
+          <button onClick={() => setCounter((v) => v + 1)}>Re-render {counter}</button>
+          <FormWithHook model={model} />
+        </>
+      );
+    };
+    const { container } = render(
+      <StrictMode>
+        <Wrapper />
+      </StrictMode>
+    );
+
+    const first = form.stableId;
+    act(() => container.querySelector("button")!.click());
+
+    expect(form.stableId).toBe(first);
+    expect(container.querySelector("input")!.id).toBe(`${first}:field`);
+  });
+
+  test("gives the form its own id back on unmount", () => {
+    const model = new IdModel();
+    const form = Form.get(model);
+    const { unmount } = render(<FormWithHook model={model} />);
+    expect(form.stableId).not.toBe(form.id);
+
+    unmount();
+
+    expect(form.stableId).toBe(form.id);
+    expect(form.getField("field").stableId).toBe(form.getField("field").id);
+  });
+
+  test("leaves an id assigned by something else in place on unmount", () => {
+    const model = new IdModel();
+    const form = Form.get(model);
+    const { unmount } = render(<FormWithHook model={model} />);
+
+    form.stableId = "assigned-elsewhere";
+    unmount();
+
+    expect(form.stableId).toBe("assigned-elsewhere");
+  });
+
+  test("keeps the stable id while mounted under StrictMode, which cleans up effects and runs them again", () => {
+    const model = new IdModel();
+    const form = Form.get(model);
+
+    // Not an observer: mobx-react-lite renders an observer again after StrictMode's remount, which
+    // would put the id back by itself and hide whether the effect does
+    let renders = 0;
+    const PlainForm: React.FC = () => {
+      renders++;
+      useFormSSR(form);
+      return (
+        <input
+          {...form.bindInput("field", {
+            getter: () => model.field,
+            setter: (v) => (model.field = v),
+          })}
+        />
+      );
+    };
+    const { container, unmount } = render(
+      <StrictMode>
+        <PlainForm />
+      </StrictMode>
+    );
+
+    // StrictMode's double render, and nothing after its cleanup, so only the effect can have put it back
+    expect(renders).toBe(2);
+    expect(form.stableId).not.toBe(form.id);
+    expect(container.querySelector("input")!.id).toBe(`${form.stableId}:field`);
+
+    unmount();
+    expect(form.stableId).toBe(form.id);
+  });
+
+  test("hands the form over to the component that renders it next", () => {
+    const model = new IdModel();
+    const form = Form.get(model);
+
+    const Switcher: React.FC = () => {
+      const [second, setSecond] = useState(false);
+      return (
+        <>
+          <button onClick={() => setSecond(true)}>Switch</button>
+          {second ? (
+            // Deeper in the tree, so useId() hands the second component an id of its own
+            <div>
+              <FormWithHook model={model} />
+            </div>
+          ) : (
+            <FormWithHook model={model} />
+          )}
+        </>
+      );
+    };
+    const { container } = render(<Switcher />);
+    const first = form.stableId;
+
+    act(() => container.querySelector("button")!.click());
+
+    // The first component's cleanup runs after the second has rendered, and must not take the id back
+    expect(form.stableId).not.toBe(first);
+    expect(form.stableId).not.toBe(form.id);
+    expect(container.querySelector("input")!.id).toBe(`${form.stableId}:field`);
+  });
+
+  test("renders ids that hydration reproduces", () => {
+    const models: IdModel[] = [];
+    const { serverId, clientId, errors } = hydrate(() => {
+      const model = new IdModel();
+      models.push(model);
+      return <FormWithHook model={model} />;
+    });
+
+    const [serverModel, clientModel] = models;
+    expect(serverModel).not.toBe(clientModel);
+    // Two processes, two model instances, one id
+    expect(Form.get(serverModel).getField("field").stableId).toBe(serverId);
+    expect(Form.get(clientModel).getField("field").stableId).toBe(serverId);
+    expect(clientId).toBe(serverId);
+    expect(errors).toEqual([]);
+  });
+
+  test("without the hook, the server and the client disagree on the ids", () => {
+    const models: IdModel[] = [];
+    const { serverId, errors } = hydrate(() => {
+      const model = new IdModel();
+      models.push(model);
+      return <FormWithoutHook model={model} />;
+    });
+
+    const [serverModel, clientModel] = models;
+    expect(Form.get(serverModel).getField("field").stableId).toBe(serverId);
+    // The client's own id is not the one it hydrated onto, and React says so.
+    // PINNED(quirk): React leaves the server's `id` in the DOM rather than patching it,
+    // so the mismatch shows up in the console instead of in the markup.
+    expect(Form.get(clientModel).getField("field").stableId).not.toBe(serverId);
+    expect(errors.join("\n")).toMatch(/hydrat/i);
+  });
+
+  test("types", () => {
+    const form = Form.get(new IdModel());
+    expectTypeOf(useFormSSR).parameters.toEqualTypeOf<[form: Form<any>]>();
+    expectTypeOf(useFormSSR).returns.toEqualTypeOf<void>();
+    expectTypeOf(useFormSSR).toBeCallableWith(form);
+
+    const typeOnly = () => {
+      // @ts-expect-error the first argument must be a Form
+      useFormSSR({});
     };
     expectTypeOf(typeOnly).toBeFunction();
   });

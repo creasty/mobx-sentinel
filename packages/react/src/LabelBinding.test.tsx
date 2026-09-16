@@ -98,24 +98,39 @@ describe("LabelBinding", () => {
       expect(env.binding.props.htmlFor).toBe("somethingElse");
     });
 
-    it("uses the id of the first field when bound to multiple fields", () => {
+    it("uses the stable id of the first field when bound to multiple fields", () => {
       const env = setupMultiEnv();
-      expect(env.binding.firstFieldId).toBe(env.field1.id);
-      expect(env.binding.props.htmlFor).toBe(env.field1.id);
-      expect(env.binding.props.htmlFor).not.toBe(env.field2.id);
+      expect(env.binding.firstFieldStableId).toBe(env.field1.stableId);
+      expect(env.binding.props.htmlFor).toBe(env.field1.stableId);
+      expect(env.binding.props.htmlFor).not.toBe(env.field2.stableId);
     });
 
     it("follows the order of the given fields", () => {
       const env = setupMultiEnv();
       const binding = new LabelBinding([env.field2, env.field1], {});
-      expect(binding.firstFieldId).toBe(env.field2.id);
-      expect(binding.props.htmlFor).toBe(env.field2.id);
+      expect(binding.firstFieldStableId).toBe(env.field2.stableId);
+      expect(binding.props.htmlFor).toBe(env.field2.stableId);
     });
 
     it("is undefined when bound to no fields", () => {
       const binding = new LabelBinding([], {});
-      expect(binding.firstFieldId).toBeUndefined();
+      expect(binding.firstFieldStableId).toBeUndefined();
       expect(binding.props.htmlFor).toBeUndefined();
+    });
+
+    it("follows a newly set stable id of the form while an observer holds the binding", () => {
+      const form = Form.get(new SampleModel());
+      form.stableId = "_R_0_";
+      const binding = new LabelBinding([form.getField("field1")], {});
+
+      // As an observer component rendering the label does. Unobserved, a computed would
+      // recompute on every read and hide the difference.
+      const dispose = autorun(() => void binding.props.htmlFor);
+      expect(binding.props.htmlFor).toBe("_R_0_:field1");
+
+      form.stableId = "_R_1_";
+      expect(binding.props.htmlFor).toBe("_R_1_:field1");
+      dispose();
     });
 
     it("keeps an empty string override instead of falling back to the field id", () => {
@@ -583,8 +598,8 @@ describe("bindLabel", () => {
 
     test("distinguishes bindings by the order of the field names", () => {
       const form = Form.get(new SampleModel());
-      expect(form.bindLabel(["field1", "field2"]).htmlFor).toBe(form.getField("field1").id);
-      expect(form.bindLabel(["field2", "field1"]).htmlFor).toBe(form.getField("field2").id);
+      expect(form.bindLabel(["field1", "field2"]).htmlFor).toBe(form.getField("field1").stableId);
+      expect(form.bindLabel(["field2", "field1"]).htmlFor).toBe(form.getField("field2").stableId);
     });
   });
 
@@ -600,7 +615,7 @@ describe("bindLabel", () => {
       "aria-errormessage": string | undefined;
     }>();
     expectTypeOf<LabelBinding.Config>().toEqualTypeOf<{ htmlFor?: string | undefined }>();
-    expectTypeOf<LabelBinding["firstFieldId"]>().toEqualTypeOf<string | undefined>();
+    expectTypeOf<LabelBinding["firstFieldStableId"]>().toEqualTypeOf<string | undefined>();
     expectTypeOf<LabelBinding["firstErrorMessage"]>().toEqualTypeOf<string | null>();
     expectTypeOf<LabelBinding["props"]>().toEqualTypeOf<ReturnType<typeof form.bindLabel>>();
     expectTypeOf(LabelBinding).constructorParameters.toEqualTypeOf<[FormField[], LabelBinding.Config]>();

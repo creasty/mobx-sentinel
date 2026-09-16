@@ -29,9 +29,10 @@ export class LabelBinding implements FormBinding {
     makeObservable(this);
   }
 
-  @computed
-  get firstFieldId() {
-    return this.fields.at(0)?.id;
+  // Not @computed: FormField#stableId reads a plain field on the form, which nothing can observe.
+  // While an observer held it, a computed would keep the first id it saw.
+  get firstFieldStableId() {
+    return this.fields.at(0)?.stableId;
   }
 
   @computed
@@ -47,7 +48,7 @@ export class LabelBinding implements FormBinding {
 
   get props() {
     return {
-      htmlFor: this.config.htmlFor ?? this.firstFieldId,
+      htmlFor: this.config.htmlFor ?? this.firstFieldStableId,
       "aria-invalid": !!this.firstErrorMessage,
       "aria-errormessage": this.firstErrorMessage ?? undefined,
     } satisfies LabelBinding.Attrs;
