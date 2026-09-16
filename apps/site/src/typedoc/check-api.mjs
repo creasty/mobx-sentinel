@@ -19,6 +19,7 @@ const withMerge = await convert({ merge: true });
 const withoutMerge = await convert({ merge: false });
 
 checkOnlyNamespacesRemoved();
+checkNoExternalDeclarations();
 checkNoNamespaceSharesAName();
 checkLinksResolve();
 checkDecoratorTagsUnchanged();
@@ -101,6 +102,18 @@ function checkOnlyNamespacesRemoved() {
   }
   if (removed.length === 0) {
     failures.push("The merge removed no namespaces; is plugin.mjs loaded?");
+  }
+}
+
+/**
+ * Nothing defined outside the repository gets documented, like the members ValidationError inherits from `Error`.
+ */
+function checkNoExternalDeclarations() {
+  for (const reflection of declarations(withMerge)) {
+    const external = reflection.sources?.find((source) => source.fullFileName.includes("/node_modules/"));
+    if (external) {
+      failures.push(`${describe(reflection)} is documented but defined in ${external.fullFileName}`);
+    }
   }
 }
 

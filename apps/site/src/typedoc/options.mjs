@@ -18,7 +18,13 @@ export const conversionOptions = {
   // Merges each namespace into its same-named class/interface/type alias, and tags MobX-decorated members.
   // Absolute, because TypeDoc resolves plugin paths against the cwd, which differs under `pnpm --filter`.
   plugin: [fileURLToPath(new URL("./plugin.mjs", import.meta.url))],
-  // `readme` is not a root-level option under the packages strategy, so the root default never reaches the
-  // per-package conversions; without this, each package README becomes its API landing page.
-  packageOptions: { readme: "none" },
+  // Under the packages strategy each package is converted with fresh options and only these applied, so a root-level
+  // value like `readme: "none"` never reaches it.
+  packageOptions: {
+    // Otherwise each package's README becomes its API landing page.
+    readme: "none",
+    // Leave out members inherited from outside the repository, like those ValidationError gets from the `Error` of
+    // TypeScript's lib and @types/node.
+    excludeExternals: true,
+  },
 };
