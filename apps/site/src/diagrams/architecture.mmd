@@ -1,0 +1,45 @@
+%% Rendered into public/diagrams/ in a light and a dark variant, which the Architecture page switches between.
+%% Regenerate both after editing, from apps/site (puppeteer downloads a browser on first use):
+%%   pnpm dlx --package @mermaid-js/mermaid-cli@11 --package puppeteer@24 mmdc -i src/diagrams/architecture.mmd -o public/diagrams/architecture-light.svg -t default -b transparent
+%%   pnpm dlx --package @mermaid-js/mermaid-cli@11 --package puppeteer@24 mmdc -i src/diagrams/architecture.mmd -o public/diagrams/architecture-dark.svg -t dark -b transparent
+
+graph TB
+
+%%subgraph external
+%%  Object((Object))
+%%end
+
+subgraph core package
+  nested(["@nested"])
+  StandardNestedFetcher -.-> |retrieves| nested
+  %%StandardNestedFetcher -.-> |reads| Object
+
+  watch(["@watch, @watch.ref, @unwatch"])
+  Watcher -.-> |retrieves| watch
+  Watcher -.-> |uses| StandardNestedFetcher
+  %%Watcher --> |observes| Object
+
+  Validator
+  Validator --> |delegates| AsyncJob["AsyncJob<br>(internal)"]
+  Validator -.-> |uses| StandardNestedFetcher
+  %%Validator --> |observes| Object
+
+  watch & Watcher & nested & StandardNestedFetcher -.-> |uses| AnnotationProcessor["AnnotationProcessor<br>(internal)"]
+end
+
+subgraph form package
+  Form -.-> |manages/updates| FormField
+  Form -.-> |manages| FormBinding["&lt;&lt;interface&gt;&gt;<br>FormBinding"]
+  %%FormBinding -.-> |references| Form & FormField
+  Form ==> Watcher
+  FormField & Form  ==> Validator
+  Form -.-> |uses| StandardNestedFetcher
+  Form --> |delegates| Submission["Submission<br>(internal)"]
+end
+
+subgraph react package
+  Hooks --> |updates| Form
+
+  Bindings -.-> |implements| FormBinding
+  Bindings ==> Form & FormField
+end

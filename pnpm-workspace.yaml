@@ -28,6 +28,10 @@ catalog:
   # either: a second Vite major means a second Vitest build, pnpm links the
   # shared jest-dom to it, and packages/react loses jest-dom's matchers from
   # its type checks (#152).
+  #
+  # apps/site is the one exception, and only because it names neither: Astro depends on Vite 8
+  # directly rather than as a peer, so that copy stays Astro's own and no second Vitest is built.
+  # Keep vite, vitest, @vitest/* and @testing-library/* out of apps/site/package.json, catalog or not.
   vite: ^7.3.6
   vitest: ^5.0.0
 

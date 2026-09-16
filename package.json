@@ -16,6 +16,7 @@
     "dev": "turbo watch build --filter=./packages/*",
     "build": "turbo run build --filter=./packages/*",
     "build:apps:example": "turbo run build --filter=./apps/example",
+    "build:apps:site": "turbo run build --filter=./apps/site",
     "doc": "typedoc",
     "test": "turbo run test",
     "lint": "biome check && pnpm lint:plugins",

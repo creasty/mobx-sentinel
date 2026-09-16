@@ -1,0 +1,317 @@
+import * as td from "typedoc";
+import { MemberRouter } from "typedoc-plugin-markdown";
+
+const ts = td.TypeScript;
+
+/**
+ * @param {td.Application} app
+ */
+export function load(app) {
+  // Before the merge below, and after CommentPlugin (priority 0) so hidden reflections are already gone.
+  app.converter.on(td.Converter.EVENT_RESOLVE_BEGIN, promoteIndexModule, -50);
+  // Skippable so check-api.mjs can convert once with the merge and once without, and diff the two.
+  if (!process.env.NO_MERGE_PLUGIN) {
+    // After CommentPlugin (priority 0) has removed @ignore/@internal reflections, so they are never resurrected,
+    // and before GroupPlugin (RESOLVE_END) builds groups, so they are computed over the merged tree.
+    // typedoc-plugin-markdown only renders a type alias's children when that type alias has groups.
+    app.converter.on(td.Converter.EVENT_RESOLVE_BEGIN, mergeDeclarationMerges, -100);
+  }
+  app.converter.on(td.Converter.EVENT_CREATE_DECLARATION, addDecoratorInfo);
+  // After CommentPlugin (priority 0) has settled which reflection each comment belongs to.
+  app.converter.on(td.Converter.EVENT_RESOLVE_BEGIN, copyDecoratorTagsToSignatures, -50);
+  app.renderer.defineRouter("merged-member", MergedMemberRouter);
+  app.renderer.on(td.PageEvent.END, writeDecoratorTags);
+  // typedoc-plugin-markdown creates its hooks when it loads, and starlight-typedoc always loads it last.
+  app.on(td.Application.EVENT_BOOTSTRAP_END, () => {
+    // Absent when only converting, as check-api.mjs does.
+    app.renderer.markdownHooks?.on("page.begin", renderSkippedMembers);
+  });
+}
+
+/**
+ * Render what typedoc-plugin-markdown leaves out but TypeDoc's HTML theme shows, by extending two of the page's
+ * partials before anything on it renders. Extending the partials rather than appending to the page is what covers
+ * members rendered inline on another declaration's page, like `InputBinding.Config` on `InputBinding`'s.
+ *
+ * - Properties of a function built with `Object.assign`, such as `nested.hoist` and `watch.ref`. The theme renders only
+ *   a function's signatures.
+ * - The members of a union inside an intersection, as in `InputBinding.Config`
+ *   (`object & { ...shared } & ({ valueAs?: "string" } | { valueAs: "number" } | ...)`). The theme expands the
+ *   object parts of an intersection and the members of a top-level union, but not a union nested in an intersection,
+ *   so each variant's `getter`, `setter` and `valueAs` would lose their descriptions and decorator tags.
+ *
+ * If a later typedoc-plugin-markdown renders either of these itself, they will show twice.
+ *
+ * @param {import("typedoc-plugin-markdown").MarkdownThemeContext} context
+ */
+function renderSkippedMembers(context) {
+  const { partials } = context;
+  const { member, declaration } = partials;
+
+  partials.member = (model, options) => {
+    const md = member(model, options);
+    if (!model.kindOf(td.ReflectionKind.Function) || !model.children?.length) return md;
+    return [
+      md,
+      `${"#".repeat(options.headingLevel + 1)} ${td.ReflectionKind.pluralString(td.ReflectionKind.Property)}`,
+      ...model.children.map((child) => partials.memberContainer(child, { headingLevel: options.headingLevel + 2 })),
+    ].join("\n\n");
+  };
+
+  partials.declaration = (model, options = { headingLevel: 2 }) => {
+    const md = declaration(model, options);
+    if (!(model.type instanceof td.IntersectionType)) return md;
+    const unions = model.type.types.filter(
+      (type) => type instanceof td.UnionType && type.types.some((variant) => variant instanceof td.ReflectionType)
+    );
+    return [
+      md,
+      ...unions.flatMap((union) => [
+        `${"#".repeat(options.headingLevel)} ${td.i18n.theme_union_members()}`,
+        // The partial reads the union from `model.type`; everything else it needs comes from the model itself.
+        partials.typeDeclarationUnionContainer(Object.create(model, { type: { value: union } }), options),
+      ]),
+    ].join("\n\n");
+  };
+
+  // A hook's return value is inserted into the page; this one only extends the partials.
+  return "";
+}
+
+/**
+ * typedoc-plugin-markdown's default router, changed to render a merged namespace's members on the page of the
+ * declaration they were merged into, rather than on pages of their own.
+ *
+ * MemberRouter gives a page to every class, interface, type alias, function and variable. Before the merge, none of
+ * those sat inside a class, interface or type alias, so it never had to place such a page, and it cannot: it would put
+ * `KeyPath`'s functions at the output root, as `KeyPath/functions/`. Giving them anchors on the parent's page instead
+ * also makes the theme render them in full there, the way it renders properties and methods, since it lists a group
+ * as links only when every member of the group has a page of its own.
+ */
+class MergedMemberRouter extends MemberRouter {
+  /**
+   * @param {td.Reflection} reflection
+   * @param {td.PageDefinition[]} outPages
+   */
+  buildChildPages(reflection, outPages) {
+    const { parent } = reflection;
+    if (parent instanceof td.DeclarationReflection && !parent.kindOf(td.ReflectionKind.SomeModule)) {
+      this.buildAnchors(reflection, parent);
+      return;
+    }
+    super.buildChildPages(reflection, outPages);
+  }
+}
+
+/**
+ * Fold a package's `index` module into the package itself.
+ *
+ * A package with one entry point has its exports directly on the package; one with several (react: `index.ts` and
+ * `extension.ts`) gets a module per entry point instead. The one named `index` can never have a URL of its own, since
+ * Astro drops `index` path segments, and it is the package's main export anyway, which is what `import ... from
+ * "@mobx-sentinel/react"` resolves to. This is the same merge TypeDoc performs for `@mergeModuleWith <project>`.
+ *
+ * Runs once per package, while each is converted as its own project.
+ *
+ * @param {td.Context} context
+ */
+function promoteIndexModule(context) {
+  const { project } = context;
+  const modules = project.children?.filter((child) => child.kindOf(td.ReflectionKind.Module)) ?? [];
+  const index = modules.find((module) => module.name === "index");
+  if (modules.length < 2 || !index) return;
+  project.mergeReflections(index, project);
+}
+
+/**
+ * Survivor preference when a merged symbol has more than one non-namespace declaration.
+ * Every merge in this repository has exactly one; the order only keeps the result deterministic.
+ */
+const survivorKinds = [
+  td.ReflectionKind.Class,
+  td.ReflectionKind.Interface,
+  td.ReflectionKind.Enum,
+  td.ReflectionKind.TypeAlias,
+  td.ReflectionKind.Function,
+  td.ReflectionKind.Variable,
+];
+
+/**
+ * Fold every namespace into the class, interface or type alias it is declaration-merged with, so the two render as
+ * one page instead of two.
+ *
+ * The namespace is always the one removed: in type position, TypeDoc resolves a reference to a merged symbol by
+ * preferring the class/interface/type-alias reflection, so removing that side would strand every signature that
+ * mentions it.
+ *
+ * @param {td.Context} context
+ */
+function mergeDeclarationMerges(context) {
+  visit(context, context.project);
+}
+
+/**
+ * @param {td.Context} context
+ * @param {td.ContainerReflection} container
+ */
+function visit(context, container) {
+  // Depth-first, so a nested namespace merges before its container is merged away.
+  for (const child of container.children?.slice() ?? []) {
+    if (child.children) visit(context, child);
+  }
+  mergeChildrenOf(context, container);
+}
+
+/**
+ * @param {td.Context} context
+ * @param {td.ContainerReflection} container
+ */
+function mergeChildrenOf(context, container) {
+  /** @type Map<unknown, td.DeclarationReflection[]> */
+  const buckets = new Map();
+  for (const child of container.children ?? []) {
+    // A declaration merge is one ts.Symbol with several declarations. The name is only a fallback for reflections
+    // TypeDoc synthesized without a symbol.
+    const key = context.getSymbolFromReflection(child) ?? child.name;
+    const bucket = buckets.get(key);
+    if (bucket) {
+      bucket.push(child);
+    } else {
+      buckets.set(key, [child]);
+    }
+  }
+
+  for (const bucket of buckets.values()) {
+    if (bucket.length < 2) continue;
+
+    // Only merges that involve exactly one namespace. KeyPath.Self is a type alias and a const sharing a symbol,
+    // with no namespace in it; merging a type and a value would mean reconciling two populated `type` fields.
+    const namespaces = bucket.filter((r) => r.kindOf(td.ReflectionKind.Namespace));
+    if (namespaces.length !== 1) continue;
+    const [namespace] = namespaces;
+
+    const candidates = bucket.filter((r) => r !== namespace);
+    const survivor = survivorKinds.map((kind) => candidates.find((r) => r.kindOf(kind))).find(Boolean);
+    if (!survivor) continue;
+    if (candidates.length > 1) {
+      context.logger.verbose(
+        `Merging namespace ${namespace.getFullName()} into one of ${candidates.length} declarations`
+      );
+    }
+
+    if (!survivor.comment && namespace.comment) {
+      survivor.comment = namespace.comment;
+    }
+    if (namespace.sources?.length) {
+      survivor.sources = [...(survivor.sources ?? []), ...namespace.sources];
+    }
+    // TypeDoc's own primitive, also used by its @mergeModuleWith support. It reparents the children and keeps the
+    // symbol and reference maps consistent; moving children by hand would leave ReferenceType targets dangling.
+    context.project.mergeReflections(namespace, survivor);
+  }
+}
+
+export const decoratorTags = new Set(["@action", "@action.bound", "@computed"]);
+
+/**
+ * How a decorator tag appears on a rendered page: the way the source spells it, in a span for custom.css.
+ *
+ * @param {string} tag
+ */
+export const decoratorTagHtml = (tag) => `<span class="api-tag">${tag}</span>`;
+
+/**
+ * Each decorator tag as typedoc-plugin-markdown writes it, which renders a modifier tag as **`Action`**, uppercasing the
+ * first letter, mapped to its replacement.
+ */
+const renderedDecoratorTags = new Map(
+  [...decoratorTags].map((tag) => [`**\`${tag[1].toUpperCase()}${tag.slice(2)}\`**`, decoratorTagHtml(tag)])
+);
+
+/**
+ * Rewrite the decorator tags on a rendered page. Done here rather than in Astro's Markdown pipeline, whose rehype
+ * plugins only run on the unified processor Astro 7 no longer uses by default.
+ *
+ * @param {td.PageEvent} page
+ */
+function writeDecoratorTags(page) {
+  if (!page.contents) return;
+  for (const [markdown, html] of renderedDecoratorTags) {
+    page.contents = page.contents.replaceAll(markdown, html);
+  }
+}
+
+/**
+ * Put the decorator tags `addDecoratorInfo` added to a method onto its signatures too.
+ *
+ * A method's doc comment belongs to its signature, and typedoc-plugin-markdown renders a signature's comment, falling
+ * back to the method's own only when the signature has none. So every documented `@action` method would lose its tag,
+ * although TypeDoc's HTML theme shows it. Accessors and properties are unaffected.
+ *
+ * @param {td.Context} context
+ */
+function copyDecoratorTagsToSignatures(context) {
+  for (const reflection of Object.values(context.project.reflections)) {
+    if (!reflection.isDeclaration() || !reflection.signatures) continue;
+    const tags = [...(reflection.comment?.modifierTags ?? [])].filter((tag) => decoratorTags.has(tag));
+    if (tags.length === 0) continue;
+
+    for (const signature of reflection.signatures) {
+      // A lone undocumented signature already renders the method's comment, tags and all.
+      if (!signature.comment && reflection.signatures.length === 1) continue;
+      signature.comment ??= new td.Comment();
+      for (const tag of tags) {
+        signature.comment.modifierTags.add(tag);
+      }
+    }
+  }
+}
+
+/**
+ * @param {td.Context} context
+ * @param {td.DeclarationReflection} decl
+ *
+ * @see https://github.com/TypeStrong/typedoc/issues/2346
+ */
+function addDecoratorInfo(context, decl) {
+  const symbol = context.getSymbolFromReflection(decl);
+  if (!symbol) return;
+
+  const declaration = symbol.valueDeclaration;
+  if (!declaration) return;
+  if (
+    !ts.isPropertyDeclaration(declaration) &&
+    !ts.isMethodDeclaration(declaration) &&
+    !ts.isGetAccessorDeclaration(declaration)
+  ) {
+    return;
+  }
+
+  const decorators = declaration.modifiers?.filter(ts.isDecorator);
+  for (const decorator of decorators ?? []) {
+    const expr = decorator.getText().split("(", 1)[0];
+    const modifierTags = [];
+    switch (expr) {
+      case "@action":
+      case "@action.bound": {
+        modifierTags.push(expr);
+        break;
+      }
+      case "@computed":
+      case "@computed.struct": {
+        modifierTags.push("@computed");
+        break;
+      }
+      default: {
+        console.warn("Unknown decorator:", expr);
+        break;
+      }
+    }
+    if (modifierTags.length > 0) {
+      decl.comment ??= new td.Comment();
+      for (const tag of modifierTags) {
+        decl.comment.modifierTags.add(tag);
+      }
+    }
+  }
+}

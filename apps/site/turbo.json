@@ -1,0 +1,12 @@
+{
+  "$schema": "https://turbo.build/schema.json",
+  "extends": ["//"],
+  "tasks": {
+    "build": {
+      // TypeDoc reads the packages' src, but resolves types across packages through their dist. The site imports none
+      // of them, so `^build` would not order their builds first.
+      "dependsOn": ["@mobx-sentinel/core#build", "@mobx-sentinel/form#build", "@mobx-sentinel/react#build"],
+      "outputs": ["dist/**", "src/content/docs/apis/**"]
+    }
+  }
+}

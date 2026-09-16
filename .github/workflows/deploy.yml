@@ -32,6 +32,12 @@ jobs:
             project: mobx-sentinel-example
             build: pnpm --filter example build
             output: apps/example/dist
+          # check:api fails the leg, and so the deploy, when the API reference loses what
+          # apps/site/src/typedoc/plugin.mjs adds to it.
+          - name: site
+            project: mobx-sentinel-site
+            build: pnpm --filter site build && pnpm --filter site check:api
+            output: apps/site/dist
     steps:
       - uses: actions/checkout@v7
       - uses: pnpm/action-setup@v6
@@ -44,7 +50,8 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
 
-      # Both artifacts are built off the packages' dist, so build them first.
+      # Every artifact is built off the packages' dist, so build them first. The site's API reference
+      # needs it too: TypeDoc resolves one package's types in another through dist/*.d.ts.
       - run: pnpm build
       - run: ${{ matrix.build }}
 

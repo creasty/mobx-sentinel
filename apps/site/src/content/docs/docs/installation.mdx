@@ -1,0 +1,65 @@
+---
+title: "Installation"
+description: "Install the mobx-sentinel packages you need."
+sidebar:
+  order: 2
+---
+
+import { PackageManagers } from "starlight-package-managers";
+
+mobx-sentinel is three packages. Each builds on the one before it, so install only as far as you need.
+
+## `@mobx-sentinel/core`
+
+Core functionality like Watcher and Validator. Runs on Node.js and in the browser.
+
+<PackageManagers pkg="@mobx-sentinel/core" />
+
+- `@nested` annotation for tracking nested models.
+  - `@nested` annotation supports objects, boxed observables, arrays, sets, and maps.
+  - `@nested.hoist` annotation can be used to hoist sub-fields in a nested model to the parent model.
+  - `StandardNestedFetcher` (low-level API) provides a simple but powerful mechanism for tracking and retrieving nested models. Allowing other modules (even your own code) to integrate nested models into their logic without hassle.
+- `Watcher` detects changes in models automatically.
+  - All `@observable` and `@computed` annotations are automatically watched by default.
+  - `@watch` annotation can be used where `@observable` is not applicable, e.g., on private fields: `@watch #private = observable.box(0)`
+  - `@watch.ref` annotation can be used to watch values with identity comparison, in contrast to the default behavior which uses shallow comparison.
+  - `@unwatch` annotation and `unwatch(() => ...)` function disable change detection when you need to modify values silently.
+- `Validator` and `makeValidatable` provides reactive model validation.
+  - Composable from multiple sources.
+  - Both sync and async validations are supported.
+  - Async validations feature smart job scheduling and are cancellable with [AbortSignal](https://developer.mozilla.org/en-US/docs/Web/API/AbortSignal).
+
+[Read more about core](/docs/core/)
+
+## `@mobx-sentinel/form`
+
+Form and bindings. Runs on Node.js and in the browser.
+
+<PackageManagers pkg="@mobx-sentinel/form" />
+
+- Asynchronous submission
+  - Composable from multiple sources.
+  - Cancellable with [AbortSignal](https://developer.mozilla.org/en-US/docs/Web/API/AbortSignal).
+- Nested and dynamic (array) forms
+  - Works by mutating models directly.
+  - Forms are created independently; they don't need to be aware of each other.
+- Custom bindings
+  - Flexible and easy-to-create.
+  - Most cases can be implemented in less than 50 lines.
+- [Smart error reporting](/docs/form/error-reporting/)
+  - Validation is always up to date; reporting decides when users see the errors.
+  - Errors wait until the user leaves a field or pauses typing, then follow every fix.
+  - Fields and sub-forms that appear later start clean, even after the whole form has been reported.
+
+[Read more about form](/docs/form/)
+
+## `@mobx-sentinel/react`
+
+Standard bindings and hooks for React. Runs in the browser.
+
+<PackageManagers pkg="@mobx-sentinel/react" />
+
+- React hooks that automatically handle component lifecycle under the hood.
+- Standard bindings for most common form elements.
+
+[Read more about react](/docs/react/)
