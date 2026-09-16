@@ -226,7 +226,7 @@ Follow these patterns when creating bindings:
 1. Overriding/extending props
     - Accept props as optional (`id?: string`)
     - Use user-specified values in conjunction with default behavior:
-      - Override with fallback: `this.config.id ?? this.field.stableId` (`stableId`, not `id` -- see [Element IDs](/docs/form/error-reporting/#element-ids))
+      - Override with fallback: `this.config.id ?? this.field.stableId` (`stableId`, not `id` -- see [Element IDs](/docs/form/bindings/#element-ids))
       - Extend with combination: `this.config.disabled || this.disabled`
 1. Normalizing problematic values
     - Provide sensible defaults for null/undefined values (e.g., `?? ""` for strings)

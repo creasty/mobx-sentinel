@@ -1,6 +1,6 @@
 ---
 title: "Smart Error Reporting"
-description: "When users see validation errors, the element ids that connect fields to labels and messages, and how to adjust it."
+description: "When users see validation errors, and how to adjust it."
 sidebar:
   order: 4
 ---
@@ -73,32 +73,6 @@ So when a field becomes reported, `field.isErrorReported` stays `undefined` unti
 ## Accessibility
 
 `field.isErrorReported` is `undefined` until the field is reported, and `true` or `false` afterwards, which maps directly onto `aria-invalid`: the attribute is omitted until the field is reported. The standard bindings pass it through as is, so assistive technologies learn about an error at the same moment sighted users see it.
-
-## Element IDs
-
-A label and its control find each other through an id, so every field carries one: `field.stableId`, which the standard bindings put in `id`, `htmlFor`, and a radio group's `name`. The form has one too, `form.stableId`.
-
-A form's stable id starts as its own identity, `form.id`, and until it is assigned another, each field's is its own identity too, `field.id`: unique on the page, but different in every process. That is all a client-rendered app needs.
-
-Server-side rendering needs more, because the markup is built in one process and hydrated in another. Assign the form a stable id that both arrive at, and its fields' stable ids build on it:
-
-```ts
-form.stableId = `invoice-form-${invoice.id}`;
-form.getField('customerEmail').stableId; // "invoice-form-42:customerEmail"
-```
-
-| | Until assigned | After `form.stableId = id` |
-| --- | --- | --- |
-| `form.stableId` | `form.id` | `<id>` |
-| `field.stableId` | `field.id` | `<id>:<field name>` |
-
-For anything that reaches the DOM, use `stableId` rather than `id`, so it keeps matching once the form's stable id is assigned.
-
-The id is used as is, so nothing else on the page may use it. In React, `useFormSSR` from `@mobx-sentinel/react` assigns `useId()`, which guarantees that: no other call returns the same value, so nothing in the model has to be involved. It gives the form its own id back when the component unmounts. A key from your own data works too, as long as it is unique on the page. Assign it before binding: bindings read the stable id as they are called, and it is not reactive.
-
-A sub-form is a separate instance with its own stable id. Assign it where the sub-form is rendered, so no component has to know what its ancestors did.
-
-A field's stable id contains `:`, which is fine for `htmlFor`, `aria-*` attributes and `document.getElementById()`. In a CSS selector, escape it with `CSS.escape()`.
 
 ## Adjusting the Behavior
 

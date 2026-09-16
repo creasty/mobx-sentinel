@@ -36,7 +36,7 @@ form.bind("username", InputBinding, config)
 
 All bindings provide built-in accessibility features:
 
-- **Unique IDs** — Automatically generates unique `id` attributes for form elements, enabling proper label associations by `htmlFor`
+- **Unique IDs** — Automatically generates unique `id` attributes for form elements, enabling proper label associations by `htmlFor` (see [Element IDs](/docs/form/bindings/#element-ids))
 - **Error states** — Sets `aria-invalid` once a field's errors are reported (see [Smart Error Reporting](/docs/form/error-reporting/))
 - **Error messages** — Provides `aria-errormessage` linking to error text for screen readers
 
