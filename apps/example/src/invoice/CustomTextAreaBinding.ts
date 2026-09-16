@@ -76,7 +76,7 @@ export class CustomTextAreaBinding implements FormBinding {
 
   get props() {
     return {
-      id: this.config.id ?? this.field.id,
+      id: this.config.id ?? this.field.stableId,
       value: this.value,
       rows: this.rows,
       placeholder: this.config.placeholder,

@@ -67,7 +67,7 @@ export class RadioButtonBinding implements FormBinding {
       /**
        * [Override] ID of the input element.
        *
-       * - `true`: Use the field ID as the ID.
+       * - `true`: Use the field's stable ID as the ID.
        * - `false`: No ID.
        * - `string`: Use the given string as the ID.
        */
@@ -78,9 +78,9 @@ export class RadioButtonBinding implements FormBinding {
   ) => {
     return {
       type: "radio",
-      id: opt?.id === true ? this.field.id : opt?.id ? opt?.id : undefined,
+      id: opt?.id === true ? this.field.stableId : opt?.id ? opt?.id : undefined,
       value: value ?? "",
-      name: opt?.name ?? this.field.id,
+      name: opt?.name ?? this.field.stableId,
       checked: this.value === value,
       onChange: this.onChange,
       onFocus: this.onFocus,

@@ -180,6 +180,90 @@ describe("FormField", () => {
     });
   });
 
+  describe("#stableId", () => {
+    it("is the field's own id until the form's stable id is set", () => {
+      const form = Form.get(new SampleModel());
+      const field = form.getField("test");
+
+      expect(field.stableId).toBe(field.id);
+    });
+
+    it("joins the form's stable id and the field name with a colon once it is set", () => {
+      const form = Form.get(new SampleModel());
+      form.stableId = "_R_0_";
+
+      expect(form.getField("test").stableId).toBe(`${form.stableId}:test`);
+      expect(form.getField("test").stableId).toBe("_R_0_:test");
+      expect(form.getField("other").stableId).toBe("_R_0_:other");
+    });
+
+    it("keeps augmented field names whole", () => {
+      const form = Form.get(new SampleModel());
+      form.stableId = "_R_0_";
+
+      expect(form.getField("test:hint").stableId).toBe("_R_0_:test:hint");
+    });
+
+    it("reads the form on access, so a field created before the form's stable id is set still picks it up", () => {
+      const form = Form.get(new SampleModel());
+      // The order a form instantiated in a view-model sees: fields first, the stable id set once React renders
+      const field = form.getField("test");
+      expect(field.stableId).toBe(field.id);
+
+      form.stableId = "_R_0_";
+      expect(field.stableId).toBe("_R_0_:test");
+
+      form.stableId = "_R_1_";
+      expect(field.stableId).toBe("_R_1_:test");
+    });
+
+    it("stays distinct between forms sharing a field name, set or not", () => {
+      const form1 = Form.get(new SampleModel());
+      const form2 = Form.get(new SampleModel());
+      expect(form1.getField("test").stableId).not.toBe(form2.getField("test").stableId);
+
+      form1.stableId = "_R_0_";
+      form2.stableId = "_R_1_";
+      expect(form1.getField("test").stableId).not.toBe(form2.getField("test").stableId);
+    });
+
+    it("is reproducible across instances assigned the same id, unlike #id", () => {
+      // What hydration needs: two processes, two model instances, the same rendered id
+      const server = Form.get(new SampleModel());
+      const client = Form.get(new SampleModel());
+      server.stableId = "_R_0_";
+      client.stableId = "_R_0_";
+
+      expect(client.getField("test").stableId).toBe(server.getField("test").stableId);
+      expect(client.getField("test").id).not.toBe(server.getField("test").id);
+    });
+
+    it("is the field's own id when constructed without a form", () => {
+      const { validator } = setupEnv();
+      const field = new FormField({ fieldName: "test", validator, getFinalizationDelayMs: () => 100 });
+
+      expect(field.stableId).toBe(field.id);
+    });
+
+    it("asks for the form's stable id on every read", () => {
+      const { validator } = setupEnv();
+      let formStableId: string | null = null;
+      const getFormStableIdIfSet = vi.fn(() => formStableId);
+      const field = new FormField({
+        fieldName: "test",
+        validator,
+        getFinalizationDelayMs: () => 100,
+        getFormStableIdIfSet,
+      });
+      expect(getFormStableIdIfSet).toBeCalledTimes(0);
+
+      expect(field.stableId).toBe(field.id);
+      formStableId = "x";
+      expect(field.stableId).toBe("x:test");
+      expect(getFormStableIdIfSet).toBeCalledTimes(2);
+    });
+  });
+
   describe("#errors", () => {
     it("returns an empty set if there are no errors at all", () => {
       const { field } = setupEnv();
@@ -1425,6 +1509,7 @@ describe("FormField", () => {
     it("exposes typed state accessors", () => {
       const { field } = setupEnv();
       expectTypeOf(field.id).toEqualTypeOf<string>();
+      expectTypeOf(field.stableId).toEqualTypeOf<string>();
       expectTypeOf(field.fieldName).toEqualTypeOf<string>();
       expectTypeOf(field.validator).toEqualTypeOf<Validator<any>>();
       expectTypeOf(field.isTouched).toEqualTypeOf<boolean>();
@@ -1438,6 +1523,7 @@ describe("FormField", () => {
     it("makes the identity and state properties read-only", () => {
       type StateKeys =
         | "id"
+        | "stableId"
         | "fieldName"
         | "validator"
         | "isTouched"
@@ -1448,6 +1534,7 @@ describe("FormField", () => {
         | "hasErrors";
       expectTypeOf<Pick<FormField, StateKeys>>().toEqualTypeOf<{
         readonly id: string;
+        readonly stableId: string;
         readonly fieldName: string;
         readonly validator: Validator<any>;
         readonly isTouched: boolean;
@@ -1463,7 +1550,14 @@ describe("FormField", () => {
 
     it("types the constructor arguments", () => {
       expectTypeOf(FormField).constructorParameters.toEqualTypeOf<
-        [args: { fieldName: string; validator: Validator<any>; getFinalizationDelayMs: () => number }]
+        [
+          args: {
+            fieldName: string;
+            validator: Validator<any>;
+            getFinalizationDelayMs: () => number;
+            getFormStableIdIfSet?: () => string | null;
+          },
+        ]
       >();
     });
 

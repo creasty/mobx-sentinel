@@ -22,7 +22,31 @@ const internalToken = Symbol("form.internalToken");
  * - Integrates with Validator for validation
  */
 export class Form<T> {
+  /**
+   * Identity of the form instance
+   *
+   * @remarks
+   * Unique per instance and fixed for its lifetime, but not reproducible:
+   * a server render and the client render that hydrates it produce different values.
+   * For an id that reaches the DOM, use {@link stableId} instead.
+   */
   readonly id = uuidV4();
+  /**
+   * Id of the form for the DOM, which the {@link FormField.stableId} of its fields build on
+   *
+   * @remarks
+   * Starts as {@link id}: unique on the page, but different between a server render and the
+   * client render that hydrates it. For a server-rendered form, assign an id that both arrive at.
+   * It is used as is, so nothing else on the page may use it. `useId()`, by way of `useFormSSR`
+   * from `@mobx-sentinel/react`, is both; a key from your own data works as long as it is unique
+   * on the page.
+   *
+   * Not reactive: bindings read it as they are called, so assign it before binding, and on every
+   * render if it can change. Assigning {@link id} back leaves the fields on their own ids again.
+   *
+   * Applies to this form alone. A sub-form is a separate instance with its own.
+   */
+  stableId = this.id;
   readonly #formKey: symbol;
   readonly watcher: Watcher;
   readonly validator: Validator<T>;
@@ -334,6 +358,7 @@ export class Form<T> {
         fieldName: String(fieldName),
         validator: this.validator,
         getFinalizationDelayMs: () => this.config.autoFinalizationDelayMs,
+        getFormStableIdIfSet: () => (this.stableId === this.id ? null : this.stableId),
       });
       this.#fields.set(fieldName, field);
     }
