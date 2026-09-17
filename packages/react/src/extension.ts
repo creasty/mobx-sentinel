@@ -1,7 +1,7 @@
-import { Form, FormBindingFuncExtension } from "@mobx-sentinel/form";
+import { Form, FormBindingFuncExtension, FormField } from "@mobx-sentinel/form";
 import { CheckBoxBinding } from "./CheckBoxBinding";
 import { InputBinding } from "./InputBinding";
-import { RadioButtonBinding } from "./RadioButtonBinding";
+import { RadioGroupBinding } from "./RadioGroupBinding";
 import { SelectBoxBinding } from "./SelectBoxBinding";
 import { SubmitButtonBinding } from "./SubmitButtonBinding";
 import { LabelBinding } from "./LabelBinding";
@@ -19,7 +19,7 @@ export interface StandardExtensions<T> {
    * Bind the input field to the form.
    *
    * `<input>` except the following types: button, submit, reset, hidden, image, file, checkbox, and radio.
-   * For checkbox and radio, use bindCheckBox and bindRadioButton respectively, and for `<textarea>`, use bindTextArea.
+   * For checkbox and radio, use bindCheckBox and bindRadioGroup respectively, and for `<textarea>`, use bindTextArea.
    *
    * @example
    * ```tsx
@@ -91,13 +91,16 @@ export interface StandardExtensions<T> {
   bindCheckBox: FormBindingFuncExtension.ForField.RequiredConfig<T, typeof CheckBoxBinding>;
 
   /**
-   * Bind the radio button field to the form.
+   * Bind the radio group field to the form.
+   *
+   * The type of the options is inferred from the getter, and the setter receives the option of the selected button.
+   * It returns a function that takes an option and returns the props of its radio button.
    *
    * @example
    * ```typescript
-   * const bind = form.bindRadioButton("enum", {
+   * const bind = form.bindRadioGroup("enum", {
    *   getter: () => model.enum,
-   *   setter: (v) => (model.enum = v as SampleEnum),
+   *   setter: (v) => (model.enum = v),
    * });
    * ```
    * ```tsx
@@ -105,8 +108,22 @@ export interface StandardExtensions<T> {
    *   <input key={value} {...bind(value)} />
    * ))
    * ```
+   * Or with `renderRadioGroup` from `@mobx-sentinel/react`:
+   * ```tsx
+   * renderRadioGroup({
+   *   binding: form.bindRadioGroup("enum", {
+   *     getter: () => model.enum,
+   *     setter: (v) => (model.enum = v),
+   *   }),
+   *   options: Object.values(SampleEnum),
+   *   renderOption: (value, bind) => <input {...bind()} />,
+   * })
+   * ```
    */
-  bindRadioButton: FormBindingFuncExtension.ForField.RequiredConfig<T, typeof RadioButtonBinding>;
+  bindRadioGroup: <V extends RadioGroupBinding.Option>(
+    fieldName: FormField.Name<T>,
+    config: RadioGroupBinding.Config<V> & FormBindingFuncExtension.Config
+  ) => RadioGroupBinding<V>["props"];
 
   /**
    * Bind the submit button to the form.
@@ -136,7 +153,7 @@ declare module "@mobx-sentinel/form" {
     bindTextArea: StandardExtensions<T>["bindTextArea"];
     bindSelectBox: StandardExtensions<T>["bindSelectBox"];
     bindCheckBox: StandardExtensions<T>["bindCheckBox"];
-    bindRadioButton: StandardExtensions<T>["bindRadioButton"];
+    bindRadioGroup: StandardExtensions<T>["bindRadioGroup"];
     bindSubmitButton: StandardExtensions<T>["bindSubmitButton"];
     bindLabel: StandardExtensions<T>["bindLabel"];
   }
@@ -161,8 +178,10 @@ Form.prototype.bindCheckBox = function (fieldName, config) {
   return this.bind(fieldName, CheckBoxBinding, config);
 };
 
-Form.prototype.bindRadioButton = function (fieldName, config) {
-  return this.bind(fieldName, RadioButtonBinding, config);
+Form.prototype.bindRadioGroup = function (fieldName, config) {
+  // Form#bind only knows the config of RadioGroupBinding with its options widened to RadioGroupBinding.Option,
+  // which a setter for a narrower type of options doesn't fit
+  return this.bind(fieldName, RadioGroupBinding, config as RadioGroupBinding.Config<any>);
 };
 
 Form.prototype.bindSubmitButton = function (config) {

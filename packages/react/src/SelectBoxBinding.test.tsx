@@ -160,7 +160,7 @@ describe("SelectBoxBinding", () => {
     it("keeps an empty string id as is", () => {
       const env = setupEnv();
       env.binding.config.id = "";
-      // PINNED(quirk): an empty-string id is passed through (`??` only falls back on null/undefined), producing an empty id attribute, whereas RadioButtonBinding treats `id: ""` as no id. Decide: should an empty id fall back to the field id?
+      // PINNED(quirk): an empty-string id is passed through (`??` only falls back on null/undefined), producing an empty id attribute, whereas RadioGroupBinding treats `id: ""` as no id. Decide: should an empty id fall back to the field id?
       expect(env.binding.props.id).toBe("");
     });
   });
