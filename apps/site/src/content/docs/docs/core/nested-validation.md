@@ -48,7 +48,7 @@ runInAction(() => {
   parent.items[0].email = "bad";
 });
 
-await when(() => !validator.isValidating);
+await validator.waitForValidation();
 
 validator.isValid // false - because nested errors exist
 
@@ -101,7 +101,7 @@ runInAction(() => {
   model.endDate = new Date("2024-01-01");
 });
 
-await when(() => !validator.isValidating);
+await validator.waitForValidation();
 
 // Self errors appear under KeyPath.Self
 validator.getErrorMessages(KeyPath.Self) // Set(["Start date must be before end date"])

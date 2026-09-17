@@ -1,4 +1,14 @@
-import { action, comparer, computed, IEqualsComparer, makeObservable, observable, reaction, runInAction } from "mobx";
+import {
+  action,
+  comparer,
+  computed,
+  IEqualsComparer,
+  makeObservable,
+  observable,
+  reaction,
+  runInAction,
+  when,
+} from "mobx";
 import { randomId } from "./randomId";
 import { ValidationError, type ValidationErrorMapBuilder, ValidationErrorMapBuilderImpl } from "./error";
 import { StandardNestedFetcher } from "./nested";
@@ -318,6 +328,44 @@ export class Validator<T> {
       }
     }
     return false;
+  }
+
+  /**
+   * Wait for the validation to complete
+   *
+   * A shorthand for:
+   * ```typescript
+   * await when(() => !validator.isValidating);
+   * ```
+   *
+   * @param opt.signal Abort signal to stop waiting
+   *
+   * @returns A promise that resolves once {@link isValidating} is `false`,
+   *   or rejects with the reason of the signal if it is aborted first
+   *
+   * @remarks
+   * - Resolves right away if nothing is being validated
+   * - Waits for nested validators as well, as {@link isValidating} includes them
+   * - Deadlocks when awaited in an async handler of this validator or of a nested one:
+   *   the handler is part of the validation it waits for
+   */
+  async waitForValidation(opt?: { signal?: AbortSignal }): Promise<void> {
+    const signal = opt?.signal;
+    if (signal?.aborted) throw signal.reason;
+
+    // The signal is not passed to when(): it leaves its listener on the signal after resolving,
+    // which would keep this validator alive as long as the signal
+    const settled = when(() => !this.isValidating);
+    const cancel = () => settled.cancel();
+    signal?.addEventListener("abort", cancel);
+    try {
+      await settled;
+    } catch (e) {
+      cancel(); // Stop observing: when() keeps its reaction after isValidating throws
+      throw signal?.aborted ? signal.reason : e;
+    } finally {
+      signal?.removeEventListener("abort", cancel);
+    }
   }
 
   /** Nested validators */

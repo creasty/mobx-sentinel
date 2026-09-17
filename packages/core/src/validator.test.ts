@@ -1,4 +1,5 @@
-import { autorun, IEqualsComparer, makeObservable, observable, runInAction } from "mobx";
+import { getEventListeners } from "node:events";
+import { autorun, getObserverTree, IEqualsComparer, makeObservable, observable, runInAction } from "mobx";
 import { Validator, makeValidatable } from "./validator";
 import { nested } from "./nested";
 import { KeyPath } from "./keyPath";
@@ -2927,6 +2928,8 @@ describe("Validator: types", () => {
     expectTypeOf(validator.id).toEqualTypeOf<string>();
     expectTypeOf(validator.isValid).toEqualTypeOf<boolean>();
     expectTypeOf(validator.isValidating).toEqualTypeOf<boolean>();
+    expectTypeOf(validator.waitForValidation).parameters.toEqualTypeOf<[opt?: { signal?: AbortSignal }]>();
+    expectTypeOf(validator.waitForValidation).returns.toEqualTypeOf<Promise<void>>();
     expectTypeOf(validator.reactionState).toEqualTypeOf<number>();
     expectTypeOf(validator.asyncState).toEqualTypeOf<number>();
     expectTypeOf(validator.invalidKeys).toEqualTypeOf<ReadonlySet<KeyPath>>();
@@ -3370,5 +3373,235 @@ describe("Validator: async job lifecycle", () => {
     expect(env.runs).toHaveLength(3);
     expect(env.validator.isValid).toBe(true);
     expect(env.validator.isValidating).toBe(false);
+  });
+});
+
+describe("Validator: #waitForValidation", () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  /** Whether anything observes validator.isValidating, such as a pending wait */
+  const isValidatingObserved = (validator: Validator<any>) => !!getObserverTree(validator, "isValidating").observers;
+
+  /** Follow the outcome of a promise without awaiting it */
+  function track(promise: Promise<void>) {
+    const outcome: { status: "pending" | "resolved" | "rejected"; reason?: unknown } = { status: "pending" };
+    promise.then(
+      () => {
+        outcome.status = "resolved";
+      },
+      (reason) => {
+        outcome.status = "rejected";
+        outcome.reason = reason;
+      }
+    );
+    return outcome;
+  }
+
+  it("resolves right away when nothing is being validated", async () => {
+    const { validator } = setupSyncHandler();
+    expect(validator.isValidating).toBe(false);
+
+    const wait = track(validator.waitForValidation());
+    await flushMicrotasks();
+    expect(wait.status).toBe("resolved");
+    expect(isValidatingObserved(validator)).toBe(false);
+  });
+
+  it("waits for a scheduled sync validation and resolves once its errors are applied", async () => {
+    const { model, validator } = setupSyncHandler();
+    runInAction(() => {
+      model.field = -1;
+    });
+
+    let errorsOnResolve: Set<string> | undefined;
+    const wait = track(
+      validator.waitForValidation().then(() => {
+        errorsOnResolve = validator.getErrorMessages("field" as KeyPath);
+      })
+    );
+    expect(isValidatingObserved(validator)).toBe(true);
+
+    await vi.advanceTimersByTimeAsync(99);
+    expect(wait.status).toBe("pending");
+    await vi.advanceTimersByTimeAsync(1);
+    expect(wait.status).toBe("resolved");
+    expect(errorsOnResolve).toEqual(new Set(["negative: -1"]));
+    expect(isValidatingObserved(validator)).toBe(false);
+  });
+
+  it("waits for a running async validation and the follow-up job queued behind it", async () => {
+    const env = setupAsyncHandler({ initialRun: false });
+    runInAction(() => {
+      env.model.field = -1;
+    });
+    const wait = track(env.validator.waitForValidation());
+
+    await vi.advanceTimersByTimeAsync(100);
+    expect(env.runs).toHaveLength(1);
+    runInAction(() => {
+      env.model.field = -2; // Queued behind the running job
+    });
+    await vi.advanceTimersByTimeAsync(100);
+
+    env.runs[0].job.resolve();
+    await flushMicrotasks();
+    expect(env.validator.getErrorMessages("field" as KeyPath)).toEqual(new Set(["negative: -1"]));
+    expect(wait.status).toBe("pending");
+
+    await vi.advanceTimersByTimeAsync(100);
+    expect(env.runs.map((run) => run.payload)).toEqual([-1, -2]);
+    expect(wait.status).toBe("pending");
+
+    env.runs[1].job.resolve();
+    await flushMicrotasks();
+    expect(wait.status).toBe("resolved");
+    expect(env.validator.getErrorMessages("field" as KeyPath)).toEqual(new Set(["negative: -2"]));
+  });
+
+  it("waits for nested validators", async () => {
+    class Leaf {
+      @observable field = 0;
+
+      constructor() {
+        makeObservable(this);
+        makeValidatable(this, (b) => {
+          if (this.field < 0) b.invalidate("field", "negative");
+        });
+      }
+    }
+    class Root {
+      @nested @observable leaf = new Leaf();
+
+      constructor() {
+        makeObservable(this);
+      }
+    }
+    const root = new Root();
+    const validator = Validator.get(root);
+
+    runInAction(() => {
+      root.leaf.field = -1;
+    });
+    expect(validator.reactionState).toBe(0); // Only the nested validator has a pending reaction
+    const wait = track(validator.waitForValidation());
+
+    await vi.advanceTimersByTimeAsync(99);
+    expect(wait.status).toBe("pending");
+    await vi.advanceTimersByTimeAsync(1);
+    expect(wait.status).toBe("resolved");
+    expect(validator.invalidKeyPaths).toEqual(new Set(["leaf.field"]));
+  });
+
+  it.each([
+    { name: "reset()", cancel: (env: ReturnType<typeof setupAsyncHandler>) => env.validator.reset() },
+    { name: "removing the handler", cancel: (env: ReturnType<typeof setupAsyncHandler>) => env.dispose() },
+  ])("resolves when $name cancels the validation", async ({ cancel }) => {
+    const env = setupAsyncHandler({ initialRun: false });
+    runInAction(() => {
+      env.model.field = -1;
+    });
+    await vi.advanceTimersByTimeAsync(100);
+    runInAction(() => {
+      env.model.field = -2; // Pending reaction on top of the running job
+    });
+    expect(env.validator.reactionState).toBe(1);
+    expect(env.validator.asyncState).toBe(1);
+
+    const wait = track(env.validator.waitForValidation());
+    await flushMicrotasks();
+    expect(wait.status).toBe("pending");
+
+    cancel(env);
+    await flushMicrotasks();
+    expect(wait.status).toBe("resolved");
+    expect(env.validator.isValid).toBe(true);
+  });
+
+  describe("with a signal", () => {
+    it("rejects with the reason of the signal when it is aborted while waiting, and stops observing", async () => {
+      const { model, validator } = setupSyncHandler();
+      runInAction(() => {
+        model.field = -1;
+      });
+      const controller = new AbortController();
+      const wait = track(validator.waitForValidation({ signal: controller.signal }));
+      await flushMicrotasks();
+      expect(wait.status).toBe("pending");
+
+      const reason = new Error("stop waiting");
+      controller.abort(reason);
+      await flushMicrotasks();
+      expect(wait.status).toBe("rejected");
+      expect(wait.reason).toBe(reason);
+      expect(isValidatingObserved(validator)).toBe(false);
+      expect(getEventListeners(controller.signal, "abort")).toHaveLength(0);
+
+      // Only the wait is aborted, not the validation
+      await vi.advanceTimersByTimeAsync(100);
+      expect(validator.getErrorMessages("field" as KeyPath)).toEqual(new Set(["negative: -1"]));
+    });
+
+    it("rejects with the reason of a signal aborted beforehand, even if nothing is being validated", async () => {
+      const { validator } = setupSyncHandler();
+      const controller = new AbortController();
+      controller.abort();
+
+      await expect(validator.waitForValidation({ signal: controller.signal })).rejects.toBe(controller.signal.reason);
+      expect(isValidatingObserved(validator)).toBe(false);
+      expect(getEventListeners(controller.signal, "abort")).toHaveLength(0);
+    });
+
+    it("resolves and removes its listener from the signal once the validation completes", async () => {
+      const { model, validator } = setupSyncHandler();
+      runInAction(() => {
+        model.field = -1;
+      });
+      const controller = new AbortController();
+      const wait = track(validator.waitForValidation({ signal: controller.signal }));
+      expect(getEventListeners(controller.signal, "abort")).toHaveLength(1);
+
+      await vi.advanceTimersByTimeAsync(100);
+      expect(wait.status).toBe("resolved");
+      expect(getEventListeners(controller.signal, "abort")).toHaveLength(0);
+
+      controller.abort();
+      await flushMicrotasks();
+      expect(wait.status).toBe("resolved");
+    });
+
+    it("removes its listener from the signal when it resolves right away", async () => {
+      const { validator } = setupSyncHandler();
+      const controller = new AbortController();
+
+      await expect(validator.waitForValidation({ signal: controller.signal })).resolves.toBeUndefined();
+      expect(getEventListeners(controller.signal, "abort")).toHaveLength(0);
+    });
+  });
+
+  it("rejects with the error isValidating throws, and stops observing", async () => {
+    class LinkedNode {
+      @nested @observable next: LinkedNode | null = null;
+
+      constructor() {
+        makeObservable(this);
+      }
+    }
+    const a = new LinkedNode();
+    const b = new LinkedNode();
+    runInAction(() => {
+      a.next = b;
+      b.next = a;
+    });
+    const validator = Validator.get(a);
+    const controller = new AbortController();
+
+    await expect(validator.waitForValidation({ signal: controller.signal })).rejects.toThrow(/Cycle detected/);
+    expect(isValidatingObserved(validator)).toBe(false);
+    expect(getEventListeners(controller.signal, "abort")).toHaveLength(0);
   });
 });

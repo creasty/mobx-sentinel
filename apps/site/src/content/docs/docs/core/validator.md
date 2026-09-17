@@ -108,7 +108,7 @@ runInAction(() => {
 });
 
 // Wait for validation to complete
-await when(() => !validator.isValidating);
+await validator.waitForValidation();
 
 validator.isValid // false
 validator.invalidKeys // Set(["email"])
@@ -146,6 +146,7 @@ validator.invalidKeyPathCount // number - count of all errors
 validator.isValidating // boolean - any validation in progress (reactionState + asyncState > 0)
 validator.reactionState // number - pending sync reactions (0 or more)
 validator.asyncState // number - pending async jobs (0 or more)
+validator.waitForValidation() // Promise<void> - resolves once isValidating is false
 
 // Error queries
 validator.firstErrorMessage // string | undefined - first error found
@@ -159,3 +160,34 @@ validator.findErrors(keyPath, deep?) // Iterator<[KeyPath, ValidationError]>
 - `asyncState`: Counts pending/running asynchronous validation jobs
 - `isValidating`: Convenience property that's `true` when either state is non-zero
 - Multiple handlers can add multiple errors to the same key - they accumulate in a Set
+
+## Waiting for Validation
+
+Errors don't reflect a change right away: handlers run after the delay, and async handlers take as long as their work does. Await `waitForValidation()` before reading the result; it resolves once the validation completes:
+
+```typescript
+runInAction(() => {
+  form.email = "invalid";
+});
+
+await validator.waitForValidation();
+
+validator.isValid // false
+validator.getErrorMessages("email") // Set(["Invalid email format"])
+```
+
+**Key behaviors**:
+- A shorthand for `await when(() => !validator.isValidating)`
+- Resolves right away if nothing is being validated
+- Waits for nested validators as well
+- Deadlocks when awaited in an async handler of the same validator or of a nested one, since the handler is part of the validation it waits for
+
+To stop waiting, pass an [AbortSignal](https://developer.mozilla.org/en-US/docs/Web/API/AbortSignal). When it's aborted, the promise rejects with the signal's reason, while the validation itself goes on. `AbortSignal.timeout()` puts a time limit on the wait:
+
+```typescript
+try {
+  await validator.waitForValidation({ signal: AbortSignal.timeout(5000) });
+} catch (e) {
+  // A "TimeoutError" DOMException after 5 seconds
+}
+```
