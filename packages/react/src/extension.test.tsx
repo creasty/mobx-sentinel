@@ -14,6 +14,7 @@ import { LabelBinding } from "./LabelBinding";
 import { RadioButtonBinding } from "./RadioButtonBinding";
 import { SelectBoxBinding } from "./SelectBoxBinding";
 import { SubmitButtonBinding } from "./SubmitButtonBinding";
+import { TextAreaBinding } from "./TextAreaBinding";
 import { useFormAutoReset, useFormHandler, useFormSSR } from "./hooks";
 
 class SampleModel {
@@ -29,6 +30,7 @@ class SampleModel {
 
 const STANDARD_METHODS = [
   "bindInput",
+  "bindTextArea",
   "bindSelectBox",
   "bindCheckBox",
   "bindRadioButton",
@@ -100,9 +102,10 @@ describe("extension module", () => {
     const { bind } = form;
     expect(bind("text", InputBinding, { getter: () => model.text, setter: noop }).value).toBe("hello");
 
-    const { bindInput, bindSelectBox, bindCheckBox, bindRadioButton, bindSubmitButton, bindLabel } = form;
+    const { bindInput, bindTextArea, bindSelectBox, bindCheckBox, bindRadioButton, bindSubmitButton, bindLabel } = form;
     // PINNED(quirk): the extension methods are prototype functions that call `this.bind`, so detaching them (e.g. `const { bindInput } = Form.get(model)`) throws a TypeError, while the detached Form#bind keeps working. Decide: should the extension methods be bound to the instance like Form#bind?
     expect(() => bindInput("text", { getter: () => model.text, setter: noop })).toThrow(TypeError);
+    expect(() => bindTextArea("text", { getter: () => model.text, setter: noop })).toThrow(TypeError);
     expect(() => bindSelectBox("choice", { getter: () => model.choice, setter: noop })).toThrow(TypeError);
     expect(() => bindCheckBox("flag", { getter: () => model.flag, setter: noop })).toThrow(TypeError);
     expect(() => bindRadioButton("choice", { getter: () => model.choice, setter: noop })).toThrow(TypeError);
@@ -120,6 +123,7 @@ describe("package entry point", () => {
       "RadioButtonBinding",
       "SelectBoxBinding",
       "SubmitButtonBinding",
+      "TextAreaBinding",
       "useFormAutoReset",
       "useFormHandler",
       "useFormSSR",
@@ -130,6 +134,7 @@ describe("package entry point", () => {
     expect(indexModule.RadioButtonBinding).toBe(RadioButtonBinding);
     expect(indexModule.SelectBoxBinding).toBe(SelectBoxBinding);
     expect(indexModule.SubmitButtonBinding).toBe(SubmitButtonBinding);
+    expect(indexModule.TextAreaBinding).toBe(TextAreaBinding);
     expect(indexModule.useFormAutoReset).toBe(useFormAutoReset);
     expect(indexModule.useFormHandler).toBe(useFormHandler);
     expect(indexModule.useFormSSR).toBe(useFormSSR);
@@ -239,6 +244,11 @@ describe("delegation to Form#bind", () => {
       { valueAs: "date", cacheKey: "date:k", getter: dateGetter, setter: noop },
     ]);
 
+    const textAreaConfig = { getter: () => model.text, setter: noop };
+    expect(form.bindTextArea("text", textAreaConfig)).toBe(lastResult());
+    expect(bindSpy.mock.lastCall).toEqual(["text", TextAreaBinding, textAreaConfig]);
+    expect(lastCall()?.[2]).toBe(textAreaConfig);
+
     const selectConfig = { getter: () => model.choice, setter: noop };
     expect(form.bindSelectBox("choice", selectConfig)).toBe(lastResult());
     expect(bindSpy.mock.lastCall).toEqual(["choice", SelectBoxBinding, selectConfig]);
@@ -268,7 +278,7 @@ describe("delegation to Form#bind", () => {
     form.bindLabel(fields, labelConfig);
     expect(lastCall()?.[2]).toBe(labelConfig);
 
-    expect(bindSpy).toBeCalledTimes(10);
+    expect(bindSpy).toBeCalledTimes(11);
   });
 
   test("uses the bind of the receiver, so the methods can be applied to another form", () => {
@@ -417,6 +427,54 @@ describe("Form#bindInput", () => {
     expect(model.text).toBe("world");
     expect(input.value).toBe("world");
     expect(field.isChanged).toBe(true);
+  });
+});
+
+describe("Form#bindTextArea", () => {
+  test("returns the props of a TextAreaBinding, sharing the cache entry with Form#bind", () => {
+    const { model, form } = setupEnv();
+    const config = { getter: () => model.text, setter: noop };
+
+    const props = form.bindTextArea("text", config);
+    expect(props).toEqual({
+      value: "hello",
+      id: form.getField("text").id,
+      onChange: expect.any(Function),
+      onFocus: expect.any(Function),
+      onBlur: expect.any(Function),
+      "aria-invalid": undefined,
+      "aria-errormessage": undefined,
+    });
+    expect(form.bindTextArea("text", config).onChange).toBe(props.onChange);
+    expect(form.bind("text", TextAreaBinding, config).onChange).toBe(props.onChange);
+    expect(form.bindTextArea("text", { cacheKey: "k", ...config }).onChange).not.toBe(props.onChange);
+    // A separate binding from the input bound to the same field
+    expect(form.bindInput("text", config).onChange).not.toBe(props.onChange);
+  });
+
+  test("writes the value through the setter and marks the field as changed and touched", () => {
+    const { model, form } = setupEnv();
+
+    const Component: React.FC = observer(() => (
+      <textarea
+        aria-label="text"
+        {...form.bindTextArea("text", {
+          getter: () => model.text,
+          setter: (v) => (model.text = v),
+        })}
+      />
+    ));
+    render(<Component />);
+    const textarea = screen.getByLabelText("text") as HTMLTextAreaElement;
+    const field = form.getField("text");
+
+    fireEvent.focus(textarea);
+    expect(field.isTouched).toBe(true);
+    fireEvent.change(textarea, { target: { value: "line 1\nline 2" } });
+    expect(model.text).toBe("line 1\nline 2");
+    expect(textarea.value).toBe("line 1\nline 2");
+    expect(field.isChanged).toBe(true);
+    form.reset(); // Cancel the pending auto-finalization
   });
 });
 
@@ -605,6 +663,7 @@ describe("types", () => {
 
     type Ext = extensionModule.StandardExtensions<SampleModel>;
     expectTypeOf(form.bindInput).toEqualTypeOf<Ext["bindInput"]>();
+    expectTypeOf(form.bindTextArea).toEqualTypeOf<Ext["bindTextArea"]>();
     expectTypeOf(form.bindSelectBox).toEqualTypeOf<Ext["bindSelectBox"]>();
     expectTypeOf(form.bindCheckBox).toEqualTypeOf<Ext["bindCheckBox"]>();
     expectTypeOf(form.bindRadioButton).toEqualTypeOf<Ext["bindRadioButton"]>();
@@ -614,6 +673,9 @@ describe("types", () => {
 
     expectTypeOf<Ext["bindInput"]>().toEqualTypeOf<
       FormBindingFuncExtension.ForField.RequiredConfig<SampleModel, typeof InputBinding>
+    >();
+    expectTypeOf<Ext["bindTextArea"]>().toEqualTypeOf<
+      FormBindingFuncExtension.ForField.RequiredConfig<SampleModel, typeof TextAreaBinding>
     >();
     expectTypeOf<Ext["bindSelectBox"]>().toEqualTypeOf<
       FormBindingFuncExtension.ForField.RequiredConfig<SampleModel, typeof SelectBoxBinding>
@@ -636,6 +698,7 @@ describe("types", () => {
     const { form } = setupEnv();
 
     expectTypeOf(form.bindInput).returns.toEqualTypeOf<InputBinding["props"]>();
+    expectTypeOf(form.bindTextArea).returns.toEqualTypeOf<TextAreaBinding["props"]>();
     expectTypeOf(form.bindSelectBox).returns.toEqualTypeOf<SelectBoxBinding["props"]>();
     expectTypeOf(form.bindCheckBox).returns.toEqualTypeOf<CheckBoxBinding["props"]>();
     expectTypeOf(form.bindRadioButton).returns.toEqualTypeOf<RadioButtonBinding["props"]>();
@@ -663,6 +726,7 @@ describe("types", () => {
         setter: (v) => expectTypeOf(v).toEqualTypeOf<Date | null>(),
       });
       form.bindInput("text:suffix", { getter: () => model.text, setter: noop });
+      form.bindTextArea("text", { getter: () => model.text, setter: (v) => expectTypeOf(v).toEqualTypeOf<string>() });
       form.bindSelectBox("choice", {
         multiple: true,
         getter: () => [model.choice],
@@ -676,6 +740,10 @@ describe("types", () => {
       form.bindInput("unknown", { getter: () => model.text, setter: noop });
       // @ts-expect-error bindInput requires a config
       form.bindInput("text");
+      // @ts-expect-error bindTextArea requires a config
+      form.bindTextArea("text");
+      // @ts-expect-error bindTextArea accepts only TextAreaBinding options
+      form.bindTextArea("number", { valueAs: "number", getter: () => model.number, setter: noop });
       // @ts-expect-error bindCheckBox requires a config
       form.bindCheckBox("flag");
       // @ts-expect-error the getter must match valueAs

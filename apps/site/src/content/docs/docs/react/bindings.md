@@ -1,11 +1,11 @@
 ---
 title: "Standard Bindings"
-description: "Bind inputs, checkboxes, radio buttons, select boxes, submit buttons and labels to a form."
+description: "Bind inputs, text areas, checkboxes, radio buttons, select boxes, submit buttons and labels to a form."
 sidebar:
   order: 2
 ---
 
-These pre-built bindings are designed for native HTML form elements (`<input>`, `<select>`, `<button>`, `<label>`) with accessibility in mind.
+These pre-built bindings are designed for native HTML form elements (`<input>`, `<textarea>`, `<select>`, `<button>`, `<label>`) with accessibility in mind.
 
 All binding methods are called on the form instance and automatically handle:
 
@@ -106,6 +106,31 @@ const MyForm = observer(({ model }) => {
     valueAs: "date",
     getter: () => model.time?.toISOString().slice(0, 16) ?? null,
     setter: (v) => (model.time = v),
+  })}
+/>
+```
+
+## Text Area: `form.bindTextArea(fieldName, config)`
+
+Binds multi-line text fields. It reports errors the same way as a text input: typing makes intermediate changes, which are finalized when the text area loses focus or after a pause.
+
+Attributes that only shape the element, such as `rows` and `placeholder`, go on the element itself.
+
+```tsx
+<textarea
+  rows={4}
+  placeholder="Anything else we should know"
+  {...form.bindTextArea("notes", {
+    getter: () => model.notes,
+    setter: (v) => (model.notes = v),
+  })}
+/>
+
+// Optional text field
+<textarea
+  {...form.bindTextArea("comment", {
+    getter: () => model.comment,
+    setter: (v) => (model.comment = v || null), // null rather than "" once emptied
   })}
 />
 ```
