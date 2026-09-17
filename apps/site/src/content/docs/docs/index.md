@@ -172,9 +172,9 @@ const InvoiceForm: React.FC<{ model: Invoice }> = observer(({ model }) => {
       ))}
       <button onClick={model.addLineItem}>Add a line</button>
 
-      {/* Disabled while the form is invalid, pristine or busy.
+      {/* Disabled while the form is invalid, busy or, as `disableUnlessDirty` asks, pristine.
           Hovering it reveals every outstanding error at once. */}
-      <button {...form.bindSubmitButton()}>Send invoice</button>
+      <button {...form.bindSubmitButton({ disableUnlessDirty: true })}>Send invoice</button>
     </>
   );
 });

@@ -12,6 +12,14 @@ export namespace SubmitButtonBinding {
     onClick?: Attrs["onClick"];
     /** [Extend] Mouse enter handler */
     onMouseOver?: Attrs["onMouseOver"];
+    /**
+     * Keep the button disabled until the form is dirty.
+     *
+     * A click that reaches the button meanwhile doesn't submit the form either.
+     *
+     * @default false
+     */
+    disableUnlessDirty?: boolean;
   };
 }
 
@@ -20,7 +28,7 @@ export namespace SubmitButtonBinding {
  *
  * Key features:
  * - Handles form submission
- * - Auto-disables during submission or validation, or when invalid
+ * - Auto-disables during submission or validation, or when invalid (and optionally, until the form is dirty)
  * - Reports errors on hover
  * - Manages busy states and ARIA attributes
  */
@@ -38,7 +46,10 @@ export class SubmitButtonBinding implements FormBinding {
   }
 
   onClick: SubmitButtonBinding.AttrsRequired["onClick"] = (e) => {
-    this.form.submit().catch((e) => void e);
+    // Form#submit() checks the rest of what disables the button
+    if (!this.#waitsForChange()) {
+      this.form.submit().catch((e) => void e);
+    }
     this.config.onClick?.(e);
   };
 
@@ -47,11 +58,16 @@ export class SubmitButtonBinding implements FormBinding {
     this.config.onMouseOver?.(e);
   };
 
+  /** Whether the button is disabled because of `disableUnlessDirty` */
+  #waitsForChange() {
+    return !!this.config.disableUnlessDirty && !this.form.isDirty;
+  }
+
   get props() {
     return {
       onClick: this.onClick,
       onMouseOver: this.onMouseOver,
-      disabled: !this.form.canSubmit,
+      disabled: !this.form.canSubmit || this.#waitsForChange(),
       "aria-busy": this.busy,
       "aria-invalid": !this.form.isValid,
     } satisfies SubmitButtonBinding.Attrs;

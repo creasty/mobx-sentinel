@@ -275,13 +275,21 @@ Binds select elements for single or multiple selection.
 
 ## Submit Button: `form.bindSubmitButton(config?)`
 
-Binds submit buttons with automatic state management. The button is automatically disabled when the form is invalid, unchanged, submitting, or validating. Hovering it reports every error of the form, even while it is disabled, so users can see what keeps them from submitting (see [Smart Error Reporting](/docs/form/error-reporting/)).
+Binds submit buttons with automatic state management. The button is automatically disabled when the form is invalid, submitting, or validating. Hovering it reports every error of the form, even while it is disabled, so users can see what keeps them from submitting (see [Smart Error Reporting](/docs/form/error-reporting/)).
 
 **Additional accessibility:** Sets `aria-busy` to indicate loading states during submission or validation. The `disabled` attribute prevents submission of invalid forms, providing clear feedback to assistive technologies about the form's current state.
 
 ```tsx
 <button {...form.bindSubmitButton()}>
   Submit
+</button>
+```
+
+**Unchanged forms:** The button is enabled whether or not the form is dirty, so a form with pre-filled values can be submitted as it is. To keep it disabled until the user changes something, set `disableUnlessDirty`. Since a successful submission resets the form, this also keeps the same values from being submitted twice.
+
+```tsx
+<button {...form.bindSubmitButton({ disableUnlessDirty: true })}>
+  Save changes
 </button>
 ```
 

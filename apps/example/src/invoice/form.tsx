@@ -522,8 +522,12 @@ const FormActions: React.FC<{ model: Invoice }> = observer(({ model }) => {
         <button className="outline secondary" onClick={form.reset}>
           Reset form state
         </button>
-        {/* Disabled until the form is dirty, valid and idle. Hovering it reveals why. */}
-        <button {...form.bindSubmitButton()}>{form.isSubmitting ? "Sending…" : "Send invoice"}</button>
+        {/* Disabled until the form is valid and idle, and with `disableUnlessDirty`, dirty.
+            Sending resets the form, so the same invoice can't be sent twice.
+            Hovering it reveals every outstanding error. */}
+        <button {...form.bindSubmitButton({ disableUnlessDirty: true })}>
+          {form.isSubmitting ? "Sending…" : "Send invoice"}
+        </button>
       </div>
 
       <p className="hints">

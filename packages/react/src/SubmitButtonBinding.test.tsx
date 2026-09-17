@@ -107,7 +107,6 @@ describe("SubmitButtonBinding", () => {
     it("is true while the form is submitting", async () => {
       const env = setupEnv();
       const submission = addPendingSubmitHandler(env.form);
-      env.form.markAsDirty();
 
       env.binding.onClick(env.fakeEvent());
       expect(env.form.isSubmitting).toBe(true);
@@ -151,7 +150,6 @@ describe("SubmitButtonBinding", () => {
           (busy) => values.push(busy)
         );
 
-        env.form.markAsDirty();
         env.binding.onClick(env.fakeEvent());
         expect(values).toEqual([true]);
 
@@ -187,7 +185,6 @@ describe("SubmitButtonBinding", () => {
         });
         expect(runs).toBe(1);
 
-        env.form.markAsDirty();
         env.binding.onClick(env.fakeEvent());
         expect(env.binding.busy).toBe(true);
         expect(runs).toBe(2);
@@ -234,7 +231,6 @@ describe("SubmitButtonBinding", () => {
       const env = setupEnv();
       const submission = addPendingSubmitHandler(env.form);
       const submitSpy = vi.spyOn(env.form, "submit");
-      env.form.markAsDirty();
 
       env.binding.onClick(env.fakeEvent());
       expect(submitSpy).toHaveBeenCalledTimes(1);
@@ -254,7 +250,6 @@ describe("SubmitButtonBinding", () => {
       env.binding.config.onClick = () => {
         isSubmitting.push(env.form.isSubmitting);
       };
-      env.form.markAsDirty();
 
       env.binding.onClick(env.fakeEvent());
       expect(isSubmitting).toEqual([true]);
@@ -266,6 +261,7 @@ describe("SubmitButtonBinding", () => {
       const submitSpy = vi.spyOn(env.form, "submit");
       const callback = vi.fn();
       env.binding.config.onClick = callback;
+      invalidate(env.form);
       expect(env.form.canSubmit).toBe(false);
 
       env.binding.onClick(env.fakeEvent());
@@ -281,7 +277,6 @@ describe("SubmitButtonBinding", () => {
       const submitSpy = vi.spyOn(env.form, "submit");
       const callback = vi.fn();
       env.binding.config.onClick = callback;
-      env.form.markAsDirty();
 
       env.binding.onClick(env.fakeEvent());
       env.binding.onClick(env.fakeEvent());
@@ -376,6 +371,27 @@ describe("SubmitButtonBinding", () => {
       }
     });
 
+    it("does not submit a form that is not dirty if disableUnlessDirty is set, but still calls the callback", () => {
+      const env = setupEnv();
+      const submission = addPendingSubmitHandler(env.form);
+      const submitSpy = vi.spyOn(env.form, "submit");
+      const callback = vi.fn();
+      env.binding.config = { onClick: callback, disableUnlessDirty: true };
+      expect(env.form.canSubmit).toBe(true);
+
+      env.binding.onClick(env.fakeEvent());
+      expect(submitSpy).not.toHaveBeenCalled();
+      expect(submission.submitHandler).not.toHaveBeenCalled();
+      expect(callback).toHaveBeenCalledTimes(1);
+
+      // A click after the form has become dirty submits
+      env.form.markAsDirty();
+      env.binding.onClick(env.fakeEvent());
+      expect(submitSpy).toHaveBeenCalledTimes(1);
+      expect(submission.submitHandler).toHaveBeenCalledTimes(1);
+      expect(callback).toHaveBeenCalledTimes(2);
+    });
+
     it("passes the received event object to the callback as is", () => {
       const env = setupEnv();
       const callback = vi.fn();
@@ -394,7 +410,6 @@ describe("SubmitButtonBinding", () => {
       env.binding.config.onClick = () => {
         throw error;
       };
-      env.form.markAsDirty();
 
       expect(() => env.binding.onClick(env.fakeEvent())).toThrow(error);
       expect(submission.submitHandler).toHaveBeenCalledTimes(1);
@@ -479,7 +494,7 @@ describe("SubmitButtonBinding", () => {
       expect(env.binding.props).toStrictEqual({
         onClick: env.binding.onClick,
         onMouseOver: env.binding.onMouseOver,
-        disabled: true,
+        disabled: false,
         "aria-busy": false,
         "aria-invalid": false,
       });
@@ -492,23 +507,19 @@ describe("SubmitButtonBinding", () => {
       expect(env.binding.props.onMouseOver).toBe(env.binding.props.onMouseOver);
     });
 
-    it("is disabled when the form is not dirty", () => {
+    it("is enabled when the form is valid, whether or not it is dirty", () => {
       const env = setupEnv();
       expect(env.form.isDirty).toBe(false);
-      expect(env.binding.props.disabled).toBe(true);
-    });
-
-    it("is enabled when the form is dirty and valid", () => {
-      const env = setupEnv();
-      env.form.markAsDirty();
       expect(env.binding.props.disabled).toBe(false);
       expect(env.binding.props["aria-invalid"]).toBe(false);
       expect(env.binding.props["aria-busy"]).toBe(false);
+
+      env.form.markAsDirty();
+      expect(env.binding.props.disabled).toBe(false);
     });
 
-    it("is disabled when the form is dirty but invalid", () => {
+    it("is disabled when the form is invalid", () => {
       const env = setupEnv();
-      env.form.markAsDirty();
       const removeError = invalidate(env.form);
       expect(env.binding.props.disabled).toBe(true);
       expect(env.binding.props["aria-invalid"]).toBe(true);
@@ -521,21 +532,49 @@ describe("SubmitButtonBinding", () => {
     it("is enabled when the form is invalid if allowSubmitInvalid is set", () => {
       const env = setupEnv();
       env.form.configure({ allowSubmitInvalid: true });
-      env.form.markAsDirty();
       invalidate(env.form);
       expect(env.binding.props.disabled).toBe(false);
       expect(env.binding.props["aria-invalid"]).toBe(true);
     });
 
-    it("is enabled when the form is not dirty if allowSubmitNonDirty is set", () => {
+    it("is disabled until the form is dirty if disableUnlessDirty is set", () => {
       const env = setupEnv();
-      env.form.configure({ allowSubmitNonDirty: true });
+      env.binding.config.disableUnlessDirty = true;
+      expect(env.binding.props.disabled).toBe(true);
+
+      env.form.markAsDirty();
       expect(env.binding.props.disabled).toBe(false);
+
+      env.form.reset();
+      expect(env.binding.props.disabled).toBe(true);
     });
+
+    it.each([
+      { disableUnlessDirty: false, isDirty: false, isValid: false, disabled: true },
+      { disableUnlessDirty: false, isDirty: false, isValid: true, disabled: false },
+      { disableUnlessDirty: false, isDirty: true, isValid: false, disabled: true },
+      { disableUnlessDirty: false, isDirty: true, isValid: true, disabled: false },
+      { disableUnlessDirty: true, isDirty: false, isValid: false, disabled: true },
+      { disableUnlessDirty: true, isDirty: false, isValid: true, disabled: true },
+      { disableUnlessDirty: true, isDirty: true, isValid: false, disabled: true },
+      { disableUnlessDirty: true, isDirty: true, isValid: true, disabled: false },
+    ])(
+      "is disabled=$disabled with disableUnlessDirty=$disableUnlessDirty, isDirty=$isDirty and isValid=$isValid",
+      ({ disableUnlessDirty, isDirty, isValid, disabled }) => {
+        const env = setupEnv();
+        env.binding.config.disableUnlessDirty = disableUnlessDirty;
+        if (isDirty) env.form.markAsDirty();
+        if (!isValid) invalidate(env.form);
+
+        expect(env.form.isDirty).toBe(isDirty);
+        expect(env.form.isValid).toBe(isValid);
+        expect(env.binding.props.disabled).toBe(disabled);
+      }
+    );
 
     it("is disabled and busy while submitting, regardless of the config", async () => {
       const env = setupEnv();
-      env.form.configure({ allowSubmitInvalid: true, allowSubmitNonDirty: true });
+      env.form.configure({ allowSubmitInvalid: true });
       const submission = addPendingSubmitHandler(env.form);
 
       env.binding.onClick(env.fakeEvent());
@@ -552,7 +591,7 @@ describe("SubmitButtonBinding", () => {
       vi.useFakeTimers();
       try {
         const env = setupEnv();
-        env.form.configure({ allowSubmitInvalid: true, allowSubmitNonDirty: true });
+        env.form.configure({ allowSubmitInvalid: true });
         addRequiredValidation(env.model);
 
         runInAction(() => {
@@ -627,12 +666,6 @@ describe("bindSubmitButton", () => {
   test("Activates and disables the button", async () => {
     const env = setupEnv();
 
-    expect(env.form.canSubmit).toBe(false);
-    expect(env.button).toBeDisabled();
-
-    act(() => {
-      env.form.markAsDirty();
-    });
     expect(env.form.isSubmitting).toBe(false);
     expect(env.form.canSubmit).toBe(true);
     expect(env.button).not.toBeDisabled();
@@ -648,8 +681,8 @@ describe("bindSubmitButton", () => {
     });
 
     expect(env.form.isSubmitting).toBe(false);
-    expect(env.form.canSubmit).toBe(false);
-    expect(env.button).toBeDisabled();
+    expect(env.form.canSubmit).toBe(true);
+    expect(env.button).not.toBeDisabled();
   });
 
   test("Hovering the button triggers form.reportError()", async () => {
@@ -657,9 +690,6 @@ describe("bindSubmitButton", () => {
     const env = setupEnv();
     const spy = vi.spyOn(env.form, "reportError");
 
-    act(() => {
-      env.form.markAsDirty();
-    });
     await env.hoverButton();
 
     expect(spy).toBeCalledTimes(1);
@@ -667,15 +697,10 @@ describe("bindSubmitButton", () => {
 
   test("renders the state as attributes", async () => {
     const env = setupEnv();
-    expect(env.button).toBeDisabled();
-    expect(env.button).toHaveAttribute("aria-busy", "false");
-    expect(env.button).toHaveAttribute("aria-invalid", "false");
-
-    act(() => {
-      env.form.markAsDirty();
-    });
     expect(env.button).not.toBeDisabled();
     expect(env.button).not.toHaveAttribute("disabled");
+    expect(env.button).toHaveAttribute("aria-busy", "false");
+    expect(env.button).toHaveAttribute("aria-invalid", "false");
 
     await env.clickButton();
     expect(env.button).toHaveAttribute("aria-busy", "true");
@@ -686,7 +711,6 @@ describe("bindSubmitButton", () => {
     expect(env.button).toHaveAttribute("aria-busy", "false");
 
     act(() => {
-      env.form.markAsDirty();
       invalidate(env.form);
     });
     expect(env.button).toBeDisabled();
@@ -696,6 +720,9 @@ describe("bindSubmitButton", () => {
   test("clicking the disabled button does not submit the form", async () => {
     const env = setupEnv();
     const submitSpy = vi.spyOn(env.form, "submit");
+    act(() => {
+      invalidate(env.form);
+    });
     expect(env.button).toBeDisabled();
 
     await env.clickButton();
@@ -775,7 +802,6 @@ describe("bindSubmitButton", () => {
   test("hovering a child element of the button reports errors again", async () => {
     disableSafeDescriptors();
     const form = Form.get(new SampleModel());
-    form.markAsDirty();
     const onMouseOver = vi.fn();
     const button = renderSubmitButton(form, { onMouseOver });
     const reportErrorSpy = vi.spyOn(form, "reportError");
@@ -794,7 +820,6 @@ describe("bindSubmitButton", () => {
 
   test("does not prevent the native submission of an enclosing <form>", () => {
     const form = Form.get(new SampleModel());
-    form.markAsDirty();
     const onSubmit = vi.fn((e: React.FormEvent) => {
       e.preventDefault(); // Keep jsdom from navigating
     });
@@ -834,8 +859,9 @@ describe("bindSubmitButton", () => {
       submission.resolve(true);
       await submission.didSubmit;
     });
+    // The successful submission resets the form, but it stays submittable
     expect(form.isDirty).toBe(false);
-    expect(button).toBeDisabled();
+    expect(button).not.toBeDisabled();
   });
 
   test.each([
@@ -844,7 +870,6 @@ describe("bindSubmitButton", () => {
   ])("submits when activated with the %s key", async (_, key) => {
     const form = Form.get(new SampleModel());
     const submission = addPendingSubmitHandler(form);
-    form.markAsDirty();
     const button = renderSubmitButton(form);
 
     act(() => {
@@ -861,9 +886,39 @@ describe("bindSubmitButton", () => {
     expect(button).toHaveAttribute("aria-busy", "false");
   });
 
-  test("submits a non-dirty invalid form when the config allows it", async () => {
+  test("keeps the button disabled until the form is dirty with disableUnlessDirty", async () => {
     const form = Form.get(new SampleModel());
-    form.configure({ allowSubmitInvalid: true, allowSubmitNonDirty: true });
+    const submission = addPendingSubmitHandler(form);
+    const submitSpy = vi.spyOn(form, "submit");
+    const button = renderSubmitButton(form, { disableUnlessDirty: true });
+    expect(button).toBeDisabled();
+
+    await userEvent.click(button);
+    expect(submitSpy).not.toHaveBeenCalled();
+
+    act(() => {
+      form.markAsDirty();
+    });
+    expect(button).not.toBeDisabled();
+
+    await userEvent.click(button);
+    expect(submission.submitHandler).toHaveBeenCalledTimes(1);
+    expect(button).toBeDisabled();
+    expect(button).toHaveAttribute("aria-busy", "true");
+
+    await act(async () => {
+      submission.resolve(true);
+      await submission.didSubmit;
+    });
+    // The successful submission resets the form, which disables the button again
+    expect(form.isDirty).toBe(false);
+    expect(button).toBeDisabled();
+    expect(button).toHaveAttribute("aria-busy", "false");
+  });
+
+  test("submits an invalid form when the config allows it", async () => {
+    const form = Form.get(new SampleModel());
+    form.configure({ allowSubmitInvalid: true });
     const submission = addPendingSubmitHandler(form);
     invalidate(form);
     const button = renderSubmitButton(form);
@@ -907,6 +962,25 @@ describe("bindSubmitButton", () => {
       expect(second).toHaveBeenCalledTimes(1);
     });
 
+    test("applies disableUnlessDirty of the latest config, to the handlers obtained earlier too", async () => {
+      const form = Form.get(new SampleModel());
+      const submission = addPendingSubmitHandler(form);
+      const event = {} as any;
+
+      const props1 = form.bindSubmitButton({ disableUnlessDirty: true });
+      expect(props1.disabled).toBe(true);
+      props1.onClick(event);
+      expect(submission.submitHandler).not.toHaveBeenCalled();
+
+      const props2 = form.bindSubmitButton();
+      expect(props2.disabled).toBe(false);
+      props1.onClick(event);
+      expect(submission.submitHandler).toHaveBeenCalledTimes(1);
+
+      submission.resolve(true);
+      await expect(submission.didSubmit).resolves.toBe(true);
+    });
+
     test("creates a separate binding per cacheKey", () => {
       const form = Form.get(new SampleModel());
       const props = form.bindSubmitButton();
@@ -924,6 +998,7 @@ describe("bindSubmitButton", () => {
     expectTypeOf(form.bindSubmitButton).toBeCallableWith({
       onClick: () => void 0,
       onMouseOver: () => void 0,
+      disableUnlessDirty: true,
       cacheKey: "key",
     });
     expectTypeOf(form.bindSubmitButton()).toEqualTypeOf<{
@@ -936,6 +1011,7 @@ describe("bindSubmitButton", () => {
     expectTypeOf<SubmitButtonBinding.Config>().toEqualTypeOf<{
       onClick?: React.MouseEventHandler<HTMLButtonElement> | undefined;
       onMouseOver?: React.MouseEventHandler<HTMLButtonElement> | undefined;
+      disableUnlessDirty?: boolean | undefined;
     }>();
     expectTypeOf<SubmitButtonBinding["busy"]>().toEqualTypeOf<boolean>();
     expectTypeOf<SubmitButtonBinding["onClick"]>().toEqualTypeOf<React.MouseEventHandler<HTMLButtonElement>>();
@@ -948,11 +1024,7 @@ describe("bindSubmitButton", () => {
     // @ts-expect-error Unknown config key
     form.bindSubmitButton({ onFocus: () => void 0 });
 
-    // @ts-expect-error The config is required when binding without the extension
-    const props = form.bind(SubmitButtonBinding) as SubmitButtonBinding["props"];
-    // Without a config, the props can be read but the handlers crash
-    expect(props.disabled).toBe(true);
-    expect(() => props.onClick({} as any)).toThrow(TypeError);
-    expect(() => props.onMouseOver({} as any)).toThrow(TypeError);
+    // @ts-expect-error The config is required when binding without the extension (it crashes without one)
+    expect(() => form.bind(SubmitButtonBinding)).toThrow(TypeError);
   });
 });

@@ -184,6 +184,7 @@ class SubmitButtonBinding implements FormBinding {
     public config: {
       onClick?: (e: React.MouseEvent) => void;
       onMouseOver?: (e: React.MouseEvent) => void;
+      disableUnlessDirty?: boolean;
     }
   ) {
     makeObservable(this);
@@ -194,8 +195,16 @@ class SubmitButtonBinding implements FormBinding {
     return this.form.isSubmitting || this.form.isValidating;
   }
 
+  // Not @computed, as it reads `config`
+  get waitsForChange() {
+    return !!this.config.disableUnlessDirty && !this.form.isDirty;
+  }
+
   onClick = (e: React.MouseEvent<HTMLButtonElement>) => {
-    this.form.submit().catch((e) => void e);
+    // `form.submit()` checks the rest of what disables the button
+    if (!this.waitsForChange) {
+      this.form.submit().catch((e) => void e);
+    }
     this.config.onClick?.(e);
   };
 
@@ -208,7 +217,7 @@ class SubmitButtonBinding implements FormBinding {
     return {
       onClick: this.onClick,
       onMouseOver: this.onMouseOver,
-      disabled: !this.form.canSubmit,
+      disabled: !this.form.canSubmit || this.waitsForChange,
       'aria-busy': this.busy,
       'aria-invalid': !this.form.isValid,
     };
