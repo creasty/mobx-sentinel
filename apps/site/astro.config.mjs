@@ -40,6 +40,9 @@ export default defineConfig({
             // name of each package's landing page, so the package links on /apis/ would all 404. index.md is kept, and
             // it is what Starlight serves at the directory's own URL.
             entryFileName: "index.md",
+            // The title of /apis/, the API reference's landing page. Unset, it is "Documentation", the name TypeDoc
+            // gives the project it merges the packages into.
+            name: apiSidebarLabel,
             // Writes a package's pages to `react/`, not `@mobx-sentinel/react/`. starlight-typedoc assumes a package's
             // directory is one path segment when it builds the sidebar for a module inside it, so under the scoped,
             // two-segment one, react's `extension` entry point got an empty group and StandardExtensions no entry.
