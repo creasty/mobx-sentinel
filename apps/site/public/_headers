@@ -2,3 +2,11 @@
 # changes in place -- the same rule apps/example sets for Vite's /assets.
 /_astro/*
   Cache-Control: public, max-age=31536000, immutable
+
+# The llms files from starlight-llms-txt. wrangler uploads a file with only the MIME type of its
+# extension, so they would be served without a charset, and a client that falls back to Latin-1
+# for text -- as Python's requests does -- would garble their em dashes and other non-ASCII text.
+/llms*.txt
+  Content-Type: text/plain; charset=utf-8
+/_llms-txt/*
+  Content-Type: text/plain; charset=utf-8
