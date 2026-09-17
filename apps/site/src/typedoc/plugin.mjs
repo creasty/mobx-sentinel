@@ -45,8 +45,8 @@ export function load(app) {
  *
  * The third drops the heading per kind (Classes, Functions; Constructors, Accessors, Methods), keeping the order the
  * theme would group them in. A package lists its exports as one list. A class, interface, type alias or namespace
- * lists its members under a single Members heading, their own subsections a level below, so the table of contents
- * still has one entry per member.
+ * lists its members under at most three headings, by how they are used (see memberSections), their own subsections
+ * a level below, so the table of contents still has one entry per member.
  *
  * @param {import("typedoc-plugin-markdown").MarkdownThemeContext} context
  */
@@ -100,10 +100,13 @@ function extendPartials(context) {
     const members = children.filter((child) => child.isDeclaration());
     // A namespace rendered on another declaration's page is already under its own heading.
     if (model !== context.page.model) return partials.members(members, { headingLevel: options.headingLevel });
-    return [
-      `${"#".repeat(options.headingLevel)} Members`,
-      partials.members(members, { headingLevel: options.headingLevel + 1 }),
-    ].join("\n\n");
+    return memberSections(members)
+      .filter(([, section]) => section.length > 0)
+      .flatMap(([title, section]) => [
+        `${"#".repeat(options.headingLevel)} ${title}`,
+        partials.members(section, { headingLevel: options.headingLevel + 1 }),
+      ])
+      .join("\n\n");
   };
 
   // A hook's return value is inserted into the page; this one only extends the partials.
@@ -210,6 +213,36 @@ function renderTypesFaithfully(context) {
 }
 
 const ModuleOrProject = td.ReflectionKind.Module | td.ReflectionKind.Project;
+
+const TypeKinds =
+  td.ReflectionKind.Class |
+  td.ReflectionKind.Interface |
+  td.ReflectionKind.TypeAlias |
+  td.ReflectionKind.Enum |
+  td.ReflectionKind.Namespace;
+
+/**
+ * Splits a page's members by how they are used, keeping their order within each:
+ * - Types: those declared in the namespace merged into a class, interface or type alias, as `Validator.AsyncHandler`.
+ * - Static Members: those used without an instance, whether a class's own statics, as `Validator.get()`, or the
+ *   functions and variables of its namespace, as `KeyPath.build()`.
+ * - Members: the rest, which on a class are its instance members.
+ *
+ * @param {td.DeclarationReflection[]} members
+ * @returns {[string, td.DeclarationReflection[]][]}
+ */
+function memberSections(members) {
+  const isStatic = (/** @type {td.DeclarationReflection} */ member) =>
+    member.flags.isStatic || member.kindOf(td.ReflectionKind.Function | td.ReflectionKind.Variable);
+  const types = members.filter((member) => member.kindOf(TypeKinds));
+  const statics = members.filter((member) => !member.kindOf(TypeKinds) && isStatic(member));
+  const rest = members.filter((member) => !member.kindOf(TypeKinds) && !isStatic(member));
+  return [
+    ["Types", types],
+    ["Static Members", statics],
+    ["Members", rest],
+  ];
+}
 
 /**
  * The partials a hook replaces, failing the build if typedoc-plugin-markdown has renamed one, as the replacement would
