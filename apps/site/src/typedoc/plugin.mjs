@@ -47,8 +47,8 @@ export function load(app) {
  * The rest tidy the page:
  * - The heading per kind (Classes, Functions; Constructors, Accessors, Methods) goes, keeping the order the theme would
  *   group them in. A package lists its exports as one list. A class, interface, type alias or namespace lists its
- *   members under at most three headings, by how they are used (see memberSections), their own subsections a level
- *   below, so the table of contents still has one entry per member.
+ *   members by how they are used (see memberSections): its Types, its Constructor, its Static Members and its other
+ *   Members, their own subsections a level below, so the table of contents still has one entry per member.
  * - Index signatures are the first of those members, under Indexable, rather than a section of their own.
  * - A type parameter that says nothing but its name, having no constraint, default or description, is left out, and
  *   so is a Type Parameters section left empty (see dropEmptyTypeParameterSections).
@@ -134,14 +134,20 @@ function extendPartials(context) {
         return context.options.getValue("useCodeBlocks") ? md : `> ${md}`;
       }),
     ].join("\n\n");
-    return memberSections(members)
-      .map(([title, section]) => {
-        const entries =
-          section.length > 0 ? [partials.members(section, { headingLevel: options.headingLevel + 1 })] : [];
-        if (title === "Members" && indexSignatures.length > 0) entries.unshift(indexable);
-        if (entries.length === 0) return "";
-        return [`${"#".repeat(options.headingLevel)} ${title}`, entries.join("\n\n***\n\n")].join("\n\n");
-      })
+    const section = (/** @type {string} */ title, /** @type {string[]} */ entries) =>
+      entries.length > 0
+        ? [`${"#".repeat(options.headingLevel)} ${title}`, entries.join("\n\n***\n\n")].join("\n\n")
+        : "";
+    const listed = (/** @type {td.DeclarationReflection[]} */ list) =>
+      list.length > 0 ? [partials.members(list, { headingLevel: options.headingLevel + 1 })] : [];
+    const { types, constructors, statics, rest } = memberSections(members);
+    return [
+      section("Types", listed(types)),
+      // Under no section: the theme heads each constructor signature with a Constructor heading of its own.
+      constructors.length > 0 ? partials.members(constructors, { headingLevel: options.headingLevel }) : "",
+      section("Static Members", listed(statics)),
+      section("Members", [...(indexSignatures.length > 0 ? [indexable] : []), ...listed(rest)]),
+    ]
       .filter(Boolean)
       .join("\n\n");
   };
@@ -260,25 +266,24 @@ const TypeKinds =
 
 /**
  * Splits a page's members by how they are used, keeping their order within each:
- * - Types: those declared in the namespace merged into a class, interface or type alias, as `Validator.AsyncHandler`.
- * - Static Members: those used without an instance, whether a class's own statics, as `Validator.get()`, or the
- *   functions and variables of its namespace, as `KeyPath.build()`.
- * - Members: the rest, which on a class are its instance members.
+ * - types: those declared in the namespace merged into a class, interface or type alias, as `Validator.AsyncHandler`.
+ * - constructors: a class's, which create an instance rather than belong to one.
+ * - statics: those used without an instance, whether a class's own statics, as `Validator.get()`, or the functions and
+ *   variables of its namespace, as `KeyPath.build()`.
+ * - rest: which on a class are its instance members.
  *
  * @param {td.DeclarationReflection[]} members
- * @returns {[string, td.DeclarationReflection[]][]}
  */
 function memberSections(members) {
   const isStatic = (/** @type {td.DeclarationReflection} */ member) =>
     member.flags.isStatic || member.kindOf(td.ReflectionKind.Function | td.ReflectionKind.Variable);
-  const types = members.filter((member) => member.kindOf(TypeKinds));
-  const statics = members.filter((member) => !member.kindOf(TypeKinds) && isStatic(member));
-  const rest = members.filter((member) => !member.kindOf(TypeKinds) && !isStatic(member));
-  return [
-    ["Types", types],
-    ["Static Members", statics],
-    ["Members", rest],
-  ];
+  const others = members.filter((member) => !member.kindOf(TypeKinds | td.ReflectionKind.Constructor));
+  return {
+    types: members.filter((member) => member.kindOf(TypeKinds)),
+    constructors: members.filter((member) => member.kindOf(td.ReflectionKind.Constructor)),
+    statics: others.filter(isStatic),
+    rest: others.filter((member) => !isStatic(member)),
+  };
 }
 
 /**
