@@ -1984,9 +1984,34 @@ describe("Validator: sync handler failures", () => {
       })
     ).not.toThrow();
     expect(consoleError.mock.calls.some((args) => args.includes(failure))).toBe(true);
-    // PINNED(quirk): After the handler fails on its initial run, the effect is still invoked with an undefined result and crashes with a TypeError, which MobX logs as a second error. Decide: should the effect skip failed evaluations?
-    expect(consoleError.mock.calls.some((args) => args.some((arg) => arg instanceof TypeError))).toBe(true);
+    // The effect skips the failed evaluation rather than crashing on its undefined result, so nothing else is logged
+    expect(consoleError).toHaveBeenCalledTimes(1);
     expect(validator.isValid).toBe(true);
+    expect(validator.reactionState).toBe(0);
+  });
+
+  it("delays and applies the first change after the handler throws on its initial run", () => {
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    const model = observable({ field: 0 });
+    const validator = Validator.get(model);
+    const seen: number[] = [];
+    validator.addSyncHandler((b) => {
+      seen.push(model.field);
+      if (model.field === 0) throw new Error("handler failure");
+      if (model.field < 0) b.invalidate("field", "negative");
+    });
+
+    runInAction(() => {
+      model.field = -1;
+    });
+    expect(seen).toEqual([0]);
+    expect(validator.reactionState).toBe(1);
+    vi.advanceTimersByTime(99);
+    expect(seen).toEqual([0]);
+
+    vi.advanceTimersByTime(1);
+    expect(seen).toEqual([0, -1]);
+    expect(validator.getErrorMessages("field" as KeyPath)).toEqual(new Set(["negative"]));
     expect(validator.reactionState).toBe(0);
   });
 
@@ -2203,6 +2228,72 @@ describe("Validator: async handler failures and cancellation", () => {
     expect(validator.asyncState).toBe(0);
     // PINNED(quirk): Errors added to the builder before the handler threw are committed (the commit runs in a finally block). Decide: should a failed async validation discard partial errors, keep them, or keep the previous result?
     expect(validator.getErrorMessages("field" as KeyPath)).toEqual(new Set(["collected before the failure"]));
+  });
+
+  it("does not call the handler when the expression throws on the initial run, and validates the first change", async () => {
+    const consoleError = vi.spyOn(console, "error").mockImplementation(() => {});
+    const model = observable({ field: 0 });
+    const validator = Validator.get(model);
+    const failure = new Error("expression failure");
+    const payloads: number[] = [];
+    validator.addAsyncHandler(
+      () => {
+        if (model.field === 0) throw failure;
+        return model.field;
+      },
+      async (payload, b) => {
+        payloads.push(payload);
+        if (payload < 0) b.invalidate("field", "negative");
+      }
+    );
+    await flushMicrotasks();
+    expect(consoleError).toHaveBeenCalledTimes(1);
+    expect(consoleError.mock.calls[0]).toContain(failure);
+    expect(payloads).toEqual([]);
+    expect(validator.isValidating).toBe(false);
+
+    runInAction(() => {
+      model.field = -1;
+    });
+    expect(validator.reactionState).toBe(1);
+    await vi.advanceTimersByTimeAsync(99);
+    expect(payloads).toEqual([]);
+
+    await vi.advanceTimersByTimeAsync(1);
+    expect(payloads).toEqual([-1]);
+    expect(validator.getErrorMessages("field" as KeyPath)).toEqual(new Set(["negative"]));
+    expect(validator.isValidating).toBe(false);
+  });
+
+  it("calls the handler on the initial run when the expression returns undefined rather than throwing", () => {
+    const model = observable({ field: undefined as number | undefined });
+    const validator = Validator.get(model);
+    const handler = vi.fn(async (_: number | undefined) => {});
+    validator.addAsyncHandler(() => model.field, handler);
+    expect(handler).toHaveBeenCalledTimes(1);
+    expect(handler.mock.calls[0][0]).toBeUndefined();
+  });
+
+  it("does not start a job for a change pending at reset() after the expression throws on the initial run", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    const model = observable({ field: 0 });
+    const validator = Validator.get(model);
+    const handler = vi.fn(async () => {});
+    validator.addAsyncHandler(() => {
+      if (model.field === 0) throw new Error("expression failure");
+      return model.field;
+    }, handler);
+
+    runInAction(() => {
+      model.field = -1;
+    });
+    expect(validator.reactionState).toBe(1);
+
+    validator.reset();
+    expect(validator.isValidating).toBe(false);
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(handler).not.toHaveBeenCalled();
+    expect(validator.isValid).toBe(true);
   });
 
   it("aborts the running job when the handler is disposed, and discards its result even if the handler ignores the signal", async () => {

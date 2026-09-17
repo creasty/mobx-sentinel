@@ -519,13 +519,22 @@ export class Validator<T> {
   }) {
     const reactionDelayMs = args.opt?.delayMs ?? Validator.defaultDelayMs;
     let initialRun = args.opt?.initialRun ?? true;
+    let evaluated = false; // Whether the last evaluation of the expression returned rather than threw
 
     const dispose = reaction(
-      args.expr,
+      () => {
+        evaluated = false;
+        const expr = args.expr();
+        evaluated = true;
+        return expr;
+      },
       (expr) => {
         if (!initialRun && !this.#reactionTimerIds.has(args.key)) return; // In case of reset()
         initialRun = false;
         this.#reactionTimerIds.delete(args.key);
+        // MobX calls the initial run's effect even if the expression threw, with an undefined value. Return without
+        // applying it: MobX ends its first run only when the effect returns, and runs changes right away until then.
+        if (!evaluated) return;
         args.effect(expr);
       },
       {
