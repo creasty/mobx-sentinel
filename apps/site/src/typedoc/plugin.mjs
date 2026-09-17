@@ -21,6 +21,7 @@ export function load(app) {
   app.converter.on(td.Converter.EVENT_RESOLVE_BEGIN, copyDecoratorTagsToSignatures, -50);
   app.renderer.defineRouter("merged-member", MergedMemberRouter);
   app.renderer.on(td.PageEvent.END, writeDecoratorTags);
+  app.renderer.on(td.PageEvent.END, dropEmptyTypeParameterSections);
   // typedoc-plugin-markdown creates its hooks when it loads, and starlight-typedoc always loads it last.
   app.on(td.Application.EVENT_BOOTSTRAP_END, () => {
     // Absent when only converting, as check-api.mjs does.
@@ -43,16 +44,26 @@ export function load(app) {
  *   object parts of an intersection and the members of a top-level union, but not a union nested in an intersection,
  *   so each variant's `getter`, `setter` and `valueAs` would lose their descriptions and decorator tags.
  *
- * The third drops the heading per kind (Classes, Functions; Constructors, Accessors, Methods), keeping the order the
- * theme would group them in. A package lists its exports as one list. A class, interface, type alias or namespace
- * lists its members under at most three headings, by how they are used (see memberSections), their own subsections
- * a level below, so the table of contents still has one entry per member.
+ * The rest tidy the page:
+ * - The heading per kind (Classes, Functions; Constructors, Accessors, Methods) goes, keeping the order the theme would
+ *   group them in. A package lists its exports as one list. A class, interface, type alias or namespace lists its
+ *   members under at most three headings, by how they are used (see memberSections), their own subsections a level
+ *   below, so the table of contents still has one entry per member.
+ * - Index signatures are the first of those members, under Indexable, rather than a section of their own.
+ * - A type parameter that says nothing but its name, having no constraint, default or description, is left out, and
+ *   so is a Type Parameters section left empty (see dropEmptyTypeParameterSections).
  *
  * @param {import("typedoc-plugin-markdown").MarkdownThemeContext} context
  */
 function extendPartials(context) {
   const { partials } = context;
-  const { member, declaration, body } = partialsToExtend(partials, ["member", "declaration", "body"]);
+  const { member, declaration, body, memberWithGroups, typeParametersList } = partialsToExtend(partials, [
+    ...["member", "declaration", "body", "memberWithGroups", "typeParametersList"],
+    "indexSignature",
+  ]);
+  // A stand-in for each declaration memberWithGroups renders without its index signatures, mapped to the declaration.
+  /** @type {WeakMap<object, td.DeclarationReflection>} */
+  const withoutIndexSignatures = new WeakMap();
 
   partials.member = (model, options) => {
     // The theme renders only packages, classes, interfaces, enums and type aliases with members this way. A namespace
@@ -85,27 +96,53 @@ function extendPartials(context) {
     ].join("\n\n");
   };
 
-  partials.body = (model, options) => {
+  partials.memberWithGroups = (model, options) => {
+    if (!model.indexSignatures?.length || model.categories?.length) return memberWithGroups(model, options);
+    // The theme renders the index signatures before the body; the body renders them among the members instead.
+    const standIn = Object.create(model, { indexSignatures: { value: undefined } });
+    withoutIndexSignatures.set(standIn, model);
+    return memberWithGroups(standIn, options);
+  };
+
+  partials.typeParametersList = (model, options) => {
+    const informative = model.filter(
+      (typeParameter) => typeParameter.type || typeParameter.default || typeParameter.comment
+    );
+    return informative.length > 0 ? typeParametersList(informative, options) : noInformativeTypeParameters;
+  };
+
+  partials.body = (rendered, options) => {
+    const model = withoutIndexSignatures.get(rendered) ?? rendered;
+    const indexSignatures = withoutIndexSignatures.has(rendered) ? (model.indexSignatures ?? []) : [];
     // The root page lists the packages under its own heading, with their versions. Categories are left alone too.
-    if (model.kindOf(td.ReflectionKind.Project) || !model.groups?.length || model.categories?.length) {
-      return body(model, options);
-    }
-    const children = model.groups.flatMap((group) => group.children);
+    if (model.kindOf(td.ReflectionKind.Project) || model.categories?.length) return body(model, options);
+    const children = model.groups?.flatMap((group) => group.children) ?? [];
+    if (children.length === 0 && indexSignatures.length === 0) return body(model, options);
     const withPages = children.filter((child) => context.router.hasOwnDocument(child));
     // A package links to its exports' pages. The theme's hideGroupHeadings option does not help: it still heads a
     // list of links with its kind, and drops headings only between members rendered on the page.
-    if (withPages.length === children.length) return partials.groupIndex({ children });
+    if (withPages.length > 0 && withPages.length === children.length) return partials.groupIndex({ children });
     if (withPages.length > 0) return body(model, options);
 
     const members = children.filter((child) => child.isDeclaration());
     // A namespace rendered on another declaration's page is already under its own heading.
     if (model !== context.page.model) return partials.members(members, { headingLevel: options.headingLevel });
+    const indexable = [
+      `${"#".repeat(options.headingLevel + 1)} ${td.i18n.theme_indexable()}`,
+      ...indexSignatures.map((signature) => {
+        const md = partials.indexSignature(signature, { headingLevel: options.headingLevel + 2 });
+        return context.options.getValue("useCodeBlocks") ? md : `> ${md}`;
+      }),
+    ].join("\n\n");
     return memberSections(members)
-      .filter(([, section]) => section.length > 0)
-      .flatMap(([title, section]) => [
-        `${"#".repeat(options.headingLevel)} ${title}`,
-        partials.members(section, { headingLevel: options.headingLevel + 1 }),
-      ])
+      .map(([title, section]) => {
+        const entries =
+          section.length > 0 ? [partials.members(section, { headingLevel: options.headingLevel + 1 })] : [];
+        if (title === "Members" && indexSignatures.length > 0) entries.unshift(indexable);
+        if (entries.length === 0) return "";
+        return [`${"#".repeat(options.headingLevel)} ${title}`, entries.join("\n\n***\n\n")].join("\n\n");
+      })
+      .filter(Boolean)
       .join("\n\n");
   };
 
@@ -432,6 +469,29 @@ export const decoratorTagHtml = (tag) => `<span class="api-tag">${tag}</span>`;
 const renderedDecoratorTags = new Map(
   [...decoratorTags].map((tag) => [`**\`${tag[1].toUpperCase()}${tag.slice(2)}\`**`, decoratorTagHtml(tag)])
 );
+
+/**
+ * What the type parameter list renders when every type parameter it is given says nothing but its name.
+ */
+const noInformativeTypeParameters = "<!-- no informative type parameters -->";
+
+/**
+ * Remove a Type Parameters section that has none left to list. The heading comes from the partial that lists them,
+ * as memberWithGroups, declaration and signature each render their own, so it goes once the page is complete.
+ *
+ * @param {td.PageEvent} page
+ */
+function dropEmptyTypeParameterSections(page) {
+  if (!page.contents) return;
+  const heading = td.ReflectionKind.pluralString(td.ReflectionKind.TypeParameter);
+  page.contents = page.contents.replace(
+    new RegExp(`\\n\\n#{1,6} ${heading}\\n\\n${noInformativeTypeParameters}`, "g"),
+    ""
+  );
+  if (page.contents.includes(noInformativeTypeParameters)) {
+    throw new Error(`${page.url} lists no type parameters under a heading other than "${heading}"`);
+  }
+}
 
 /**
  * Rewrite the decorator tags on a rendered page. Done here rather than in Astro's Markdown pipeline, whose rehype
