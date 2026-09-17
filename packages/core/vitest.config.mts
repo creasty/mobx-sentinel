@@ -17,5 +17,27 @@ export default defineConfig({
       // test-stage3/tsconfig.json for it.
       include: ["**/src/**/*.test.ts"],
     },
+    // Every test runs against both builds of MobX. Its production build mangles the internal names ending in `_`, so
+    // code reading one of those by name works in development only, and only the tests against that build notice.
+    projects: [
+      {
+        extends: true,
+        test: {
+          name: "mobx-development",
+        },
+      },
+      {
+        extends: true,
+        test: {
+          name: "mobx-production",
+          // MobX has no `exports` map, so Node takes its `main` entry, which loads the production build under this
+          // NODE_ENV. That is how servers get it, whereas browser bundles take `module`, a build that is not mangled.
+          // mobx.test.ts checks that this still selects the mangled build.
+          env: { NODE_ENV: "production" },
+          // Types are the same on both builds, and already checked by the other project.
+          typecheck: { enabled: false },
+        },
+      },
+    ],
   },
 });

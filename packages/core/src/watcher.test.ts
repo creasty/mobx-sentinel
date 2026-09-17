@@ -11,6 +11,9 @@ import { Watcher, debugWatcher, unwatch, watch } from "./watcher";
 import { nested } from "./nested";
 import { KeyPath } from "./keyPath";
 
+/** MobX's "Cycle detected in computation" error, which its production build only gives the number of */
+const mobxCycleError = /Cycle detected in computation|minified error nr: 32 /;
+
 /** A minimal model to be nested */
 class Leaf {
   @observable value = 0;
@@ -2858,7 +2861,7 @@ describe("Annotations", () => {
       });
       expect(watcher.changed).toBe(true);
       // PINNED(quirk): key paths are collected recursively without cycle detection, so MobX reports a cycle (and reset() recurses until the stack overflows, which is not exercised here). Decide: support cycles by tracking visited watchers, or reject them?
-      expect(() => watcher.changedKeyPaths).toThrowError(/Cycle detected/);
+      expect(() => watcher.changedKeyPaths).toThrowError(mobxCycleError);
     });
   });
 });

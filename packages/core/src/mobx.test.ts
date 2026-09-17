@@ -12,6 +12,7 @@ import {
   action,
   autorun,
   configure,
+  getAtom,
   isAction,
   isBoxedObservable,
   isObservableArray,
@@ -19,13 +20,27 @@ import {
   isObservableObject,
   isObservableProp,
   isObservableSet,
-  makeAutoObservable,
   remove,
+  set,
+  untracked,
 } from "mobx";
-import type { ObservableObjectAdministration } from "mobx/dist/internal";
+
+/** Read the value of an annotated key through its atom */
+function readAtom(target: object, key: PropertyKey) {
+  return (getAtom(target, key) as unknown as { get(): unknown }).get();
+}
 
 describe("MobX", () => {
-  describe("$mobx and ObservableObjectAdministration", () => {
+  describe("builds", () => {
+    test("NODE_ENV=production loads the production build, which mangles the internal names ending in _", () => {
+      // What the mobx-production project in vitest.config.mts relies on to test against that build
+      const adm = (observable({}) as any)[$mobx];
+      expect("values_" in adm).toBe(process.env.NODE_ENV !== "production");
+    });
+  });
+
+  // getMobxObservableAnnotations goes through these, as its production build mangles the internal API
+  describe("introspection of observable objects", () => {
     class Sample {
       @observable field1 = 123;
       @observable.ref field2 = 456;
@@ -40,104 +55,91 @@ describe("MobX", () => {
       @computed.struct get computed2() {
         return this.field2 * 3;
       }
+
+      @action action1() {}
     }
 
-    test("List of annotated properties can be retrieved via the internal API", () => {
+    test("isObservableProp is true for the keys of observable and computed annotations only", () => {
       const obj = new Sample();
-      const adm = (obj as any)[$mobx] as ObservableObjectAdministration;
 
-      expectTypeOf(adm).toMatchTypeOf<{
-        values_: Map<string | symbol | number, { get: () => any }>;
-      }>();
-
-      expect(adm).toBeTruthy();
-      expect(adm).toBeTypeOf("object");
-      expect(adm).toHaveProperty("values_");
-      expect(adm.values_).toBeInstanceOf(Map);
-
-      for (const [key, value] of adm.values_) {
-        expect(key).toBeTypeOf("string");
-        expect(value).toBeTruthy();
-        expect(value).toBeTypeOf("object");
-        expect(value).toHaveProperty("get");
-        expect(value.get).toBeTypeOf("function");
-      }
-
-      expect(new Set(adm.values_.keys())).toEqual(new Set(["field1", "field2", "computed1", "computed2"]));
-      expect(adm.values_.get("field1")?.get()).toEqual(obj.field1);
-      expect(adm.values_.get("field2")?.get()).toEqual(obj.field2);
-      expect(adm.values_.get("computed1")?.get()).toEqual(obj.computed1);
-      expect(adm.values_.get("computed2")?.get()).toEqual(obj.computed2);
+      expect(isObservableProp(obj, "field1")).toBe(true);
+      expect(isObservableProp(obj, "field2")).toBe(true);
+      expect(isObservableProp(obj, "computed1")).toBe(true);
+      expect(isObservableProp(obj, "computed2")).toBe(true);
+      expect(isObservableProp(obj, "action1")).toBe(false);
+      expect(isObservableProp(obj, "missing")).toBe(false);
     });
 
-    test("getObservablePropValue_ reads the current value of an annotated key", () => {
+    test("getAtom returns the atom holding the current value of an annotated key, and reads through it are tracked", () => {
       const obj = new Sample();
-      const adm = (obj as any)[$mobx];
+      expect(readAtom(obj, "field1")).toBe(123);
+      expect(readAtom(obj, "computed1")).toBe(246);
 
-      expectTypeOf<ObservableObjectAdministration["getObservablePropValue_"]>().toEqualTypeOf<
-        (key: PropertyKey) => any
-      >();
-      expect(adm.getObservablePropValue_).toBeTypeOf("function");
-      expect(adm.getObservablePropValue_("field1")).toBe(123);
-      expect(adm.getObservablePropValue_("computed1")).toBe(246);
-
-      runInAction(() => (obj.field1 = 1));
-      expect(adm.getObservablePropValue_("field1")).toBe(1);
-      expect(adm.getObservablePropValue_("computed1")).toBe(2);
-    });
-
-    test("getObservablePropValue_ throws for keys that are not annotated", () => {
-      const obj = new Sample();
-      const adm = (obj as any)[$mobx];
-
-      expect(() => adm.getObservablePropValue_("missing")).toThrow(TypeError);
-    });
-
-    test("reads through getObservablePropValue_ are tracked by reactions", () => {
-      const obj = new Sample();
-      const adm = (obj as any)[$mobx];
       const effectFn = vi.fn();
-      reaction(() => adm.getObservablePropValue_("computed1"), effectFn);
-
+      const dispose = reaction(() => readAtom(obj, "computed1"), effectFn);
       runInAction(() => (obj.field1 = 1));
+      expect(readAtom(obj, "field1")).toBe(1);
       expect(effectFn).toBeCalledTimes(1);
       expect(effectFn).lastCalledWith(2, 246, expect.anything());
+
+      dispose();
     });
 
-    test("lazy key maps are not populated without stage-3 decorators", () => {
-      class AnnotationMap {
-        field1 = 1;
-        constructor() {
-          makeObservable(this, { field1: observable, computed1: computed });
-        }
-        get computed1() {
-          return this.field1;
-        }
-      }
-      class Auto {
-        field1 = 1;
-        constructor() {
-          makeAutoObservable(this);
-        }
-        get computed1() {
-          return this.field1;
-        }
-      }
+    test("getAtom throws for keys that are not annotated, and for the falsy keys '' and 0 even when they are", () => {
+      const obj = observable<Record<string | number, number>>({ "": 1 });
+      runInAction(() => set(obj, 0, 2));
 
-      const targets: [object, string[]][] = [
-        [new Sample(), ["field1", "field2", "computed1", "computed2"]],
-        [new AnnotationMap(), ["field1", "computed1"]],
-        [new Auto(), ["field1", "computed1"]],
-        [observable({ field1: 1 }), ["field1"]],
-      ];
-      for (const [target, keys] of targets) {
-        const adm = (target as any)[$mobx];
-        // The fields are undefined both on MobX versions that lack them (<6.16) and on those that initialize them lazily
-        expect(adm.lazyObservableKeys_).toBeUndefined();
-        expect(adm.lazyComputedKeys_).toBeUndefined();
-        // All annotations are materialized up front, before any property is read
-        expect(new Set(adm.values_.keys())).toEqual(new Set(keys));
-      }
+      expect(isObservableProp(obj, "")).toBe(true);
+      expect(isObservableProp(obj, 0)).toBe(true);
+      expect(() => getAtom(obj, "")).toThrow();
+      expect(() => getAtom(obj, 0)).toThrow();
+      expect(() => getAtom(obj, "missing")).toThrow();
+    });
+
+    test("removing a key leaves its atom detached, holding the last value", () => {
+      const obj = observable<Record<string, number>>({ value: 1 });
+      const atom = getAtom(obj, "value") as unknown as { get(): unknown };
+
+      runInAction(() => remove(obj, "value"));
+      expect(isObservableProp(obj, "value")).toBe(false);
+      expect("value" in obj).toBe(false);
+      expect(atom.get()).toBe(1);
+    });
+
+    test("a property deleted from a non-proxied target without MobX stays annotated", () => {
+      const obj: Record<string, number> = observable({ value: 1 }, {}, { proxy: false });
+
+      delete obj.value;
+      expect("value" in obj).toBe(false);
+      expect(isObservableProp(obj, "value")).toBe(true);
+      expect(readAtom(obj, "value")).toBe(1);
+    });
+
+    test("the administration holds the annotated keys as keys of maps among its own enumerable properties", () => {
+      // getMobxObservableAnnotations finds keys that are not properties this way, whatever the (mangled) names
+      const keysInMaps = (target: object) =>
+        Object.values((target as any)[$mobx]).flatMap((value) => (value instanceof Map ? [...value.keys()] : []));
+
+      expect(keysInMaps(new Sample())).toEqual(expect.arrayContaining(["field1", "field2", "computed1", "computed2"]));
+
+      const obj: Record<string, number> = observable({ value: 1 }, {}, { proxy: false });
+      delete obj.value;
+      expect(keysInMaps(obj)).toContain("value");
+    });
+
+    test("listing the keys of a proxied observable object is tracked, unless untracked", () => {
+      const obj = observable<Record<string, number>>({ value: 1 });
+      const trackedFn = vi.fn();
+      const untrackedFn = vi.fn();
+      const dispose1 = autorun(() => trackedFn(Reflect.ownKeys(obj)));
+      const dispose2 = autorun(() => untrackedFn(untracked(() => Reflect.ownKeys(obj))));
+
+      runInAction(() => (obj.added = 2));
+      expect(trackedFn).toBeCalledTimes(2);
+      expect(untrackedFn).toBeCalledTimes(1);
+
+      dispose1();
+      dispose2();
     });
 
     test("observable() stores function-valued properties as observable values holding actions", () => {
@@ -146,58 +148,9 @@ describe("MobX", () => {
           return 1;
         },
       });
-      const adm = (obj as any)[$mobx] as ObservableObjectAdministration;
 
       expect(isObservableProp(obj, "method")).toBe(true);
       expect(isAction(obj.method)).toBe(true);
-      expect(adm.values_.has("method")).toBe(true);
-    });
-
-    test("methods annotated with actions are not stored in values_", () => {
-      class Sample {
-        field1 = 1;
-        constructor() {
-          makeObservable(this, { field1: observable, action1: action });
-        }
-        action1() {}
-      }
-      const adm = (new Sample() as any)[$mobx] as ObservableObjectAdministration;
-
-      expect([...adm.values_.keys()]).toEqual(["field1"]);
-    });
-
-    test("removing a key deletes its values_ entry, while the detached entry keeps the last value", () => {
-      const obj = observable<Record<string, number>>({ value: 1 });
-      const adm = (obj as any)[$mobx] as ObservableObjectAdministration;
-      const entry = adm.values_.get("value")!;
-
-      runInAction(() => remove(obj, "value"));
-      expect(adm.values_.has("value")).toBe(false);
-      expect("value" in obj).toBe(false);
-      expect(entry.get()).toBe(1);
-    });
-
-    test("values_ keeps entries whose property was deleted from a non-proxied target without MobX", () => {
-      const obj: Record<string, number> = observable({ value: 1 }, {}, { proxy: false });
-      const adm = (obj as any)[$mobx] as ObservableObjectAdministration;
-
-      delete obj.value;
-      expect("value" in obj).toBe(false);
-      expect(adm.values_.has("value")).toBe(true);
-      expect(adm.values_.get("value")!.get()).toBe(1);
-    });
-
-    test("iterating values_ is not tracked by reactions", () => {
-      const obj = observable<Record<string, number>>({ value: 1 });
-      const adm = (obj as any)[$mobx] as ObservableObjectAdministration;
-      const effectFn = vi.fn();
-      const dispose = autorun(() => effectFn([...adm.values_.keys()]));
-
-      runInAction(() => (obj.other = 2));
-      expect(effectFn).toBeCalledTimes(1);
-      expect([...adm.values_.keys()]).toEqual(["value", "other"]);
-
-      dispose();
     });
   });
 
