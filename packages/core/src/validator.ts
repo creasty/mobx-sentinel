@@ -532,7 +532,19 @@ export class Validator<T> {
         fireImmediately: args.opt?.initialRun ?? true,
         scheduler: (fn) => {
           // No need for clearing timer
-          const timerId = +setTimeout(fn, reactionDelayMs);
+          const timerId = +setTimeout(() => {
+            try {
+              fn();
+            } finally {
+              // MobX skips the effect, which removes the timer id, when the expression throws or its value is unchanged.
+              // The id is compared, as the run may have scheduled the next one.
+              runInAction(() => {
+                if (this.#reactionTimerIds.get(args.key) === timerId) {
+                  this.#reactionTimerIds.delete(args.key);
+                }
+              });
+            }
+          }, reactionDelayMs);
           runInAction(() => {
             this.#reactionTimerIds.set(args.key, timerId!);
           });
