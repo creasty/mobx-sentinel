@@ -1,6 +1,6 @@
 ---
 title: "Form Basics"
-description: "Get a Form for a model, nest forms, and read the form's state and errors."
+description: "Get a Form for a model, nest forms, read the form's state and errors, and reset it."
 sidebar:
   order: 1
 ---
@@ -129,4 +129,17 @@ form.reportError();
 form.addHandler('didSubmit', (succeed) => {
   if (!succeed) form.reportError();
 });
+```
+
+## Managing State
+
+```ts
+// Mark form as dirty
+form.markAsDirty();
+
+// Reset form state (clears dirty, fields, sub-forms)
+form.reset();
+
+// Note: reset() does NOT clear validation errors
+// Errors are managed by the Validator and remain until revalidation
 ```

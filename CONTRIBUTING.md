@@ -9,7 +9,7 @@
 
 ## Developing
 
-Before contributing, please familiarize yourself with the [Design Principles](README.md#design-principles) and [Architecture](README.md#architecture) sections to understand the project's core philosophy and structure.
+Before contributing, please familiarize yourself with the [Design Principles](https://mobx-sentinel.creasty.com/#design-principles) and the [Architecture](https://mobx-sentinel.creasty.com/docs/architecture/) to understand the project's core philosophy and structure.
 
 ### Coding Standards
 
@@ -37,7 +37,7 @@ Before contributing, please familiarize yourself with the [Design Principles](RE
 1. Create a new branch for your feature or bugfix.
 1. Make your changes, ensuring you follow the coding standards and add/update tests as needed.
 1. Run all tests locally and ensure they pass.
-1. Update documentation if your changes affect the public API or behavior.
+1. Update documentation if your changes affect the public API or behavior: the guides in [apps/site/src/content/docs/docs/](./apps/site/src/content/docs/docs), and the TSDoc comments the API reference is generated from.
 1. Submit a pull request with a clear description of your changes and reference any related issues.
 1. Use self-review comments to provide additional context or highlight specific areas for reviewer attention.
 1. Be responsive to feedback and make requested changes promptly.
@@ -191,12 +191,11 @@ ordinary pull request.
 
 **Merging it.** `GITHUB_TOKEN` can turn auto-merge on, but the merge it then performs is attributed
 to `github-actions[bot]`, so `main` never sees that push: no test run, no Codecov upload, and no
-production Pages deploy -- and with TypeDoc's `includeVersion`, the API doc would keep printing the
-previous version. Worse, the release would then ship a commit `main`'s own CI never ran. Dispatching
-those runs after the publish patches the symptom in the wrong order. Merging by hand costs one click
-and keeps the sequence: `push` and `deploy` run on the merge, and only then is there a release worth
-publishing. Turning auto-merge on from the pull request page yourself is fine -- that merge is
-attributed to you, so it behaves.
+production Pages deploy. Worse, the release would then ship a commit `main`'s own CI never ran.
+Dispatching those runs after the publish patches the symptom in the wrong order. Merging by hand
+costs one click and keeps the sequence: `push` and `deploy` run on the merge, and only then is there
+a release worth publishing. Turning auto-merge on from the pull request page yourself is fine --
+that merge is attributed to you, so it behaves.
 
 #### What the guards refuse
 
@@ -218,20 +217,19 @@ empty. The draft carries that warning in a note above the release notes; delete 
 
 ## [Maintainer Only] Deployments
 
-Three sites are deployed to Cloudflare Pages by the [deploy](https://github.com/creasty/mobx-sentinel/actions/workflows/deploy.yml) workflow:
+Two sites are deployed to Cloudflare Pages by the [deploy](https://github.com/creasty/mobx-sentinel/actions/workflows/deploy.yml) workflow:
 
 | Pages project | Source | Built by | Deployed to |
 | ------------- | ------ | -------- | ----------- |
-| `mobx-sentinel-apidoc` | `packages/*` (TSDoc) | `pnpm doc` | [mobx-sentinel.creasty.com](https://mobx-sentinel.creasty.com) |
+| `mobx-sentinel-site` | [apps/site/](./apps/site) | `pnpm --filter site build` | [mobx-sentinel.creasty.com](https://mobx-sentinel.creasty.com) |
 | `mobx-sentinel-example` | [apps/example/](./apps/example) | `pnpm --filter example build` | [example.mobx-sentinel.creasty.com](https://example.mobx-sentinel.creasty.com) |
-| `mobx-sentinel-site` | [apps/site/](./apps/site) | `pnpm --filter site build` | [mobx-sentinel-site.pages.dev](https://mobx-sentinel-site.pages.dev), until it replaces `mobx-sentinel-apidoc` |
 
-Every branch push deploys all three. Pushes to `main` go to production; every other branch gets a
+Every branch push deploys both. Pushes to `main` go to production; every other branch gets a
 preview deployment, whose URL is reported back on the commit and on the pull request.
 
 The site's leg also runs `pnpm --filter site check:api`, which fails the deploy when the API reference
-loses what `apps/site/src/typedoc/plugin.mjs` adds to it: namespaces merged into their same-named class,
-interface or type alias, and the `@action`/`@computed` tags. It needs the site built first.
+loses what `apps/site/src/typedoc/` adds to it: namespaces merged into their same-named class, interface
+or type alias, and the `@action`/`@computed` tags. It needs the site built first.
 
 Deployments are direct uploads via [wrangler](https://developers.cloudflare.com/workers/wrangler/),
 so they require two repository secrets: `CLOUDFLARE_ACCOUNT_ID` and `CLOUDFLARE_API_TOKEN`
@@ -243,13 +241,13 @@ custom domain has no wrangler command, so attach that through the API (or the da
 wrangler while its dependencies' build scripts are unapproved; the workflow's pnpm 11 does not ask.
 
 ```sh
-pnpm dlx --allow-build=esbuild --allow-build=workerd wrangler@4 pages project create mobx-sentinel-site --production-branch=main
-curl -X POST "https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/pages/projects/mobx-sentinel-site/domains" \
+pnpm dlx --allow-build=esbuild --allow-build=workerd wrangler@4 pages project create <project> --production-branch=main
+curl -X POST "https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/pages/projects/<project>/domains" \
   -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" -H "Content-Type: application/json" \
   -d '{"name":"<hostname>"}'
 ```
 
-If Cloudflare does not also create the hostname's proxied `CNAME` to `mobx-sentinel-site.pages.dev`,
+If Cloudflare does not also create the hostname's proxied `CNAME` to `<project>.pages.dev`,
 adding it takes *Zone → DNS → Edit*, beyond the *Cloudflare Pages: Edit* the deploy token is described with above.
 
 Everything else -- custom domains, production branch, compatibility flags -- remains a per-project

@@ -103,16 +103,3 @@ form.addHandler('didSubmit', (succeed) => {
 Calling `form.submit({ force: true })` while a submission is in progress cancels it: its `AbortSignal` is aborted and a new submission starts. The cancelled submission invokes no further `willSubmit` or `submit` handlers, resolves `false` whatever its handlers return, and neither calls `didSubmit` handlers nor resets the form, while `isSubmitting` stays `true` until the latest submission settles. The latest submission reports the outcome, so `didSubmit` is called once for it, even if the cancelled submission settles later.
 
 The handler that is running when the submission is cancelled is not interrupted, so pass the signal to its async work (e.g. `fetch(url, { signal })`) to cancel that work too. Since `didSubmit` is not called for a cancelled submission, release anything a handler acquired in a `finally` block inside that handler.
-
-## Managing State
-
-```ts
-// Mark form as dirty
-form.markAsDirty();
-
-// Reset form state (clears dirty, fields, sub-forms)
-form.reset();
-
-// Note: reset() does NOT clear validation errors
-// Errors are managed by the Validator and remain until revalidation
-```

@@ -1778,7 +1778,7 @@ describe("Validator: error bookkeeping", () => {
         b.invalidate("field", "field");
       });
 
-      // PINNED(quirk): invalidKeys/invalidKeyCount count a self error as the key KeyPath.Self, while the README describes invalidKeys as "direct property errors only". Decide: should self errors be excluded from invalidKeys and invalidKeyCount?
+      // PINNED(quirk): invalidKeys/invalidKeyCount count a self error as the key KeyPath.Self, while the docs describe invalidKeys as "direct property errors only". Decide: should self errors be excluded from invalidKeys and invalidKeyCount?
       expect(validator.invalidKeys).toEqual(new Set([KeyPath.Self, "field"]));
       expect(validator.invalidKeyCount).toBe(2);
     });
@@ -2937,7 +2937,7 @@ describe("Validator: types", () => {
     expectTypeOf(validator.getErrorMessages(KeyPath.Self)).toEqualTypeOf<Set<string>>();
     expectTypeOf(validator.hasErrors(KeyPath.Self)).toEqualTypeOf<boolean>();
     expectTypeOf(validator.findErrors(KeyPath.Self)).toMatchTypeOf<Iterable<[KeyPath, ValidationError]>>();
-    // `null` is intended (see "#firstErrorMessage returns null when there are no errors"); the README's "string | undefined" is outdated.
+    // `null` is intended (see "#firstErrorMessage returns null when there are no errors"); the "string | undefined" in the docs is outdated.
     expectTypeOf(validator.firstErrorMessage).toEqualTypeOf<string | null>();
     expect(validator.firstErrorMessage).toBeNull();
   });

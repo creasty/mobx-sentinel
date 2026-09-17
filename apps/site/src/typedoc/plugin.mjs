@@ -21,10 +21,12 @@ export function load(app) {
   app.converter.on(td.Converter.EVENT_RESOLVE_BEGIN, copyDecoratorTagsToSignatures, -50);
   app.renderer.defineRouter("merged-member", MergedMemberRouter);
   app.renderer.on(td.PageEvent.END, writeDecoratorTags);
+  app.renderer.on(td.PageEvent.END, dropEmptyTypeParameterSections);
   // typedoc-plugin-markdown creates its hooks when it loads, and starlight-typedoc always loads it last.
   app.on(td.Application.EVENT_BOOTSTRAP_END, () => {
     // Absent when only converting, as check-api.mjs does.
     app.renderer.markdownHooks?.on("page.begin", extendPartials);
+    app.renderer.markdownHooks?.on("page.begin", renderTypesFaithfully);
   });
 }
 
@@ -42,16 +44,26 @@ export function load(app) {
  *   object parts of an intersection and the members of a top-level union, but not a union nested in an intersection,
  *   so each variant's `getter`, `setter` and `valueAs` would lose their descriptions and decorator tags.
  *
- * The third drops the heading per kind (Classes, Functions; Constructors, Accessors, Methods), keeping the order the
- * theme would group them in. A package lists its exports as one list. A class, interface, type alias or namespace
- * lists its members under a single Members heading, their own subsections a level below, so the table of contents
- * still has one entry per member.
+ * The rest tidy the page:
+ * - The heading per kind (Classes, Functions; Constructors, Accessors, Methods) goes, keeping the order the theme would
+ *   group them in. A package lists its exports as one list. A class, interface, type alias or namespace lists its
+ *   members by how they are used (see memberSections): its Types, its Constructor, its Static Members and its other
+ *   Members, their own subsections a level below, so the table of contents still has one entry per member.
+ * - Index signatures are the first of those members, under Indexable, rather than a section of their own.
+ * - A type parameter that says nothing but its name, having no constraint, default or description, is left out, and
+ *   so is a Type Parameters section left empty (see dropEmptyTypeParameterSections).
  *
  * @param {import("typedoc-plugin-markdown").MarkdownThemeContext} context
  */
 function extendPartials(context) {
   const { partials } = context;
-  const { member, declaration, body } = partials;
+  const { member, declaration, body, memberWithGroups, typeParametersList } = partialsToExtend(partials, [
+    ...["member", "declaration", "body", "memberWithGroups", "typeParametersList"],
+    "indexSignature",
+  ]);
+  // A stand-in for each declaration memberWithGroups renders without its index signatures, mapped to the declaration.
+  /** @type {WeakMap<object, td.DeclarationReflection>} */
+  const withoutIndexSignatures = new WeakMap();
 
   partials.member = (model, options) => {
     // The theme renders only packages, classes, interfaces, enums and type aliases with members this way. A namespace
@@ -84,29 +96,217 @@ function extendPartials(context) {
     ].join("\n\n");
   };
 
-  partials.body = (model, options) => {
+  partials.memberWithGroups = (model, options) => {
+    if (!model.indexSignatures?.length || model.categories?.length) return memberWithGroups(model, options);
+    // The theme renders the index signatures before the body; the body renders them among the members instead.
+    const standIn = Object.create(model, { indexSignatures: { value: undefined } });
+    withoutIndexSignatures.set(standIn, model);
+    return memberWithGroups(standIn, options);
+  };
+
+  partials.typeParametersList = (model, options) => {
+    const informative = model.filter(
+      (typeParameter) => typeParameter.type || typeParameter.default || typeParameter.comment
+    );
+    return informative.length > 0 ? typeParametersList(informative, options) : noInformativeTypeParameters;
+  };
+
+  partials.body = (rendered, options) => {
+    const model = withoutIndexSignatures.get(rendered) ?? rendered;
+    const indexSignatures = withoutIndexSignatures.has(rendered) ? (model.indexSignatures ?? []) : [];
     // The root page lists the packages under its own heading, with their versions. Categories are left alone too.
-    if (model.kindOf(td.ReflectionKind.Project) || !model.groups?.length || model.categories?.length) {
-      return body(model, options);
-    }
-    const children = model.groups.flatMap((group) => group.children);
+    if (model.kindOf(td.ReflectionKind.Project) || model.categories?.length) return body(model, options);
+    const children = model.groups?.flatMap((group) => group.children) ?? [];
+    if (children.length === 0 && indexSignatures.length === 0) return body(model, options);
     const withPages = children.filter((child) => context.router.hasOwnDocument(child));
     // A package links to its exports' pages. The theme's hideGroupHeadings option does not help: it still heads a
     // list of links with its kind, and drops headings only between members rendered on the page.
-    if (withPages.length === children.length) return partials.groupIndex({ children });
+    if (withPages.length > 0 && withPages.length === children.length) return partials.groupIndex({ children });
     if (withPages.length > 0) return body(model, options);
 
     const members = children.filter((child) => child.isDeclaration());
     // A namespace rendered on another declaration's page is already under its own heading.
     if (model !== context.page.model) return partials.members(members, { headingLevel: options.headingLevel });
-    return [
-      `${"#".repeat(options.headingLevel)} Members`,
-      partials.members(members, { headingLevel: options.headingLevel + 1 }),
+    const indexable = [
+      `${"#".repeat(options.headingLevel + 1)} ${td.i18n.theme_indexable()}`,
+      ...indexSignatures.map((signature) => {
+        const md = partials.indexSignature(signature, { headingLevel: options.headingLevel + 2 });
+        return context.options.getValue("useCodeBlocks") ? md : `> ${md}`;
+      }),
     ].join("\n\n");
+    const section = (/** @type {string} */ title, /** @type {string[]} */ entries) =>
+      entries.length > 0
+        ? [`${"#".repeat(options.headingLevel)} ${title}`, entries.join("\n\n***\n\n")].join("\n\n")
+        : "";
+    const listed = (/** @type {td.DeclarationReflection[]} */ list) =>
+      list.length > 0 ? [partials.members(list, { headingLevel: options.headingLevel + 1 })] : [];
+    const { types, constructors, statics, rest } = memberSections(members);
+    return [
+      section("Types", listed(types)),
+      // Under no section: the theme heads each constructor signature with a Constructor heading of its own.
+      constructors.length > 0 ? partials.members(constructors, { headingLevel: options.headingLevel }) : "",
+      section("Static Members", listed(statics)),
+      section("Members", [...(indexSignatures.length > 0 ? [indexable] : []), ...listed(rest)]),
+    ]
+      .filter(Boolean)
+      .join("\n\n");
   };
 
   // A hook's return value is inserted into the page; this one only extends the partials.
   return "";
+}
+
+/**
+ * Render types as TypeScript reads them, and as TypeDoc's HTML theme did, where typedoc-plugin-markdown would print a
+ * different type or leave part of one out:
+ * - A function type keeps `new` and its parameters' types, as in `new (field: FormField) => FormBinding`. The theme
+ *   prints only the parameter names, and nothing else on the page names a callback's parameter types.
+ * - An intersection parenthesizes the unions in it: `object & (A | B)`, not `object & A | B`.
+ * - A named tuple member keeps its name, as in `[keyPath: KeyPath, error: ValidationError]`.
+ * - A type predicate and a template literal type link the types in them, rather than print the whole as code.
+ * - A reference to a type declared inside another names the declarations it is in, as in `InputBinding.Config`, where
+ *   the theme prints `Config`.
+ * - An interface that extends several lists each one, where the theme joins them with dots, as if into one name.
+ * - An interface does not get the `()` the theme puts after the name of anything with call signatures.
+ * - "Defined in" lists every declaration of a merged name, not only the first.
+ *
+ * @param {import("typedoc-plugin-markdown").MarkdownThemeContext} context
+ */
+function renderTypesFaithfully(context) {
+  const { partials, helpers } = context;
+  const { functionType, someType, referenceType, memberTitle, sources } = partialsToExtend(partials, [
+    ...["functionType", "someType", "referenceType", "memberTitle", "sources"],
+    ...["intersectionType", "namedTupleType", "hierarchy"],
+  ]);
+
+  partials.functionType = (model, options) =>
+    model
+      .map((signature) => {
+        const md = functionType([signature], { ...options, forceParameterType: true });
+        return signature.kindOf(td.ReflectionKind.ConstructorSignature) ? `new ${md}` : md;
+      })
+      .join("; ");
+
+  partials.intersectionType = (model) =>
+    model.types
+      .map((type) => {
+        const md = partials.someType(type);
+        return type.needsParenthesis(td.TypeContext.intersectionElement) ? `(${md})` : md;
+      })
+      .join(" & ");
+
+  partials.namedTupleType = (model) =>
+    `\`${model.name}${model.isOptional ? "?" : ""}\`: ${partials.someType(model.element)}`;
+
+  partials.someType = (model, options) => {
+    if (model instanceof td.PredicateType) {
+      const subject = `${model.asserts ? "*asserts* " : ""}\`${model.name}\``;
+      return model.targetType ? `${subject} *is* ${partials.someType(model.targetType)}` : subject;
+    }
+    if (model instanceof td.TemplateLiteralType) {
+      const spans = model.tail.map(([type, text]) => `$\\{${partials.someType(type)}\\}${escapeMarkdown(text)}`);
+      return `\\\`${escapeMarkdown(model.head)}${spans.join("")}\\\``;
+    }
+    return someType(model, options);
+  };
+
+  partials.referenceType = (model) => {
+    const md = referenceType(model);
+    const target = model.reflection;
+    if (!target || target.kindOf(td.ReflectionKind.TypeParameter)) return md;
+    const names = [target.name];
+    for (let parent = target.parent; parent && !parent.kindOf(ModuleOrProject); parent = parent.parent) {
+      names.unshift(parent.name);
+    }
+    // The theme's own rendering starts with the name, linked or not.
+    return md.replace(`\`${target.name}\``, `\`${names.join(".")}\``);
+  };
+
+  partials.hierarchy = (model, options) => {
+    const md = [];
+    const heading = (/** @type {string} */ text) => `${"#".repeat(Math.min(options.headingLevel, 6))} ${text}`;
+    const list = (/** @type {td.SomeType[]} */ types, /** @type {boolean} */ isTarget) =>
+      types.map((type) => `- ${helpers.getHierarchyType(type, { isTarget })}`).join("\n");
+    for (let level = model; level.next; level = level.next) {
+      if (!level.isTarget && level.types.length) {
+        md.push(heading(td.i18n.theme_extends()), list(level.types, false));
+      } else {
+        md.push(heading(td.i18n.theme_extended_by()), list(level.next.types, level.next.isTarget ?? false));
+      }
+      if (!level.next.next) break;
+    }
+    return md.join("\n\n");
+  };
+
+  partials.memberTitle = (model) => {
+    const md = memberTitle(model);
+    return model.kindOf(td.ReflectionKind.Interface) ? md.replace("()", "") : md;
+  };
+
+  partials.sources = (model, options) =>
+    [
+      sources(model, options),
+      ...(model.sources ?? []).slice(1).map((source) => {
+        const location = `${escapeMarkdown(source.fileName)}:${source.line}`;
+        return source.url ? `[${location}](${source.url})` : location;
+      }),
+    ].join(", ");
+
+  return "";
+}
+
+const ModuleOrProject = td.ReflectionKind.Module | td.ReflectionKind.Project;
+
+const TypeKinds =
+  td.ReflectionKind.Class |
+  td.ReflectionKind.Interface |
+  td.ReflectionKind.TypeAlias |
+  td.ReflectionKind.Enum |
+  td.ReflectionKind.Namespace;
+
+/**
+ * Splits a page's members by how they are used, keeping their order within each:
+ * - types: those declared in the namespace merged into a class, interface or type alias, as `Validator.AsyncHandler`.
+ * - constructors: a class's, which create an instance rather than belong to one.
+ * - statics: those used without an instance, whether a class's own statics, as `Validator.get()`, or the functions and
+ *   variables of its namespace, as `KeyPath.build()`.
+ * - rest: which on a class are its instance members.
+ *
+ * @param {td.DeclarationReflection[]} members
+ */
+function memberSections(members) {
+  const isStatic = (/** @type {td.DeclarationReflection} */ member) =>
+    member.flags.isStatic || member.kindOf(td.ReflectionKind.Function | td.ReflectionKind.Variable);
+  const others = members.filter((member) => !member.kindOf(TypeKinds | td.ReflectionKind.Constructor));
+  return {
+    types: members.filter((member) => member.kindOf(TypeKinds)),
+    constructors: members.filter((member) => member.kindOf(td.ReflectionKind.Constructor)),
+    statics: others.filter(isStatic),
+    rest: others.filter((member) => !isStatic(member)),
+  };
+}
+
+/**
+ * The partials a hook replaces, failing the build if typedoc-plugin-markdown has renamed one, as the replacement would
+ * otherwise quietly never run.
+ *
+ * @param {import("typedoc-plugin-markdown").MarkdownThemeContext["partials"]} partials
+ * @param {string[]} names
+ * @returns {any}
+ */
+function partialsToExtend(partials, names) {
+  const missing = names.filter((name) => typeof (/** @type {any} */ (partials)[name]) !== "function");
+  if (missing.length) throw new Error(`typedoc-plugin-markdown has no ${missing.join(", ")} partial to extend`);
+  return { ...partials };
+}
+
+/**
+ * Escapes what typedoc-plugin-markdown escapes in text it writes into a page.
+ *
+ * @param {string} text
+ */
+function escapeMarkdown(text) {
+  return text.replace(/[<>{}_`|[\]*]/g, "\\$&");
 }
 
 /**
@@ -245,8 +445,12 @@ function mergeChildrenOf(context, container) {
     if (!survivor.comment && namespace.comment) {
       survivor.comment = namespace.comment;
     }
-    if (namespace.sources?.length) {
-      survivor.sources = [...(survivor.sources ?? []), ...namespace.sources];
+    // A reflection's sources are its symbol's declarations, so the survivor usually lists the namespace's already.
+    const location = (/** @type {td.SourceReference} */ source) => `${source.fullFileName}:${source.line}`;
+    const known = new Set(survivor.sources?.map(location));
+    const added = namespace.sources?.filter((source) => !known.has(location(source))) ?? [];
+    if (added.length) {
+      survivor.sources = [...(survivor.sources ?? []), ...added];
     }
     // TypeDoc's own primitive, also used by its @mergeModuleWith support. It reparents the children and keeps the
     // symbol and reference maps consistent; moving children by hand would leave ReferenceType targets dangling.
@@ -270,6 +474,29 @@ export const decoratorTagHtml = (tag) => `<span class="api-tag">${tag}</span>`;
 const renderedDecoratorTags = new Map(
   [...decoratorTags].map((tag) => [`**\`${tag[1].toUpperCase()}${tag.slice(2)}\`**`, decoratorTagHtml(tag)])
 );
+
+/**
+ * What the type parameter list renders when every type parameter it is given says nothing but its name.
+ */
+const noInformativeTypeParameters = "<!-- no informative type parameters -->";
+
+/**
+ * Remove a Type Parameters section that has none left to list. The heading comes from the partial that lists them,
+ * as memberWithGroups, declaration and signature each render their own, so it goes once the page is complete.
+ *
+ * @param {td.PageEvent} page
+ */
+function dropEmptyTypeParameterSections(page) {
+  if (!page.contents) return;
+  const heading = td.ReflectionKind.pluralString(td.ReflectionKind.TypeParameter);
+  page.contents = page.contents.replace(
+    new RegExp(`\\n\\n#{1,6} ${heading}\\n\\n${noInformativeTypeParameters}`, "g"),
+    ""
+  );
+  if (page.contents.includes(noInformativeTypeParameters)) {
+    throw new Error(`${page.url} lists no type parameters under a heading other than "${heading}"`);
+  }
+}
 
 /**
  * Rewrite the decorator tags on a rendered page. Done here rather than in Astro's Markdown pipeline, whose rehype

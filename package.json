@@ -17,7 +17,6 @@
     "build": "turbo run build --filter=./packages/*",
     "build:apps:example": "turbo run build --filter=./apps/example",
     "build:apps:site": "turbo run build --filter=./apps/site",
-    "doc": "typedoc",
     "test": "turbo run test",
     "lint": "biome check && pnpm lint:plugins",
     "lint:plugins": "biome lint --error-on-warnings script/biome/fixtures",
@@ -33,7 +32,6 @@
     "@biomejs/biome": "2.5.13",
     "lint-staged": "^17.5.1",
     "simple-git-hooks": "^2.14.0",
-    "turbo": "^2.10.12",
-    "typedoc": "^0.28.20"
+    "turbo": "^2.10.12"
   }
 }

@@ -1,4 +1,4 @@
-import { readFileSync } from "node:fs";
+import { readdirSync, readFileSync } from "node:fs";
 import { posix } from "node:path";
 import React from "react";
 import "@testing-library/jest-dom/vitest";
@@ -193,12 +193,18 @@ describe("package exports", () => {
     const pkg = JSON.parse(readText("../package.json"));
     const exportedSubpaths = Object.keys(pkg.exports);
 
-    for (const readme of [readText("../README.md"), readText("../../../README.md")]) {
-      const documented = [...readme.matchAll(/import "@mobx-sentinel\/react(\/[^"]*)"/g)].map((m) => `.${m[1]}`);
-      // Guard against a vacuous pass if the import line is reworded
-      expect(documented.length).toBeGreaterThan(0);
-      expect(documented.filter((subpath) => !exportedSubpaths.includes(subpath))).toEqual([]);
-    }
+    // Through a variable, as Vite rewrites `new URL("<literal>", import.meta.url)` into a URL of its dev server
+    const docsPath = "../../../apps/site/src/content/docs/docs/";
+    const docsDir = new URL(docsPath, import.meta.url);
+    const docs = readdirSync(docsDir, { recursive: true, encoding: "utf8" })
+      .filter((path) => /\.mdx?$/.test(path))
+      .map((path) => readFileSync(new URL(path, docsDir), "utf8"));
+    const documented = docs.flatMap((doc) =>
+      [...doc.matchAll(/import "@mobx-sentinel\/react(\/[^"]*)"/g)].map((m) => `.${m[1]}`)
+    );
+    // Guard against a vacuous pass if the import line is reworded
+    expect(documented.length).toBeGreaterThan(0);
+    expect(documented.filter((subpath) => !exportedSubpaths.includes(subpath))).toEqual([]);
   });
 });
 

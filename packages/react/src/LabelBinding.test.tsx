@@ -212,7 +212,7 @@ describe("LabelBinding", () => {
       env.field.reportError();
 
       expect(env.binding.props["aria-invalid"]).toBe(true);
-      // PINNED(quirk): aria-errormessage is set to the error message text itself, while it is an ID reference (@types/react: "Identifies the element that provides an error message for the object"); packages/form/README.md says "with error text" and packages/react/README.md says "linking to error text". Decide: should the binding reference the id of an element that renders the message instead of embedding the text?
+      // PINNED(quirk): aria-errormessage is set to the error message text itself, while it is an ID reference (@types/react: "Identifies the element that provides an error message for the object"); the form docs say "with error text" and the react docs say "linking to error text". Decide: should the binding reference the id of an element that renders the message instead of embedding the text?
       expect(env.binding.props["aria-errormessage"]).toBe("invalid1");
     });
 
@@ -242,7 +242,7 @@ describe("LabelBinding", () => {
       expect(env.field2.isErrorReported).toBe(true);
       expect(env.binding.firstErrorMessage).toBe("");
 
-      // PINNED(bug): both associated fields are reported invalid, but the empty first message makes aria-invalid false. Expected: true, as the README says aria-invalid is set "once a field's errors are reported". Flip this assertion when fixing.
+      // PINNED(bug): both associated fields are reported invalid, but the empty first message makes aria-invalid false. Expected: true, as the docs say aria-invalid is set "once a field's errors are reported". Flip this assertion when fixing.
       expect(env.binding.props["aria-invalid"]).toBe(false);
     });
   });

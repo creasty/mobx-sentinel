@@ -27,14 +27,14 @@ import { Aside, Card, CardGrid, LinkButton } from "@astrojs/starlight/components
 
 <CardGrid>
   <Card title="@mobx-sentinel/core" icon="setting">
-    `Watcher` detects changes in models, `Validator` validates them reactively — sync or async, cancellable, composable
-    from many sources — and `@nested` tracks models inside models.
+    `Watcher` detects changes in models, `Validator` validates them reactively — composable from many sources, sync or
+    async, with smart job scheduling and cancellation for async validations — and `@nested` tracks models inside models.
 
     [Read more](/docs/core/)
   </Card>
   <Card title="@mobx-sentinel/form" icon="list-format">
-    Asynchronous submission, nested and array forms, custom bindings in under 50 lines, and error reporting that shows
-    errors when users are ready for them.
+    Asynchronous submission, nested and array forms, flexible custom bindings (most in less than 50 lines), and error
+    reporting that shows errors when users are ready for them.
 
     [Read more](/docs/form/)
   </Card>
@@ -47,21 +47,33 @@ import { Aside, Card, CardGrid, LinkButton } from "@astrojs/starlight/components
 
 ## Why mobx-sentinel
 
-It began as a form library built around models, and grew into a general way to enhance models, with forms as one
-application.
+This library originally started with the goal of creating a form-building library centered around models, and evolved
+into a more general-purpose library that enhances model capabilities with form management being one of its applications.
 
-Complex domains keep their business logic in MobX classes, so most responsibilities belong on the model side. Existing
-MobX form libraries are designed around serializing data rather than modeling it: they either cannot use classes or do
-not separate data from form state, none of them is type-safe from both the model and the UI, and many show error
-messages at the wrong time.
+### About Form Management
 
-mobx-sentinel instead splits the responsibilities into layers:
+When dealing with complex domains, we needed a solution that works with forms while assuming business logic exists as
+class implementations using MobX. With models as a premise, most responsibilities should be placed on the model side.
 
-- **Validation** belongs to the business logic layer, the model. It provides validity state and error management.
-- **Form state** belongs to the application logic layer, the view-model. It handles submission and reacts to changes
-  in validity.
-- **Bindings** belong to the presentation layer, the view. They get values from the model, write changes back, and
-  express error states.
+While there are already many libraries for building forms using MobX, they are all designed from a data serialization
+perspective rather than modeling, and have issues either being unable to use classes or not properly separating data
+from form state management. Furthermore, there isn't a single one designed to allow type-safe implementation from both
+model and UI ends. (cf. [Alternatives](/docs/alternatives/)) \
+Additionally, showing error messages to users at appropriate times is important for user experience, yet many existing
+libraries lack proper design. (cf. [Smart Error Reporting](/docs/form/error-reporting/))
+
+This library aims to solve these problems through a model-centric design that properly separates and breaks down
+responsibilities into layers:
+
+- Validation = Business logic layer (Model)
+  - Provides validity state and error management
+- Form-specific state management = Application logic layer (View-Model)
+  - Handles form submission
+  - Reacts to validity state changes
+- Input element connection (a.k.a. Binding) = Presentation layer (View)
+  - Handles form state and UI events to update forms, models and UI
+  - Gets values from the model and writes back on input changes
+  - Expresses error states
 
 ## Design Principles
 

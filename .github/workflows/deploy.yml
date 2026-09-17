@@ -24,16 +24,12 @@ jobs:
         include:
           # `project` is the Pages project name, as listed in Cloudflare's
           # Workers & Pages dashboard -- not the custom domain.
-          - name: apidoc
-            project: mobx-sentinel-apidoc
-            build: pnpm doc
-            output: docs
           - name: example
             project: mobx-sentinel-example
             build: pnpm --filter example build
             output: apps/example/dist
           # check:api fails the leg, and so the deploy, when the API reference loses what
-          # apps/site/src/typedoc/plugin.mjs adds to it.
+          # apps/site/src/typedoc/ adds to it.
           - name: site
             project: mobx-sentinel-site
             build: pnpm --filter site build && pnpm --filter site check:api
