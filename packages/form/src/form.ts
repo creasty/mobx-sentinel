@@ -244,8 +244,7 @@ export class Form<T> {
    * @remarks
    * - Checks if the form is not busy
    * - Checks if the form is valid or allows invalid submissions
-   * - Does not check if the form is dirty, so an unchanged form can be submitted too.
-   *   `SubmitButtonBinding` from `@mobx-sentinel/react` can wait for a change with `disableUnlessDirty`.
+   * - Does not check if the form is dirty, so an unchanged form can be submitted too
    */
   @computed
   get canSubmit() {

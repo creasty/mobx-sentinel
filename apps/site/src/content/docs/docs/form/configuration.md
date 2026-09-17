@@ -31,5 +31,3 @@ form.configure(true);
 // Access current configuration
 form.config; // Readonly<FormConfig>
 ```
-
-A form can be submitted whether or not it is dirty. To keep a submit button disabled until the user changes something, pass `disableUnlessDirty` to [`form.bindSubmitButton()`](/docs/react/bindings/#submit-button-formbindsubmitbuttonconfig).

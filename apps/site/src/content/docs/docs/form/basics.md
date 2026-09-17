@@ -101,7 +101,7 @@ form.canSubmit; // true if ready to submit
 - Not currently busy (submitting or validating)
 - Valid (unless `allowSubmitInvalid` is enabled)
 
-Whether the form is dirty doesn't matter, so a form with pre-filled values can be submitted as it is. To keep a submit button disabled until the user changes something, pass `disableUnlessDirty` to [`form.bindSubmitButton()`](/docs/react/bindings/#submit-button-formbindsubmitbuttonconfig).
+Whether the form is dirty doesn't matter, so a form with pre-filled values can be submitted as it is.
 
 ## Error Handling
 

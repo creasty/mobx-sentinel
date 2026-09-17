@@ -285,13 +285,7 @@ Binds submit buttons with automatic state management. The button is automaticall
 </button>
 ```
 
-**Unchanged forms:** The button is enabled whether or not the form is dirty, so a form with pre-filled values can be submitted as it is. To keep it disabled until the user changes something, set `disableUnlessDirty`. Since a successful submission resets the form, this also keeps the same values from being submitted twice.
-
-```tsx
-<button {...form.bindSubmitButton({ disableUnlessDirty: true })}>
-  Save changes
-</button>
-```
+**Unchanged forms:** The button is enabled whether or not the form is dirty, so a form with pre-filled values can be submitted as it is.
 
 ## Label: `form.bindLabel(fieldNames, config?)`
 
