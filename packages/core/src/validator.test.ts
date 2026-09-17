@@ -1990,7 +1990,7 @@ describe("Validator: sync handler failures", () => {
     expect(validator.reactionState).toBe(0);
   });
 
-  it("stays in the validating state after the handler throws on a scheduled run", () => {
+  it("leaves the validating state after the handler throws on a scheduled run", () => {
     const consoleError = vi.spyOn(console, "error").mockImplementation(() => {});
     const model = observable({ field: 0 });
     const validator = Validator.get(model);
@@ -2014,11 +2014,10 @@ describe("Validator: sync handler failures", () => {
     expect(consoleError.mock.calls.some((args) => args.includes(failure))).toBe(true);
     // PINNED(quirk): The errors of the last successful run are kept when the handler throws. Decide: should a failing handler clear its errors, keep them, or surface the exception as an error?
     expect(validator.getErrorMessages("field" as KeyPath)).toEqual(new Set(["negative"]));
-    // PINNED(bug): The reaction's timer id is only removed by the effect, which is skipped when the handler throws, so reactionState stays 1 and isValidating stays true until the next successful run (`await when(() => !validator.isValidating)` hangs). Expected: reactionState returns to 0 once the scheduled run finishes, even if it failed. Flip these assertions when fixing.
-    expect(validator.reactionState).toBe(1);
-    expect(validator.isValidating).toBe(true);
+    expect(validator.reactionState).toBe(0);
+    expect(validator.isValidating).toBe(false);
     vi.advanceTimersByTime(1000);
-    expect(validator.reactionState).toBe(1);
+    expect(validator.reactionState).toBe(0);
 
     runInAction(() => {
       model.field = 2;
@@ -3164,7 +3163,7 @@ describe("Validator: timers and pending reactions", () => {
     expect(env.validator.isValid).toBe(true);
   });
 
-  it("stays in the validating state when an async expression returns to its previous value before the delay elapses", async () => {
+  it("leaves the validating state when an async expression returns to its previous value before the delay elapses", async () => {
     const env = setupAsyncHandler({ initialRun: false });
     runInAction(() => {
       env.model.field = -1;
@@ -3177,11 +3176,10 @@ describe("Validator: timers and pending reactions", () => {
     await vi.advanceTimersByTimeAsync(100);
     expect(env.runs).toHaveLength(0);
     expect(vi.getTimerCount()).toBe(0);
-    // PINNED(bug): MobX skips the effect when the expression value is unchanged, and the effect is the only place that removes the reaction's timer id, so reactionState stays 1 and isValidating stays true although nothing is pending (`await when(() => !validator.isValidating)` hangs). Expected: reactionState returns to 0 once the scheduled run has fired. Flip these assertions when fixing.
-    expect(env.validator.reactionState).toBe(1);
-    expect(env.validator.isValidating).toBe(true);
+    expect(env.validator.reactionState).toBe(0);
+    expect(env.validator.isValidating).toBe(false);
 
-    // A later change of the value recovers the state
+    // A later change of the value is still validated
     runInAction(() => {
       env.model.field = -2;
     });
@@ -3190,7 +3188,7 @@ describe("Validator: timers and pending reactions", () => {
     expect(env.validator.reactionState).toBe(0);
   });
 
-  it("stays in the validating state when a derived async expression does not change", async () => {
+  it("leaves the validating state when a derived async expression does not change", async () => {
     const model = observable({ field: 1 });
     const validator = Validator.get(model);
     const handler = vi.fn(async () => {});
@@ -3203,13 +3201,38 @@ describe("Validator: timers and pending reactions", () => {
     });
     await vi.advanceTimersByTimeAsync(1000);
     expect(handler).toHaveBeenCalledTimes(1);
-    // PINNED(bug): Same as above: the expression (`field > 0`) stays true, the effect is skipped and the timer id is never removed, so isValidating stays true after an unrelated change of the observed field. Expected: reactionState 0 and isValidating false. Flip these assertions when fixing.
-    expect(validator.reactionState).toBe(1);
-    expect(validator.isValidating).toBe(true);
-
-    // reset() recovers the state
-    validator.reset();
+    expect(validator.reactionState).toBe(0);
     expect(validator.isValidating).toBe(false);
+
+    // A change of the derived value is still validated
+    runInAction(() => {
+      model.field = -1;
+    });
+    await vi.advanceTimersByTimeAsync(100);
+    expect(handler).toHaveBeenCalledTimes(2);
+    expect(validator.reactionState).toBe(0);
+  });
+
+  it("keeps the next run pending when applying the errors of a run schedules it", () => {
+    const model = observable({ field: 0 });
+    const validator = Validator.get(model);
+    validator.addSyncHandler((b) => {
+      // Reads the validity that applying its own errors changes
+      if (model.field < 0) b.invalidate("field", validator.isValid ? "first run" : "second run");
+    });
+
+    runInAction(() => {
+      model.field = -1;
+    });
+    vi.advanceTimersByTime(100);
+    expect(validator.getErrorMessages("field" as KeyPath)).toEqual(new Set(["first run"]));
+    expect(vi.getTimerCount()).toBe(1);
+    expect(validator.reactionState).toBe(1);
+
+    vi.advanceTimersByTime(100);
+    expect(validator.getErrorMessages("field" as KeyPath)).toEqual(new Set(["second run"]));
+    expect(vi.getTimerCount()).toBe(0);
+    expect(validator.reactionState).toBe(0);
   });
 });
 
@@ -3434,6 +3457,30 @@ describe("Validator: #waitForValidation", () => {
     expect(isValidatingObserved(validator)).toBe(false);
   });
 
+  it("resolves once a scheduled sync validation has run, even if the handler throws", async () => {
+    const consoleError = vi.spyOn(console, "error").mockImplementation(() => {});
+    onTestFinished(() => {
+      consoleError.mockRestore();
+    });
+    const model = observable({ field: 0 });
+    const validator = Validator.get(model);
+    const failure = new Error("handler failure");
+    validator.addSyncHandler(() => {
+      if (model.field === 1) throw failure;
+    });
+    runInAction(() => {
+      model.field = 1;
+    });
+
+    const wait = track(validator.waitForValidation());
+    await vi.advanceTimersByTimeAsync(99);
+    expect(wait.status).toBe("pending");
+    await vi.advanceTimersByTimeAsync(1);
+    expect(consoleError.mock.calls.some((args) => args.includes(failure))).toBe(true);
+    expect(wait.status).toBe("resolved");
+    expect(isValidatingObserved(validator)).toBe(false);
+  });
+
   it("waits for a running async validation and the follow-up job queued behind it", async () => {
     const env = setupAsyncHandler({ initialRun: false });
     runInAction(() => {
@@ -3461,6 +3508,29 @@ describe("Validator: #waitForValidation", () => {
     await flushMicrotasks();
     expect(wait.status).toBe("resolved");
     expect(env.validator.getErrorMessages("field" as KeyPath)).toEqual(new Set(["negative: -2"]));
+  });
+
+  it.each([
+    { name: "returns to its previous value before the delay elapses", expr: (field: number) => field, values: [-1, 0] },
+    { name: "is derived and does not change", expr: (field: number) => field >= 0, values: [1] },
+  ])("resolves when the expression of a scheduled async validation $name", async ({ expr, values }) => {
+    const model = observable({ field: 0 });
+    const validator = Validator.get(model);
+    const handler = vi.fn(async () => {});
+    validator.addAsyncHandler(() => expr(model.field), handler, { initialRun: false });
+    for (const value of values) {
+      runInAction(() => {
+        model.field = value;
+      });
+    }
+
+    const wait = track(validator.waitForValidation());
+    await vi.advanceTimersByTimeAsync(99);
+    expect(wait.status).toBe("pending");
+    await vi.advanceTimersByTimeAsync(1);
+    expect(handler).not.toHaveBeenCalled();
+    expect(wait.status).toBe("resolved");
+    expect(isValidatingObserved(validator)).toBe(false);
   });
 
   it("waits for nested validators", async () => {

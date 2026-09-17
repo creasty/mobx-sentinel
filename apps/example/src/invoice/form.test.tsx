@@ -232,16 +232,15 @@ describe("the CRM check", () => {
     expect(screen.getByRole("heading", { name: "Bill to" })).toHaveAttribute("aria-invalid", "false");
   });
 
-  test("stays busy after a typo in the email is corrected before the check runs", async () => {
+  test("goes idle again when a typo in the email is corrected before the check runs", async () => {
     const user = setup();
     await completeFromDraft(user);
     expect(sendButton()).toBeEnabled();
 
     await user.type(screen.getByLabelText("Billing contact"), "x{Backspace}");
     await elapse(CRM_THROTTLE_MS + CRM_LOOKUP_MS);
-    // PINNED(bug): the address the CRM check reads is the same as before the typo, so MobX skips the check's effect, which is the only place its pending timer id is removed; the invoice stays validating, and cannot be sent, until the address really changes. Expected: the send button is enabled and idle again. Flip these assertions when fixing (see "MobX skips the effect when the expression value is unchanged" in packages/core/src/validator.test.ts).
-    expect(sendButton()).toBeDisabled();
-    expect(sendButton()).toHaveAttribute("aria-busy", "true");
+    expect(sendButton()).toBeEnabled();
+    expect(sendButton()).toHaveAttribute("aria-busy", "false");
   });
 });
 
