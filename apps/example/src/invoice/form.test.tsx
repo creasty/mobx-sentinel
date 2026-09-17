@@ -1,4 +1,4 @@
-import { act, render, screen } from "@testing-library/react";
+import { act, render, screen, within } from "@testing-library/react";
 import { type UserEvent, userEvent } from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { InvoiceForm } from "./form";
@@ -335,6 +335,52 @@ describe("resetting", () => {
     expect(screen.queryByText("Customer email is required")).not.toBeInTheDocument();
     expect(screen.queryByText("Street address is required")).not.toBeInTheDocument();
     expect(screen.getByLabelText("Customer name")).toHaveValue("Ada");
+  });
+});
+
+describe("the notify list", () => {
+  test("holds its errors back while the list is open, and reports them once it closes", async () => {
+    const user = setup();
+    // The legend names the group, which holds the summary of the list and its checkboxes
+    const notify = within(screen.getByRole("group", { name: "Notify (up to 3)" })).getByText("Nobody");
+
+    await user.click(notify);
+    await user.click(screen.getByRole("checkbox", { name: "Dana Whitfield — Controller" }));
+    await user.click(screen.getByRole("checkbox", { name: "Inés Moreau — AR Lead" }));
+    await user.click(screen.getByRole("checkbox", { name: "Koji Arakawa — Account Manager" }));
+    await user.click(screen.getByRole("checkbox", { name: "Pat Nkemelu — Sales Ops" }));
+    await elapse(RULES_MS);
+    expect(notify).toHaveTextContent(
+      "Dana Whitfield — Controller, Inés Moreau — AR Lead, Koji Arakawa — Account Manager, Pat Nkemelu — Sales Ops"
+    );
+    // The rule already fails, but the user is still choosing
+    expect(screen.queryByText("Notify at most 3 people")).not.toBeInTheDocument();
+    expect(notify).not.toHaveAttribute("aria-invalid");
+
+    await user.keyboard("{Escape}");
+    expect(notify.closest("details")).not.toHaveAttribute("open");
+    expect(notify).toHaveFocus();
+    expect(screen.getByText("Notify at most 3 people")).toBeInTheDocument();
+    expect(notify).toHaveAttribute("aria-invalid", "true");
+    expect(notify).toHaveAttribute("aria-errormessage", "Notify at most 3 people");
+    expect(screen.getByText("Notify (up to 3)")).toHaveAttribute("aria-invalid", "true");
+  });
+
+  test("closes the list, and reports its errors, once focus leaves it", async () => {
+    const user = setup();
+    const notify = within(screen.getByRole("group", { name: "Notify (up to 3)" })).getByText("Nobody");
+
+    await user.click(notify);
+    await user.click(screen.getByRole("checkbox", { name: "Sam Oyelaran — Finance Partner" }));
+    await elapse(RULES_MS);
+    expect(notify.closest("details")).toHaveAttribute("open");
+
+    // Past the last option, to the next field
+    await user.tab();
+    expect(screen.getByLabelText("Street address")).toHaveFocus();
+    expect(notify.closest("details")).not.toHaveAttribute("open");
+    expect(notify).toHaveTextContent("Sam Oyelaran — Finance Partner");
+    expect(notify).toHaveAttribute("aria-invalid", "false");
   });
 });
 

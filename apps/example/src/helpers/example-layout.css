@@ -27,9 +27,6 @@
     > * {
       flex: 1 1 7rem;
     }
-    > .wide {
-      flex: 3 1 12rem;
-    }
     > button {
       flex: 0 0 auto;
     }
@@ -41,6 +38,18 @@
     gap: 4px 24px;
   }
 
+  details.dropdown {
+    /* Pico shows the summary as a placeholder on one line. Checked options are a value, and all of them show. */
+    &:has(:checked) > summary {
+      height: auto;
+      color: var(--pico-form-element-color);
+    }
+    /* Keeps the errors as close as Pico keeps them below its form elements */
+    + small {
+      margin-top: calc(var(--pico-spacing) * -0.75);
+    }
+  }
+
   .sub-form {
     /* BEGIN: Copied from 'Card' styles */
     margin-bottom: var(--pico-block-spacing-vertical);
@@ -49,6 +58,55 @@
     background: var(--pico-card-background-color);
     box-shadow: var(--pico-card-box-shadow);
     /* END: Copied from 'Card' styles */
+  }
+
+  /*
+   * A line item's inputs are a Pico group, which joins them into a row, and the labels above
+   * take the same widths. The row scrolls sideways where it is too narrow for its inputs.
+   */
+  .line-item-fields {
+    overflow-x: auto;
+    /* Keeps the focus rings of the inputs at either end from being cut off by the scrolling */
+    margin-inline: calc(var(--pico-outline-width) * -1);
+    padding-inline: var(--pico-outline-width);
+
+    > * {
+      min-width: 25rem;
+
+      /* The description takes what the other inputs leave */
+      > :nth-child(1) {
+        flex: 1 1 0;
+        min-width: 0;
+      }
+      > :nth-child(2) {
+        flex: 0 0 3.5rem;
+      }
+      > :nth-child(3) {
+        flex: 0 0 5.5rem;
+      }
+      > :nth-child(4) {
+        flex: 0 0 9rem;
+      }
+    }
+    > .line-item-labels {
+      display: flex;
+
+      > label {
+        overflow: hidden;
+        white-space: nowrap;
+        text-overflow: ellipsis;
+      }
+    }
+    > [role="group"] {
+      /* Leaves the inputs room for their values: narrower insets, and no validation icons, as the borders show it too */
+      --pico-form-element-spacing-horizontal: 0.5rem;
+      margin-bottom: calc(var(--pico-spacing) * 0.25);
+
+      > input[aria-invalid] {
+        padding-inline-end: var(--pico-form-element-spacing-horizontal) !important;
+        background-image: none;
+      }
+    }
   }
 
   .line-item-footer {
@@ -95,6 +153,7 @@
   }
 
   .receipt {
+    margin-top: 16px;
     padding: calc(var(--pico-spacing) * 0.5) var(--pico-spacing);
     border-radius: var(--pico-border-radius);
     background: var(--pico-mark-background-color);
