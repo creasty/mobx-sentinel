@@ -323,6 +323,11 @@ describe("KeyPath types", () => {
     expectTypeOf<symbol>().not.toExtend<KeyPath>();
   });
 
+  test("the brand adds no string-named property to the base types", () => {
+    expectTypeOf<Extract<keyof KeyPath.Component, string>>().toEqualTypeOf<Extract<keyof string, string>>();
+    expectTypeOf<Extract<keyof KeyPath.Self, string>>().toEqualTypeOf<Extract<keyof symbol, string>>();
+  });
+
   test("KeyPath.Self is typed as the branded self type", () => {
     expectTypeOf(KeyPath.Self).toEqualTypeOf<KeyPath.Self>();
   });

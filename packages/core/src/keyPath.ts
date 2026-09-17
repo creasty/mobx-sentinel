@@ -1,3 +1,6 @@
+/** Brand of the key path types, which exists only at the type level */
+declare const keyPathBrand: unique symbol;
+
 /**
  * Key paths represent paths to access nested properties in an object
  *
@@ -9,9 +12,9 @@ export type KeyPath = KeyPath.Component | KeyPath.Self;
 
 export namespace KeyPath {
   /** Branded type for key path components */
-  export type Component = string & { __brand: "KeyPath.Component" };
+  export type Component = string & { [keyPathBrand]: unknown };
   /** Branded type for a self-referencing key path */
-  export type Self = symbol & { __brand: "KeyPath.Self" };
+  export type Self = symbol & { [keyPathBrand]: unknown };
   /** Self path symbol */
   export const Self = Symbol("self") as Self;
 
