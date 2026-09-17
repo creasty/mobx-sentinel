@@ -162,7 +162,7 @@ function checkDecoratorTagsUnchanged() {
 
 /**
  * TypeDoc takes a tag it does not know for the start of a section, so a decorator a comment names without declaring it
- * in options.mjs, as in `Get the value from the model @computed`, renders as a "Computed" heading rather than a tag.
+ * in options.mjs, as in `Set the value to the model @action`, renders as an "Action" heading rather than a tag.
  */
 function checkNoUnknownTags() {
   const known = new Set(td.OptionDefaults.blockTags);

@@ -8,7 +8,7 @@ export namespace CheckBoxBinding {
   export type AttrsRequired = Required<Attrs>;
 
   export type Config = {
-    /** Get the value from the model @computed */
+    /** Get the value from the model */
     getter: () => boolean;
     /** Set the value to the model @action */
     setter: (value: boolean) => void;
@@ -37,7 +37,6 @@ export class CheckBoxBinding implements FormBinding {
     makeObservable(this);
   }
 
-  @computed
   get checked(): CheckBoxBinding.AttrsRequired["checked"] {
     return this.config.getter();
   }

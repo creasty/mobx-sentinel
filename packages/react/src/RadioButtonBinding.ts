@@ -36,7 +36,6 @@ export class RadioButtonBinding implements FormBinding {
     makeObservable(this);
   }
 
-  @computed
   get value(): RadioButtonBinding.AttrsRequired["value"] {
     return this.config.getter() ?? "";
   }

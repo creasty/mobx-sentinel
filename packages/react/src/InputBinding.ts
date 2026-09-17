@@ -43,7 +43,7 @@ export namespace InputBinding {
          * It determines how getter/setter should handle the value.
          */
         valueAs?: "string";
-        /** Get the value from the model @computed */
+        /** Get the value from the model */
         getter: () => string | null;
         /** Set the value to the model @action */
         setter: (value: string) => void;
@@ -61,7 +61,7 @@ export namespace InputBinding {
          * It determines how getter/setter should handle the value.
          */
         valueAs: "number";
-        /** Get the value from the model @computed */
+        /** Get the value from the model */
         getter: () => number | null;
         /** Set the value to the model @action */
         setter: (value: number | null) => void;
@@ -80,7 +80,7 @@ export namespace InputBinding {
          */
         valueAs: "date";
         /**
-         * Get the value from the model @computed
+         * Get the value from the model
          *
          * String representation of the date.
          * As Date instance has no distinction between date and datetime,
@@ -123,7 +123,6 @@ export class InputBinding implements FormBinding {
     makeObservable(this);
   }
 
-  @computed
   get value(): InputBinding.AttrsRequired["value"] {
     return this.config.getter() ?? "";
   }

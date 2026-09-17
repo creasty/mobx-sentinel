@@ -940,8 +940,37 @@ describe("Form#bind (constructor, lifecycle, and misuse)", () => {
       expect(debugForm(form).bindings.size).toBe(1);
     });
 
-    it("does not notify a computed member of config replaced by a later call", () => {
-      // Follows the documented pattern: a computed member reads `this.config`, and `props` is a plain getter
+    it("lets a plain getter read the config of the latest call while observed", () => {
+      // The documented pattern: members that read `this.config` are plain getters, as `props` is
+      class GetterPropsBinding implements FormBinding {
+        constructor(
+          readonly form: Form<any>,
+          public config: { label: string }
+        ) {}
+        get label() {
+          return this.config.label;
+        }
+        get props() {
+          return { label: this.label };
+        }
+      }
+
+      const form = createForm();
+      const label = observable.box("first");
+      const seen: string[] = [];
+      const dispose = autorun(() => {
+        seen.push(form.bind(GetterPropsBinding, { label: label.get() }).label);
+      });
+      try {
+        runInAction(() => label.set("second"));
+        expect(seen).toEqual(["first", "second"]);
+      } finally {
+        dispose();
+      }
+    });
+
+    it("keeps a computed member that reads config on the first config while observed", () => {
+      // Why the docs advise against @computed for members that read `this.config`
       class ComputedPropsBinding implements FormBinding {
         constructor(
           readonly form: Form<any>,
@@ -965,7 +994,7 @@ describe("Form#bind (constructor, lifecycle, and misuse)", () => {
       });
       try {
         runInAction(() => label.set("second"));
-        // PINNED(quirk): `config` is assigned as a plain property, so a computed member reading `this.config` (the pattern the docs recommend, e.g. `@computed get value()` over `this.config.getter()`) stays cached with the first config while it is observed. The docs only say configuration "can be updated on subsequent calls". Decide: should Form#bind make the config replacement observable (e.g. an observable box), or should bindings be documented to read only observables through `config`? If observable, this becomes ["first", "second"].
+        // `config` is assigned as a plain property, so nothing tells the computed that it was replaced
         expect(seen).toEqual(["first", "first"]);
       } finally {
         dispose();

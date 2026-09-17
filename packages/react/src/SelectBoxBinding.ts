@@ -50,7 +50,6 @@ export class SelectBoxBinding implements FormBinding {
     makeObservable(this);
   }
 
-  @computed
   get value(): SelectBoxBinding.AttrsRequired["value"] {
     return this.config.getter() ?? "";
   }
