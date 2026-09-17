@@ -37,8 +37,6 @@ export class CheckBoxBinding implements FormBinding {
     makeObservable(this);
   }
 
-  // Not @computed: Form#bind replaces `config` on every call, which nothing can observe.
-  // While an observer held it, a computed would keep returning an earlier getter's value.
   get checked(): CheckBoxBinding.AttrsRequired["checked"] {
     return this.config.getter();
   }

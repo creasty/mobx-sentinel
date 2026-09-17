@@ -36,8 +36,6 @@ export class RadioButtonBinding implements FormBinding {
     makeObservable(this);
   }
 
-  // Not @computed: Form#bind replaces `config` on every call, which nothing can observe.
-  // While an observer held it, a computed would keep returning an earlier getter's value.
   get value(): RadioButtonBinding.AttrsRequired["value"] {
     return this.config.getter() ?? "";
   }
