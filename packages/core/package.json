@@ -4,7 +4,7 @@
   "version": "0.3.6",
   "author": "creasty <yuki@creasty.com>",
   "license": "MIT",
-  "homepage": "https://github.com/creasty/mobx-sentinel",
+  "homepage": "https://mobx-sentinel.creasty.com/docs/core/",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/creasty/mobx-sentinel.git"

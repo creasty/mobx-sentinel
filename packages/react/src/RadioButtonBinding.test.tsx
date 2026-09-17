@@ -285,7 +285,7 @@ describe("RadioButtonBinding", () => {
         seen.push(env.binding.value);
       });
       env.binding.config = { getter: () => other.get(), setter: () => {} };
-      // PINNED(quirk): `config` is not observable, so replacing it (as Form#bind does on every call) does not invalidate the observed computed and the old getter's cached value ("") is returned until a dependency of the old getter changes; packages/form/README.md only says "Configuration can be updated on subsequent calls while maintaining the same binding instance" (same root cause as the config quirks in binding.test.ts and InputBinding.test.tsx). Decide: should `config` be observable (e.g. observable.ref) so that the new getter takes effect immediately (flip to "other")?
+      // PINNED(quirk): `config` is not observable, so replacing it (as Form#bind does on every call) does not invalidate the observed computed and the old getter's cached value ("") is returned until a dependency of the old getter changes; the form docs only say "Configuration can be updated on subsequent calls while maintaining the same binding instance" (same root cause as the config quirks in binding.test.ts and InputBinding.test.tsx). Decide: should `config` be observable (e.g. observable.ref) so that the new getter takes effect immediately (flip to "other")?
       expect(env.binding.value).toBe("");
       expect(seen).toEqual([""]);
       dispose();
@@ -715,7 +715,7 @@ describe("bindRadioButton", () => {
     await env.clickBravo();
     for (const input of [env.alpha, env.bravo, env.zulu]) {
       expect(input).toHaveAttribute("aria-invalid", "true");
-      // PINNED(quirk): aria-errormessage carries the message text itself, while WAI-ARIA defines it as an ID reference to the element that contains the message (packages/form/README.md says "with error text"; packages/react/README.md says "linking to error text"). Decide: should the binding reference an error element id instead of embedding the text?
+      // PINNED(quirk): aria-errormessage carries the message text itself, while WAI-ARIA defines it as an ID reference to the element that contains the message (the form docs say "with error text"; the react docs say "linking to error text"). Decide: should the binding reference an error element id instead of embedding the text?
       expect(input).toHaveAttribute("aria-errormessage", "invalid");
     }
 

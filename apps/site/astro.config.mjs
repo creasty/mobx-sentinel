@@ -41,8 +41,8 @@ export default defineConfig({
           },
         }),
         flattenApiSidebar(apiSidebarLabel),
-        // Fails the build on a broken internal link or a missing #anchor, which is what keeps the guides, split from
-        // four READMEs across many pages, from rotting as they are edited.
+        // Fails the build on a broken internal link or a missing #anchor, which is what keeps the guides, spread
+        // across many pages, from rotting as they are edited.
         starlightLinksValidator({ errorOnInvalidHashes: true }),
       ],
       sidebar: [

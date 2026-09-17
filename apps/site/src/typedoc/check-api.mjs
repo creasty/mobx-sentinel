@@ -24,6 +24,7 @@ checkNoExternalDeclarations();
 checkNoNamespaceSharesAName();
 checkLinksResolve();
 checkDecoratorTagsUnchanged();
+checkNoUnknownTags();
 
 if (!existsSync(apisDir)) {
   failures.push(`${apisDir} does not exist; run \`astro build\` first`);
@@ -156,6 +157,21 @@ function checkDecoratorTagsUnchanged() {
   const [before, after] = [count(withoutMerge), count(withMerge)];
   if (before !== after) {
     failures.push(`The merge changed the number of decorator-tagged declarations from ${before} to ${after}`);
+  }
+}
+
+/**
+ * TypeDoc takes a tag it does not know for the start of a section, so a decorator a comment names without declaring it
+ * in options.mjs, as in `Get the value from the model @computed`, renders as a "Computed" heading rather than a tag.
+ */
+function checkNoUnknownTags() {
+  const known = new Set(td.OptionDefaults.blockTags);
+  for (const reflection of Object.values(withMerge.reflections)) {
+    for (const { tag } of reflection.comment?.blockTags ?? []) {
+      if (!known.has(tag)) {
+        failures.push(`The comment of ${describe(reflection)} has the unknown tag ${tag}`);
+      }
+    }
   }
 }
 

@@ -1215,7 +1215,7 @@ describe("StandardNestedFetcher", () => {
         });
         expect(Array.from(fetcher)).toHaveLength(4);
         // Standard MobX semantics: plain arrays held by @observable.ref or unannotated properties are not observable,
-        // so the cached dataMap stays stale (the README pairs @nested collections with @observable)
+        // so the cached dataMap stays stale (the docs pair @nested collections with @observable)
         expect(observer.runs).toBe(1);
         expect(fetcher.dataMap.size).toBe(2);
       });
@@ -1528,8 +1528,8 @@ describe("StandardNestedFetcher (edge cases)", () => {
     expect(Array.from(derived.fetcher, (entry) => entry.keyPath)).toEqual(["base.0", "derived.0"]);
   });
 
-  it("re-runs a dataMap observer when an observable read by transform changes, as in the README example", () => {
-    // Mirrors the README "StandardNestedFetcher (low-level API)" example
+  it("re-runs a dataMap observer when an observable read by transform changes, as in the documented example", () => {
+    // Mirrors the "StandardNestedFetcher (low-level API)" example in the docs
     class Item {
       @observable id: number;
       @observable name: string;
@@ -1552,7 +1552,7 @@ describe("StandardNestedFetcher (edge cases)", () => {
       }
     }
     const parent = new Parent();
-    // The README example returns strings, which only type-checks with an explicit type argument (T extends object)
+    // The documented example returns strings, which only type-checks with an explicit type argument (T extends object)
     const fetcher = new StandardNestedFetcher<any>(parent, (entry) =>
       entry.data instanceof Item ? entry.data.toString() : null
     );
@@ -1562,7 +1562,7 @@ describe("StandardNestedFetcher (edge cases)", () => {
       ["items.1", "Item(id = 2, name = Second)"],
     ]);
 
-    // README: "autorun triggers because the array structure changed"
+    // The docs: "autorun triggers because the array structure changed"
     runInAction(() => parent.items.push(new Item(3, "Third")));
     expect(observer.runs).toBe(2);
     expect(observer.last!.size).toBe(3);
@@ -1570,7 +1570,7 @@ describe("StandardNestedFetcher (edge cases)", () => {
     runInAction(() => {
       parent.items[0].name = "Updated";
     });
-    // PINNED(bug): transform runs inside the dataMap computed, so the observables it reads (id and name, via toString) are tracked and the item change produces a different value at "items.0"; the autorun re-runs. Expected: the README says "autorun does NOT trigger - only the item changed, not the structure" (and "It does NOT re-run when individual item properties change"), so runs stays 2 — either untrack transform or correct the README. Flip this assertion when fixing.
+    // PINNED(bug): transform runs inside the dataMap computed, so the observables it reads (id and name, via toString) are tracked and the item change produces a different value at "items.0"; the autorun re-runs. Expected: the docs say "autorun does NOT trigger - only the item changed, not the structure" (and "It does NOT re-run when individual item properties change"), so runs stays 2 — either untrack transform or correct the docs. Flip this assertion when fixing.
     expect(observer.runs).toBe(3);
     expect(observer.last!.get("items.0" as KeyPath)).toBe("Item(id = 1, name = Updated)");
   });

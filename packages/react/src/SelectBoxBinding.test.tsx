@@ -200,7 +200,7 @@ describe("SelectBoxBinding", () => {
 
     it("does not set aria-multiselectable for a multiple select", () => {
       const env = setupModelEnv({ multiple: true, getter: () => [], setter: () => {} });
-      // PINNED(bug): no aria-multiselectable attribute is produced, although packages/react/README.md says "For multiple selection, `aria-multiselectable` is automatically set". Expected: props["aria-multiselectable"] is true for multiple selects (or the README is corrected, since a native <select multiple> already exposes it implicitly). Flip this assertion when fixing.
+      // PINNED(bug): no aria-multiselectable attribute is produced, although the react docs say "For multiple selection, `aria-multiselectable` is automatically set". Expected: props["aria-multiselectable"] is true for multiple selects (or the docs are corrected, since a native <select multiple> already exposes it implicitly). Flip this assertion when fixing.
       expect(env.binding.props).not.toHaveProperty("aria-multiselectable");
     });
 
@@ -271,7 +271,7 @@ describe("SelectBoxBinding", () => {
         seen.push(env.binding.value);
       });
       env.binding.config = { multiple: true, getter: () => ["B"], setter: () => {} };
-      // PINNED(quirk): `config` is not observable, so replacing it (as Form#bind does on every call) does not invalidate the observed computed; the old single value "A" is still returned while `multiple` already reads true. packages/form/README.md only says "Configuration can be updated on subsequent calls while maintaining the same binding instance" (same root cause as the config quirks in binding.test.ts and InputBinding.test.tsx). Decide: should `config` be observable (e.g. observable.ref) so that the new getter takes effect immediately (flip to ["B"])?
+      // PINNED(quirk): `config` is not observable, so replacing it (as Form#bind does on every call) does not invalidate the observed computed; the old single value "A" is still returned while `multiple` already reads true. the form docs only say "Configuration can be updated on subsequent calls while maintaining the same binding instance" (same root cause as the config quirks in binding.test.ts and InputBinding.test.tsx). Decide: should `config` be observable (e.g. observable.ref) so that the new getter takes effect immediately (flip to ["B"])?
       expect(env.binding.props.value).toBe("A");
       expect(env.binding.props.multiple).toBe(true);
       expect(seen).toEqual(["A"]);
@@ -707,7 +707,7 @@ describe("bindSelectBox", () => {
 
       await env.selectOptions(SAMPLE_OPTIONS[1].code);
       expect(env.select).toHaveAttribute("aria-invalid", "true");
-      // PINNED(quirk): aria-errormessage carries the message text itself, while WAI-ARIA defines it as an ID reference to the element that contains the message (packages/form/README.md says "with error text"; packages/react/README.md says "linking to error text"). Decide: should the binding reference an error element id instead of embedding the text?
+      // PINNED(quirk): aria-errormessage carries the message text itself, while WAI-ARIA defines it as an ID reference to the element that contains the message (the form docs say "with error text"; the react docs say "linking to error text"). Decide: should the binding reference an error element id instead of embedding the text?
       expect(env.select).toHaveAttribute("aria-errormessage", "invalid");
 
       act(() => form.reset());
@@ -895,7 +895,7 @@ describe("bindSelectBox", () => {
       expect(env.select).toHaveAttribute("id", form.getField("multiple").id);
       expect(env.select).toHaveAttribute("multiple");
       expect(env.select.multiple).toBe(true);
-      // PINNED(bug): aria-multiselectable is not rendered, although packages/react/README.md says it "is automatically set" for multiple selection. Expected: aria-multiselectable="true" (or the README is corrected, since a native <select multiple> already exposes it implicitly). Flip this assertion when fixing.
+      // PINNED(bug): aria-multiselectable is not rendered, although the react docs say it "is automatically set" for multiple selection. Expected: aria-multiselectable="true" (or the docs are corrected, since a native <select multiple> already exposes it implicitly). Flip this assertion when fixing.
       expect(env.select).not.toHaveAttribute("aria-multiselectable");
     });
 

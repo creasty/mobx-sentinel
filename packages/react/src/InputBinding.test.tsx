@@ -477,7 +477,7 @@ describe("InputBinding", () => {
         const env = setupBinding(() => ({ valueAs: "date", type: "datetime-local", getter: () => null, setter }));
         env.binding.onChange(inputEventOf("datetime-local", "2024-12-31T23:59"));
         expect(setter).toHaveBeenCalledTimes(1);
-        // PINNED(bug): valueAsDate does not apply to datetime-local inputs (HTML spec), so the setter always receives null although the README documents `type: "datetime-local"` with `valueAs: "date"` and the Config type accepts it. Expected: the setter receives a Date for 2024-12-31T23:59 (the fix must decide between local time and UTC; `valueAsNumber` above reads it as UTC). Flip this assertion when fixing.
+        // PINNED(bug): valueAsDate does not apply to datetime-local inputs (HTML spec), so the setter always receives null although the docs show `type: "datetime-local"` with `valueAs: "date"` and the Config type accepts it. Expected: the setter receives a Date for 2024-12-31T23:59 (the fix must decide between local time and UTC; `valueAsNumber` above reads it as UTC). Flip this assertion when fixing.
         expect(isoOf(setter.mock.calls[0][0])).toBeNull();
       });
     });
@@ -757,7 +757,7 @@ describe("InputBinding", () => {
       });
       env.field.reportError();
       expect(env.binding.props["aria-invalid"]).toBe(true);
-      // PINNED(quirk): aria-errormessage receives the message text, but WAI-ARIA defines it as an ID reference to the element containing the message (packages/form/README.md says "with error text"; packages/react/README.md says "linking to error text"). Decide: should the binding reference an error element id instead of embedding the text (flip to an element id, or no attribute when no such element is known)? The other assertions of the aria-errormessage text in this file (lifecycle and rendered error reporting tests) rely on the same behavior and must be updated along with it.
+      // PINNED(quirk): aria-errormessage receives the message text, but WAI-ARIA defines it as an ID reference to the element containing the message (the form docs say "with error text"; the react docs say "linking to error text"). Decide: should the binding reference an error element id instead of embedding the text (flip to an element id, or no attribute when no such element is known)? The other assertions of the aria-errormessage text in this file (lifecycle and rendered error reporting tests) rely on the same behavior and must be updated along with it.
       expect(env.binding.props["aria-errormessage"]).toBe("invalid1, invalid2");
     });
 
@@ -1435,7 +1435,7 @@ describe("bindInput", () => {
       expect(env.input).toHaveDisplayValue("");
     });
 
-    test("works with type=time as documented in the README", () => {
+    test("works with type=time as documented", () => {
       vi.useFakeTimers();
       onTestFinished(() => {
         vi.useRealTimers();
@@ -1465,7 +1465,7 @@ describe("bindInput", () => {
       expect(input).toHaveDisplayValue("08:30");
     });
 
-    test("clears the model for type=datetime-local as documented in the README", () => {
+    test("clears the model for type=datetime-local as documented", () => {
       vi.useFakeTimers();
       onTestFinished(() => {
         vi.useRealTimers();
@@ -1493,7 +1493,7 @@ describe("bindInput", () => {
 
       expect(input).toHaveDisplayValue("2024-12-31T23:59");
       fireEvent.change(input, { target: { value: "2025-01-02T03:04" } });
-      // PINNED(bug): valueAsDate does not apply to datetime-local inputs, so the README example writes null to the model and the input is emptied. Expected: the model holds the entered date-time and the input keeps displaying it. Flip these assertions when fixing.
+      // PINNED(bug): valueAsDate does not apply to datetime-local inputs, so the documented example writes null to the model and the input is emptied. Expected: the model holds the entered date-time and the input keeps displaying it. Flip these assertions when fixing.
       expect(model.time).toBeNull();
       expect(input).toHaveDisplayValue("");
     });
@@ -1784,7 +1784,7 @@ describe("bindInput", () => {
       await userEvent.clear(env.input);
       expect(env.input).toHaveDisplayValue("0"); // `v ?? 0` never lets the input be empty
       await userEvent.type(env.input, "-5");
-      // PINNED(quirk): typing "-" leaves the number input's value "" (not a number yet), so the setter receives null, the README pattern `v ?? 0` resets the input to "0", and the next keystroke yields 5 instead of -5. Decide: should the binding avoid overwriting the element while a change is intermediate (or expose the raw text) so that negative numbers can be typed?
+      // PINNED(quirk): typing "-" leaves the number input's value "" (not a number yet), so the setter receives null, the documented pattern `v ?? 0` resets the input to "0", and the next keystroke yields 5 instead of -5. Decide: should the binding avoid overwriting the element while a change is intermediate (or expose the raw text) so that negative numbers can be typed?
       expect(env.model.number).toBe(5);
       expect(env.input).toHaveDisplayValue("5");
     });
@@ -1952,7 +1952,7 @@ describe("bindInput", () => {
       const config = { getter: () => model.string, setter: () => {} };
       const viaBind = form.bind("string", InputBinding, config);
       const viaExtension = form.bindInput("string", config);
-      // PINNED(quirk): bindInput rewrites the cache key to `${valueAs}:${cacheKey}` while Form#bind uses the plain cacheKey, so the two call styles the README presents as equivalent never share a binding instance. Decide: should both styles resolve to the same cache entry? (flip not.toBe -> toBe)
+      // PINNED(quirk): bindInput rewrites the cache key to `${valueAs}:${cacheKey}` while Form#bind uses the plain cacheKey, so the two call styles the docs present as equivalent never share a binding instance. Decide: should both styles resolve to the same cache entry? (flip not.toBe -> toBe)
       expect(viaExtension.onChange).not.toBe(viaBind.onChange);
       expect(viaExtension.id).toBe(viaBind.id);
     });

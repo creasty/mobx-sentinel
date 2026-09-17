@@ -651,7 +651,7 @@ describe("Submission", () => {
       timeline.push("exec resolved");
       gate.resolve();
       await flushMicrotasks();
-      // Intended: didSubmit handlers are typed to return void and "run synchronously within a MobX action" (README), so
+      // Intended: didSubmit handlers are typed to return void and "run synchronously within a MobX action" (docs), so
       // exec does not wait for the asynchronous part of a handler. For rejections, see "does not subscribe to promises
       // returned by didSubmit handlers".
       expect(timeline).toEqual(["didSubmit start", "exec resolved", "didSubmit end"]);

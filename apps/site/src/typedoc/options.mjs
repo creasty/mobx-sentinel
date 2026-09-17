@@ -1,4 +1,5 @@
 import { fileURLToPath } from "node:url";
+import { OptionDefaults } from "typedoc";
 
 const fromRoot = (/** @type {string} */ path) => fileURLToPath(new URL(`../../../../${path}`, import.meta.url));
 
@@ -26,5 +27,8 @@ export const conversionOptions = {
     // Leave out members inherited from outside the repository, like those ValidationError gets from the `Error` of
     // TypeScript's lib and @types/node.
     excludeExternals: true,
+    // Doc comments name the MobX decorator a config's function runs under, as in `Get the value from the model
+    // @computed`, and TypeDoc would take an unknown tag for the start of a section.
+    modifierTags: [...OptionDefaults.modifierTags, "@action", "@computed"],
   },
 };

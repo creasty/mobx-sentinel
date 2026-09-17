@@ -916,7 +916,7 @@ describe("FormField", () => {
         field.markAsChanged("intermediate");
         expect(field.isIntermediate).toBe(true);
         expect(field.isChanged).toBe(true);
-        // An intermediate change does not withdraw an earlier report: once shown, errors keep following the value while typing (README: "Errors Follow the Value Once Shown")
+        // An intermediate change does not withdraw an earlier report: once shown, errors keep following the value while typing (the docs: "Errors Follow the Value Once Shown")
         expect(field.isErrorReported).toBe(true);
 
         await waitForDelay();
@@ -1245,7 +1245,7 @@ describe("FormField", () => {
       form.addHandler("submit", handler);
 
       expect(form.canSubmit).toBe(false);
-      // Reporting is left to the caller (README: "Typically called when submit fails validation")
+      // Reporting is left to the caller (the docs: "Report errors to make them visible")
       await expect(form.submit()).resolves.toBe(false);
       expect(handler).toBeCalledTimes(0);
       expect(field.isErrorReported).toBe(undefined);

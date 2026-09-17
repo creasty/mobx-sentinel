@@ -546,7 +546,7 @@ describe("Form#bind (binding key and cache)", () => {
       const form = createForm();
       const none = form.bind(SampleFormBinding);
       const literal = form.bind(SampleFormBinding, { cacheKey: "undefined" });
-      // PINNED(bug): The absent cacheKey is stringified as "undefined", so it collides with the literal cacheKey "undefined". Expected: distinct instances, as the README defines the user-specified key as a component of the binding key. Flip this assertion when fixing.
+      // PINNED(bug): The absent cacheKey is stringified as "undefined", so it collides with the literal cacheKey "undefined". Expected: distinct instances, as the docs define the user-specified key as a component of the binding key. Flip this assertion when fixing.
       expect(literal.bindingId).toBe(none.bindingId);
     });
 
@@ -554,7 +554,7 @@ describe("Form#bind (binding key and cache)", () => {
       const form = createForm();
       const single = form.bind("a", EitherFieldBinding);
       const multi = form.bind(["a"], EitherFieldBinding);
-      // PINNED(bug): Both produce the key `a@<name>:undefined`, so the multi-field call returns the instance constructed with a single FormField. Expected: distinct instances, as the README lists the subject (a single field vs multiple fields) as a component of the binding key. Flip these assertions when fixing.
+      // PINNED(bug): Both produce the key `a@<name>:undefined`, so the multi-field call returns the instance constructed with a single FormField. Expected: distinct instances, as the docs list the subject (a single field vs multiple fields) as a component of the binding key. Flip these assertions when fixing.
       expect(multi.bindingId).toBe(single.bindingId);
       expect(multi.isMulti).toBe(false);
     });
@@ -941,7 +941,7 @@ describe("Form#bind (constructor, lifecycle, and misuse)", () => {
     });
 
     it("does not notify a computed member of config replaced by a later call", () => {
-      // Follows the README pattern: a computed member reads `this.config`, and `props` is a plain getter
+      // Follows the documented pattern: a computed member reads `this.config`, and `props` is a plain getter
       class ComputedPropsBinding implements FormBinding {
         constructor(
           readonly form: Form<any>,
@@ -965,7 +965,7 @@ describe("Form#bind (constructor, lifecycle, and misuse)", () => {
       });
       try {
         runInAction(() => label.set("second"));
-        // PINNED(quirk): `config` is assigned as a plain property, so a computed member reading `this.config` (the pattern the README recommends, e.g. `@computed get value()` over `this.config.getter()`) stays cached with the first config while it is observed. The README only says configuration "can be updated on subsequent calls". Decide: should Form#bind make the config replacement observable (e.g. an observable box), or should bindings be documented to read only observables through `config`? If observable, this becomes ["first", "second"].
+        // PINNED(quirk): `config` is assigned as a plain property, so a computed member reading `this.config` (the pattern the docs recommend, e.g. `@computed get value()` over `this.config.getter()`) stays cached with the first config while it is observed. The docs only say configuration "can be updated on subsequent calls". Decide: should Form#bind make the config replacement observable (e.g. an observable box), or should bindings be documented to read only observables through `config`? If observable, this becomes ["first", "second"].
         expect(seen).toEqual(["first", "first"]);
       } finally {
         dispose();

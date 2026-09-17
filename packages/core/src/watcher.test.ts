@@ -130,7 +130,7 @@ describe("Watcher", () => {
     });
 
     it("throws when the target is not extensible", () => {
-      // PINNED(bug): getSafe() lets the TypeError from caching the watcher on a frozen / sealed / non-extensible object escape, although its JSDoc says it "returns null instead of throwing an error" (the README only mentions non-objects; Validator.getSafe has the identical JSDoc and is pinned as a bug in validator.test.ts). Expected: getSafe does not throw for objects, either by giving non-extensible objects a watcher (e.g. cached in a WeakMap; flip to `.toBeInstanceOf(Watcher)`) or by returning null (flip to `.toBeNull()`). Flip these assertions when fixing.
+      // PINNED(bug): getSafe() lets the TypeError from caching the watcher on a frozen / sealed / non-extensible object escape, although its JSDoc says it "returns null instead of throwing an error" (the docs only mention non-objects; Validator.getSafe has the identical JSDoc and is pinned as a bug in validator.test.ts). Expected: getSafe does not throw for objects, either by giving non-extensible objects a watcher (e.g. cached in a WeakMap; flip to `.toBeInstanceOf(Watcher)`) or by returning null (flip to `.toBeNull()`). Flip these assertions when fixing.
       expect(() => Watcher.getSafe(Object.freeze({}))).toThrowError(/not extensible/);
       expect(() => Watcher.getSafe(Object.seal({}))).toThrowError(/not extensible/);
     });
@@ -594,7 +594,7 @@ describe("Watcher", () => {
         watcher = Watcher.get(object);
         object.value = 1;
       });
-      // PINNED(bug): the reactions of a watcher created inside a transaction take their first reading only when the transaction ends, so changes made after Watcher.get() in the same transaction become the baseline (e.g. a model created and edited inside one action). Expected: tracked, as the README says "Watching starts immediately when the Watcher instance is created". Flip this assertion when fixing.
+      // PINNED(bug): the reactions of a watcher created inside a transaction take their first reading only when the transaction ends, so changes made after Watcher.get() in the same transaction become the baseline (e.g. a model created and edited inside one action). Expected: tracked, as the docs say "Watching starts immediately when the Watcher instance is created". Flip this assertion when fixing.
       expect(watcher.changed).toBe(false);
 
       runInAction(() => {
@@ -838,7 +838,7 @@ describe("unwatch()", () => {
   });
 
   it("drops a change made before unwatch() in the same transaction, and tracks one made after", () => {
-    // The example of "Warning about transactions" in the README of the core package
+    // The example of "Warning about transactions" in the docs of the core package
     const object = observable({ field1: false, field2: false, field3: false });
     const watcher = Watcher.get(object);
 
@@ -850,9 +850,9 @@ describe("unwatch()", () => {
       object.field3 = true;
     });
     expect(watcher.changedKeys.has("field2" as KeyPath)).toBe(false);
-    // PINNED(bug): the reaction for field1 is scheduled before unwatch() but only runs when the transaction ends, while unwatching is still in effect, so the change is dropped. Expected: tracked, as the README says ("Tracked: Before unwatch begins"). Flip this assertion when fixing.
+    // PINNED(bug): the reaction for field1 is scheduled before unwatch() but only runs when the transaction ends, while unwatching is still in effect, so the change is dropped. Expected: tracked, as the docs say ("Tracked: Before unwatch begins"). Flip this assertion when fixing.
     expect(watcher.changedKeys.has("field1" as KeyPath)).toBe(false);
-    // PINNED(quirk): field3 is tracked because its reaction is scheduled after unwatching ends, contradicting the README ("NOT tracked: Still in the same transaction as unwatch"); the test "works when unwatch() function has outer transactions" relies on this. Decide: fix the README, or the behavior?
+    // PINNED(quirk): field3 is tracked because its reaction is scheduled after unwatching ends, contradicting the docs ("NOT tracked: Still in the same transaction as unwatch"); the test "works when unwatch() function has outer transactions" relies on this. Decide: fix the docs, or the behavior?
     expect(watcher.changedKeys.has("field3" as KeyPath)).toBe(true);
   });
 
@@ -1932,7 +1932,7 @@ describe("Annotations", () => {
       runInAction(() => {
         (sample.array as IObservableArray<number>).replace([1, 2]);
       });
-      // PINNED(quirk): shallow watching compares fresh copies (slice()) by identity, so any notification from the collection counts even when its contents end up identical. Decide: should shallow watching compare the copies with comparer.shallow, as "shallow comparison" in the README suggests?
+      // PINNED(quirk): shallow watching compares fresh copies (slice()) by identity, so any notification from the collection counts even when its contents end up identical. Decide: should shallow watching compare the copies with comparer.shallow, as "shallow comparison" in the docs suggests?
       expect(watcher.changedKeys).toEqual(new Set(["array"]));
     });
   });
@@ -2003,7 +2003,7 @@ describe("Annotations", () => {
       runInAction(() => {
         sample.value = 1;
       });
-      // PINNED(quirk): the watcher collects MobX annotations once in its constructor and is cached, so annotations applied afterwards are never tracked. Decide: should Watcher collect annotations lazily, or detect this misuse (the README only warns about the order for makeValidatable())?
+      // PINNED(quirk): the watcher collects MobX annotations once in its constructor and is cached, so annotations applied afterwards are never tracked. Decide: should Watcher collect annotations lazily, or detect this misuse (the docs only warn about the order for makeValidatable())?
       expect(sample.watcher.changed).toBe(false);
     });
   });
@@ -2466,7 +2466,7 @@ describe("Annotations", () => {
           sample.child.value = 2;
         });
         expect(childWatcher.changedTick).toBe(2n);
-        // PINNED(bug): the parent only reacts to the nested `changed` flipping to true, so further nested changes neither increment its changedTick nor notify reactions observing it (the autosave/sync use case in the root README). Expected: 2n and 2 calls. Flip these assertions when fixing.
+        // PINNED(bug): the parent only reacts to the nested `changed` flipping to true, so further nested changes neither increment its changedTick nor notify reactions observing it (the autosave/sync use case in the overview of the docs). Expected: 2n and 2 calls. Flip these assertions when fixing.
         expect(watcher.changedTick).toBe(1n);
         expect(onTick).toHaveBeenCalledTimes(1);
       } finally {
@@ -2624,7 +2624,7 @@ describe("Annotations", () => {
         leaf.value = 1;
       });
       expect(watcher.changedKeyPaths).toEqual(new Set());
-      // PINNED(bug): symbol-keyed entries are skipped by the nested fetcher but not by the change propagation, so they flip `changed`. Expected: `false`, as the README says "Symbol keys in nested objects are ignored". Flip this assertion when fixing.
+      // PINNED(bug): symbol-keyed entries are skipped by the nested fetcher but not by the change propagation, so they flip `changed`. Expected: `false`, as the docs say "Symbol keys in nested objects are ignored". Flip this assertion when fixing.
       expect(watcher.changed).toBe(true);
 
       watcher.reset();
@@ -2794,7 +2794,7 @@ describe("Annotations", () => {
         // The change propagation reaction fails on its first run, which MobX reports
         expect(consoleError).toHaveBeenCalled();
 
-        // PINNED(bug): nested watchers are created with Watcher.getSafe(), which throws for non-extensible objects (see ".getSafe"), so a model holding a frozen plain object (e.g. Immer output) under @nested cannot even be reset(), although @nested "supports objects" (README). Expected: none of them throws (the frozen object is either skipped or given a watcher). Flip these assertions to `.not.toThrow()` when fixing.
+        // PINNED(bug): nested watchers are created with Watcher.getSafe(), which throws for non-extensible objects (see ".getSafe"), so a model holding a frozen plain object (e.g. Immer output) under @nested cannot even be reset(), although @nested "supports objects" (docs). Expected: none of them throws (the frozen object is either skipped or given a watcher). Flip these assertions to `.not.toThrow()` when fixing.
         expect(() => watcher.nested).toThrowError(/not extensible/);
         expect(() => watcher.changedKeyPaths).toThrowError(/not extensible/);
         expect(() => watcher.reset()).toThrowError(/not extensible/);

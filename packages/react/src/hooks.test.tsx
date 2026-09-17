@@ -645,7 +645,7 @@ describe("useFormHandler", () => {
     await submit(form);
 
     expect(receivers).toHaveLength(2);
-    // PINNED(quirk): the wrapper invokes `handlerRef.current(...args)` as a method call, so a non-arrow handler sees the hook's internal `{ current: handler }` ref object as `this` instead of `undefined` (as with Form#addHandler, which the README calls this hook a wrapper for). Decide: should the wrapper call the handler without a receiver? The flip is `toEqual({ current: handler })` -> `toBeUndefined()`.
+    // PINNED(quirk): the wrapper invokes `handlerRef.current(...args)` as a method call, so a non-arrow handler sees the hook's internal `{ current: handler }` ref object as `this` instead of `undefined` (as with Form#addHandler, which the docs call this hook a wrapper for). Decide: should the wrapper call the handler without a receiver? The flip is `toEqual({ current: handler })` -> `toBeUndefined()`.
     expect(receivers[0]).toEqual({ current: handler });
     expect(receivers[1]).toBeUndefined();
   });

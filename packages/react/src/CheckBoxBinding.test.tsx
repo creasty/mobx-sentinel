@@ -197,7 +197,7 @@ describe("CheckBoxBinding", () => {
         seen.push(env.binding.checked);
       });
       env.binding.config = { getter: () => other.get(), setter: () => {} };
-      // PINNED(quirk): `config` is not observable, so replacing it (as Form#bind does on every call) does not invalidate the observed computed and the old getter's cached value (false) is returned; packages/form/README.md only says "Configuration can be updated on subsequent calls while maintaining the same binding instance" (same root cause as the config quirks in binding.test.ts and InputBinding.test.tsx). Decide: should `config` be observable (e.g. observable.ref) so that the new getter takes effect immediately (flip to true, and the observer re-runs)?
+      // PINNED(quirk): `config` is not observable, so replacing it (as Form#bind does on every call) does not invalidate the observed computed and the old getter's cached value (false) is returned; the form docs only say "Configuration can be updated on subsequent calls while maintaining the same binding instance" (same root cause as the config quirks in binding.test.ts and InputBinding.test.tsx). Decide: should `config` be observable (e.g. observable.ref) so that the new getter takes effect immediately (flip to true, and the observer re-runs)?
       expect(env.binding.checked).toBe(false);
       expect(seen).toEqual([false]);
 
@@ -628,7 +628,7 @@ describe("bindCheckBox", () => {
 
     await env.clickInput();
     expect(env.input).toHaveAttribute("aria-invalid", "true");
-    // PINNED(quirk): aria-errormessage carries the message text itself, while WAI-ARIA defines it as an ID reference to the element that contains the message (packages/form/README.md says "with error text"; packages/react/README.md says "linking to error text"). Decide: should the binding reference an error element id instead of embedding the text?
+    // PINNED(quirk): aria-errormessage carries the message text itself, while WAI-ARIA defines it as an ID reference to the element that contains the message (the form docs say "with error text"; the react docs say "linking to error text"). Decide: should the binding reference an error element id instead of embedding the text?
     expect(env.input).toHaveAttribute("aria-errormessage", "invalid1, invalid2");
 
     act(() => form.reset());
@@ -802,7 +802,7 @@ describe("bindCheckBox", () => {
       const input = screen.getByRole("checkbox");
 
       // The label binding only knows the field id, so an overridden element id ([Override]) must be
-      // paired with the label's htmlFor override (packages/react/README.md "Custom htmlFor").
+      // paired with the label's htmlFor override ("Custom htmlFor" in the react docs).
       expect(input).toHaveAttribute("id", "custom-boolean");
       expect(screen.queryByLabelText("Boolean")).toBeNull();
       await userEvent.click(screen.getByText("Boolean"));
@@ -908,7 +908,7 @@ describe("bindCheckBox", () => {
 
       const props3 = form.bindCheckBox("boolean", { ...config, cacheKey: "another" });
       expect(props3.onChange).not.toBe(props1.onChange);
-      // PINNED(quirk): distinct bindings of the same field (different cacheKey) share the field id, so rendering both yields duplicate element ids although the README promises "unique id attributes for form elements". Decide: should each binding instance get its own element id?
+      // PINNED(quirk): distinct bindings of the same field (different cacheKey) share the field id, so rendering both yields duplicate element ids although the docs promise "unique id attributes for form elements". Decide: should each binding instance get its own element id?
       expect(props3.id).toBe(props1.id);
     });
 

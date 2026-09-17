@@ -1061,7 +1061,7 @@ describe("Form (details)", () => {
       editForm.markAsDirty();
       editForm.validator.updateErrors(Symbol(), (b) => b.invalidate("field", "error"));
 
-      // PINNED(quirk): Forms of the same subject share one Watcher and one Validator regardless of the formKey, so markAsDirty/reset (including the reset after a successful submission) on one form affects the others. Decide: should forms with different keys have independent dirty states, as the README's "multiple independent forms" wording suggests?
+      // PINNED(quirk): Forms of the same subject share one Watcher and one Validator regardless of the formKey, so markAsDirty/reset (including the reset after a successful submission) on one form affects the others. Decide: should forms with different keys have independent dirty states, as the "multiple independent forms" wording of the docs suggests?
       expect(previewForm.watcher).toBe(editForm.watcher);
       expect(previewForm.validator).toBe(editForm.validator);
       expect(previewForm.isDirty).toBe(true);
@@ -1939,7 +1939,7 @@ describe("Form (details)", () => {
   describe("#firstErrorMessage", () => {
     it("returns null when there are no errors", () => {
       const form = Form.get(new CollectionModel());
-      // PINNED(quirk): firstErrorMessage returns null when there are no errors, matching its type (`string | null`) and Validator#firstErrorMessage, but the README documents `string | undefined`. Decide: should it return undefined (toBeUndefined(), and the "properties" type assertion changes), or should the README say `string | null`?
+      // `null` is intended: it matches the type (`string | null`), Validator#firstErrorMessage and the docs
       expect(form.firstErrorMessage).toBeNull();
     });
 
@@ -2447,7 +2447,7 @@ describe("Form (details)", () => {
       it("calls a didSubmit listener guarded by succeed exactly once, for the successful forced submission", async () => {
         const { form, calls } = setupEnv();
         const onSuccess = vi.fn();
-        // Like the useFormHandler example in packages/react/README.md
+        // Like the useFormHandler example in the react docs
         form.addHandler("didSubmit", (succeed) => {
           if (succeed) onSuccess();
         });
@@ -2475,7 +2475,7 @@ describe("Form (details)", () => {
           const form = Form.get(new SampleModel());
           form.markAsDirty();
 
-          // README-style submit handler around a fetch-like request that rejects as soon as its signal aborts
+          // A submit handler like the ones in the docs, around a fetch-like request that rejects as soon as its signal aborts
           const signals: AbortSignal[] = [];
           form.addHandler("submit", async (signal) => {
             signals.push(signal);
