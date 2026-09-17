@@ -339,8 +339,8 @@ describe("resetting", () => {
   });
 });
 
-describe("a binding the app defines", () => {
-  test("holds errors back and reports them like the built-in bindings", async () => {
+describe("the memo", () => {
+  test("holds its errors back while the user types, and reports them once the user leaves it", async () => {
     const user = setup();
     const memo = screen.getByPlaceholderText("Anything the customer's accounts payable team should know");
 

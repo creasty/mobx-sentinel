@@ -21,7 +21,6 @@ import {
   today,
 } from "@/invoice/catalog";
 import { Invoice, LineItem, MAX_CC_RECIPIENTS, MAX_MEMO_LENGTH, PostalAddress } from "@/invoice/models";
-import { CustomTextAreaBinding } from "@/invoice/CustomTextAreaBinding";
 
 export const InvoiceForm: React.FC<{ model: Invoice }> = observer(({ model }) => {
   // One line to attach a form to a model. No provider, no context, no schema.
@@ -480,10 +479,10 @@ const MemoField: React.FC<{ model: Invoice }> = observer(({ model }) => {
 
   return (
     <div className="field">
-      {/* A binding written in this app, used exactly like the built-in ones. */}
       <textarea
-        {...form.bind("memo", CustomTextAreaBinding, {
-          placeholder: "Anything the customer's accounts payable team should know",
+        rows={3}
+        placeholder="Anything the customer's accounts payable team should know"
+        {...form.bindTextArea("memo", {
           getter: () => model.memo,
           setter: (v) => (model.memo = v),
         })}

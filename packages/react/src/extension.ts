@@ -5,6 +5,7 @@ import { RadioButtonBinding } from "./RadioButtonBinding";
 import { SelectBoxBinding } from "./SelectBoxBinding";
 import { SubmitButtonBinding } from "./SubmitButtonBinding";
 import { LabelBinding } from "./LabelBinding";
+import { TextAreaBinding } from "./TextAreaBinding";
 
 /**
  * Standard binding extensions for React form elements
@@ -18,7 +19,7 @@ export interface StandardExtensions<T> {
    * Bind the input field to the form.
    *
    * `<input>` except the following types: button, submit, reset, hidden, image, file, checkbox, and radio.
-   * For checkbox and radio, use bindCheckBox and bindRadioButton respectively.
+   * For checkbox and radio, use bindCheckBox and bindRadioButton respectively, and for `<textarea>`, use bindTextArea.
    *
    * @example
    * ```tsx
@@ -40,6 +41,22 @@ export interface StandardExtensions<T> {
    * ```
    */
   bindInput: FormBindingFuncExtension.ForField.RequiredConfig<T, typeof InputBinding>;
+
+  /**
+   * Bind the textarea field to the form.
+   *
+   * @example
+   * ```tsx
+   * <textarea
+   *   rows={4}
+   *   {...form.bindTextArea("string", {
+   *     getter: () => model.string,
+   *     setter: (v) => (model.string = v),
+   *   })}
+   * />
+   * ```
+   */
+  bindTextArea: FormBindingFuncExtension.ForField.RequiredConfig<T, typeof TextAreaBinding>;
 
   /**
    * Bind the select box field to the form.
@@ -116,6 +133,7 @@ export interface StandardExtensions<T> {
 declare module "@mobx-sentinel/form" {
   export interface Form<T> extends StandardExtensions<T> {
     bindInput: StandardExtensions<T>["bindInput"];
+    bindTextArea: StandardExtensions<T>["bindTextArea"];
     bindSelectBox: StandardExtensions<T>["bindSelectBox"];
     bindCheckBox: StandardExtensions<T>["bindCheckBox"];
     bindRadioButton: StandardExtensions<T>["bindRadioButton"];
@@ -129,6 +147,10 @@ Form.prototype.bindInput = function (fieldName, config) {
     ...config,
     cacheKey: `${config.valueAs}:${config.cacheKey}`,
   });
+};
+
+Form.prototype.bindTextArea = function (fieldName, config) {
+  return this.bind(fieldName, TextAreaBinding, config);
 };
 
 Form.prototype.bindSelectBox = function (fieldName, config) {

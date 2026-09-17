@@ -30,7 +30,7 @@ The standard bindings of [`@mobx-sentinel/react`](/docs/react/) behave as follow
 
 ## Intermediate and Final Changes
 
-A text input cannot tell when the user is done, so `InputBinding` marks every keystroke as an **intermediate** change — a value that may still be incomplete, like `user@` in an email field — and reports nothing yet. The change becomes **final**, and the field's errors are reported, when either:
+A text input cannot tell when the user is done, so `InputBinding` and `TextAreaBinding` mark every keystroke as an **intermediate** change — a value that may still be incomplete, like `user@` in an email field — and report nothing yet. The change becomes **final**, and the field's errors are reported, when either:
 
 - the user leaves the field (`onBlur` calls `field.finalizeChangeIfNeeded()`), or
 - the user stops typing for [`autoFinalizationDelayMs`](/docs/form/configuration/), 3 seconds by default. Every keystroke restarts the timer, so users who never leave the field, such as on the last field before a disabled submit button, still get feedback.
