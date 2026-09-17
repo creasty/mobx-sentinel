@@ -1,5 +1,5 @@
 import { action, autorun, computed, makeObservable, observable, reaction, runInAction, transaction } from "mobx";
-import { v4 as uuidV4 } from "uuid";
+import { randomId } from "./randomId";
 import { createPropertyLikeAnnotation, getAnnotationProcessor } from "./annotationProcessor";
 import { getMobxObservableAnnotations, shallowReadValue, unwrapShallowContents } from "./mobx-utils";
 import { StandardNestedFetcher, getNestedAnnotations } from "./nested";
@@ -114,7 +114,7 @@ const internalToken = Symbol("watcher.internal");
  * - Can be temporarily disabled via `unwatch()`
  */
 export class Watcher {
-  readonly id = uuidV4();
+  readonly id = randomId();
   readonly #assumeChanged = observable.box(false);
   readonly #changedTick = observable.box(0n);
   readonly #changedKeys = observable.set<KeyPath>();

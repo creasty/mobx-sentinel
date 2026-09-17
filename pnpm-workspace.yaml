@@ -21,7 +21,6 @@ catalog:
   react-dom: ^19.3.0
   tsup: ^8.5.1
   typescript: ^6.0.3
-  uuid: ^11.1.1
   # One Vite for the whole workspace, held at 7. Vite 8 compiles TypeScript
   # with Oxc, which does not lower standard decorators, so core's test-stage3
   # fails to parse on it (oxc-project/oxc#9170). Nothing can move to 8 alone

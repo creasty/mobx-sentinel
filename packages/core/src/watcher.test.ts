@@ -149,10 +149,10 @@ describe("Watcher", () => {
   });
 
   describe("#id", () => {
-    it("is a UUID v4 that stays the same for the target", () => {
+    it("is a random id that stays the same for the target", () => {
       const target = {};
       const watcher = Watcher.get(target);
-      expect(watcher.id).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/);
+      expect(watcher.id).toMatch(/^[0-9a-f]{32}$/);
       expect(Watcher.get(target).id).toBe(watcher.id);
     });
   });

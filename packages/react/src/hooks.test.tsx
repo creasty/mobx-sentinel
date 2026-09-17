@@ -815,7 +815,7 @@ describe("useFormSSR", () => {
 
     expect(input.id).toBe(`${form.stableId}:field`);
     expect(label.getAttribute("for")).toBe(input.id);
-    // No longer built on the form's uuid
+    // No longer built on the form's id
     expect(input.id).not.toContain(form.id);
   });
 

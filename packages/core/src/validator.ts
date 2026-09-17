@@ -1,5 +1,5 @@
 import { action, comparer, computed, IEqualsComparer, makeObservable, observable, reaction, runInAction } from "mobx";
-import { v4 as uuidV4 } from "uuid";
+import { randomId } from "./randomId";
 import { ValidationError, type ValidationErrorMapBuilder, ValidationErrorMapBuilderImpl } from "./error";
 import { StandardNestedFetcher } from "./nested";
 import { KeyPath, ReadonlyKeyPathMultiMap } from "./keyPath";
@@ -76,7 +76,7 @@ export function makeValidatable(target: object, ...args: any[]) {
 export class Validator<T> {
   static defaultDelayMs = 100;
 
-  readonly id = uuidV4();
+  readonly id = randomId();
   readonly #errors = observable.map<symbol, ReadonlyKeyPathMultiMap<ValidationError>>([], {
     equals: comparer.structural,
   });

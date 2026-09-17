@@ -1,6 +1,6 @@
 import type { Form } from "./form";
 import type { FormField } from "./field";
-import { v4 as uuidV4 } from "uuid";
+import { randomId } from "./randomId";
 
 type ConfigOf<T> = T extends new (
   form: Form<any>,
@@ -45,12 +45,12 @@ export namespace FormBindingConstructor {
  * Get a safe name for the binding class
  *
  * Since Function.name is vulnerable to minification,
- * a UUID is appended to the name to ensure uniqueness.
+ * a random id is appended to the name to ensure uniqueness.
  */
 export function getSafeBindingName(bindingClass: FormBindingConstructor): string {
   let name = safeBindingNameCache.get(bindingClass);
   if (!name) {
-    name = `${bindingClass.name}--${uuidV4()}`;
+    name = `${bindingClass.name}--${randomId()}`;
     safeBindingNameCache.set(bindingClass, name);
   }
   return name;

@@ -31,9 +31,6 @@
     "test:dev": "vitest",
     "build": "tsup"
   },
-  "dependencies": {
-    "uuid": "catalog:"
-  },
   "peerDependencies": {
     "@mobx-sentinel/core": "workspace:~",
     "mobx": "catalog:peer"
