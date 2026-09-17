@@ -5,6 +5,8 @@ import { renderRadioGroup, useFormHandler } from "@mobx-sentinel/react";
 import { reaction } from "mobx";
 import { observer } from "mobx-react-lite";
 import { useEffect, useState } from "react";
+import { CustomDropdown } from "@/helpers/CustomDropdown";
+import { CustomDropdownBinding } from "@/helpers/CustomDropdownBinding";
 import * as api from "@/invoice/api";
 import {
   COUNTRIES,
@@ -55,12 +57,6 @@ export const InvoiceForm: React.FC<{ model: Invoice }> = observer(({ model }) =>
         <InvoiceHeader model={model} />
       </header>
 
-      {issued && (
-        <p className="receipt" role="status">
-          Sent as <b>{issued}</b>. The form reset itself, so it is no longer dirty.
-        </p>
-      )}
-
       <h4>Customer</h4>
       <CustomerFields model={model} />
 
@@ -105,7 +101,7 @@ export const InvoiceForm: React.FC<{ model: Invoice }> = observer(({ model }) =>
         <ErrorText errors={form.getErrors("amountsConfirmed")} />
       </div>
 
-      <FormActions model={model} />
+      <FormActions model={model} issued={issued} />
     </article>
   );
 });
@@ -270,24 +266,23 @@ const TermsFields: React.FC<{ model: Invoice }> = observer(({ model }) => {
         </div>
       )}
 
-      <div className="field">
-        <label {...form.bindLabel(["ccRecipients"])}>Notify (up to {MAX_CC_RECIPIENTS})</label>
-        <select
-          size={api.TEAM_MEMBERS.length}
-          {...form.bindSelectBox("ccRecipients", {
-            multiple: true,
+      <fieldset className="field">
+        {/* A legend, not a label: a <label> cannot point at the dropdown, while a legend names the whole group. */}
+        <legend {...form.bindLabel(["ccRecipients"])}>Notify (up to {MAX_CC_RECIPIENTS})</legend>
+        {/*
+          `bindSelectBox` with `multiple: true` would do for this field. CustomDropdown is here to show how easily a
+          component that knows nothing of forms gets a binding of its own.
+        */}
+        <CustomDropdown
+          placeholder="Nobody"
+          options={api.TEAM_MEMBERS.map((member) => ({ value: member.id, label: member.name }))}
+          {...form.bind("ccRecipients", CustomDropdownBinding, {
             getter: () => model.ccRecipients,
             setter: (v) => (model.ccRecipients = v),
           })}
-        >
-          {api.TEAM_MEMBERS.map((member) => (
-            <option key={member.id} value={member.id}>
-              {member.name}
-            </option>
-          ))}
-        </select>
+        />
         <ErrorText errors={form.getErrors("ccRecipients")} />
-      </div>
+      </fieldset>
     </>
   );
 });
@@ -390,57 +385,53 @@ const LineItemForm: React.FC<{
 
   return (
     <div className="sub-form">
-      <div className="row">
-        <div className="field wide">
-          <label {...form.bindLabel(["description"])}>Description</label>
-          <input
-            {...form.bindInput("description", {
-              getter: () => model.description,
-              setter: (v) => (model.description = v),
-            })}
-          />
-          <ErrorText errors={form.getErrors("description")} />
+      <div className="field">
+        <div className="line-item-fields">
+          <div className="line-item-labels">
+            <label {...form.bindLabel(["description"])}>Description</label>
+            <label {...form.bindLabel(["quantity"])}>Qty</label>
+            <label {...form.bindLabel(["unitPrice"])}>Unit price</label>
+            <label {...form.bindLabel(["taxCategory"])}>Tax</label>
+          </div>
+          {/* biome-ignore lint/a11y/noRedundantRoles: Pico CSS lays out a group by its role */}
+          <fieldset role="group">
+            <input
+              {...form.bindInput("description", {
+                getter: () => model.description,
+                setter: (v) => (model.description = v),
+              })}
+            />
+            <input
+              {...form.bindInput("quantity", {
+                valueAs: "number",
+                getter: () => model.quantity,
+                setter: (v) => (model.quantity = v ?? 0),
+              })}
+            />
+            <input
+              {...form.bindInput("unitPrice", {
+                valueAs: "number",
+                getter: () => model.unitPrice,
+                setter: (v) => (model.unitPrice = v),
+              })}
+            />
+            <select
+              {...form.bindSelectBox("taxCategory", {
+                getter: () => model.taxCategory,
+                setter: (v) => (model.taxCategory = v as TaxCategory),
+              })}
+            >
+              {Object.values(TaxCategory).map((category) => (
+                <option key={category} value={category}>
+                  {TAX_CATEGORIES[category].label}
+                </option>
+              ))}
+            </select>
+          </fieldset>
         </div>
-
-        <div className="field">
-          <label {...form.bindLabel(["quantity"])}>Qty</label>
-          <input
-            {...form.bindInput("quantity", {
-              valueAs: "number",
-              getter: () => model.quantity,
-              setter: (v) => (model.quantity = v ?? 0),
-            })}
-          />
-          <ErrorText errors={form.getErrors("quantity")} />
-        </div>
-
-        <div className="field">
-          <label {...form.bindLabel(["unitPrice"])}>Unit price</label>
-          <input
-            {...form.bindInput("unitPrice", {
-              valueAs: "number",
-              getter: () => model.unitPrice,
-              setter: (v) => (model.unitPrice = v),
-            })}
-          />
-          <ErrorText errors={form.getErrors("unitPrice")} />
-        </div>
-
-        <div className="field">
-          <label {...form.bindLabel(["taxCategory"])}>Tax</label>
-          <select
-            {...form.bindSelectBox("taxCategory", {
-              getter: () => model.taxCategory,
-              setter: (v) => (model.taxCategory = v as TaxCategory),
-            })}
-          >
-            {Object.values(TaxCategory).map((category) => (
-              <option key={category} value={category}>
-                {TAX_CATEGORIES[category].label}
-              </option>
-            ))}
-          </select>
-        </div>
+        <ErrorText errors={form.getErrors("description")} />
+        <ErrorText errors={form.getErrors("quantity")} />
+        <ErrorText errors={form.getErrors("unitPrice")} />
       </div>
 
       <div className="line-item-footer">
@@ -497,7 +488,7 @@ const MemoField: React.FC<{ model: Invoice }> = observer(({ model }) => {
   );
 });
 
-const FormActions: React.FC<{ model: Invoice }> = observer(({ model }) => {
+const FormActions: React.FC<{ model: Invoice; issued: string | null }> = observer(({ model, issued }) => {
   const form = Form.get(model);
   const [autosavedAt, setAutosavedAt] = useState<string | null>(null);
 
@@ -525,6 +516,12 @@ const FormActions: React.FC<{ model: Invoice }> = observer(({ model }) => {
         {/* Disabled until the form is valid and idle. Hovering it reveals why. */}
         <button {...form.bindSubmitButton()}>{form.isSubmitting ? "Sending…" : "Send invoice"}</button>
       </div>
+
+      {issued && (
+        <p className="receipt" role="status">
+          Sent as <b>{issued}</b>. The form reset itself, so it is no longer dirty.
+        </p>
+      )}
 
       <p className="hints">
         <small>

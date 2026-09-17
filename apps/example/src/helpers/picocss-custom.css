@@ -29,10 +29,11 @@
   .field {
     margin-bottom: var(--pico-spacing);
 
-    label:not(:has(input)) {
+    label:not(:has(input)),
+    legend {
       font-weight: bold;
     }
-    label[aria-invalid="true"] {
+    :is(label, legend)[aria-invalid="true"] {
       color: var(--pico-del-color);
     }
 
