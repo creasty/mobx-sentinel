@@ -10,6 +10,7 @@ import {
   configure,
   extendObservable,
   flow,
+  getAtom,
   isObservableArray,
   isObservableMap,
   isObservableSet,
@@ -18,6 +19,7 @@ import {
   remove,
   set,
   $mobx,
+  type IObservableValue,
 } from "mobx";
 import { getMobxObservableAnnotations, shallowReadValue, unwrapShallowContents } from "./mobx-utils";
 
@@ -996,12 +998,11 @@ describe("getMobxObservableAnnotations", () => {
 
     test("reads through the target, so a property that replaces the annotated accessor takes precedence", () => {
       const obj: Record<string, number> = observable({ value: 1 }, {}, { proxy: false });
-      const adm = (obj as any)[$mobx];
       const getValue = new Map(getMobxObservableAnnotations(obj)).get("value")!;
 
       // Bypass MobX so that the administration keeps the entry while the target gets a plain property
       Object.defineProperty(obj, "value", { value: 99 });
-      expect(adm.values_.get("value").get()).toBe(1);
+      expect((getAtom(obj, "value") as unknown as IObservableValue<number>).get()).toBe(1);
 
       expect(getValue()).toBe(99);
     });
@@ -1056,6 +1057,16 @@ describe("getMobxObservableAnnotations", () => {
       // PINNED(quirk): the administration is looked up through the prototype chain (`target[$mobx]`), so a non-observable object that merely inherits from an observable one yields the prototype's annotations. Decide: should only an own administration count? If so, this becomes toEqual([]).
       expect(readAll(child)).toEqual([["value", 1]]);
     });
+
+    test("getters read a key that the prototype removes after the enumeration as undefined", () => {
+      const proto = observable<Record<string, number>>({ value: 1 });
+      const child = Object.create(proto);
+      const getValue = new Map(getMobxObservableAnnotations(child)).get("value")!;
+
+      runInAction(() => remove(proto, "value"));
+      // PINNED(quirk): unlike a key of the target itself (see "follows a key that is removed and added again after the enumeration"), the getter has no detached administration entry to fall back to, as only the keys that are own properties of the target get theirs captured at enumeration. Decide along with that test: if removing a key should read as `undefined` there too, both agree.
+      expect(getValue()).toBeUndefined();
+    });
   });
 
   describe("enumeration", () => {
@@ -1101,7 +1112,7 @@ describe("getMobxObservableAnnotations", () => {
 
       runInAction(() => (obj.added = 2));
       expect(objectKeysFn).toBeCalledTimes(2);
-      // PINNED(quirk): enumeration reads the administration's `values_` map directly without reporting its keys atom, so a derivation that enumerates is not re-run when a key is added (unlike Object.keys). Decide: should enumeration report the keys atom so that consumers can pick up keys added later? If so, enumerateFn is called 2 times.
+      // PINNED(quirk): enumeration lists the keys untracked, without reporting the keys atom, so a derivation that enumerates is not re-run when a key is added (unlike Object.keys). Decide: should enumeration report the keys atom so that consumers can pick up keys added later? If so, enumerateFn is called 2 times.
       expect(enumerateFn).toBeCalledTimes(1);
       expect(keysOf(obj)).toEqual(["a", "added"]);
 
@@ -1117,187 +1128,59 @@ describe("getMobxObservableAnnotations", () => {
     });
   });
 
-  // The function relies on MobX internals and guards each of them at runtime, so that a change of the internal API
-  // degrades to yielding less instead of throwing. These tests tamper with a real administration to exercise the guards.
-  describe("guards against changes of the internal API", () => {
-    const createTarget = () => {
-      const obj = observable({ value: 1 }, {}, { proxy: false });
+  // ECMAScript private keys are not properties, so the function also takes the keys of every map held by the
+  // administration, whatever their (mangled) names are. test-stage3/ covers private keys; these tests cover the rest.
+  describe("keys held by the administration", () => {
+    test("does not yield keys that derivations only checked the presence of", () => {
+      const obj = observable<Record<string, number>>({ value: 1 });
+      const dispose = autorun(() => "missing" in obj);
+      // MobX holds those in a map too, to notify the derivation once the key is added
       const adm = (obj as any)[$mobx];
-      return { obj, adm };
-    };
+      expect(Object.values(adm).some((value) => value instanceof Map && value.has("missing"))).toBe(true);
 
-    test("yields nothing when the administration has no values_", () => {
-      const { obj, adm } = createTarget();
-      delete adm.values_;
-      expect(keysOf(obj)).toEqual([]);
+      expect(keysOf(obj)).toEqual(["value"]);
+
+      dispose();
     });
 
-    test("yields nothing when values_ is not a map", () => {
-      const { obj, adm } = createTarget();
-      adm.values_ = { value: observable.box(1) };
-      expect(keysOf(obj)).toEqual([]);
-    });
-
-    test("skips entries of values_ that are not objects with a get function", () => {
-      const { obj, adm } = createTarget();
-      adm.values_.set("primitive", 1);
-      adm.values_.set("null", null);
-      adm.values_.set("noGetter", {});
-      adm.values_.set("nonFunctionGetter", { get: 1 });
+    test("does not yield the keys of other maps, including ones that are not strings, symbols, or numbers", () => {
+      const obj = observable({ value: 1 });
+      (obj as any)[$mobx].other = new Map<unknown, unknown>([
+        [{}, 1],
+        ["other", 2],
+        [Symbol("other"), 3],
+      ]);
 
       expect(readAll(obj)).toEqual([["value", 1]]);
     });
 
-    test("skips entries of values_ that are functions, even with a get function", () => {
-      const { obj, adm } = createTarget();
-      adm.values_.set(
-        "function",
-        Object.assign(() => 2, { get: () => 2 })
-      );
+    test("yields keys as the administration holds them, including the numbers set() adds and the falsy '' and 0", () => {
+      const obj = observable<Record<string | number, number>>({ "": 1 });
+      runInAction(() => {
+        set(obj, 0, 2);
+        set(obj, 3, 3);
+      });
 
-      expect(readAll(obj)).toEqual([["value", 1]]);
-    });
-
-    test("skips entries of values_ whose keys are not strings, symbols, or numbers", () => {
-      const { obj, adm } = createTarget();
-      adm.values_.set({}, observable.box(2));
-      adm.values_.set(3, observable.box(3));
-
+      // getAtom() rejects '' and 0, so their getters only read through the target
       expect(readAll(obj)).toEqual([
-        ["value", 1],
+        ["", 1],
+        [0, 2],
         [3, 3],
       ]);
     });
 
-    test("ignores pending lazy keys when the administration has no getObservablePropValue_", () => {
-      const { obj, adm } = createTarget();
-      adm.getObservablePropValue_ = undefined;
-      adm.lazyObservableKeys_ = new Map([["lazyObservable", () => observable.box(10)]]);
-      adm.lazyComputedKeys_ = new Map([["lazyComputed", () => computed(() => 20)]]);
+    test("still yields the keys of properties when the administration holds no enumerable maps", () => {
+      const obj: Record<string, number> = observable({ value: 1, deleted: 2 }, {}, { proxy: false });
+      // Bypass MobX so that only the administration knows the key
+      delete obj.deleted;
+      expect(keysOf(obj)).toEqual(["value", "deleted"]);
 
-      // Only enumerate: the property accessors of the target read through getObservablePropValue_ as well
-      expect(keysOf(obj)).toEqual(["value"]);
-    });
-  });
-
-  // MobX 6.16+ applies stage-3 decorator annotations lazily: the keys stay in `lazyObservableKeys_` /
-  // `lazyComputedKeys_` until first read. Files under src/ compile stage-2 decorators, which never populate
-  // those maps (test-stage3/ covers the real thing), so these tests populate them by hand to pin down how
-  // the function treats them. Older MobX (e.g. 6.11) cannot materialize such keys, so the tests are skipped there.
-  const supportsLazyAnnotations = typeof (observable({}) as any)[$mobx].materializeLazyObservable_ === "function";
-
-  describe.skipIf(!supportsLazyAnnotations)("lazily applied annotations (MobX 6.16+)", () => {
-    const createTarget = () => {
-      const obj = observable({ materialized: 1 }, {}, { proxy: false });
+      // As if MobX stopped holding its keys that way: it reads the maps by name, so it keeps working
       const adm = (obj as any)[$mobx];
-      return { obj, adm };
-    };
-
-    test("yields pending keys before materialized ones, without materializing them", () => {
-      const { obj, adm } = createTarget();
-      adm.lazyObservableKeys_ = new Map([["lazyObservable", () => observable.box(10)]]);
-      adm.lazyComputedKeys_ = new Map([["lazyComputed", () => computed(() => 20)]]);
-
-      expect(keysOf(obj)).toEqual(["lazyObservable", "lazyComputed", "materialized"]);
-      expect([...adm.values_.keys()]).toEqual(["materialized"]);
-      expect(adm.lazyObservableKeys_.size).toBe(1);
-      expect(adm.lazyComputedKeys_.size).toBe(1);
-    });
-
-    test("getters materialize pending keys, which are then not yielded again from the materialized ones", () => {
-      const { obj, adm } = createTarget();
-      adm.lazyObservableKeys_ = new Map([["lazyObservable", () => observable.box(10)]]);
-      adm.lazyComputedKeys_ = new Map([["lazyComputed", () => computed(() => 20)]]);
-
-      expect(readAll(obj)).toEqual([
-        ["lazyObservable", 10],
-        ["lazyComputed", 20],
-        ["materialized", 1],
-      ]);
-      expect([...adm.values_.keys()]).toEqual(["materialized", "lazyObservable", "lazyComputed"]);
-      expect(adm.lazyObservableKeys_).toBeUndefined();
-      expect(adm.lazyComputedKeys_).toBeUndefined();
-
-      // Once materialized, the keys are yielded from the materialized ones
-      expect(readAll(obj)).toEqual([
-        ["materialized", 1],
-        ["lazyObservable", 10],
-        ["lazyComputed", 20],
-      ]);
-    });
-
-    test("getters consumed during the enumeration, as Watcher does, do not make materialized keys yielded again", () => {
-      const { obj, adm } = createTarget();
-      const box = observable.box(10);
-      adm.lazyObservableKeys_ = new Map([["lazyObservable", () => box]]);
-      adm.lazyComputedKeys_ = new Map([["lazyComputed", () => computed(() => box.get() * 2)]]);
-
-      const seen: PropertyKey[] = [];
-      const effectFn = vi.fn();
-      const disposers: (() => void)[] = [];
-      for (const [key, getValue] of getMobxObservableAnnotations(obj)) {
-        seen.push(key);
-        // The reaction reads the value immediately, which materializes the key before `values_` is enumerated
-        disposers.push(reaction(getValue, (value) => effectFn(key, value)));
+      for (const [name, value] of Object.entries(adm)) {
+        if (value instanceof Map) Object.defineProperty(adm, name, { enumerable: false });
       }
-
-      expect(seen).toEqual(["lazyObservable", "lazyComputed", "materialized"]);
-      expect([...adm.values_.keys()]).toEqual(["materialized", "lazyObservable", "lazyComputed"]);
-
-      // Reads of pending keys are tracked
-      runInAction(() => box.set(11));
-      expect(effectFn.mock.calls).toEqual([
-        ["lazyObservable", 11],
-        ["lazyComputed", 22],
-      ]);
-
-      for (const dispose of disposers) dispose();
-    });
-
-    test("yields pending keys of one map when the other one is absent", () => {
-      const { obj, adm } = createTarget();
-      expect(adm.lazyObservableKeys_).toBeUndefined();
-      adm.lazyComputedKeys_ = new Map([["lazyComputed", () => computed(() => 20)]]);
-
-      expect(readAll(obj)).toEqual([
-        ["lazyComputed", 20],
-        ["materialized", 1],
-      ]);
-    });
-
-    test("yields a key pending in both maps once", () => {
-      const { obj, adm } = createTarget();
-      adm.lazyObservableKeys_ = new Map([["duplicate", () => observable.box(10)]]);
-      adm.lazyComputedKeys_ = new Map([["duplicate", () => computed(() => 10)]]);
-
-      expect(readAll(obj)).toEqual([
-        ["duplicate", 10],
-        ["materialized", 1],
-      ]);
-    });
-
-    test("skips pending keys that are not strings, symbols, or numbers", () => {
-      const { obj, adm } = createTarget();
-      const symbolKey = Symbol("key");
-      adm.lazyObservableKeys_ = new Map<unknown, () => unknown>([
-        [{}, () => observable.box(0)],
-        [symbolKey, () => observable.box(1)],
-        [2, () => observable.box(2)],
-      ]);
-
-      expect(readAll(obj)).toEqual([
-        [symbolKey, 1],
-        [2, 2],
-        ["materialized", 1],
-      ]);
-    });
-
-    test("ignores pending key containers that are not maps", () => {
-      const { obj, adm } = createTarget();
-      adm.lazyObservableKeys_ = { lazyObservable: () => observable.box(10) };
-      adm.lazyComputedKeys_ = [["lazyComputed", () => computed(() => 20)]];
-
-      expect(keysOf(obj)).toEqual(["materialized"]);
+      expect(readAll(obj)).toEqual([["value", 1]]);
     });
   });
 });

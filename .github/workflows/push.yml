@@ -7,14 +7,16 @@ on:
       - main
 
 jobs:
-  # The packages support a MobX range, and getMobxObservableAnnotations reads
-  # MobX internals that do not behave the same across it: 6.16 applies stage3
-  # annotations lazily, so `values_` is empty until each property is first read,
-  # while 6.11 has them all up front. Each version takes a different path
-  # through that function, and running only one hides a break in the other.
+  # The packages support a MobX range, and MobX does not behave the same across
+  # it where getMobxObservableAnnotations looks: 6.16 applies stage3 annotations
+  # lazily, when each property is first read, while 6.11 applies them all up
+  # front. The function runs into different MobX code on each, and running
+  # only one hides a break in the other.
   #
   # So: what the lockfile pins, which is what ships, plus both ends of the peer
-  # range. `test-ok` below is the one to require on a branch rule.
+  # range. Each leg runs core's tests against both builds of that MobX too, as
+  # packages/core/vitest.config.mts sets up. `test-ok` below is the one to
+  # require on a branch rule.
   test:
     runs-on: ubuntu-latest
     strategy:

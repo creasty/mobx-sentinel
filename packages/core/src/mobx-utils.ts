@@ -4,9 +4,13 @@ import {
   isObservableSet,
   isObservableMap,
   isObservableObject,
+  isObservableProp,
+  getAtom,
+  untracked,
   $mobx,
+  type IComputedValue,
+  type IObservableValue,
 } from "mobx";
-import type { ObservableObjectAdministration } from "mobx/dist/internal";
 
 /**
  * Shallow read the content of the value if applicable,
@@ -78,49 +82,83 @@ export function* unwrapShallowContents(value: any): Generator<[key: string | sym
  *
  * Also includes their variants such as `@observable.ref` and `@computed.struct`.
  *
- * It relies on the internal API, so it may break in future versions of MobX.\
- * When making changes, please ensure that the internal API is still available by runtime assertions.
+ * It goes through the public API of MobX, as its production builds mangle every internal name ending in `_`.\
+ * The one exception is finding the keys that are not properties, such as ECMAScript private keys, which nothing public
+ * lists: see {@link getCandidateKeys}.
  */
 export function* getMobxObservableAnnotations(
   target: object
 ): Generator<[key: string | symbol | number, getValue: () => any]> {
   if (!isObservableObject(target)) return;
-  const adm = (target as any)[$mobx] as ObservableObjectAdministration;
 
-  if (typeof adm !== "object" || !adm) return;
+  // Snapshot, as consuming the getters (as Watcher does) or anything done in the meantime can add and remove keys.
+  // Untracked, as listing the keys of a proxied observable object is observed by the derivation running it.
+  const entries = untracked(() => {
+    const result = new Map<string | symbol | number, ObservableAtom | undefined>();
+    for (const key of getCandidateKeys(target)) {
+      if (!isObservableProp(target, key)) continue;
+      // MobX only removes keys that are own properties, and once it does, the atom is the only way left to read the
+      // last value. Capturing the other atoms up front would materialize the annotations that stage3 decorators apply
+      // lazily (MobX 6.16+), which the getter leaves until it needs one.
+      result.set(key, Object.hasOwn(target, key) ? getObservableAtom(target, key) : undefined);
+    }
+    return result;
+  });
 
-  const yielded = new Set<string | symbol | number>();
+  for (const [key, capturedAtom] of entries) {
+    let atom = capturedAtom;
+    const getValue = () => {
+      if (key in target) return (target as any)[key];
+      atom ??= isObservableProp(target, key) ? getObservableAtom(target, key) : undefined;
+      return atom?.get();
+    };
+    yield [key, getValue];
+  }
+}
 
-  // Since 6.16, MobX applies the annotations of stage3 decorators lazily: `values_` stays empty
-  // until each property is first read, and until then the pending keys only live in these maps.
-  // `getObservablePropValue_` is what materializes an entry and reads it; going through the
-  // target instead would miss ECMAScript private keys, which are not reachable from the outside.
-  const getObservablePropValue = (adm as any).getObservablePropValue_;
-  if (typeof getObservablePropValue === "function") {
-    for (const lazyKeys of [(adm as any).lazyObservableKeys_, (adm as any).lazyComputedKeys_]) {
-      if (!(lazyKeys instanceof Map)) continue;
-      // Snapshot, as materializing a key deletes it from the map being iterated.
-      for (const key of [...lazyKeys.keys()]) {
-        if (typeof key !== "string" && typeof key !== "symbol" && typeof key !== "number") continue;
-        if (yielded.has(key)) continue;
-        yielded.add(key);
-        yield [key, () => getObservablePropValue.call(adm, key)];
-      }
+type ObservableAtom = IObservableValue<unknown> | IComputedValue<unknown>;
+
+/**
+ * Get the atom holding the value of an annotated key, materializing it if MobX applies the annotation lazily
+ *
+ * `getAtom()` rejects the falsy keys `""` and `0` as if they were missing, so those yield `undefined`.
+ */
+function getObservableAtom(target: object, key: string | symbol | number): ObservableAtom | undefined {
+  if (!key) return;
+  return getAtom(target, key) as unknown as ObservableAtom;
+}
+
+/**
+ * Get the keys that may be annotated on the observable object, in the order to yield them
+ *
+ * Every annotated key is included, along with ones that are not annotated, which `isObservableProp()` tells apart.
+ *
+ * - Keys of properties come first, as `for...in` visits them: own ones, then those of prototypes, where stage3
+ *   decorators define their accessors.
+ * - Then the keys only the administration knows: ECMAScript private keys, which stage3 decorators annotate, and keys
+ *   deleted from a non-proxied target without MobX. Nothing public lists them, so they are taken from every `Map` held
+ *   by the administration, whatever its (mangled) name. That is where MobX holds the keys of both materialized and
+ *   lazily applied annotations, at both ends of the supported range (6.11 and 6.16). Should that change, only these
+ *   keys are lost.
+ */
+function getCandidateKeys(target: object): Set<string | symbol | number> {
+  const keys = new Set<string | symbol | number>();
+
+  let object: object | null = target;
+  while (object && object !== Object.prototype) {
+    for (const key of Reflect.ownKeys(object)) {
+      keys.add(key);
+    }
+    object = Object.getPrototypeOf(object);
+  }
+
+  for (const value of Object.values((target as any)[$mobx])) {
+    if (!(value instanceof Map)) continue;
+    for (const key of value.keys()) {
+      if (typeof key !== "string" && typeof key !== "symbol" && typeof key !== "number") continue;
+      keys.add(key);
     }
   }
 
-  if (!("values_" in adm)) return;
-  const values = adm.values_;
-  if (!(values instanceof Map)) return;
-
-  // Snapshot, as consuming the keys yielded above inserts into `values_`.
-  for (const [key, value] of [...values]) {
-    if (typeof key !== "string" && typeof key !== "symbol" && typeof key !== "number") continue;
-    if (typeof value !== "object" || !value) continue;
-    if (!("get" in value && typeof value.get === "function")) continue;
-    if (yielded.has(key)) continue;
-    yielded.add(key);
-    const getValue = () => (key in target ? (target as any)[key] : value.get());
-    yield [key, getValue];
-  }
+  return keys;
 }

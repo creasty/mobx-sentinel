@@ -5,6 +5,9 @@ import { nested } from "./nested";
 import { KeyPath } from "./keyPath";
 import { ValidationError, ValidationErrorMapBuilder } from "./error";
 
+/** MobX's "Cycle detected in computation" error, which its production build only gives the number of */
+const mobxCycleError = /Cycle detected in computation|minified error nr: 32 /;
+
 class Sample {
   @observable field1 = 0;
   @observable field2 = 0;
@@ -2841,8 +2844,8 @@ describe("Validator: nested key paths", () => {
     });
 
     // PINNED(quirk): Cyclic @nested graphs are unsupported: the aggregating computeds recurse into themselves and MobX throws "Cycle detected in computation". Decide: should cycles be detected and skipped (e.g. by tracking visited validators)?
-    expect(() => Validator.get(a).isValid).toThrow(/Cycle detected/);
-    expect(() => Validator.get(a).isValidating).toThrow(/Cycle detected/);
+    expect(() => Validator.get(a).isValid).toThrow(mobxCycleError);
+    expect(() => Validator.get(a).isValidating).toThrow(mobxCycleError);
   });
 });
 
@@ -3670,7 +3673,7 @@ describe("Validator: #waitForValidation", () => {
     const validator = Validator.get(a);
     const controller = new AbortController();
 
-    await expect(validator.waitForValidation({ signal: controller.signal })).rejects.toThrow(/Cycle detected/);
+    await expect(validator.waitForValidation({ signal: controller.signal })).rejects.toThrow(mobxCycleError);
     expect(isValidatingObserved(validator)).toBe(false);
     expect(getEventListeners(controller.signal, "abort")).toHaveLength(0);
   });
