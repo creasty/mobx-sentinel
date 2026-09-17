@@ -56,6 +56,7 @@ describe("MobX", () => {
         return this.field2 * 3;
       }
 
+      // biome-ignore lint/plugin/mobxUnboundParameterlessAction: models may declare actions as methods, which must not count as observable props
       @action action1() {}
     }
 

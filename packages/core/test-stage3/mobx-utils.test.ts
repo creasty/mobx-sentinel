@@ -18,6 +18,7 @@ describe("getMobxObservableAnnotations", () => {
       return [this.#field2];
     }
 
+    // biome-ignore lint/plugin/mobxUnboundParameterlessAction: models may declare actions as methods, which must be left out of the result
     @action action1() {}
 
     setField2(value: number) {
