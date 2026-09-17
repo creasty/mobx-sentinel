@@ -1,5 +1,5 @@
 import { autorun, computed, getDependencyTree, makeObservable, observable, runInAction } from "mobx";
-import { v4 as uuidV4 } from "uuid";
+import { randomId } from "./randomId";
 import {
   FormBinding,
   FormBindingConstructor,
@@ -11,7 +11,7 @@ import { debugForm, Form } from "./form";
 import { FormField } from "./field";
 
 export class SampleFormBinding implements FormBinding {
-  readonly id = uuidV4();
+  readonly id = randomId();
 
   constructor(private form: Form<any>) {
     this.form = form;
@@ -26,7 +26,7 @@ export class SampleFormBinding implements FormBinding {
 }
 
 export class SampleConfigurableFormBinding implements FormBinding {
-  readonly id = uuidV4();
+  readonly id = randomId();
 
   constructor(
     private form: Form<any>,
@@ -43,7 +43,7 @@ export class SampleConfigurableFormBinding implements FormBinding {
 }
 
 export class SampleFieldBinding implements FormBinding {
-  readonly id = uuidV4();
+  readonly id = randomId();
 
   constructor(private field: FormField) {}
 
@@ -56,7 +56,7 @@ export class SampleFieldBinding implements FormBinding {
 }
 
 export class SampleConfigurableFieldBinding implements FormBinding {
-  readonly id = uuidV4();
+  readonly id = randomId();
 
   constructor(
     private field: FormField,
@@ -73,7 +73,7 @@ export class SampleConfigurableFieldBinding implements FormBinding {
 }
 
 export class SampleMultiFieldBinding implements FormBinding {
-  readonly id = uuidV4();
+  readonly id = randomId();
 
   constructor(private fields: FormField[]) {}
 
@@ -86,7 +86,7 @@ export class SampleMultiFieldBinding implements FormBinding {
 }
 
 export class SampleConfigurableMultiFieldBinding implements FormBinding {
-  readonly id = uuidV4();
+  readonly id = randomId();
 
   constructor(
     private fields: FormField[],
@@ -292,8 +292,8 @@ describe("FormBindingFuncExtension", () => {
   });
 });
 
-/** UUID v4 in its canonical textual form */
-const uuidV4Pattern = "[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}";
+/** The random id that getSafeBindingName appends */
+const randomIdPattern = "[0-9a-f]{32}";
 
 /** Wraps type-level assertions that must (or must not) compile; the callback is never executed */
 function typeOnly(_fn: () => void) {}
@@ -305,7 +305,7 @@ class BindModel {
 
 /** A binding whose constructor accepts both a single field and multiple fields */
 class EitherFieldBinding implements FormBinding {
-  readonly id = uuidV4();
+  readonly id = randomId();
 
   constructor(
     readonly target: FormField | FormField[],
@@ -345,9 +345,9 @@ class FormCaptureBinding implements FormBinding {
 }
 
 describe("getSafeBindingName (details)", () => {
-  it("formats the name as `<Function.name>--<UUID v4>`", () => {
+  it("formats the name as `<Function.name>--<random id>`", () => {
     expect(getSafeBindingName(SampleMultiFieldBinding)).toMatch(
-      new RegExp(`^SampleMultiFieldBinding--${uuidV4Pattern}$`)
+      new RegExp(`^SampleMultiFieldBinding--${randomIdPattern}$`)
     );
   });
 
@@ -359,7 +359,7 @@ describe("getSafeBindingName (details)", () => {
         }
       })();
     expect(Anonymous.name).toBe("");
-    expect(getSafeBindingName(Anonymous)).toMatch(new RegExp(`^--${uuidV4Pattern}$`));
+    expect(getSafeBindingName(Anonymous)).toMatch(new RegExp(`^--${randomIdPattern}$`));
   });
 
   it("reads Function.name only on the first call", () => {
@@ -370,7 +370,7 @@ describe("getSafeBindingName (details)", () => {
     }
     Object.defineProperty(Original, "name", { value: "Renamed" });
     const name = getSafeBindingName(Original);
-    expect(name).toMatch(new RegExp(`^Renamed--${uuidV4Pattern}$`));
+    expect(name).toMatch(new RegExp(`^Renamed--${randomIdPattern}$`));
 
     Object.defineProperty(Original, "name", { value: "RenamedAgain" });
     expect(getSafeBindingName(Original)).toBe(name);
@@ -392,8 +392,8 @@ describe("getSafeBindingName (details)", () => {
     class Child extends Parent {}
     const parentName = getSafeBindingName(Parent);
     const childName = getSafeBindingName(Child);
-    expect(parentName).toMatch(new RegExp(`^Parent--${uuidV4Pattern}$`));
-    expect(childName).toMatch(new RegExp(`^Child--${uuidV4Pattern}$`));
+    expect(parentName).toMatch(new RegExp(`^Parent--${randomIdPattern}$`));
+    expect(childName).toMatch(new RegExp(`^Child--${randomIdPattern}$`));
     expect(getSafeBindingName(Parent)).toBe(parentName);
   });
 

@@ -1,6 +1,6 @@
 import { action, comparer, computed, makeObservable, observable, reaction } from "mobx";
-import { v4 as uuidV4 } from "uuid";
 import { KeyPath, type Validator } from "@mobx-sentinel/core";
+import { randomId } from "./randomId";
 
 const internalToken = Symbol("formField.internal");
 
@@ -22,7 +22,7 @@ export class FormField {
    * a server render and the client render that hydrates it produce different values.
    * For an id that reaches the DOM, use {@link stableId} instead.
    */
-  readonly id = uuidV4();
+  readonly id = randomId();
   readonly fieldName: string;
   readonly validator: Validator<any>;
   readonly #getFinalizationDelayMs: () => number;

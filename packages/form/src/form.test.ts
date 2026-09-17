@@ -1027,9 +1027,9 @@ describe("Form (details)", () => {
       expect(() => Form.get(fn)).toThrow(TypeError);
     });
 
-    it("assigns a UUID v4 as the id", () => {
+    it("assigns a random id", () => {
       const form = Form.get(new SampleModel());
-      expect(form.id).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/);
+      expect(form.id).toMatch(/^[0-9a-f]{32}$/);
     });
 
     it("throws when the constructor is called with a token other than the internal one", () => {

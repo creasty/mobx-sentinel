@@ -1,10 +1,10 @@
 import { action, computed, makeObservable, observable } from "mobx";
-import { v4 as uuidV4 } from "uuid";
 import { Validator, Watcher, StandardNestedFetcher, KeyPath } from "@mobx-sentinel/core";
 import { FormField } from "./field";
 import { FormBinding, FormBindingConstructor, FormBindingFunc, getSafeBindingName } from "./binding";
 import { FormConfig, globalConfig } from "./config";
 import { Submission } from "./submission";
+import { randomId } from "./randomId";
 
 const registry = new WeakMap<object, Map<symbol, Form<any>>>();
 const defaultFormKey = Symbol("form.defaultFormKey");
@@ -30,7 +30,7 @@ export class Form<T> {
    * a server render and the client render that hydrates it produce different values.
    * For an id that reaches the DOM, use {@link stableId} instead.
    */
-  readonly id = uuidV4();
+  readonly id = randomId();
   /**
    * Id of the form for the DOM, which the {@link FormField.stableId} of its fields build on
    *

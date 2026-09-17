@@ -136,12 +136,12 @@ describe("FormField", () => {
       expect(field.validator).toBe(validator);
     });
 
-    it("assigns a unique UUID v4 to each instance, even for the same field name", () => {
+    it("assigns a unique random id to each instance, even for the same field name", () => {
       const { field, validator } = setupEnv();
       const another = new FormField({ fieldName: "test", validator, getFinalizationDelayMs: () => 100 });
 
-      expect(field.id).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/);
-      expect(another.id).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/);
+      expect(field.id).toMatch(/^[0-9a-f]{32}$/);
+      expect(another.id).toMatch(/^[0-9a-f]{32}$/);
       expect(another.id).not.toBe(field.id);
     });
 

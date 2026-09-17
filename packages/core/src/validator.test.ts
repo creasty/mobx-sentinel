@@ -1591,8 +1591,8 @@ describe("Validator.get / Validator.getSafe: targets", () => {
     expect(Validator.get(copy)).not.toBe(validator);
   });
 
-  it("assigns a UUID v4 as the id", () => {
-    expect(Validator.get({}).id).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/);
+  it("assigns a random id", () => {
+    expect(Validator.get({}).id).toMatch(/^[0-9a-f]{32}$/);
   });
 
   it("requires Validator as the receiver of the static methods", () => {
