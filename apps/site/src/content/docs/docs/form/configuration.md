@@ -13,7 +13,6 @@ import { configureForm } from '@mobx-sentinel/form';
 // Global configuration (affects all forms)
 configureForm({
   autoFinalizationDelayMs: 2000, // delay before intermediate input is finalized
-  allowSubmitNonDirty: true, // allow submitting unchanged forms
   allowSubmitInvalid: true, // allow submitting invalid forms
 });
 
@@ -23,7 +22,7 @@ configureForm(true);
 // Per-form configuration (overrides global)
 form.configure({
   autoFinalizationDelayMs: 5000,
-  allowSubmitNonDirty: false,
+  allowSubmitInvalid: false,
 });
 
 // Reset per-form configuration

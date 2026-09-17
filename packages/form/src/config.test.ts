@@ -25,7 +25,7 @@ function resetGlobalConfig() {
   });
 }
 
-const configKeys = ["autoFinalizationDelayMs", "allowSubmitNonDirty", "allowSubmitInvalid"] as const;
+const configKeys = ["autoFinalizationDelayMs", "allowSubmitInvalid"] as const;
 
 describe("defaultConfig", () => {
   it("is frozen", () => {
@@ -35,7 +35,6 @@ describe("defaultConfig", () => {
   it("has the documented default values", () => {
     expect(defaultConfig).toStrictEqual({
       autoFinalizationDelayMs: 3000,
-      allowSubmitNonDirty: false,
       allowSubmitInvalid: false,
     });
   });
@@ -51,7 +50,6 @@ describe("defaultConfig", () => {
     expectTypeOf(defaultConfig).toEqualTypeOf<Readonly<FormConfig>>();
     expectTypeOf<FormConfig>().toEqualTypeOf<{
       autoFinalizationDelayMs: number;
-      allowSubmitNonDirty: boolean;
       allowSubmitInvalid: boolean;
     }>();
 
@@ -80,10 +78,9 @@ describe("globalConfig", () => {
 
   it("is a separate object from defaultConfig", () => {
     expect(globalConfig).not.toBe(defaultConfig);
-    configureForm({ autoFinalizationDelayMs: 1, allowSubmitNonDirty: true, allowSubmitInvalid: true });
+    configureForm({ autoFinalizationDelayMs: 1, allowSubmitInvalid: true });
     expect(defaultConfig).toStrictEqual({
       autoFinalizationDelayMs: 3000,
-      allowSubmitNonDirty: false,
       allowSubmitInvalid: false,
     });
   });
@@ -185,14 +182,11 @@ describe("configureForm (details)", () => {
         (config) => seen.push(config)
       );
       try {
-        configureForm({ autoFinalizationDelayMs: 1, allowSubmitNonDirty: true, allowSubmitInvalid: true });
-        expect(seen).toEqual([{ autoFinalizationDelayMs: 1, allowSubmitNonDirty: true, allowSubmitInvalid: true }]);
+        configureForm({ autoFinalizationDelayMs: 1, allowSubmitInvalid: true });
+        expect(seen).toEqual([{ autoFinalizationDelayMs: 1, allowSubmitInvalid: true }]);
 
         configureForm(true);
-        expect(seen).toEqual([
-          { autoFinalizationDelayMs: 1, allowSubmitNonDirty: true, allowSubmitInvalid: true },
-          defaultConfig,
-        ]);
+        expect(seen).toEqual([{ autoFinalizationDelayMs: 1, allowSubmitInvalid: true }, defaultConfig]);
       } finally {
         dispose();
       }
@@ -330,9 +324,10 @@ describe("Form#config with globalConfig", () => {
   });
 
   it("updates canSubmit when globalConfig changes after the form was created", () => {
-    const form = Form.get({});
-    expect(form.canSubmit).toBe(false); // not dirty
-    configureForm({ allowSubmitNonDirty: true });
+    const form = Form.get({ field: "" });
+    form.validator.updateErrors(Symbol(), (b) => b.invalidate("field", "error"));
+    expect(form.canSubmit).toBe(false); // invalid
+    configureForm({ allowSubmitInvalid: true });
     expect(form.canSubmit).toBe(true);
     configureForm(true);
     expect(form.canSubmit).toBe(false);
@@ -342,14 +337,14 @@ describe("Form#config with globalConfig", () => {
     const form = Form.get({});
     form.configure({ autoFinalizationDelayMs: 1 });
     configureForm({ autoFinalizationDelayMs: 2, allowSubmitInvalid: true });
-    expect(form.config).toEqual({ autoFinalizationDelayMs: 1, allowSubmitNonDirty: false, allowSubmitInvalid: true });
+    expect(form.config).toEqual({ autoFinalizationDelayMs: 1, allowSubmitInvalid: true });
   });
 
   it("merges successive local overrides", () => {
     const form = Form.get({});
     form.configure({ autoFinalizationDelayMs: 1 });
-    form.configure({ allowSubmitNonDirty: true });
-    expect(form.config).toEqual({ autoFinalizationDelayMs: 1, allowSubmitNonDirty: true, allowSubmitInvalid: false });
+    form.configure({ allowSubmitInvalid: true });
+    expect(form.config).toEqual({ autoFinalizationDelayMs: 1, allowSubmitInvalid: true });
   });
 
   it("follows the latest globalConfig after resetting the local overrides", () => {
@@ -379,7 +374,7 @@ describe("Form#config with globalConfig", () => {
     const form = Form.get({});
     const override = { autoFinalizationDelayMs: 1 };
     form.configure(override);
-    form.configure({ allowSubmitNonDirty: true });
+    form.configure({ allowSubmitInvalid: true });
     expect(override).toStrictEqual({ autoFinalizationDelayMs: 1 });
   });
 
@@ -490,14 +485,11 @@ describe("Form#configure (details)", () => {
       (config) => seen.push(config)
     );
     try {
-      form.configure({ autoFinalizationDelayMs: 1, allowSubmitNonDirty: true, allowSubmitInvalid: true });
-      expect(seen).toEqual([{ autoFinalizationDelayMs: 1, allowSubmitNonDirty: true, allowSubmitInvalid: true }]);
+      form.configure({ autoFinalizationDelayMs: 1, allowSubmitInvalid: true });
+      expect(seen).toEqual([{ autoFinalizationDelayMs: 1, allowSubmitInvalid: true }]);
 
       form.configure(true);
-      expect(seen).toEqual([
-        { autoFinalizationDelayMs: 1, allowSubmitNonDirty: true, allowSubmitInvalid: true },
-        defaultConfig,
-      ]);
+      expect(seen).toEqual([{ autoFinalizationDelayMs: 1, allowSubmitInvalid: true }, defaultConfig]);
     } finally {
       dispose();
     }

@@ -566,7 +566,7 @@ describe("Form#bindSubmitButton", () => {
     expect(props).toEqual({
       onClick: expect.any(Function),
       onMouseOver: expect.any(Function),
-      disabled: true,
+      disabled: false,
       "aria-busy": false,
       "aria-invalid": false,
     });
@@ -597,7 +597,6 @@ describe("Form#bindSubmitButton", () => {
 
   test("forwards the extended handlers of the latest config", () => {
     const { form } = setupEnv();
-    form.configure({ allowSubmitNonDirty: true });
     const onClick = vi.fn();
     const onMouseOver = vi.fn();
 

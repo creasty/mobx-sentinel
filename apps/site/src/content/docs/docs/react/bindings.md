@@ -275,7 +275,7 @@ Binds select elements for single or multiple selection.
 
 ## Submit Button: `form.bindSubmitButton(config?)`
 
-Binds submit buttons with automatic state management. The button is automatically disabled when the form is invalid, unchanged, submitting, or validating. Hovering it reports every error of the form, even while it is disabled, so users can see what keeps them from submitting (see [Smart Error Reporting](/docs/form/error-reporting/)).
+Binds submit buttons with automatic state management. The button is automatically disabled when the form is invalid, submitting, or validating. Hovering it reports every error of the form, even while it is disabled, so users can see what keeps them from submitting (see [Smart Error Reporting](/docs/form/error-reporting/)).
 
 **Additional accessibility:** Sets `aria-busy` to indicate loading states during submission or validation. The `disabled` attribute prevents submission of invalid forms, providing clear feedback to assistive technologies about the form's current state.
 
@@ -284,6 +284,20 @@ Binds submit buttons with automatic state management. The button is automaticall
   Submit
 </button>
 ```
+
+**Unchanged forms:** The button is enabled whether or not the form is dirty, so a form with pre-filled values can be submitted as it is. When submitting unchanged values makes no sense, as with the save button of an edit form, set `disableUnlessDirty` to keep the button disabled until the form is dirty:
+
+```tsx
+<button {...form.bindSubmitButton({ disableUnlessDirty: true })}>
+  Save changes
+</button>
+```
+
+- **It adds to the other conditions.** Once the form is dirty, the button is still disabled while the form is invalid, submitting, or validating.
+- **The form becomes dirty** when its `Watcher` detects a change in the model or in a nested model (see [Basic Change Tracking](/docs/core/watcher/#basic-change-tracking)), or when `form.markAsDirty()` is called. Changes made inside [`unwatch()`](/docs/core/watching-changes/#temporarily-disable-tracking), such as loading saved data into the model, don't count. Changing a value back doesn't make the form clean again.
+- **It becomes clean again** on `form.reset()`, which a successful submission also runs. The button is then disabled until the next change, so the same values aren't submitted twice.
+- **Only the button waits.** `form.canSubmit` doesn't check whether the form is dirty, so calling `form.submit()` from your own code submits an unchanged form. A click that still reaches `onClick` while the button waits, for example on a component that ignores `disabled`, doesn't submit the form.
+- **The option can change between renders.** Each call to `bindSubmitButton()` replaces the config, so a component shared by a create form and an edit form can pass `disableUnlessDirty: isEditing`.
 
 ## Label: `form.bindLabel(fieldNames, config?)`
 

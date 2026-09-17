@@ -65,7 +65,7 @@ describe("a new invoice", () => {
     // ...but none of its fields has been reported, so none of them says so yet
     expect(screen.getByLabelText("Billing contact")).not.toHaveAttribute("aria-invalid");
     expect(screen.queryByText("Customer email is required")).not.toBeInTheDocument();
-    // Nor is there anything to send before the user changes something
+    // Nothing has changed yet, and the invalid invoice can't be sent
     expect(screen.getByText("No changes")).toBeInTheDocument();
     expect(sendButton()).toBeDisabled();
   });
@@ -313,11 +313,11 @@ describe("sending", () => {
     await user.click(sendButton());
     await elapse(SUBMIT_MS);
     expect(screen.getByRole("status")).toHaveTextContent(/^Sent as INV-\d{4}\./);
-    // A successful submission resets the form, and leaves the model as it was
+    // A successful submission resets the form, and leaves the model as it was, still valid
     expect(screen.getByText("No changes")).toBeInTheDocument();
     expect(purchaseOrder).not.toHaveAttribute("aria-invalid");
     expect(purchaseOrder).toHaveValue("PO-2042");
-    expect(sendButton()).toBeDisabled();
+    expect(sendButton()).toBeEnabled();
   });
 });
 

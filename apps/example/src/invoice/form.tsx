@@ -522,7 +522,7 @@ const FormActions: React.FC<{ model: Invoice }> = observer(({ model }) => {
         <button className="outline secondary" onClick={form.reset}>
           Reset form state
         </button>
-        {/* Disabled until the form is dirty, valid and idle. Hovering it reveals why. */}
+        {/* Disabled until the form is valid and idle. Hovering it reveals why. */}
         <button {...form.bindSubmitButton()}>{form.isSubmitting ? "Sending…" : "Send invoice"}</button>
       </div>
 

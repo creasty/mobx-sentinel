@@ -287,40 +287,35 @@ describe("Form", () => {
   });
 
   describe("#canSubmit", () => {
-    it("returns true when the form is dirty and valid", () => {
+    it("returns true when the form is valid, whether or not it is dirty", () => {
       const model = new SampleModel();
       const form = Form.get(model);
-      expect(form.canSubmit).toBe(false);
+      expect(form.isDirty).toBe(false);
+      expect(form.isValid).toBe(true);
+      expect(form.canSubmit).toBe(true);
 
       form.markAsDirty();
       expect(form.canSubmit).toBe(true);
 
       form.reset();
-      expect(form.canSubmit).toBe(false);
+      expect(form.canSubmit).toBe(true);
     });
 
-    it("returns true when config.allowSubmitNonDirty is true", () => {
+    it("returns false when the form is invalid", () => {
       const model = new SampleModel();
       const form = Form.get(model);
-      expect(form.isDirty).toBe(false);
-      expect(form.isValid).toBe(true);
-
-      form.configure({ allowSubmitNonDirty: true });
-      expect(form.isDirty).toBe(false);
-      expect(form.isValid).toBe(true);
-      expect(form.canSubmit).toBe(true);
+      form.validator.updateErrors(Symbol(), (b) => b.invalidate("field", "error"));
+      expect(form.isValid).toBe(false);
+      expect(form.canSubmit).toBe(false);
     });
 
     it("returns true when config.allowSubmitInvalid is true", () => {
       const model = new SampleModel();
       const form = Form.get(model);
-      form.markAsDirty();
       form.validator.updateErrors(Symbol(), (b) => b.invalidate("field", "error"));
-      expect(form.isDirty).toBe(true);
       expect(form.isValid).toBe(false);
 
       form.configure({ allowSubmitInvalid: true });
-      expect(form.isDirty).toBe(true);
       expect(form.isValid).toBe(false);
       expect(form.canSubmit).toBe(true);
     });
@@ -329,7 +324,6 @@ describe("Form", () => {
       const model = new SampleModel();
       const form = Form.get(model);
 
-      form.markAsDirty();
       expect(form.isValidating).toBe(false);
       expect(form.canSubmit).toBe(true);
 
@@ -440,30 +434,32 @@ describe("Form", () => {
   });
 
   describe("#submit", () => {
-    it("does not call Submission#exec when the form is not dirty", async () => {
+    it("calls Submission#exec when the form can be submitted, even if it is not dirty", async () => {
       const model = new EmptyModel();
       const form = Form.get(model);
       const internal = debugForm(form);
       const spy = vi.spyOn(internal.submission, "exec");
-      await form.submit();
-      expect(spy).not.toBeCalled();
-    });
-
-    it("calls Submission#exec when the form is dirty", async () => {
-      const model = new EmptyModel();
-      const form = Form.get(model);
-      const internal = debugForm(form);
-      const spy = vi.spyOn(internal.submission, "exec");
-      form.markAsDirty();
+      expect(form.isDirty).toBe(false);
       await form.submit();
       expect(spy).toBeCalled();
     });
 
-    it("calls Submission#exec when the force option is true", async () => {
-      const model = new EmptyModel();
+    it("does not call Submission#exec when the form cannot be submitted", async () => {
+      const model = new SampleModel();
       const form = Form.get(model);
       const internal = debugForm(form);
       const spy = vi.spyOn(internal.submission, "exec");
+      form.validator.updateErrors(Symbol(), (b) => b.invalidate("field", "error"));
+      await form.submit();
+      expect(spy).not.toBeCalled();
+    });
+
+    it("calls Submission#exec when the force option is true", async () => {
+      const model = new SampleModel();
+      const form = Form.get(model);
+      const internal = debugForm(form);
+      const spy = vi.spyOn(internal.submission, "exec");
+      form.validator.updateErrors(Symbol(), (b) => b.invalidate("field", "error"));
       await form.submit({ force: true });
       expect(spy).toBeCalled();
     });
@@ -1234,7 +1230,6 @@ describe("Form (details)", () => {
 
       form.reset();
       expect(form.isDirty).toBe(false);
-      expect(form.canSubmit).toBe(false);
 
       runInAction(() => {
         model.otherField = true;
@@ -1249,11 +1244,10 @@ describe("Form (details)", () => {
 
       Form.dispose(model);
       const recreated = Form.get(model);
-      await expect(recreated.submit({ force: true })).resolves.toBe(true);
+      await expect(recreated.submit()).resolves.toBe(true);
       expect(submit).toBeCalledTimes(1); // Handlers belong to the disposed instance
 
       // The disposed instance keeps working with its own handlers
-      form.markAsDirty();
       await expect(form.submit()).resolves.toBe(true);
       expect(submit).toBeCalledTimes(2);
     });
@@ -1469,7 +1463,6 @@ describe("Form (details)", () => {
     it("becomes invalid when only a sub-form is invalid", () => {
       const model = new CollectionModel();
       const form = Form.get(model);
-      form.markAsDirty();
 
       Form.get([...model.set][0]).validator.updateErrors(Symbol(), (b) => b.invalidate("field", "error"));
       expect(form.invalidFieldCount).toBe(0);
@@ -1504,7 +1497,6 @@ describe("Form (details)", () => {
       const model = new CollectionModel();
       const form = Form.get(model);
       const sampleForm = Form.get(model.sample);
-      sampleForm.markAsDirty();
 
       const submit = deferred<boolean>();
       sampleForm.addHandler("submit", () => submit.promise);
@@ -1523,10 +1515,12 @@ describe("Form (details)", () => {
       const model = new CollectionModel();
       const form = Form.get(model);
       const sampleForm = Form.get(model.sample);
+      sampleForm.validator.updateErrors(Symbol(), (b) => b.invalidate("field", "error"));
+      expect(form.isValid).toBe(false);
 
-      form.configure({ allowSubmitNonDirty: true });
+      form.configure({ allowSubmitInvalid: true });
       expect(form.canSubmit).toBe(true);
-      expect(sampleForm.config.allowSubmitNonDirty).toBe(false);
+      expect(sampleForm.config.allowSubmitInvalid).toBe(false);
       expect(sampleForm.canSubmit).toBe(false);
     });
 
@@ -1577,44 +1571,45 @@ describe("Form (details)", () => {
       const timeline: boolean[] = [];
       const dispose = autorun(() => timeline.push(form.canSubmit));
 
-      form.markAsDirty(); // -> true
       form.validator.updateErrors(Symbol(), (b) => b.invalidate("field", "error")); // -> false
       form.configure({ allowSubmitInvalid: true }); // -> true
 
       const submit = deferred<boolean>();
       form.addHandler("submit", () => submit.promise);
+      form.markAsDirty();
       const promise = form.submit(); // -> false (submitting)
-      submit.resolve(false);
-      await expect(promise).resolves.toBe(false); // -> true (still dirty)
+      submit.resolve(true);
+      await expect(promise).resolves.toBe(true); // -> true (no longer dirty, but still submittable)
 
-      expect(timeline).toEqual([false, true, false, true, false, true]);
-      expect(form.isDirty).toBe(true);
+      expect(timeline).toEqual([true, false, true, false, true]);
+      expect(form.isDirty).toBe(false);
       dispose();
     });
 
     it.each([
-      { allowSubmitInvalid: false, allowSubmitNonDirty: false, expected: false },
-      { allowSubmitInvalid: true, allowSubmitNonDirty: false, expected: false },
-      { allowSubmitInvalid: false, allowSubmitNonDirty: true, expected: false },
-      { allowSubmitInvalid: true, allowSubmitNonDirty: true, expected: true },
+      { allowSubmitInvalid: false, isDirty: false, expected: false },
+      { allowSubmitInvalid: false, isDirty: true, expected: false },
+      { allowSubmitInvalid: true, isDirty: false, expected: true },
+      { allowSubmitInvalid: true, isDirty: true, expected: true },
     ])(
-      "is $expected for a clean invalid form with allowSubmitInvalid=$allowSubmitInvalid and allowSubmitNonDirty=$allowSubmitNonDirty",
-      ({ expected, ...config }) => {
+      "is $expected for an invalid form with allowSubmitInvalid=$allowSubmitInvalid and isDirty=$isDirty",
+      ({ allowSubmitInvalid, isDirty, expected }) => {
         const form = Form.get(new SampleModel());
         form.validator.updateErrors(Symbol(), (b) => b.invalidate("field", "error"));
-        form.configure(config);
+        form.configure({ allowSubmitInvalid });
+        if (isDirty) form.markAsDirty();
 
-        expect(form.isDirty).toBe(false);
+        expect(form.isDirty).toBe(isDirty);
         expect(form.isValid).toBe(false);
         expect(form.canSubmit).toBe(expected);
       }
     );
 
-    it("is false while validating even when invalid and non-dirty submissions are allowed", () => {
+    it("is false while validating even when invalid submissions are allowed", () => {
       vi.useFakeTimers();
       const model = new SampleModel();
       const form = Form.get(model);
-      form.configure({ allowSubmitInvalid: true, allowSubmitNonDirty: true });
+      form.configure({ allowSubmitInvalid: true });
       expect(form.canSubmit).toBe(true);
 
       runInAction(() => {
@@ -1630,15 +1625,14 @@ describe("Form (details)", () => {
 
     it("notifies observers only when its value changes", () => {
       const form = Form.get(new SampleModel());
-      form.markAsDirty();
 
       const timeline: boolean[] = [];
       const dispose = autorun(() => timeline.push(form.canSubmit));
 
       form.configure({ autoFinalizationDelayMs: 1 }); // The config changes, but canSubmit does not
-      form.markAsDirty();
+      form.markAsDirty(); // The form becomes dirty, but canSubmit does not change
       form.validator.updateErrors(Symbol(), (b) => b.invalidate("field", "error")); // -> false
-      form.configure({ allowSubmitNonDirty: true }); // Still false
+      form.reset(); // Still false
       expect(timeline).toEqual([true, false]);
       dispose();
     });
@@ -2583,8 +2577,8 @@ describe("Form (details)", () => {
       addHandler("didSubmit", didSubmit);
       expect(bind(SampleFormBinding)).toEqual(form.bind(SampleFormBinding));
       expect(debugForm(form).bindings.size).toBe(1);
-      configure({ allowSubmitNonDirty: true });
-      expect(form.config.allowSubmitNonDirty).toBe(true);
+      configure({ allowSubmitInvalid: true });
+      expect(form.config.allowSubmitInvalid).toBe(true);
       await expect(form.submit()).resolves.toBe(true);
       expect(didSubmit.mock.calls).toEqual([[true]]);
 

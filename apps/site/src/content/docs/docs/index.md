@@ -172,7 +172,7 @@ const InvoiceForm: React.FC<{ model: Invoice }> = observer(({ model }) => {
       ))}
       <button onClick={model.addLineItem}>Add a line</button>
 
-      {/* Disabled while the form is invalid, pristine or busy.
+      {/* Disabled while the form is invalid or busy.
           Hovering it reveals every outstanding error at once. */}
       <button {...form.bindSubmitButton()}>Send invoice</button>
     </>
