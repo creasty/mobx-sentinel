@@ -7,7 +7,7 @@ sidebar:
 
 ## Field Binding Example
 
-Here's a real-world text input binding similar to the implementation in [@mobx-sentinel/react](/docs/react/):
+Here's a real-world text input binding similar to the implementation in [@mobx-sentinel/react](https://github.com/creasty/mobx-sentinel/tree/main/packages/react/src):
 
 ```ts
 import { FormBinding, FormField } from '@mobx-sentinel/form';

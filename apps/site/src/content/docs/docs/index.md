@@ -9,7 +9,7 @@ sidebar:
 This library is in an early stage of development. Its interface may change without notice.
 :::
 
-[apps/example/](https://example.mobx-sentinel.creasty.com) is a working invoice editor — cross-field rules, a throttled CRM lookup, nested and repeated sub-forms, server-reported conflicts, dirty tracking and autosave. It is deployed at [example.mobx-sentinel.creasty.com](https://example.mobx-sentinel.creasty.com). The code below is condensed from it.
+[apps/example/](https://github.com/creasty/mobx-sentinel/tree/main/apps/example) is a working invoice editor — cross-field rules, a throttled CRM lookup, nested and repeated sub-forms, server-reported conflicts, dirty tracking and autosave. It is deployed at [example.mobx-sentinel.creasty.com](https://example.mobx-sentinel.creasty.com). The code below is condensed from it.
 
 ## Model
 

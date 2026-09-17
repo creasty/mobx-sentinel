@@ -12,7 +12,7 @@ The `@mobx-sentinel/form` package provides only the **API for creating bindings*
 1. **Use `@mobx-sentinel/react`** - Pre-built bindings for React components (InputBinding, CheckBoxBinding, SubmitButtonBinding, etc.)
 2. **Build your own bindings** - Implement custom bindings for your framework or specific use cases
 
-The examples below demonstrate how to create custom bindings. They are based on the actual implementations in [@mobx-sentinel/react](/docs/react/).
+[Creating Binding Classes](/docs/form/custom-bindings/) and [Binding Examples](/docs/form/binding-examples/) demonstrate how to create custom bindings. The examples are based on the actual implementations in [@mobx-sentinel/react](https://github.com/creasty/mobx-sentinel/tree/main/packages/react/src).
 
 ## Using Bindings
 

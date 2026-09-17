@@ -130,7 +130,7 @@ describe("Watcher", () => {
     });
 
     it("throws when the target is not extensible", () => {
-      // PINNED(bug): getSafe() lets the TypeError from caching the watcher on a frozen / sealed / non-extensible object escape, although its JSDoc says it "returns null instead of throwing an error" (the docs only mention non-objects; Validator.getSafe has the identical JSDoc and is pinned as a bug in validator.test.ts). Expected: getSafe does not throw for objects, either by giving non-extensible objects a watcher (e.g. cached in a WeakMap; flip to `.toBeInstanceOf(Watcher)`) or by returning null (flip to `.toBeNull()`). Flip these assertions when fixing.
+      // PINNED(bug): getSafe() lets the TypeError from caching the watcher on a frozen / sealed / non-extensible object escape, although its JSDoc says it "returns null instead of throwing an error" (the guide only mentions non-objects; Validator.getSafe has the identical JSDoc and is pinned as a bug in validator.test.ts). Expected: getSafe does not throw for objects, either by giving non-extensible objects a watcher (e.g. cached in a WeakMap; flip to `.toBeInstanceOf(Watcher)`) or by returning null (flip to `.toBeNull()`). Flip these assertions when fixing.
       expect(() => Watcher.getSafe(Object.freeze({}))).toThrowError(/not extensible/);
       expect(() => Watcher.getSafe(Object.seal({}))).toThrowError(/not extensible/);
     });
@@ -2466,7 +2466,7 @@ describe("Annotations", () => {
           sample.child.value = 2;
         });
         expect(childWatcher.changedTick).toBe(2n);
-        // PINNED(bug): the parent only reacts to the nested `changed` flipping to true, so further nested changes neither increment its changedTick nor notify reactions observing it (the autosave/sync use case in the overview of the docs). Expected: 2n and 2 calls. Flip these assertions when fixing.
+        // PINNED(bug): the parent only reacts to the nested `changed` flipping to true, so further nested changes neither increment its changedTick nor notify reactions observing it (the autosave/sync use case in the Overview at /docs/). Expected: 2n and 2 calls. Flip these assertions when fixing.
         expect(watcher.changedTick).toBe(1n);
         expect(onTick).toHaveBeenCalledTimes(1);
       } finally {

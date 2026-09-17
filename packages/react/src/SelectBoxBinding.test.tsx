@@ -271,7 +271,7 @@ describe("SelectBoxBinding", () => {
         seen.push(env.binding.value);
       });
       env.binding.config = { multiple: true, getter: () => ["B"], setter: () => {} };
-      // PINNED(quirk): `config` is not observable, so replacing it (as Form#bind does on every call) does not invalidate the observed computed; the old single value "A" is still returned while `multiple` already reads true. the form docs only say "Configuration can be updated on subsequent calls while maintaining the same binding instance" (same root cause as the config quirks in binding.test.ts and InputBinding.test.tsx). Decide: should `config` be observable (e.g. observable.ref) so that the new getter takes effect immediately (flip to ["B"])?
+      // PINNED(quirk): `config` is not observable, so replacing it (as Form#bind does on every call) does not invalidate the observed computed; the old single value "A" is still returned while `multiple` already reads true. The form docs only say "Configuration can be updated on subsequent calls while maintaining the same binding instance" (same root cause as the config quirks in binding.test.ts and InputBinding.test.tsx). Decide: should `config` be observable (e.g. observable.ref) so that the new getter takes effect immediately (flip to ["B"])?
       expect(env.binding.props.value).toBe("A");
       expect(env.binding.props.multiple).toBe(true);
       expect(seen).toEqual(["A"]);

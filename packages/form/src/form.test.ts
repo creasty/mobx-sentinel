@@ -1939,7 +1939,7 @@ describe("Form (details)", () => {
   describe("#firstErrorMessage", () => {
     it("returns null when there are no errors", () => {
       const form = Form.get(new CollectionModel());
-      // `null` is intended: it matches the type (`string | null`), Validator#firstErrorMessage and the docs
+      // `null` is intended: it matches the type (`string | null`), Validator#firstErrorMessage and the form docs
       expect(form.firstErrorMessage).toBeNull();
     });
 

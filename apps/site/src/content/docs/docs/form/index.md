@@ -8,7 +8,7 @@ sidebar:
 
 Form and bindings for MobX-based form management with validation and submission handling.
 
-- [Form Basics](/docs/form/basics/) — getting a form, nested and array forms, form state and errors
+- [Form Basics](/docs/form/basics/) — getting a form, nested and array forms, form state and errors, and managing the state
 - [Submission](/docs/form/submission/) — submission handlers and their lifecycle
 - [Configuration](/docs/form/configuration/)
 - [Smart Error Reporting](/docs/form/error-reporting/) — when users see validation errors
