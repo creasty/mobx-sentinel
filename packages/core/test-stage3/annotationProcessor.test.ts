@@ -658,9 +658,7 @@ describe("createPropertyLikeAnnotation", () => {
       new Sample();
 
       expect(fn.mock.calls.length - callsBefore).toBe(3);
-      expect(extractStoredData(getAnnotationProcessor(obj1)!)).toEqual(
-        new Map([["property1", ["data of property1"]]])
-      );
+      expect(extractStoredData(getAnnotationProcessor(obj1)!)).toEqual(new Map([["property1", ["data of property1"]]]));
     });
 
     test("objects derived from an instance resolve the instance's processor", () => {

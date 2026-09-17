@@ -6,18 +6,7 @@
     "useIgnoreFile": true
   },
   "files": {
-    "includes": [
-      "**/*.ts",
-      "**/*.tsx",
-      "**/*.mts",
-      "**/*.mjs",
-      "**/*.json",
-      "**/*.jsonc",
-      // Uses `override accessor`, which TypeScript accepts but Biome's parser rejects ("'accessor'
-      // cannot be used with 'override' modifier"), so Biome can neither format nor lint the file.
-      // Drop this line once Biome parses it.
-      "!packages/core/test-stage3/annotationProcessor.test.ts"
-    ]
+    "includes": ["**/*.ts", "**/*.tsx", "**/*.mts", "**/*.mjs", "**/*.json", "**/*.jsonc"]
   },
   "formatter": {
     "indentStyle": "space",
