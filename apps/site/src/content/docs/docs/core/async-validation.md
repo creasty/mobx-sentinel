@@ -65,7 +65,7 @@ runInAction(() => {
   user.username = "jake"; // Does not abort "jane": "jake" is validated after it settles
 });
 
-await when(() => !validator.isValidating);
+await validator.waitForValidation();
 
 // The validation completed successfully
 validator.isValid // true or false depending on the result

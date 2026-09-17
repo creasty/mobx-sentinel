@@ -86,7 +86,7 @@ export class Invoice {
 Both are available on any model, with or without a form — which is what makes them usable for autosave, sync, navigation guards and server round-trips.
 
 ```typescript
-import { reaction, runInAction, when } from "mobx";
+import { reaction, runInAction } from "mobx";
 import { unwatch, Validator, Watcher } from "@mobx-sentinel/core";
 
 const invoice = new Invoice();
@@ -103,7 +103,7 @@ watcher.changed //=> true
 watcher.changedKeyPaths //=> Set ["customerEmail", "lineItems.0.quantity"]
 
 // What is wrong — aggregated from every nested validator.
-await when(() => !validator.isValidating);
+await validator.waitForValidation();
 validator.isValid //=> false
 validator.invalidKeyPaths //=> Set ["billTo.postalCode", "lineItems.0.unitPrice"]
 validator.firstErrorMessage //=> "ZIP code is required"

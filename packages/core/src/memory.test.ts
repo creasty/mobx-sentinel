@@ -225,6 +225,35 @@ describe("Validator", () => {
     Validator.get(scheduled.deref()!).reset(); // Cancel the timers, so that they do not outlive the test
   });
 
+  it.each([
+    { outcome: "resolves", abort: false },
+    { outcome: "is aborted", abort: true },
+  ])(
+    "releases the target once a wait for its validation $outcome, although the signal passed to it lives on",
+    async ({ abort }) => {
+      const controller = new AbortController();
+      const ref = await (async () => {
+        const sample = new Sample({ delayMs: abort ? 60_000 : 0 });
+        const validator = Validator.get(sample);
+        runInAction(() => {
+          sample.name = "taken";
+        });
+        const waiting = validator.waitForValidation({ signal: controller.signal });
+        if (abort) {
+          controller.abort();
+          await expect(waiting).rejects.toBe(controller.signal.reason);
+          validator.reset(); // Cancel the timers, which keep the target alive until they fire
+        } else {
+          await waiting;
+        }
+        return new WeakRef(sample);
+      })();
+      expect(await isCollected(ref)).toBe(true);
+      // Until here, the test keeps the signal, and any listener still on it, alive
+      expect(controller.signal.aborted).toBe(abort);
+    }
+  );
+
   it("releases a handler once it is disposed, even while its validation is scheduled", async () => {
     const named = new Named();
     const validator = Validator.get(named);
