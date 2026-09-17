@@ -11,7 +11,7 @@ import * as indexModule from "./index";
 import { CheckBoxBinding } from "./CheckBoxBinding";
 import { InputBinding } from "./InputBinding";
 import { LabelBinding } from "./LabelBinding";
-import { RadioButtonBinding } from "./RadioButtonBinding";
+import { RadioGroupBinding, renderRadioGroup } from "./RadioGroupBinding";
 import { SelectBoxBinding } from "./SelectBoxBinding";
 import { SubmitButtonBinding } from "./SubmitButtonBinding";
 import { TextAreaBinding } from "./TextAreaBinding";
@@ -33,7 +33,7 @@ const STANDARD_METHODS = [
   "bindTextArea",
   "bindSelectBox",
   "bindCheckBox",
-  "bindRadioButton",
+  "bindRadioGroup",
   "bindSubmitButton",
   "bindLabel",
 ] as const;
@@ -102,13 +102,13 @@ describe("extension module", () => {
     const { bind } = form;
     expect(bind("text", InputBinding, { getter: () => model.text, setter: noop }).value).toBe("hello");
 
-    const { bindInput, bindTextArea, bindSelectBox, bindCheckBox, bindRadioButton, bindSubmitButton, bindLabel } = form;
+    const { bindInput, bindTextArea, bindSelectBox, bindCheckBox, bindRadioGroup, bindSubmitButton, bindLabel } = form;
     // PINNED(quirk): the extension methods are prototype functions that call `this.bind`, so detaching them (e.g. `const { bindInput } = Form.get(model)`) throws a TypeError, while the detached Form#bind keeps working. Decide: should the extension methods be bound to the instance like Form#bind?
     expect(() => bindInput("text", { getter: () => model.text, setter: noop })).toThrow(TypeError);
     expect(() => bindTextArea("text", { getter: () => model.text, setter: noop })).toThrow(TypeError);
     expect(() => bindSelectBox("choice", { getter: () => model.choice, setter: noop })).toThrow(TypeError);
     expect(() => bindCheckBox("flag", { getter: () => model.flag, setter: noop })).toThrow(TypeError);
-    expect(() => bindRadioButton("choice", { getter: () => model.choice, setter: noop })).toThrow(TypeError);
+    expect(() => bindRadioGroup("choice", { getter: () => model.choice, setter: noop })).toThrow(TypeError);
     expect(() => bindSubmitButton()).toThrow(TypeError);
     expect(() => bindLabel(["text"])).toThrow(TypeError);
   });
@@ -120,10 +120,11 @@ describe("package entry point", () => {
       "CheckBoxBinding",
       "InputBinding",
       "LabelBinding",
-      "RadioButtonBinding",
+      "RadioGroupBinding",
       "SelectBoxBinding",
       "SubmitButtonBinding",
       "TextAreaBinding",
+      "renderRadioGroup",
       "useFormAutoReset",
       "useFormHandler",
       "useFormSSR",
@@ -131,7 +132,8 @@ describe("package entry point", () => {
     expect(indexModule.CheckBoxBinding).toBe(CheckBoxBinding);
     expect(indexModule.InputBinding).toBe(InputBinding);
     expect(indexModule.LabelBinding).toBe(LabelBinding);
-    expect(indexModule.RadioButtonBinding).toBe(RadioButtonBinding);
+    expect(indexModule.RadioGroupBinding).toBe(RadioGroupBinding);
+    expect(indexModule.renderRadioGroup).toBe(renderRadioGroup);
     expect(indexModule.SelectBoxBinding).toBe(SelectBoxBinding);
     expect(indexModule.SubmitButtonBinding).toBe(SubmitButtonBinding);
     expect(indexModule.TextAreaBinding).toBe(TextAreaBinding);
@@ -260,8 +262,8 @@ describe("delegation to Form#bind", () => {
     expect(lastCall()?.[2]).toBe(checkConfig);
 
     const radioConfig = { getter: () => model.choice, setter: noop };
-    expect(form.bindRadioButton("choice", radioConfig)).toBe(lastResult());
-    expect(bindSpy.mock.lastCall).toEqual(["choice", RadioButtonBinding, radioConfig]);
+    expect(form.bindRadioGroup("choice", radioConfig)).toBe(lastResult());
+    expect(bindSpy.mock.lastCall).toEqual(["choice", RadioGroupBinding, radioConfig]);
     expect(lastCall()?.[2]).toBe(radioConfig);
 
     expect(form.bindSubmitButton()).toBe(lastResult());
@@ -530,12 +532,12 @@ describe("Form#bindCheckBox", () => {
   });
 });
 
-describe("Form#bindRadioButton", () => {
-  test("returns the props function of a RadioButtonBinding, sharing the cache entry with Form#bind", () => {
+describe("Form#bindRadioGroup", () => {
+  test("returns the props function of a RadioGroupBinding, sharing the cache entry with Form#bind", () => {
     const { model, form } = setupEnv();
     const config = { getter: () => model.choice, setter: noop };
 
-    const bindRadio = form.bindRadioButton("choice", config);
+    const bindRadio = form.bindRadioGroup("choice", config);
     expect(bindRadio).toBeTypeOf("function");
     expect(bindRadio("a")).toEqual({
       type: "radio",
@@ -550,9 +552,9 @@ describe("Form#bindRadioButton", () => {
     });
     expect(bindRadio("b").checked).toBe(false);
 
-    expect(form.bindRadioButton("choice", config)).toBe(bindRadio);
-    expect(form.bind("choice", RadioButtonBinding, config)).toBe(bindRadio);
-    expect(form.bindRadioButton("choice", { cacheKey: "k", ...config })).not.toBe(bindRadio);
+    expect(form.bindRadioGroup("choice", config)).toBe(bindRadio);
+    expect(form.bind("choice", RadioGroupBinding, config)).toBe(bindRadio);
+    expect(form.bindRadioGroup("choice", { cacheKey: "k", ...config })).not.toBe(bindRadio);
   });
 });
 
@@ -666,7 +668,7 @@ describe("types", () => {
     expectTypeOf(form.bindTextArea).toEqualTypeOf<Ext["bindTextArea"]>();
     expectTypeOf(form.bindSelectBox).toEqualTypeOf<Ext["bindSelectBox"]>();
     expectTypeOf(form.bindCheckBox).toEqualTypeOf<Ext["bindCheckBox"]>();
-    expectTypeOf(form.bindRadioButton).toEqualTypeOf<Ext["bindRadioButton"]>();
+    expectTypeOf(form.bindRadioGroup).toEqualTypeOf<Ext["bindRadioGroup"]>();
     expectTypeOf(form.bindSubmitButton).toEqualTypeOf<Ext["bindSubmitButton"]>();
     expectTypeOf(form.bindLabel).toEqualTypeOf<Ext["bindLabel"]>();
     expectTypeOf(form).toExtend<Ext>();
@@ -683,8 +685,12 @@ describe("types", () => {
     expectTypeOf<Ext["bindCheckBox"]>().toEqualTypeOf<
       FormBindingFuncExtension.ForField.RequiredConfig<SampleModel, typeof CheckBoxBinding>
     >();
-    expectTypeOf<Ext["bindRadioButton"]>().toEqualTypeOf<
-      FormBindingFuncExtension.ForField.RequiredConfig<SampleModel, typeof RadioButtonBinding>
+    // Generic, so that the options are typed after the getter
+    expectTypeOf<Ext["bindRadioGroup"]>().toEqualTypeOf<
+      <V extends RadioGroupBinding.Option>(
+        fieldName: FormField.Name<SampleModel>,
+        config: RadioGroupBinding.Config<V> & FormBindingFuncExtension.Config
+      ) => RadioGroupBinding<V>["props"]
     >();
     expectTypeOf<Ext["bindSubmitButton"]>().toEqualTypeOf<
       FormBindingFuncExtension.ForForm.OptionalConfig<SampleModel, typeof SubmitButtonBinding>
@@ -701,7 +707,7 @@ describe("types", () => {
     expectTypeOf(form.bindTextArea).returns.toEqualTypeOf<TextAreaBinding["props"]>();
     expectTypeOf(form.bindSelectBox).returns.toEqualTypeOf<SelectBoxBinding["props"]>();
     expectTypeOf(form.bindCheckBox).returns.toEqualTypeOf<CheckBoxBinding["props"]>();
-    expectTypeOf(form.bindRadioButton).returns.toEqualTypeOf<RadioButtonBinding["props"]>();
+    expectTypeOf(form.bindRadioGroup).returns.toEqualTypeOf<RadioGroupBinding["props"]>();
     expectTypeOf(form.bindSubmitButton).returns.toEqualTypeOf<SubmitButtonBinding["props"]>();
     expectTypeOf(form.bindLabel).returns.toEqualTypeOf<LabelBinding["props"]>();
   });
@@ -754,8 +760,8 @@ describe("types", () => {
       form.bindSubmitButton("text");
       // @ts-expect-error bindSelectBox requires a config
       form.bindSelectBox("choice");
-      // @ts-expect-error bindRadioButton requires a config
-      form.bindRadioButton("choice");
+      // @ts-expect-error bindRadioGroup requires a config
+      form.bindRadioGroup("choice");
       // @ts-expect-error a multiple select box setter receives string[]
       form.bindSelectBox("choice", { multiple: true, getter: () => [model.choice], setter: (v: string) => void v });
       form.bindLabel(["text"], { htmlFor: "custom", cacheKey: "k" });

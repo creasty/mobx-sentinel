@@ -1,6 +1,6 @@
 export { CheckBoxBinding } from "./CheckBoxBinding";
 export { InputBinding } from "./InputBinding";
-export { RadioButtonBinding } from "./RadioButtonBinding";
+export { RadioGroupBinding, renderRadioGroup } from "./RadioGroupBinding";
 export { SelectBoxBinding } from "./SelectBoxBinding";
 export { SubmitButtonBinding } from "./SubmitButtonBinding";
 export { LabelBinding } from "./LabelBinding";

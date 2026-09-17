@@ -6,7 +6,7 @@ import { autorun, isAction, isComputedProp, makeObservable, observable, runInAct
 import { Form, FormField } from "@mobx-sentinel/form";
 import "./extension";
 import { observer } from "mobx-react-lite";
-import { RadioButtonBinding } from "./RadioButtonBinding";
+import { RadioGroupBinding, renderRadioGroup } from "./RadioGroupBinding";
 
 enum SampleEnum {
   ALPHA = "ALPHA",
@@ -17,6 +17,9 @@ enum SampleEnum {
 class SampleModel {
   @observable enum: SampleEnum = SampleEnum.ALPHA;
   @observable enumOpt: SampleEnum | null = null;
+  @observable rating: number = 3;
+  @observable agreed: boolean | null = null;
+  @observable code: number | string = 1;
 
   constructor() {
     makeObservable(this);
@@ -26,23 +29,23 @@ class SampleModel {
 const SampleComponent: React.FC<{ model: SampleModel }> = observer(({ model }) => {
   const form = Form.get(model);
 
-  const bindRadioButton1 = form.bindRadioButton("enum", {
+  const bindEnum = form.bindRadioGroup("enum", {
     getter: () => model.enum,
-    setter: (v) => (model.enum = v ? (v as SampleEnum) : SampleEnum.ZULU),
+    setter: (v) => (model.enum = v),
   });
-  const bindRadioButton2 = form.bindRadioButton("enumOpt", {
+  const bindEnumOpt = form.bindRadioGroup("enumOpt", {
     getter: () => model.enumOpt,
-    setter: (v) => (model.enumOpt = v ? (v as SampleEnum) : null),
+    setter: (v) => (model.enumOpt = v),
   });
 
   return (
     <>
       {Object.values(SampleEnum).map((value) => (
-        <input key={value} aria-label={`enum-${value}`} {...bindRadioButton1(value)} />
+        <input key={value} aria-label={`enum-${value}`} {...bindEnum(value)} />
       ))}
 
       {Object.values(SampleEnum).map((value) => (
-        <input key={value} aria-label={`enumOpt-${value}`} {...bindRadioButton2(value)} />
+        <input key={value} aria-label={`enumOpt-${value}`} {...bindEnumOpt(value)} />
       ))}
     </>
   );
@@ -73,7 +76,17 @@ function setupEnv(inputLabelPrefix: string) {
   };
 }
 
-describe("RadioButtonBinding", () => {
+/** Create a change event of a radio button, whose `value` attribute the binding should not need */
+const radioEventOf = (value = "", checked = true) => {
+  const element = document.createElement("input");
+  element.type = "radio";
+  element.value = value;
+  element.checked = checked;
+  return { currentTarget: element } as unknown as React.ChangeEvent<HTMLInputElement> &
+    React.FocusEvent<HTMLInputElement>;
+};
+
+describe("RadioGroupBinding", () => {
   const setupEnv = () => {
     const model = new SampleModel();
     const form = Form.get(model);
@@ -82,7 +95,7 @@ describe("RadioButtonBinding", () => {
       validator: form.validator,
       getFinalizationDelayMs: () => form.config.autoFinalizationDelayMs,
     });
-    const binding = new RadioButtonBinding(field, {
+    const binding = new RadioGroupBinding<string | null>(field, {
       getter: () => null,
       setter: () => {},
     });
@@ -102,30 +115,36 @@ describe("RadioButtonBinding", () => {
   };
 
   /** Binding wired to a real (nullable) model property through the form's cached field */
-  const setupModelEnv = (config?: Partial<RadioButtonBinding.Config>) => {
+  const setupModelEnv = (config?: Partial<RadioGroupBinding.Config<SampleEnum | null>>) => {
     const model = new SampleModel();
     const form = Form.get(model);
     const field = form.getField("enumOpt");
-    const binding = new RadioButtonBinding(field, {
+    const binding = new RadioGroupBinding<SampleEnum | null>(field, {
       getter: () => model.enumOpt,
-      setter: (v) => (model.enumOpt = v ? (v as SampleEnum) : null),
+      setter: (v) => (model.enumOpt = v),
       ...config,
     });
-    const element = document.createElement("input");
-    element.type = "radio";
-    const fakeEvent = (value: string, checked = true) => {
-      element.value = value;
-      element.checked = checked;
-      return { currentTarget: element } as any;
-    };
 
     return {
       model,
       form,
       field,
       binding,
-      fakeEvent,
     };
+  };
+
+  /** Binding on a field of its own, whose options can be of any type */
+  const setupBoxEnv = <V extends RadioGroupBinding.Option>(initial: V) => {
+    const form = Form.get(new SampleModel());
+    const field = new FormField({
+      fieldName: "box",
+      validator: form.validator,
+      getFinalizationDelayMs: () => form.config.autoFinalizationDelayMs,
+    });
+    const box = observable.box<V>(initial);
+    const setter = vi.fn((value: V) => box.set(value));
+    const binding = new RadioGroupBinding<V>(field, { getter: () => box.get(), setter });
+    return { form, field, box, setter, binding };
   };
 
   afterEach(() => {
@@ -178,13 +197,14 @@ describe("RadioButtonBinding", () => {
   describe("props", () => {
     it("returns the full set of attributes", () => {
       const env = setupModelEnv();
-      expect(env.binding.props(SampleEnum.ALPHA)).toStrictEqual({
+      const props = env.binding.props(SampleEnum.ALPHA);
+      expect(props).toStrictEqual({
         type: "radio",
         id: undefined,
         value: SampleEnum.ALPHA,
         name: env.field.id,
         checked: false,
-        onChange: env.binding.onChange,
+        onChange: expect.any(Function),
         onFocus: env.binding.onFocus,
         "aria-invalid": undefined,
         "aria-errormessage": undefined,
@@ -203,40 +223,72 @@ describe("RadioButtonBinding", () => {
       expect(props1.onFocus).toBe(props2.onFocus);
     });
 
+    it("gives each option a change handler of its own, and all options the same focus handler", () => {
+      const env = setupModelEnv();
+      const options = [...Object.values(SampleEnum), null];
+      const changeHandlers = new Set(options.map((option) => env.binding.props(option).onChange));
+      expect(changeHandlers.size).toBe(options.length);
+      expect(new Set(options.map((option) => env.binding.props(option).onFocus))).toEqual(
+        new Set([env.binding.onFocus])
+      );
+    });
+
+    it("keeps the handlers across config replacements", () => {
+      const env = setupModelEnv();
+      const { onChange } = env.binding.props(SampleEnum.ALPHA);
+      env.binding.config = { getter: () => SampleEnum.ALPHA, setter: () => {} };
+      expect(env.binding.props(SampleEnum.ALPHA).onChange).toBe(onChange);
+    });
+
     it("exposes errorMessages as a computed value while value is a plain getter", () => {
       const env = setupModelEnv();
       expect(isComputedProp(env.binding, "value")).toBe(false);
       expect(isComputedProp(env.binding, "errorMessages")).toBe(true);
     });
 
-    it("checks only the button whose value strictly equals the getter value", () => {
+    it("checks only the button whose option strictly equals the getter value", () => {
       const env = setupModelEnv();
       runInAction(() => (env.model.enumOpt = SampleEnum.BRAVO));
       expect(env.binding.props(SampleEnum.ALPHA).checked).toBe(false);
       expect(env.binding.props(SampleEnum.BRAVO).checked).toBe(true);
       expect(env.binding.props(SampleEnum.ZULU).checked).toBe(false);
-      expect(env.binding.props("bravo").checked).toBe(false);
-      expect(env.binding.props(" BRAVO").checked).toBe(false);
+      expect(env.binding.props("bravo" as SampleEnum).checked).toBe(false);
+      expect(env.binding.props(" BRAVO" as SampleEnum).checked).toBe(false);
       expect(env.binding.props(null).checked).toBe(false);
-      expect(env.binding.props("").checked).toBe(false);
+      expect(env.binding.props("" as SampleEnum).checked).toBe(false);
     });
 
-    it("renders a null value as an empty string", () => {
+    it("renders a null option as an empty value", () => {
       const env = setupModelEnv();
       expect(env.binding.props(null).value).toBe("");
     });
 
-    it("does not check the null button when the getter returns null", () => {
-      const env = setupModelEnv();
-      expect(env.model.enumOpt).toBeNull();
-      // PINNED(bug): `checked` compares the coerced value ("") with the raw argument (null), so a null button is never checked even though the getter returns null; the props signature accepts `value: string | null` and the class JSDoc says "Supports optional (nullable) values". Expected: props(null).checked is true when the getter returns null. Flip this assertion when fixing.
-      expect(env.binding.props(null).checked).toBe(false);
+    it("renders number and boolean options by their string form", () => {
+      expect(setupBoxEnv<number>(0).binding.props(0).value).toBe("0");
+      expect(setupBoxEnv<number>(0).binding.props(-1.5).value).toBe("-1.5");
+      expect(setupBoxEnv<boolean>(false).binding.props(true).value).toBe("true");
+      expect(setupBoxEnv<boolean>(false).binding.props(false).value).toBe("false");
     });
 
-    it("checks the empty-string button when the getter returns null", () => {
+    it("checks the null button when the getter returns null", () => {
       const env = setupModelEnv();
-      // PINNED(quirk): null from the getter is coerced to "", so a button whose value is "" is checked while the model holds null (null and "" are indistinguishable). Decide: should a null getter value only match a null button?
-      expect(env.binding.props("").checked).toBe(true);
+      expect(env.model.enumOpt).toBeNull();
+      expect(env.binding.props(null).checked).toBe(true);
+      expect(env.binding.props(SampleEnum.ALPHA).checked).toBe(false);
+    });
+
+    it("tells a null option from an empty string, and a number from its string form", () => {
+      const nullable = setupBoxEnv<string | null>(null);
+      expect(nullable.binding.props(null).checked).toBe(true);
+      expect(nullable.binding.props("").checked).toBe(false);
+      runInAction(() => nullable.box.set(""));
+      expect(nullable.binding.props(null).checked).toBe(false);
+      expect(nullable.binding.props("").checked).toBe(true);
+
+      const mixed = setupBoxEnv<number | string>(1);
+      expect(mixed.binding.props(1).checked).toBe(true);
+      expect(mixed.binding.props("1").checked).toBe(false);
+      expect(mixed.binding.props("1").value).toBe(mixed.binding.props(1).value);
     });
 
     it("applies the same aria attributes to every button", () => {
@@ -259,9 +311,9 @@ describe("RadioButtonBinding", () => {
       expect(env.binding.value).toBe(SampleEnum.ZULU);
     });
 
-    it("returns an empty string when the getter returns null", () => {
+    it("returns null when the getter returns null", () => {
       const env = setupModelEnv();
-      expect(env.binding.value).toBe("");
+      expect(env.binding.value).toBeNull();
     });
 
     it("is tracked through the getter", () => {
@@ -271,73 +323,99 @@ describe("RadioButtonBinding", () => {
         seen.push(env.binding.value);
       });
       runInAction(() => (env.model.enum = SampleEnum.ZULU)); // Unrelated property
-      expect(seen).toEqual([""]);
+      expect(seen).toEqual([null]);
       runInAction(() => (env.model.enumOpt = SampleEnum.BRAVO));
-      expect(seen).toEqual(["", SampleEnum.BRAVO]);
+      expect(seen).toEqual([null, SampleEnum.BRAVO]);
       dispose();
     });
 
     it("reads a replaced getter immediately, even while observed", () => {
       const env = setupModelEnv();
-      const other = observable.box("other");
+      const other = observable.box<SampleEnum | null>(SampleEnum.ZULU);
       const seen: unknown[] = [];
       const dispose = autorun(() => {
         seen.push(env.binding.value);
       });
       env.binding.config = { getter: () => other.get(), setter: () => {} };
-      expect(env.binding.value).toBe("other");
-      expect(env.binding.props("other").checked).toBe(true);
+      expect(env.binding.value).toBe(SampleEnum.ZULU);
+      expect(env.binding.props(SampleEnum.ZULU).checked).toBe(true);
       // Nothing is notified: `config` is not observable, and Form#bind reads the props right after replacing it
-      expect(seen).toEqual([""]);
+      expect(seen).toEqual([null]);
       dispose();
     });
   });
 
-  describe("#onChange", () => {
-    it("works without a callback", () => {
+  describe("change handlers", () => {
+    it("work without a callback", () => {
       const env = setupEnv();
-      env.binding.onChange(env.fakeEvent());
+      env.binding.props("value1").onChange(env.fakeEvent());
     });
 
-    it("calls the callback if provided", () => {
+    it("call the callback if provided", () => {
       const env = setupEnv();
       const callback = vi.fn();
       env.binding.config.onChange = callback;
-      env.binding.onChange(env.fakeEvent());
+      env.binding.props("value1").onChange(env.fakeEvent());
       expect(callback).toBeCalledWith(env.fakeEvent());
     });
 
-    it("is a MobX action", () => {
+    it("are MobX actions", () => {
       const env = setupModelEnv();
-      expect(isAction(env.binding.onChange)).toBe(true);
+      expect(isAction(env.binding.props(SampleEnum.ALPHA).onChange)).toBe(true);
+      expect(isAction(env.binding.props(null).onChange)).toBe(true);
     });
 
-    it("passes the value of the checked button to the setter", () => {
+    it("pass the option of the button to the setter, whatever the value attribute of the event says", () => {
       const setter = vi.fn();
       const env = setupModelEnv({ setter });
-      env.binding.onChange(env.fakeEvent(SampleEnum.BRAVO));
+      env.binding.props(SampleEnum.BRAVO).onChange(radioEventOf(SampleEnum.ZULU));
       expect(setter.mock.calls).toEqual([[SampleEnum.BRAVO]]);
     });
 
-    it("passes an empty string when the null button is checked", () => {
+    it("pass null when the null button is checked", () => {
       const setter = vi.fn();
       const env = setupModelEnv({ setter });
-      const props = env.binding.props(null);
-      env.binding.onChange(env.fakeEvent(props.value));
-      expect(setter.mock.calls).toEqual([[""]]);
+      env.binding.props(null).onChange(radioEventOf(""));
+      expect(setter.mock.calls).toEqual([[null]]);
     });
 
-    it("updates the model", () => {
+    it("pass number and boolean options as they are", () => {
+      const numbers = setupBoxEnv<number>(1);
+      numbers.binding.props(2).onChange(radioEventOf("2"));
+      expect(numbers.setter.mock.calls).toEqual([[2]]);
+      expect(numbers.binding.props(2).checked).toBe(true);
+      expect(numbers.binding.props(1).checked).toBe(false);
+
+      const booleans = setupBoxEnv<boolean | null>(null);
+      booleans.binding.props(false).onChange(radioEventOf("false"));
+      expect(booleans.setter.mock.calls).toEqual([[false]]);
+      expect(booleans.binding.props(false).checked).toBe(true);
+      expect(booleans.binding.props(null).checked).toBe(false);
+    });
+
+    it("keep options that share a string form apart", () => {
+      const env = setupBoxEnv<number | string>(1);
+      env.binding.props("1").onChange(radioEventOf("1"));
+      expect(env.setter.mock.calls).toEqual([["1"]]);
+      expect(env.binding.props("1").checked).toBe(true);
+      expect(env.binding.props(1).checked).toBe(false);
+
+      env.binding.props(1).onChange(radioEventOf("1"));
+      expect(env.setter.mock.calls).toEqual([["1"], [1]]);
+      expect(env.binding.props(1).checked).toBe(true);
+    });
+
+    it("update the model", () => {
       const env = setupModelEnv();
-      env.binding.onChange(env.fakeEvent(SampleEnum.BRAVO));
+      env.binding.props(SampleEnum.BRAVO).onChange(radioEventOf());
       expect(env.model.enumOpt).toBe(SampleEnum.BRAVO);
       expect(env.binding.props(SampleEnum.BRAVO).checked).toBe(true);
     });
 
-    it("marks the field as changed with the final change type", () => {
+    it("mark the field as changed with the final change type", () => {
       vi.useFakeTimers();
       const env = setupModelEnv();
-      env.binding.onChange(env.fakeEvent(SampleEnum.BRAVO));
+      env.binding.props(SampleEnum.BRAVO).onChange(radioEventOf());
       expect(env.field.isChanged).toBe(true);
       expect(env.field.isIntermediate).toBe(false);
       expect(vi.getTimerCount()).toBe(0); // No auto-finalization is scheduled
@@ -345,24 +423,24 @@ describe("RadioButtonBinding", () => {
       expect(env.field.isErrorReported).toBe(false);
     });
 
-    it("reports errors immediately", () => {
+    it("report errors immediately", () => {
       const env = setupModelEnv();
       env.form.validator.updateErrors(Symbol(), (builder) => {
         builder.invalidate("enumOpt", "invalid");
       });
       expect(env.field.isErrorReported).toBeUndefined();
-      env.binding.onChange(env.fakeEvent(SampleEnum.BRAVO));
+      env.binding.props(SampleEnum.BRAVO).onChange(radioEventOf());
       expect(env.field.isErrorReported).toBe(true);
       expect(env.binding.props(SampleEnum.ALPHA)["aria-invalid"]).toBe(true);
       expect(env.binding.props(SampleEnum.ALPHA)["aria-errormessage"]).toBe("invalid");
     });
 
-    it("ignores events from unchecked buttons", () => {
+    it("ignore events from unchecked buttons", () => {
       vi.useFakeTimers();
       const setter = vi.fn();
       const callback = vi.fn();
       const env = setupModelEnv({ setter, onChange: callback });
-      env.binding.onChange(env.fakeEvent(SampleEnum.BRAVO, false));
+      env.binding.props(SampleEnum.BRAVO).onChange(radioEventOf(SampleEnum.BRAVO, false));
       expect(setter).not.toBeCalled();
       expect(env.field.isChanged).toBe(false);
       expect(env.field.isErrorReported).toBeUndefined();
@@ -370,7 +448,7 @@ describe("RadioButtonBinding", () => {
       expect(callback).not.toBeCalled();
     });
 
-    it("calls the setter, marks the field as changed, then calls the callback", () => {
+    it("call the setter, mark the field as changed, then call the callback", () => {
       const env = setupModelEnv();
       const log: unknown[] = [];
       env.binding.config = {
@@ -382,24 +460,24 @@ describe("RadioButtonBinding", () => {
           log.push(["callback", e.currentTarget.value, env.field.isChanged, env.field.isErrorReported]);
         },
       };
-      env.binding.onChange(env.fakeEvent(SampleEnum.ZULU));
+      env.binding.props(SampleEnum.ZULU).onChange(radioEventOf(SampleEnum.ZULU));
       expect(log[0]).toEqual(["setter", SampleEnum.ZULU, false]);
-      // PINNED(quirk): the callback runs inside the onChange action batch, so the delayed error report has not settled yet: isErrorReported is still undefined in the callback and becomes false right after. Decide: should the callback run after the action completes so that it observes the settled field state?
+      // PINNED(quirk): the callback runs inside the change handler's action batch, so the delayed error report has not settled yet: isErrorReported is still undefined in the callback and becomes false right after. Decide: should the callback run after the action completes so that it observes the settled field state?
       expect(log[1]).toEqual(["callback", SampleEnum.ZULU, true, undefined]);
       expect(log).toHaveLength(2);
       expect(env.field.isErrorReported).toBe(false);
     });
 
-    it("works when detached from the binding", () => {
+    it("work when detached from the binding", () => {
       const setter = vi.fn();
       const env = setupModelEnv({ setter });
       const { onChange } = env.binding.props(SampleEnum.ALPHA);
-      onChange(env.fakeEvent(SampleEnum.ALPHA));
+      onChange(radioEventOf());
       expect(setter).toBeCalledWith(SampleEnum.ALPHA);
       expect(env.field.isChanged).toBe(true);
     });
 
-    it("neither marks the field as changed nor calls the callback when the setter throws", () => {
+    it("neither mark the field as changed nor call the callback when the setter throws", () => {
       const callback = vi.fn();
       const env = setupModelEnv({
         setter: () => {
@@ -407,12 +485,12 @@ describe("RadioButtonBinding", () => {
         },
         onChange: callback,
       });
-      expect(() => env.binding.onChange(env.fakeEvent(SampleEnum.ALPHA))).toThrow("setter failed");
+      expect(() => env.binding.props(SampleEnum.ALPHA).onChange(radioEventOf())).toThrow("setter failed");
       expect(env.field.isChanged).toBe(false);
       expect(callback).not.toBeCalled();
     });
 
-    it("uses the config at the time of the event", () => {
+    it("use the config at the time of the event", () => {
       const oldSetter = vi.fn();
       const oldCallback = vi.fn();
       const env = setupModelEnv({ setter: oldSetter, onChange: oldCallback });
@@ -420,23 +498,23 @@ describe("RadioButtonBinding", () => {
       const setter = vi.fn();
       const callback = vi.fn();
       env.binding.config = { getter: () => null, setter, onChange: callback };
-      onChange(env.fakeEvent(SampleEnum.ZULU));
+      onChange(radioEventOf());
       expect(oldSetter).not.toBeCalled();
       expect(oldCallback).not.toBeCalled();
-      expect(setter).toBeCalledWith(SampleEnum.ZULU);
+      expect(setter).toBeCalledWith(SampleEnum.ALPHA);
       expect(callback).toBeCalledTimes(1);
     });
 
-    it("reports the change again after the form is reset", () => {
+    it("report the change again after the form is reset", () => {
       const env = setupModelEnv();
-      env.binding.onChange(env.fakeEvent(SampleEnum.BRAVO));
+      env.binding.props(SampleEnum.BRAVO).onChange(radioEventOf());
       expect(env.binding.props(SampleEnum.BRAVO)).toMatchObject({ checked: true, "aria-invalid": false });
 
       env.form.reset();
       expect(env.field.isChanged).toBe(false);
       expect(env.binding.props(SampleEnum.BRAVO)).toMatchObject({ checked: true, "aria-invalid": undefined }); // The model is kept
 
-      env.binding.onChange(env.fakeEvent(SampleEnum.ZULU));
+      env.binding.props(SampleEnum.ZULU).onChange(radioEventOf());
       expect(env.field.isChanged).toBe(true);
       expect(env.binding.props(SampleEnum.ZULU)).toMatchObject({ checked: true, "aria-invalid": false });
     });
@@ -466,7 +544,7 @@ describe("RadioButtonBinding", () => {
       const env = setupModelEnv({ setter });
       const log: boolean[] = [];
       env.binding.config.onFocus = () => log.push(env.field.isTouched);
-      env.binding.onFocus(env.fakeEvent(SampleEnum.ALPHA));
+      env.binding.onFocus(radioEventOf());
       expect(log).toEqual([true]);
       expect(env.field.isTouched).toBe(true);
       expect(env.field.isChanged).toBe(false);
@@ -480,7 +558,7 @@ describe("RadioButtonBinding", () => {
       const { onFocus } = env.binding.props(SampleEnum.ALPHA);
       const callback = vi.fn();
       env.binding.config = { ...env.binding.config, onFocus: callback };
-      onFocus(env.fakeEvent(SampleEnum.ALPHA));
+      onFocus(radioEventOf());
       expect(oldCallback).not.toBeCalled();
       expect(callback).toBeCalledTimes(1);
     });
@@ -529,12 +607,11 @@ describe("RadioButtonBinding", () => {
   });
 
   describe("types", () => {
-    it("exposes a typed props function", () => {
+    it("exposes a props function typed by the options", () => {
       const env = setupModelEnv();
-      expectTypeOf(env.binding.props).parameter(0).toEqualTypeOf<string | null>();
-      expectTypeOf(env.binding.props)
-        .parameter(1)
-        .toEqualTypeOf<{ id?: string | boolean; name?: string } | undefined>();
+      expectTypeOf(env.binding.props).parameter(0).toEqualTypeOf<SampleEnum | null>();
+      expectTypeOf(env.binding.props).parameter(1).toEqualTypeOf<RadioGroupBinding.ButtonConfig | undefined>();
+      expectTypeOf<RadioGroupBinding.ButtonConfig>().toEqualTypeOf<{ id?: string | boolean; name?: string }>();
 
       const props = env.binding.props(SampleEnum.ALPHA);
       expectTypeOf(props.type).toEqualTypeOf<"radio">();
@@ -546,74 +623,182 @@ describe("RadioButtonBinding", () => {
       expectTypeOf(props["aria-errormessage"]).toEqualTypeOf<string | undefined>();
       expectTypeOf(props.onChange).toEqualTypeOf<React.ChangeEventHandler<HTMLInputElement>>();
       expectTypeOf(props.onFocus).toEqualTypeOf<React.FocusEventHandler<HTMLInputElement>>();
-      expectTypeOf(props).toExtend<RadioButtonBinding.Attrs>();
+      expectTypeOf(props).toExtend<RadioGroupBinding.Attrs>();
+      expectTypeOf(env.binding.value).toEqualTypeOf<SampleEnum | null>();
       expectTypeOf(env.binding.errorMessages).toEqualTypeOf<string | null>();
     });
 
-    it("types the config", () => {
-      expectTypeOf<RadioButtonBinding.Config["getter"]>().toEqualTypeOf<() => string | null>();
-      expectTypeOf<RadioButtonBinding.Config["setter"]>().toEqualTypeOf<(value: string) => void>();
+    it("types the config by the options", () => {
+      expectTypeOf<RadioGroupBinding.Option>().toEqualTypeOf<string | number | boolean | null>();
+      expectTypeOf<RadioGroupBinding.Config<SampleEnum>["getter"]>().toEqualTypeOf<() => SampleEnum>();
+      expectTypeOf<RadioGroupBinding.Config<SampleEnum>["setter"]>().toEqualTypeOf<(value: SampleEnum) => void>();
+      // Without a type argument, any option
+      expectTypeOf<RadioGroupBinding.Config["getter"]>().toEqualTypeOf<() => RadioGroupBinding.Option>();
+      expectTypeOf(RadioGroupBinding).constructorParameters.toEqualTypeOf<[FormField, RadioGroupBinding.Config]>();
     });
 
     it("types the extended handlers", () => {
-      expectTypeOf<RadioButtonBinding.Config["onChange"]>().toEqualTypeOf<
+      expectTypeOf<RadioGroupBinding.Config["onChange"]>().toEqualTypeOf<
         React.ChangeEventHandler<HTMLInputElement> | undefined
       >();
-      expectTypeOf<RadioButtonBinding.Config["onFocus"]>().toEqualTypeOf<
+      expectTypeOf<RadioGroupBinding.Config["onFocus"]>().toEqualTypeOf<
         React.FocusEventHandler<HTMLInputElement> | undefined
       >();
     });
 
-    it("accepts a nullable getter but rejects undefined at compile time", () => {
+    it("infers the options of bindRadioGroup from the getter", () => {
       const model = new SampleModel();
       const form = Form.get(model);
-      expectTypeOf(form.bindRadioButton).toBeCallableWith("enumOpt", {
-        getter: () => model.enumOpt,
-        setter: () => {},
-      });
-      const invalidUsages = () => {
-        // @ts-expect-error getter must return a string or null, not undefined
-        form.bindRadioButton("enumOpt", { getter: () => model.enumOpt ?? undefined, setter: () => {} });
-      };
-      expectTypeOf(invalidUsages).toBeFunction();
-    });
 
-    it("returns the props function from bindRadioButton", () => {
-      const model = new SampleModel();
-      const form = Form.get(model);
-      const bind = form.bindRadioButton("enum", {
+      const bindEnum = form.bindRadioGroup("enum", {
         getter: () => model.enum,
         setter: (v) => {
-          expectTypeOf(v).toEqualTypeOf<string>();
+          expectTypeOf(v).toEqualTypeOf<SampleEnum>();
         },
       });
-      expectTypeOf(bind).toEqualTypeOf<RadioButtonBinding["props"]>();
+      expectTypeOf(bindEnum).toEqualTypeOf<RadioGroupBinding<SampleEnum>["props"]>();
+      expectTypeOf(bindEnum).parameter(0).toEqualTypeOf<SampleEnum>();
+
+      form.bindRadioGroup("enumOpt", {
+        getter: () => model.enumOpt,
+        setter: (v) => {
+          expectTypeOf(v).toEqualTypeOf<SampleEnum | null>();
+        },
+      });
+      form.bindRadioGroup("rating", {
+        getter: () => model.rating,
+        setter: (v) => {
+          expectTypeOf(v).toEqualTypeOf<number>();
+        },
+      });
+      form.bindRadioGroup("agreed", {
+        getter: () => model.agreed,
+        setter: (v) => {
+          expectTypeOf(v).toEqualTypeOf<boolean | null>();
+        },
+      });
+      // A setter taking more than the getter returns fits
+      form.bindRadioGroup("enum", { getter: () => model.enum, setter: (_v: string | null) => {} });
+      // An explicit type of the options
+      form.bindRadioGroup<SampleEnum | null>("enumOpt", {
+        getter: () => model.enumOpt,
+        setter: (v) => (model.enumOpt = v),
+        cacheKey: "explicit",
+      });
+    });
+
+    it("widens the options to RadioGroupBinding.Option without the extension", () => {
+      const model = new SampleModel();
+      const form = Form.get(model);
+      const bind = form.bind("enum", RadioGroupBinding, {
+        getter: () => model.enum,
+        setter: (v) => {
+          expectTypeOf(v).toEqualTypeOf<RadioGroupBinding.Option>();
+        },
+      });
+      expectTypeOf(bind).toEqualTypeOf<RadioGroupBinding["props"]>();
     });
 
     it("rejects invalid usage at compile time", () => {
       const model = new SampleModel();
       const form = Form.get(model);
-      const bind = form.bindRadioButton("enum", { getter: () => model.enum, setter: () => {} });
+      const bind = form.bindRadioGroup("enum", { getter: () => model.enum, setter: () => {} });
       const invalidUsages = () => {
-        // @ts-expect-error getter must return a string or null
-        form.bindRadioButton("enum", { getter: () => 1, setter: () => {} });
-        // @ts-expect-error setter receives a plain string, not the enum
-        form.bindRadioButton("enum", { getter: () => model.enum, setter: (_v: SampleEnum) => {} });
+        // @ts-expect-error the getter must return an option, not undefined
+        form.bindRadioGroup("enumOpt", { getter: () => model.enumOpt ?? undefined, setter: () => {} });
+        // @ts-expect-error the getter must return an option, not an object
+        form.bindRadioGroup("enum", { getter: () => ({}), setter: () => {} });
+        // @ts-expect-error the setter must take every option the getter returns
+        form.bindRadioGroup("enumOpt", { getter: () => model.enumOpt, setter: (_v: SampleEnum) => {} });
+        // @ts-expect-error an explicit type of the options must include what the getter returns
+        form.bindRadioGroup<SampleEnum>("enumOpt", { getter: () => model.enumOpt, setter: () => {} });
         // @ts-expect-error unknown field name
-        form.bindRadioButton("unknown", { getter: () => null, setter: () => {} });
-        // @ts-expect-error value must be a string or null
+        form.bindRadioGroup("unknown", { getter: () => null, setter: () => {} });
+        // @ts-expect-error bindRadioGroup requires a config
+        form.bindRadioGroup("enum");
+        // @ts-expect-error the option must be one the field can hold
+        bind("ALPHA");
+        // @ts-expect-error null is not an option of a field that cannot be null
+        bind(null);
+        // @ts-expect-error the option must be one the field can hold
         bind(1);
-        // @ts-expect-error value is required
+        // @ts-expect-error the option is required
         bind();
         // @ts-expect-error id must be a string or a boolean
-        bind("ALPHA", { id: 1 });
+        bind(SampleEnum.ALPHA, { id: 1 });
       };
       expectTypeOf(invalidUsages).toBeFunction();
+    });
+
+    it("types renderRadioGroup by the options", () => {
+      const model = new SampleModel();
+      const form = Form.get(model);
+
+      // Compile-time only: the closure is never invoked
+      const typeOnly = () => (
+        <>
+          {renderRadioGroup({
+            binding: form.bindRadioGroup("enum", { getter: () => model.enum, setter: (v) => (model.enum = v) }),
+            options: Object.values(SampleEnum),
+            renderOption: (option, bind, index) => {
+              expectTypeOf(option).toEqualTypeOf<SampleEnum>();
+              expectTypeOf(index).toEqualTypeOf<number>();
+              expectTypeOf(bind).parameters.toEqualTypeOf<[config?: RadioGroupBinding.ButtonConfig]>();
+              expectTypeOf(bind()).toEqualTypeOf<ReturnType<RadioGroupBinding<SampleEnum>["props"]>>();
+              return <input {...bind({ id: index === 0 })} />;
+            },
+          })}
+          {renderRadioGroup({
+            binding: form.bindRadioGroup("enumOpt", {
+              getter: () => model.enumOpt,
+              setter: (v) => (model.enumOpt = v),
+            }),
+            options: [null, ...Object.values(SampleEnum)],
+            renderOption: (option, bind) => <input {...bind()} aria-label={option ?? "none"} />,
+          })}
+          {renderRadioGroup({
+            // A subset of the options, and a nullable field without a null option
+            binding: form.bindRadioGroup("enumOpt", {
+              getter: () => model.enumOpt,
+              setter: (v) => (model.enumOpt = v),
+            }),
+            options: [SampleEnum.ALPHA, SampleEnum.BRAVO],
+            renderOption: (option, bind) => {
+              expectTypeOf(option).toEqualTypeOf<SampleEnum.ALPHA | SampleEnum.BRAVO>();
+              return <input {...bind()} />;
+            },
+          })}
+          {renderRadioGroup({
+            binding: form.bindRadioGroup("agreed", { getter: () => model.agreed, setter: (v) => (model.agreed = v) }),
+            options: [true, false],
+            renderOption: (option, bind) => <input {...bind()} aria-label={option ? "Yes" : "No"} />,
+          })}
+          {renderRadioGroup({
+            // @ts-expect-error the options must be ones the field can hold
+            binding: form.bindRadioGroup("enum", { getter: () => model.enum, setter: (v) => (model.enum = v) }),
+            options: ["OMEGA"],
+            renderOption: (_option, bind) => <input {...bind()} />,
+          })}
+          {renderRadioGroup({
+            // @ts-expect-error null is not an option of a field that cannot be null
+            binding: form.bindRadioGroup("enum", { getter: () => model.enum, setter: (v) => (model.enum = v) }),
+            options: [null, SampleEnum.ALPHA],
+            renderOption: (_option, bind) => <input {...bind()} />,
+          })}
+          {renderRadioGroup({
+            binding: form.bindRadioGroup("enum", { getter: () => model.enum, setter: (v) => (model.enum = v) }),
+            options: Object.values(SampleEnum),
+            // @ts-expect-error bind takes the overrides of the button, not the option
+            renderOption: (option, bind) => <input {...bind(option)} />,
+          })}
+        </>
+      );
+      expectTypeOf(typeOnly).toBeFunction();
     });
   });
 });
 
-describe("bindRadioButton", () => {
+describe("bindRadioGroup", () => {
   test("works with a required field", async () => {
     const env = setupEnv("enum");
 
@@ -679,11 +864,11 @@ describe("bindRadioButton", () => {
     const model = new SampleModel();
     const Component = observer(({ selected }: { selected: SampleEnum }) => {
       const form = Form.get(model);
-      const bindRadioButton = form.bindRadioButton("enum", { getter: () => selected, setter: () => {} });
+      const bindRadioGroup = form.bindRadioGroup("enum", { getter: () => selected, setter: () => {} });
       return (
         <>
           {Object.values(SampleEnum).map((value) => (
-            <input key={value} aria-label={`prop-${value}`} {...bindRadioButton(value)} />
+            <input key={value} aria-label={`prop-${value}`} {...bindRadioGroup(value)} />
           ))}
         </>
       );
@@ -752,19 +937,20 @@ describe("bindRadioButton", () => {
     const form = Form.get(model);
     const config = { getter: () => model.enum, setter: () => {} };
 
-    const bind1 = form.bindRadioButton("enum", config);
-    const bind2 = form.bindRadioButton("enum", { ...config });
+    const bind1 = form.bindRadioGroup("enum", config);
+    const bind2 = form.bindRadioGroup("enum", { ...config });
     expect(bind2).toBe(bind1);
-    expect(form.bindRadioButton("enum", { ...config, cacheKey: "another" })).not.toBe(bind1);
+    expect(form.bind("enum", RadioGroupBinding, config)).toBe(bind1);
+    expect(form.bindRadioGroup("enum", { ...config, cacheKey: "another" })).not.toBe(bind1);
   });
 
-  test("does not check a null button while the model is null", async () => {
+  test("checks a null button while the model is null", async () => {
     const model = new SampleModel();
     const Component = observer(() => {
       const form = Form.get(model);
-      const bind = form.bindRadioButton("enumOpt", {
+      const bind = form.bindRadioGroup("enumOpt", {
         getter: () => model.enumOpt,
-        setter: (v) => (model.enumOpt = v ? (v as SampleEnum) : null),
+        setter: (v) => (model.enumOpt = v),
       });
       return (
         <>
@@ -781,18 +967,59 @@ describe("bindRadioButton", () => {
 
     expect(model.enumOpt).toBeNull();
     expect(none).toHaveAttribute("value", "");
-    // PINNED(bug): the null button stays unchecked while the model is null (see "does not check the null button when the getter returns null"). Expected: checked. Flip this assertion when fixing.
-    expect(none).not.toBeChecked();
+    expect(none).toBeChecked();
 
     await userEvent.click(bravo);
     expect(model.enumOpt).toBe(SampleEnum.BRAVO);
     expect(bravo).toBeChecked();
+    expect(none).not.toBeChecked();
 
     await userEvent.click(none);
     expect(model.enumOpt).toBeNull();
     expect(bravo).not.toBeChecked();
-    // PINNED(bug): selecting the null button sets the model to null, but the button is rendered unchecked again. Expected: checked. Flip this assertion when fixing.
-    expect(none).not.toBeChecked();
+    expect(none).toBeChecked();
+  });
+
+  test("works with number and boolean options", async () => {
+    const model = new SampleModel();
+    const Component = observer(() => {
+      const form = Form.get(model);
+      const bindRating = form.bindRadioGroup("rating", {
+        getter: () => model.rating,
+        setter: (v) => (model.rating = v),
+      });
+      const bindAgreed = form.bindRadioGroup("agreed", {
+        getter: () => model.agreed,
+        setter: (v) => (model.agreed = v),
+      });
+      return (
+        <>
+          {[1, 2, 3, 4, 5].map((rating) => (
+            <input key={rating} aria-label={`rating-${rating}`} {...bindRating(rating)} />
+          ))}
+          <input aria-label="Yes" {...bindAgreed(true)} />
+          <input aria-label="No" {...bindAgreed(false)} />
+        </>
+      );
+    });
+    render(<Component />);
+
+    expect(screen.getByLabelText("rating-3")).toBeChecked();
+    expect(screen.getByLabelText("rating-3")).toHaveAttribute("value", "3");
+    await userEvent.click(screen.getByLabelText("rating-5"));
+    expect(model.rating).toBe(5);
+    expect(screen.getByLabelText("rating-5")).toBeChecked();
+    expect(screen.getByLabelText("rating-3")).not.toBeChecked();
+
+    expect(screen.getByLabelText("Yes")).not.toBeChecked();
+    expect(screen.getByLabelText("No")).not.toBeChecked();
+    await userEvent.click(screen.getByLabelText("No"));
+    expect(model.agreed).toBe(false);
+    expect(screen.getByLabelText("No")).toBeChecked();
+    await userEvent.click(screen.getByLabelText("Yes"));
+    expect(model.agreed).toBe(true);
+    expect(screen.getByLabelText("Yes")).toBeChecked();
+    expect(screen.getByLabelText("No")).not.toBeChecked();
   });
 
   test("keeps the previous button checked when the setter ignores the value", async () => {
@@ -800,7 +1027,7 @@ describe("bindRadioButton", () => {
     const setter = vi.fn();
     const Component = observer(() => {
       const form = Form.get(model);
-      const bind = form.bindRadioButton("enum", { getter: () => model.enum, setter });
+      const bind = form.bindRadioGroup("enum", { getter: () => model.enum, setter });
       return (
         <>
           {Object.values(SampleEnum).map((value) => (
@@ -837,9 +1064,9 @@ describe("bindRadioButton", () => {
     const model = new SampleModel();
     const Component = observer(() => {
       const form = Form.get(model);
-      const bind = form.bindRadioButton("enum", {
+      const bind = form.bindRadioGroup("enum", {
         getter: () => model.enum,
-        setter: (v) => (model.enum = v as SampleEnum),
+        setter: (v) => (model.enum = v),
       });
       return (
         <>
@@ -930,5 +1157,161 @@ describe("bindRadioButton", () => {
         expect(button).not.toHaveAttribute("aria-errormessage");
       }
     });
+  });
+});
+
+describe("renderRadioGroup", () => {
+  /** A radio group rendered with renderRadioGroup, over the options given as a prop */
+  const GroupComponent: React.FC<{
+    model: SampleModel;
+    options: readonly (SampleEnum | null)[];
+    renderOption?: Parameters<typeof renderRadioGroup<SampleEnum | null>>[0]["renderOption"];
+  }> = observer(({ model, options, renderOption }) => {
+    const form = Form.get(model);
+    return (
+      <div>
+        {renderRadioGroup({
+          binding: form.bindRadioGroup("enumOpt", {
+            getter: () => model.enumOpt,
+            setter: (v) => (model.enumOpt = v),
+          }),
+          options,
+          renderOption:
+            renderOption ??
+            ((option, bind) => (
+              <label>
+                <input {...bind()} /> {option ?? "None"}
+              </label>
+            )),
+        })}
+      </div>
+    );
+  });
+
+  const spyOnConsoleError = () => {
+    const consoleError = vi.spyOn(console, "error").mockImplementation(() => {});
+    onTestFinished(() => {
+      consoleError.mockRestore();
+    });
+    return consoleError;
+  };
+
+  test("renders a radio button for each option, in order", async () => {
+    const model = new SampleModel();
+    render(<GroupComponent model={model} options={[null, ...Object.values(SampleEnum)]} />);
+
+    const buttons = screen.getAllByRole("radio");
+    expect(buttons.map((button) => button.getAttribute("value"))).toEqual(["", "ALPHA", "BRAVO", "ZULU"]);
+    expect(buttons.map((button) => (button as HTMLInputElement).checked)).toEqual([true, false, false, false]);
+    const form = Form.get(model);
+    for (const button of buttons) {
+      expect(button).toHaveAttribute("name", form.getField("enumOpt").id);
+    }
+
+    await userEvent.click(screen.getByLabelText("BRAVO"));
+    expect(model.enumOpt).toBe(SampleEnum.BRAVO);
+    expect(screen.getByLabelText("BRAVO")).toBeChecked();
+    expect(screen.getByLabelText("None")).not.toBeChecked();
+
+    act(() => runInAction(() => (model.enumOpt = null)));
+    expect(screen.getByLabelText("None")).toBeChecked();
+    expect(screen.getByLabelText("BRAVO")).not.toBeChecked();
+  });
+
+  test("passes each option, a function that binds its button, and its index to renderOption", () => {
+    const model = new SampleModel();
+    const form = Form.get(model);
+    const renderOption = vi.fn((_option: SampleEnum | null, _bind: unknown, _index: number) => null);
+    render(<GroupComponent model={model} options={Object.values(SampleEnum)} renderOption={renderOption} />);
+
+    expect(renderOption.mock.calls.map(([option, , index]) => [option, index])).toEqual([
+      [SampleEnum.ALPHA, 0],
+      [SampleEnum.BRAVO, 1],
+      [SampleEnum.ZULU, 2],
+    ]);
+
+    const binding = form.bindRadioGroup("enumOpt", {
+      getter: () => model.enumOpt,
+      setter: (v) => (model.enumOpt = v),
+    });
+    const bindBravo = renderOption.mock.calls[1][1] as (
+      config?: RadioGroupBinding.ButtonConfig
+    ) => ReturnType<RadioGroupBinding<SampleEnum | null>["props"]>;
+    expect(bindBravo()).toStrictEqual(binding(SampleEnum.BRAVO));
+    expect(bindBravo({ id: true, name: "group" })).toStrictEqual(
+      binding(SampleEnum.BRAVO, { id: true, name: "group" })
+    );
+    expect(bindBravo({ id: true }).id).toBe(form.getField("enumOpt").id);
+  });
+
+  test("keys each option by its value, so renderOption needs no key", () => {
+    const consoleError = spyOnConsoleError();
+    const model = new SampleModel();
+
+    // The same elements without renderRadioGroup: React warns about the missing keys
+    const Unkeyed: React.FC<{ model: SampleModel }> = observer(({ model }) => {
+      const bind = Form.get(model).bindRadioGroup("enumOpt", {
+        getter: () => model.enumOpt,
+        setter: (v) => (model.enumOpt = v),
+      });
+      return (
+        <div>
+          {[null, ...Object.values(SampleEnum)].map((option) => (
+            // biome-ignore lint/correctness/useJsxKeyInIterable: the missing key is what this control renders
+            <input {...bind(option)} />
+          ))}
+        </div>
+      );
+    });
+    const unkeyed = render(<Unkeyed model={model} />);
+    expect(consoleError.mock.calls.some((args) => String(args[0]).includes('unique "key"'))).toBe(true);
+    unkeyed.unmount();
+    consoleError.mockClear();
+
+    const { rerender } = render(<GroupComponent model={model} options={[null, ...Object.values(SampleEnum)]} />);
+    expect(consoleError).not.toHaveBeenCalled();
+
+    // Reordered options keep their elements
+    const none = screen.getByLabelText("None");
+    const bravo = screen.getByLabelText("BRAVO");
+    rerender(<GroupComponent model={model} options={[...Object.values(SampleEnum).reverse(), null]} />);
+    expect(screen.getByLabelText("None")).toBe(none);
+    expect(screen.getByLabelText("BRAVO")).toBe(bravo);
+    expect(screen.getAllByRole("radio").map((button) => button.getAttribute("value"))).toEqual([
+      "ZULU",
+      "BRAVO",
+      "ALPHA",
+      "",
+    ]);
+    expect(consoleError).not.toHaveBeenCalled();
+  });
+
+  test("keeps options that share a string form apart", async () => {
+    const consoleError = spyOnConsoleError();
+    const model = new SampleModel();
+    const Component = observer(() => {
+      const form = Form.get(model);
+      return (
+        <div>
+          {renderRadioGroup({
+            binding: form.bindRadioGroup("code", { getter: () => model.code, setter: (v) => (model.code = v) }),
+            options: [1, "1"],
+            renderOption: (option, bind) => <input {...bind()} aria-label={typeof option} />,
+          })}
+        </div>
+      );
+    });
+    render(<Component />);
+    expect(consoleError).not.toHaveBeenCalled();
+
+    const [asNumber, asString] = [screen.getByLabelText("number"), screen.getByLabelText("string")];
+    expect(asNumber).toHaveAttribute("value", "1");
+    expect(asString).toHaveAttribute("value", "1");
+    expect(asNumber).toBeChecked();
+
+    await userEvent.click(asString);
+    expect(model.code).toBe("1");
+    expect(asString).toBeChecked();
+    expect(asNumber).not.toBeChecked();
   });
 });

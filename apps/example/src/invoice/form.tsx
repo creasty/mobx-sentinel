@@ -1,7 +1,7 @@
 import "@mobx-sentinel/react/extension";
 import { KeyPath } from "@mobx-sentinel/core";
 import { Form } from "@mobx-sentinel/form";
-import { useFormHandler } from "@mobx-sentinel/react";
+import { renderRadioGroup, useFormHandler } from "@mobx-sentinel/react";
 import { reaction } from "mobx";
 import { observer } from "mobx-react-lite";
 import { useEffect, useState } from "react";
@@ -203,10 +203,6 @@ const CustomerFields: React.FC<{ model: Invoice }> = observer(({ model }) => {
 
 const TermsFields: React.FC<{ model: Invoice }> = observer(({ model }) => {
   const form = Form.get(model);
-  const bindPaymentTerms = form.bindRadioButton("paymentTerms", {
-    getter: () => model.paymentTerms,
-    setter: (v) => (model.paymentTerms = v as PaymentTerms),
-  });
 
   return (
     <>
@@ -243,11 +239,19 @@ const TermsFields: React.FC<{ model: Invoice }> = observer(({ model }) => {
       <fieldset className="field">
         <label {...form.bindLabel(["paymentTerms"])}>Payment terms</label>
         <div className="choices">
-          {Object.values(PaymentTerms).map((terms, i) => (
-            <label key={terms}>
-              <input {...bindPaymentTerms(terms, { id: i === 0 })} /> {PAYMENT_TERMS[terms].label}
-            </label>
-          ))}
+          {/* The options are typed after the getter: the setter receives a PaymentTerms, with no cast. */}
+          {renderRadioGroup({
+            binding: form.bindRadioGroup("paymentTerms", {
+              getter: () => model.paymentTerms,
+              setter: (v) => (model.paymentTerms = v),
+            }),
+            options: Object.values(PaymentTerms),
+            renderOption: (terms, bind, i) => (
+              <label>
+                <input {...bind({ id: i === 0 })} /> {PAYMENT_TERMS[terms].label}
+              </label>
+            ),
+          })}
         </div>
       </fieldset>
 

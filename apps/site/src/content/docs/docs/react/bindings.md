@@ -1,6 +1,6 @@
 ---
 title: "Standard Bindings"
-description: "Bind inputs, text areas, checkboxes, radio buttons, select boxes, submit buttons and labels to a form."
+description: "Bind inputs, text areas, checkboxes, radio groups, select boxes, submit buttons and labels to a form."
 sidebar:
   order: 2
 ---
@@ -156,9 +156,11 @@ Binds checkbox inputs for boolean values.
 />
 ```
 
-## Radio Buttons: `form.bindRadioButton(fieldName, config)`
+## Radio Group: `form.bindRadioGroup(fieldName, config)`
 
-Binds radio button groups. The binding function returns a function that takes the value for each button.
+Binds a group of radio buttons. The binding function returns a function that takes an option and returns the props of its radio button.
+
+The type of the options is inferred from the getter, and the setter receives the option of the selected button as it is, so no cast is needed.
 
 **Additional accessibility:** Each radio button receives a proper `name` attribute for grouping, and error ARIA attributes are applied to all buttons in the group when errors occur.
 
@@ -171,9 +173,9 @@ enum Role {
 
 const MyForm = observer(({ model }) => {
   const form = Form.get(model);
-  const bindRole = form.bindRadioButton("role", {
-    getter: () => model.role,
-    setter: (v) => (model.role = v as Role),
+  const bindRole = form.bindRadioGroup("role", {
+    getter: () => model.role, // Role
+    setter: (v) => (model.role = v), // v: Role
   });
 
   return (
@@ -191,6 +193,45 @@ const MyForm = observer(({ model }) => {
 // With custom IDs for each button
 <input {...bindRole(Role.ADMIN, { id: "role-admin" })} />
 <input {...bindRole(Role.USER, { id: "role-user" })} />
+```
+
+**Other types of options:** Options can be strings, numbers, booleans or `null`. A button's `value` attribute is the string form of its option, but the setter receives the option itself.
+
+```tsx
+// An optional field with a button for null, which is checked while the model holds null
+const bindPlan = form.bindRadioGroup("plan", {
+  getter: () => model.plan, // Plan | null
+  setter: (v) => (model.plan = v), // v: Plan | null
+});
+<input {...bindPlan(null)} />
+
+// Booleans
+const bindAgreed = form.bindRadioGroup("agreed", {
+  getter: () => model.agreed, // boolean
+  setter: (v) => (model.agreed = v), // v: boolean
+});
+<input {...bindAgreed(true)} />
+<input {...bindAgreed(false)} />
+```
+
+**Rendering the options:** `renderRadioGroup()` renders a radio button for each option. It needs no variable for the binding, and no `key` for each option.
+
+```tsx
+import { renderRadioGroup } from "@mobx-sentinel/react";
+
+{renderRadioGroup({
+  binding: form.bindRadioGroup("role", {
+    getter: () => model.role,
+    setter: (v) => (model.role = v),
+  }),
+  options: Object.values(Role),
+  renderOption: (role, bind, index) => (
+    <label>
+      <input {...bind({ id: index === 0 })} />
+      {role}
+    </label>
+  ),
+})}
 ```
 
 ## Select Box: `form.bindSelectBox(fieldName, config)`
