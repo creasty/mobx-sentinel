@@ -25,6 +25,7 @@ export function load(app) {
   app.on(td.Application.EVENT_BOOTSTRAP_END, () => {
     // Absent when only converting, as check-api.mjs does.
     app.renderer.markdownHooks?.on("page.begin", extendPartials);
+    app.renderer.markdownHooks?.on("page.begin", renderTypesFaithfully);
   });
 }
 
@@ -51,7 +52,7 @@ export function load(app) {
  */
 function extendPartials(context) {
   const { partials } = context;
-  const { member, declaration, body } = partials;
+  const { member, declaration, body } = partialsToExtend(partials, ["member", "declaration", "body"]);
 
   partials.member = (model, options) => {
     // The theme renders only packages, classes, interfaces, enums and type aliases with members this way. A namespace
@@ -107,6 +108,130 @@ function extendPartials(context) {
 
   // A hook's return value is inserted into the page; this one only extends the partials.
   return "";
+}
+
+/**
+ * Render types as TypeScript reads them, and as TypeDoc's HTML theme did, where typedoc-plugin-markdown would print a
+ * different type or leave part of one out:
+ * - A function type keeps `new` and its parameters' types, as in `new (field: FormField) => FormBinding`. The theme
+ *   prints only the parameter names, and nothing else on the page names a callback's parameter types.
+ * - An intersection parenthesizes the unions in it: `object & (A | B)`, not `object & A | B`.
+ * - A named tuple member keeps its name, as in `[keyPath: KeyPath, error: ValidationError]`.
+ * - A type predicate and a template literal type link the types in them, rather than print the whole as code.
+ * - A reference to a type declared inside another names the declarations it is in, as in `InputBinding.Config`, where
+ *   the theme prints `Config`.
+ * - An interface that extends several lists each one, where the theme joins them with dots, as if into one name.
+ * - An interface does not get the `()` the theme puts after the name of anything with call signatures.
+ * - "Defined in" lists every declaration of a merged name, not only the first.
+ *
+ * @param {import("typedoc-plugin-markdown").MarkdownThemeContext} context
+ */
+function renderTypesFaithfully(context) {
+  const { partials, helpers } = context;
+  const { functionType, someType, referenceType, memberTitle, sources } = partialsToExtend(partials, [
+    ...["functionType", "someType", "referenceType", "memberTitle", "sources"],
+    ...["intersectionType", "namedTupleType", "hierarchy"],
+  ]);
+
+  partials.functionType = (model, options) =>
+    model
+      .map((signature) => {
+        const md = functionType([signature], { ...options, forceParameterType: true });
+        return signature.kindOf(td.ReflectionKind.ConstructorSignature) ? `new ${md}` : md;
+      })
+      .join("; ");
+
+  partials.intersectionType = (model) =>
+    model.types
+      .map((type) => {
+        const md = partials.someType(type);
+        return type.needsParenthesis(td.TypeContext.intersectionElement) ? `(${md})` : md;
+      })
+      .join(" & ");
+
+  partials.namedTupleType = (model) =>
+    `\`${model.name}${model.isOptional ? "?" : ""}\`: ${partials.someType(model.element)}`;
+
+  partials.someType = (model, options) => {
+    if (model instanceof td.PredicateType) {
+      const subject = `${model.asserts ? "*asserts* " : ""}\`${model.name}\``;
+      return model.targetType ? `${subject} *is* ${partials.someType(model.targetType)}` : subject;
+    }
+    if (model instanceof td.TemplateLiteralType) {
+      const spans = model.tail.map(([type, text]) => `$\\{${partials.someType(type)}\\}${escapeMarkdown(text)}`);
+      return `\\\`${escapeMarkdown(model.head)}${spans.join("")}\\\``;
+    }
+    return someType(model, options);
+  };
+
+  partials.referenceType = (model) => {
+    const md = referenceType(model);
+    const target = model.reflection;
+    if (!target || target.kindOf(td.ReflectionKind.TypeParameter)) return md;
+    const names = [target.name];
+    for (let parent = target.parent; parent && !parent.kindOf(ModuleOrProject); parent = parent.parent) {
+      names.unshift(parent.name);
+    }
+    // The theme's own rendering starts with the name, linked or not.
+    return md.replace(`\`${target.name}\``, `\`${names.join(".")}\``);
+  };
+
+  partials.hierarchy = (model, options) => {
+    const md = [];
+    const heading = (/** @type {string} */ text) => `${"#".repeat(Math.min(options.headingLevel, 6))} ${text}`;
+    const list = (/** @type {td.SomeType[]} */ types, /** @type {boolean} */ isTarget) =>
+      types.map((type) => `- ${helpers.getHierarchyType(type, { isTarget })}`).join("\n");
+    for (let level = model; level.next; level = level.next) {
+      if (!level.isTarget && level.types.length) {
+        md.push(heading(td.i18n.theme_extends()), list(level.types, false));
+      } else {
+        md.push(heading(td.i18n.theme_extended_by()), list(level.next.types, level.next.isTarget ?? false));
+      }
+      if (!level.next.next) break;
+    }
+    return md.join("\n\n");
+  };
+
+  partials.memberTitle = (model) => {
+    const md = memberTitle(model);
+    return model.kindOf(td.ReflectionKind.Interface) ? md.replace("()", "") : md;
+  };
+
+  partials.sources = (model, options) =>
+    [
+      sources(model, options),
+      ...(model.sources ?? []).slice(1).map((source) => {
+        const location = `${escapeMarkdown(source.fileName)}:${source.line}`;
+        return source.url ? `[${location}](${source.url})` : location;
+      }),
+    ].join(", ");
+
+  return "";
+}
+
+const ModuleOrProject = td.ReflectionKind.Module | td.ReflectionKind.Project;
+
+/**
+ * The partials a hook replaces, failing the build if typedoc-plugin-markdown has renamed one, as the replacement would
+ * otherwise quietly never run.
+ *
+ * @param {import("typedoc-plugin-markdown").MarkdownThemeContext["partials"]} partials
+ * @param {string[]} names
+ * @returns {any}
+ */
+function partialsToExtend(partials, names) {
+  const missing = names.filter((name) => typeof (/** @type {any} */ (partials)[name]) !== "function");
+  if (missing.length) throw new Error(`typedoc-plugin-markdown has no ${missing.join(", ")} partial to extend`);
+  return { ...partials };
+}
+
+/**
+ * Escapes what typedoc-plugin-markdown escapes in text it writes into a page.
+ *
+ * @param {string} text
+ */
+function escapeMarkdown(text) {
+  return text.replace(/[<>{}_`|[\]*]/g, "\\$&");
 }
 
 /**
@@ -245,8 +370,12 @@ function mergeChildrenOf(context, container) {
     if (!survivor.comment && namespace.comment) {
       survivor.comment = namespace.comment;
     }
-    if (namespace.sources?.length) {
-      survivor.sources = [...(survivor.sources ?? []), ...namespace.sources];
+    // A reflection's sources are its symbol's declarations, so the survivor usually lists the namespace's already.
+    const location = (/** @type {td.SourceReference} */ source) => `${source.fullFileName}:${source.line}`;
+    const known = new Set(survivor.sources?.map(location));
+    const added = namespace.sources?.filter((source) => !known.has(location(source))) ?? [];
+    if (added.length) {
+      survivor.sources = [...(survivor.sources ?? []), ...added];
     }
     // TypeDoc's own primitive, also used by its @mergeModuleWith support. It reparents the children and keeps the
     // symbol and reference maps consistent; moving children by hand would leave ReferenceType targets dangling.

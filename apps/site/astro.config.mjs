@@ -11,6 +11,11 @@ const apiSidebarLabel = "API reference";
 
 export default defineConfig({
   site: "https://mobx-sentinel.creasty.com",
+  markdown: {
+    // Typography would turn a rest parameter's `...` into `…` and quote marks in comments into curly ones, which would
+    // then differ from the code they document.
+    smartypants: false,
+  },
   integrations: [
     // Renders ```mermaid blocks in the browser, loading mermaid only on pages that have one, and re-renders them when
     // the theme switches. It must come before starlight, whose code-block rendering would otherwise take them.
