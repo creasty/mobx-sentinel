@@ -39,13 +39,13 @@ export class CustomTextAreaBinding implements FormBinding {
     makeObservable(this);
   }
 
-  @computed
+  // Plain getters, not @computed: `form.bind` replaces `config` on every render, which
+  // nothing can observe, so a computed would keep an earlier render's value.
   get value(): string {
     return this.config.getter();
   }
 
   /** Grow with the content, between the configured bounds. */
-  @computed
   get rows(): number {
     const minRows = this.config.minRows ?? 3;
     const maxRows = this.config.maxRows ?? 10;

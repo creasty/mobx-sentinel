@@ -213,9 +213,9 @@ describe("SelectBoxBinding", () => {
       expect(props1.onFocus).toBe(props2.onFocus);
     });
 
-    it("exposes value and errorMessages as computed values while props is a plain getter", () => {
+    it("exposes errorMessages as a computed value while value and props are plain getters", () => {
       const env = setupModelEnv();
-      expect(isComputedProp(env.binding, "value")).toBe(true);
+      expect(isComputedProp(env.binding, "value")).toBe(false);
       expect(isComputedProp(env.binding, "errorMessages")).toBe(true);
       expect(isComputedProp(env.binding, "props")).toBe(false);
     });
@@ -264,19 +264,18 @@ describe("SelectBoxBinding", () => {
       dispose();
     });
 
-    it("keeps the cached value when the config is replaced while observed", () => {
+    it("reads a replaced getter immediately, even while observed", () => {
       const env = setupModelEnv();
       const seen: unknown[] = [];
       const dispose = autorun(() => {
         seen.push(env.binding.value);
       });
       env.binding.config = { multiple: true, getter: () => ["B"], setter: () => {} };
-      // PINNED(quirk): `config` is not observable, so replacing it (as Form#bind does on every call) does not invalidate the observed computed; the old single value "A" is still returned while `multiple` already reads true. The form docs only say "Configuration can be updated on subsequent calls while maintaining the same binding instance" (same root cause as the config quirks in binding.test.ts and InputBinding.test.tsx). Decide: should `config` be observable (e.g. observable.ref) so that the new getter takes effect immediately (flip to ["B"])?
-      expect(env.binding.props.value).toBe("A");
+      expect(env.binding.props.value).toEqual(["B"]);
       expect(env.binding.props.multiple).toBe(true);
+      // Nothing is notified: `config` is not observable, and Form#bind reads the props right after replacing it
       expect(seen).toEqual(["A"]);
       dispose();
-      expect(env.binding.value).toEqual(["B"]);
     });
   });
 
@@ -680,6 +679,28 @@ describe("bindSelectBox", () => {
 
       act(() => runInAction(() => (env.model.single = SAMPLE_OPTIONS[2])));
       expect(env.select).toHaveDisplayValue(SAMPLE_OPTIONS[2].name);
+    });
+
+    test("reflects a getter that closes over a changed React prop", () => {
+      const model = new SampleModel();
+      const Component = observer(({ code }: { code: string }) => {
+        const form = Form.get(model);
+        return (
+          <select aria-label="prop" {...form.bindSelectBox("single", { getter: () => code, setter: () => {} })}>
+            {SAMPLE_OPTIONS.map((sample) => (
+              <option key={sample.code} value={sample.code}>
+                {sample.name}
+              </option>
+            ))}
+          </select>
+        );
+      });
+      const { rerender } = render(<Component code={SAMPLE_OPTIONS[0].code} />);
+      const select = screen.getByLabelText("prop");
+      expect(select).toHaveDisplayValue(SAMPLE_OPTIONS[0].name);
+
+      rerender(<Component code={SAMPLE_OPTIONS[1].code} />);
+      expect(select).toHaveDisplayValue(SAMPLE_OPTIONS[1].name);
     });
 
     test("marks only the changed field as touched and changed", async () => {

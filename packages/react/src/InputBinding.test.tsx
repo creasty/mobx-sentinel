@@ -342,7 +342,7 @@ describe("InputBinding", () => {
       }
     });
 
-    test("keeps the cached result of the previous getter when the config is replaced while observed", () => {
+    test("reads a replaced getter immediately, even while observed", () => {
       const env = setupBinding((model) => ({ getter: () => `${model.string}:A`, setter: () => {} }));
 
       const seen: unknown[] = [];
@@ -351,11 +351,12 @@ describe("InputBinding", () => {
       });
       try {
         env.binding.config = { getter: () => `${env.model.string}:B`, setter: () => {} };
-        // PINNED(quirk): `value` is a computed that does not track `config`, so replacing the config (Form#bind does it on every call) keeps serving the previous getter's result while observed. Decide: should `config` be observable (e.g. observable.ref) so that a new getter takes effect immediately?
-        expect(env.binding.value).toBe("hello:A");
+        expect(env.binding.value).toBe("hello:B");
+        expect(env.binding.props.value).toBe("hello:B");
+        // Nothing is notified: `config` is not observable, and Form#bind reads the props right after replacing it
         expect(seen).toEqual(["hello:A"]);
 
-        // The new getter is picked up once a dependency of the old one changes
+        // The observer tracks what the old getter read until it runs again
         runInAction(() => {
           env.model.string = "world";
         });
@@ -363,10 +364,6 @@ describe("InputBinding", () => {
       } finally {
         dispose();
       }
-
-      // Once unobserved, the computed is re-evaluated on every access
-      env.binding.config = { getter: () => `${env.model.string}:C`, setter: () => {} };
-      expect(env.binding.value).toBe("world:C");
     });
   });
 
@@ -1694,15 +1691,14 @@ describe("bindInput", () => {
       expect(renders[1].id).toBe(renders[0].id);
     });
 
-    test("keeps displaying the previous getter result when only a non-observable input of the getter changes", () => {
+    test("uses the getter of the latest render when only a non-observable input of the getter changes", () => {
       const model = new SampleModel();
       const { rerender } = render(<SuffixComponent model={model} suffix="A" />);
       const input = screen.getByLabelText("suffix");
       expect(input).toHaveDisplayValue("helloA");
 
       rerender(<SuffixComponent model={model} suffix="B" />);
-      // PINNED(quirk): `value` is a computed that is still observed by the component, and the new getter is not tracked, so a getter closing over a React prop keeps rendering the stale "helloA". Decide: should a replaced config invalidate `value`, or should the docs require getters to read only observables?
-      expect(input).toHaveDisplayValue("helloA");
+      expect(input).toHaveDisplayValue("helloB");
 
       act(() => {
         runInAction(() => {

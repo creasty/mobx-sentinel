@@ -28,7 +28,8 @@ class InputBinding implements FormBinding {
     makeObservable(this);
   }
 
-  @computed
+  // Not @computed: `form.bind()` replaces `config` on every call,
+  // so while observed, a computed would keep an earlier getter's value
   get value() {
     return this.config.getter() ?? ''; // Read the value from the model
   }
@@ -91,7 +92,7 @@ class CheckBoxBinding implements FormBinding {
     makeObservable(this);
   }
 
-  @computed
+  // Not @computed, as it reads `config`
   get checked() {
     return this.config.getter();
   }
@@ -219,6 +220,9 @@ class SubmitButtonBinding implements FormBinding {
 
 Follow these patterns when creating bindings:
 
+1. Reading configuration
+    - Read `this.config` in plain getters, not `@computed` ones, since `form.bind()` replaces it on every call (see [Why Not `@computed`](/docs/form/custom-bindings/#why-not-computed))
+    - Use `@computed` only for members that read nothing but observables, like `field.errors`
 1. Extending event handlers
     - Accept configuration handlers as optional (`onChange?: ...`)
     - Call configuration handlers AFTER internal logic (`this.config.onChange?.(e)`)

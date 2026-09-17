@@ -139,9 +139,9 @@ describe("CheckBoxBinding", () => {
       expect(props1.onFocus).toBe(props2.onFocus);
     });
 
-    it("exposes checked and errorMessages as computed values while props is a plain getter", () => {
+    it("exposes errorMessages as a computed value while checked and props are plain getters", () => {
       const env = setupModelEnv();
-      expect(isComputedProp(env.binding, "checked")).toBe(true);
+      expect(isComputedProp(env.binding, "checked")).toBe(false);
       expect(isComputedProp(env.binding, "errorMessages")).toBe(true);
       expect(isComputedProp(env.binding, "props")).toBe(false);
     });
@@ -189,7 +189,7 @@ describe("CheckBoxBinding", () => {
       expect(env.binding.checked).toBe(true);
     });
 
-    it("keeps the cached value when the config is replaced while observed", () => {
+    it("reads a replaced getter immediately, even while observed", () => {
       const env = setupModelEnv();
       const other = observable.box(true);
       const seen: boolean[] = [];
@@ -197,13 +197,12 @@ describe("CheckBoxBinding", () => {
         seen.push(env.binding.checked);
       });
       env.binding.config = { getter: () => other.get(), setter: () => {} };
-      // PINNED(quirk): `config` is not observable, so replacing it (as Form#bind does on every call) does not invalidate the observed computed and the old getter's cached value (false) is returned; the form docs only say "Configuration can be updated on subsequent calls while maintaining the same binding instance" (same root cause as the config quirks in binding.test.ts and InputBinding.test.tsx). Decide: should `config` be observable (e.g. observable.ref) so that the new getter takes effect immediately (flip to true, and the observer re-runs)?
-      expect(env.binding.checked).toBe(false);
+      expect(env.binding.checked).toBe(true);
+      // Nothing is notified: `config` is not observable, and Form#bind reads the props right after replacing it
       expect(seen).toEqual([false]);
 
-      // Only a change to a dependency of the old getter makes the computed pick up the new getter
+      // The observer tracks what the old getter read until it runs again
       runInAction(() => (env.model.boolean = true));
-      expect(env.binding.checked).toBe(true);
       expect(seen).toEqual([false, true]);
       runInAction(() => other.set(false)); // Now tracked through the new getter
       expect(env.binding.checked).toBe(false);
@@ -705,7 +704,7 @@ describe("bindCheckBox", () => {
     expect(input).not.toBeChecked();
   });
 
-  test("does not reflect a getter that closes over a changed React prop", () => {
+  test("reflects a getter that closes over a changed React prop", () => {
     const model = new SampleModel();
     const Component = observer(({ checked }: { checked: boolean }) => {
       const form = Form.get(model);
@@ -716,8 +715,7 @@ describe("bindCheckBox", () => {
     expect(input).not.toBeChecked();
 
     rerender(<Component checked={true} />);
-    // PINNED(quirk): the observed `checked` computed only tracks observables, so a getter closing over a changed (non-observable) prop keeps rendering the stale value. The config JSDoc marks the getter as "@computed". Decide: should non-observable getters be supported (e.g. by making `config` observable), or documented as unsupported?
-    expect(input).not.toBeChecked();
+    expect(input).toBeChecked();
   });
 
   test("keeps the checkbox unchecked when the setter ignores the value", async () => {
@@ -934,12 +932,12 @@ describe("bindCheckBox", () => {
       const first = screen.getByLabelText("item-0");
       const second = screen.getByLabelText("item-1");
 
+      // Each call reads its own getter as it returns the props
       expect(first).toBeChecked();
-      // PINNED(quirk): both bind calls share one binding, so within one render the observed `checked` computed returns the first getter's value for the second element as well. Decide: should rebinding the same key with a different config in one render be detected (warn/throw), or is cacheKey the documented remedy?
-      expect(second).toBeChecked();
+      expect(second).not.toBeChecked();
 
       await userEvent.click(first);
-      // PINNED(quirk): the shared binding's onChange uses the latest config, so clicking the first element invokes the second element's setter. Decide: same as above.
+      // PINNED(quirk): both bind calls share one binding, whose onChange uses the latest config, so clicking the first element invokes the second element's setter. Decide: should rebinding the same key with a different config in one render be detected (warn/throw), or is cacheKey the documented remedy?
       expect(setters[0]).not.toBeCalled();
       expect(setters[1]).toBeCalledWith(false);
     });

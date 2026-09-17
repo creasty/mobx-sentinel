@@ -203,9 +203,9 @@ describe("RadioButtonBinding", () => {
       expect(props1.onFocus).toBe(props2.onFocus);
     });
 
-    it("exposes value and errorMessages as computed values", () => {
+    it("exposes errorMessages as a computed value while value is a plain getter", () => {
       const env = setupModelEnv();
-      expect(isComputedProp(env.binding, "value")).toBe(true);
+      expect(isComputedProp(env.binding, "value")).toBe(false);
       expect(isComputedProp(env.binding, "errorMessages")).toBe(true);
     });
 
@@ -277,7 +277,7 @@ describe("RadioButtonBinding", () => {
       dispose();
     });
 
-    it("keeps the cached value when the config is replaced while observed", () => {
+    it("reads a replaced getter immediately, even while observed", () => {
       const env = setupModelEnv();
       const other = observable.box("other");
       const seen: unknown[] = [];
@@ -285,11 +285,11 @@ describe("RadioButtonBinding", () => {
         seen.push(env.binding.value);
       });
       env.binding.config = { getter: () => other.get(), setter: () => {} };
-      // PINNED(quirk): `config` is not observable, so replacing it (as Form#bind does on every call) does not invalidate the observed computed and the old getter's cached value ("") is returned until a dependency of the old getter changes; the form docs only say "Configuration can be updated on subsequent calls while maintaining the same binding instance" (same root cause as the config quirks in binding.test.ts and InputBinding.test.tsx). Decide: should `config` be observable (e.g. observable.ref) so that the new getter takes effect immediately (flip to "other")?
-      expect(env.binding.value).toBe("");
+      expect(env.binding.value).toBe("other");
+      expect(env.binding.props("other").checked).toBe(true);
+      // Nothing is notified: `config` is not observable, and Form#bind reads the props right after replacing it
       expect(seen).toEqual([""]);
       dispose();
-      expect(env.binding.value).toBe("other");
     });
   });
 
@@ -673,6 +673,27 @@ describe("bindRadioButton", () => {
     act(() => runInAction(() => (env.model.enum = SampleEnum.ZULU)));
     expect(env.alpha).not.toBeChecked();
     expect(env.zulu).toBeChecked();
+  });
+
+  test("reflects a getter that closes over a changed React prop", () => {
+    const model = new SampleModel();
+    const Component = observer(({ selected }: { selected: SampleEnum }) => {
+      const form = Form.get(model);
+      const bindRadioButton = form.bindRadioButton("enum", { getter: () => selected, setter: () => {} });
+      return (
+        <>
+          {Object.values(SampleEnum).map((value) => (
+            <input key={value} aria-label={`prop-${value}`} {...bindRadioButton(value)} />
+          ))}
+        </>
+      );
+    });
+    const { rerender } = render(<Component selected={SampleEnum.ALPHA} />);
+    expect(screen.getByLabelText(`prop-${SampleEnum.ALPHA}`)).toBeChecked();
+
+    rerender(<Component selected={SampleEnum.BRAVO} />);
+    expect(screen.getByLabelText(`prop-${SampleEnum.ALPHA}`)).not.toBeChecked();
+    expect(screen.getByLabelText(`prop-${SampleEnum.BRAVO}`)).toBeChecked();
   });
 
   test("marks only the clicked field as touched and changed", async () => {
