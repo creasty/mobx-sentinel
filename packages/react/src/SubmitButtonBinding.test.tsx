@@ -2,7 +2,7 @@ import React from "react";
 import "@testing-library/jest-dom/vitest";
 import { act, fireEvent, render, screen } from "@testing-library/react";
 import { userEvent } from "@testing-library/user-event";
-import { autorun, makeObservable, observable, reaction, runInAction } from "mobx";
+import { autorun, configure, makeObservable, observable, reaction, runInAction } from "mobx";
 import { Form } from "@mobx-sentinel/form";
 import "./extension";
 import { observer } from "mobx-react-lite";
@@ -26,6 +26,19 @@ const SampleComponent: React.FC<{ model: SampleModel }> = observer(({ model }) =
     </>
   );
 });
+
+/**
+ * Turn off MobX's safe descriptors until the test finishes
+ *
+ * An action declared as `@action name = () => {}` is a read-only property, which `vi.spyOn()` can only replace on an
+ * object created while safe descriptors are off. MobX advises against turning them off for all tests.
+ */
+function disableSafeDescriptors() {
+  configure({ safeDescriptors: false });
+  onTestFinished(() => {
+    configure({ safeDescriptors: true });
+  });
+}
 
 function createDeferred<T>() {
   let resolve: (value: T) => void = () => void 0;
@@ -422,6 +435,7 @@ describe("SubmitButtonBinding", () => {
     });
 
     it("reports errors even when the form cannot be submitted, without submitting", () => {
+      disableSafeDescriptors();
       const env = setupEnv();
       const reportErrorSpy = vi.spyOn(env.form, "reportError");
       const submitSpy = vi.spyOn(env.form, "submit");
@@ -639,6 +653,7 @@ describe("bindSubmitButton", () => {
   });
 
   test("Hovering the button triggers form.reportError()", async () => {
+    disableSafeDescriptors();
     const env = setupEnv();
     const spy = vi.spyOn(env.form, "reportError");
 
@@ -758,6 +773,7 @@ describe("bindSubmitButton", () => {
   });
 
   test("hovering a child element of the button reports errors again", async () => {
+    disableSafeDescriptors();
     const form = Form.get(new SampleModel());
     form.markAsDirty();
     const onMouseOver = vi.fn();

@@ -266,14 +266,14 @@ export class Form<T> {
 
   /** Report error states on all fields and sub-forms */
   @action
-  reportError() {
+  reportError = () => {
     for (const field of this.#fields.values()) {
       field.reportError();
     }
     for (const entry of this.#nestedFetcher) {
       entry.data.reportError();
     }
-  }
+  };
 
   /**
    * Reset the form's state
@@ -285,7 +285,7 @@ export class Form<T> {
    * - Does not reset the validator
    */
   @action
-  reset() {
+  reset = () => {
     // NOTE: DO NOT reset the validator here.
     this.watcher.reset();
     for (const field of this.#fields.values()) {
@@ -294,16 +294,17 @@ export class Form<T> {
     for (const entry of this.#nestedFetcher) {
       entry.data.reset();
     }
-  }
+  };
 
   /**
    * Mark the form as dirty
    *
    * @remarks Alias for {@link Watcher.assumeChanged}.
    */
-  markAsDirty() {
+  @action
+  markAsDirty = () => {
     this.watcher.assumeChanged();
-  }
+  };
 
   /**
    * Submit the form.

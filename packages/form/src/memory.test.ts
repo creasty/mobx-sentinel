@@ -24,6 +24,16 @@ async function isCollected(ref: WeakRef<object>) {
   return false;
 }
 
+/**
+ * Pass the object behind the reference to `fn`
+ *
+ * Use it to call a method of the object without the test holding onto it. After calling a bound action, such as
+ * `form.reset()`, the test itself can keep the action, and so the instance it is bound to, alive while it awaits.
+ */
+function withTarget<T extends object>(ref: WeakRef<T>, fn: (target: T) => void) {
+  fn(ref.deref()!);
+}
+
 class ChildModel {
   @observable value = "";
 
@@ -150,11 +160,11 @@ describe("Form", () => {
     expect(await isCollected(keyedWithReportedField)).toBe(true);
     // The timer of the auto-finalization references the field, and so the form, until it fires
     expect(await isCollected(awaitingFinalization)).toBe(false);
-    awaitingFinalization.deref()!.reset(); // Cancel the timer
+    withTarget(awaitingFinalization, (form) => form.reset()); // Cancel the timer
     expect(await isCollected(awaitingFinalization)).toBe(true);
     // A field observes the validator only while its report waits for the validation to settle
     expect(await isCollected(awaitingValidation)).toBe(false);
-    awaitingValidation.deref()!.validator.reset(); // Cancel the validation, which settles the report
+    withTarget(awaitingValidation, (form) => form.validator.reset()); // Cancel the validation, which settles the report
     expect(await isCollected(awaitingValidation)).toBe(true);
     expect(model.field).toBe("");
   });

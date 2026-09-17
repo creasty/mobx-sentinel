@@ -66,3 +66,47 @@ export class Conditional {
     }
   }
 }
+
+export class CleanArrowAction {
+  @observable value = 0;
+
+  constructor() {
+    makeObservable(this);
+  }
+
+  @action
+  reset = () => {
+    this.value = 0;
+  };
+
+  // Parameters leave the binding to the author, either way
+  @action
+  add(amount: number) {
+    this.value += amount;
+  }
+
+  @action
+  static create() {
+    return new CleanArrowAction();
+  }
+}
+
+export class UnboundParameterless {
+  @observable value = 0;
+
+  constructor() {
+    makeObservable(this);
+  }
+
+  // biome-ignore lint/plugin/mobxUnboundParameterlessAction: fixture
+  @action
+  reset() {
+    this.value = 0;
+  }
+
+  // biome-ignore lint/plugin/mobxUnboundParameterlessAction: fixture
+  @action("clear")
+  clear() {
+    this.value = 0;
+  }
+}

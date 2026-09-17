@@ -619,12 +619,14 @@ describe("Watcher", () => {
   });
 
   describe("method binding", () => {
-    it("reset() and assumeChanged() throw when called without the watcher as `this`", () => {
+    it("reset() and assumeChanged() work when called without the watcher as `this`", () => {
       const watcher = Watcher.get({});
       const { reset, assumeChanged } = watcher;
-      // PINNED(quirk): the methods are decorated with @action, not @action.bound, so passing them as callbacks (e.g. `onClick={watcher.reset}`) throws a TypeError. Decide: should reset() and assumeChanged() be bound?
-      expect(() => reset()).toThrowError(TypeError);
-      expect(() => assumeChanged()).toThrowError(TypeError);
+      // Bound, so that they can be passed as callbacks as they are (e.g. `onClick={watcher.reset}`)
+      assumeChanged();
+      expect(watcher.changed).toBe(true);
+      reset();
+      expect(watcher.changed).toBe(false);
     });
   });
 

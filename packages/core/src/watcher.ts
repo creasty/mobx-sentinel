@@ -238,7 +238,7 @@ export class Watcher {
    * - Resets all nested watchers
    */
   @action
-  reset() {
+  reset = () => {
     this.#changedKeys.clear();
     this.#changedTick.set(0n);
     this.#assumeChanged.set(false);
@@ -246,7 +246,7 @@ export class Watcher {
     for (const entry of this.#nestedFetcher) {
       entry.data.reset();
     }
-  }
+  };
 
   /**
    * Assume some changes have been made
@@ -254,10 +254,10 @@ export class Watcher {
    * It only changes {@link changed} to true and does not increment {@link changedTick}.
    */
   @action
-  assumeChanged() {
+  assumeChanged = () => {
     if (!Watcher.isWatching) return;
     this.#assumeChanged.set(true);
-  }
+  };
 
   /** Mark a key as changed */
   #didChange(key: KeyPath) {
