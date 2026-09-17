@@ -1,0 +1,23 @@
+language js
+
+// A MobX action that takes no parameters must keep `this`: `@action name = () => {}`, not a method.
+//
+// TypeScript lets such an action go anywhere a callback goes, as it is (`onClick={form.reset}`), and a method then
+// throws, having lost `this`. A method with parameters is left to its author: a callback's own arguments, like an
+// event, would land in its parameters, so TypeScript rejects most of those uses and the method is called from an
+// arrow function anyway.
+//
+// Decorators are recognized by name alone, as in the other plugins here, and static methods are skipped, since MobX
+// only annotates instances.
+//
+// The patterns name nodes of Biome's syntax tree, which can change between releases;
+// script/biome/fixtures/mobx.ts pins the expected behavior (`pnpm lint:plugins`).
+
+JsMethodClassMember(modifiers = $modifiers, parameters = JsParameters(items = [])) where {
+  not $modifiers <: some JsStaticModifier(),
+  $modifiers <: some JsDecorator(expression = or { `action`, `action($...)` }) as $decorator,
+  register_diagnostic(
+    span = $decorator,
+    message = "An action without parameters must be an arrow function, `@action name = () => {}`, so that it keeps `this` when passed as a callback."
+  )
+}

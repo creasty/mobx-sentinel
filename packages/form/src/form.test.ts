@@ -1,5 +1,5 @@
 import { KeyPath, makeValidatable, nested, Validator, Watcher } from "@mobx-sentinel/core";
-import { autorun, makeObservable, observable, runInAction } from "mobx";
+import { autorun, configure as configureMobx, makeObservable, observable, runInAction } from "mobx";
 import { Form, debugForm } from "./form";
 import { FormField } from "./field";
 import {
@@ -11,6 +11,19 @@ import {
   SampleMultiFieldBinding,
 } from "./binding.test";
 import { defaultConfig, FormConfig } from "./config";
+
+/**
+ * Turn off MobX's safe descriptors until the test finishes
+ *
+ * An action declared as `@action name = () => {}` is a read-only property, which `vi.spyOn()` can only replace on an
+ * object created while safe descriptors are off. MobX advises against turning them off for all tests.
+ */
+function disableSafeDescriptors() {
+  configureMobx({ safeDescriptors: false });
+  onTestFinished(() => {
+    configureMobx({ safeDescriptors: true });
+  });
+}
 
 describe("Form", () => {
   class EmptyModel {}
@@ -354,6 +367,7 @@ describe("Form", () => {
     });
 
     it("resets the watcher", () => {
+      disableSafeDescriptors();
       const model = new SampleModel();
       const form = Form.get(model);
       const spy = vi.spyOn(form.watcher, "reset");
@@ -363,6 +377,7 @@ describe("Form", () => {
     });
 
     it("does not reset the validator", () => {
+      disableSafeDescriptors();
       const model = new SampleModel();
       const form = Form.get(model);
       const spy = vi.spyOn(form.validator, "reset");
@@ -372,6 +387,7 @@ describe("Form", () => {
     });
 
     it("resets fields", () => {
+      disableSafeDescriptors();
       const model = new SampleModel();
       const form = Form.get(model);
       const field = form.getField("field");
@@ -383,6 +399,7 @@ describe("Form", () => {
     });
 
     it("resets sub-forms", () => {
+      disableSafeDescriptors();
       const model = new NestedModel();
       const form = Form.get(model);
 
@@ -397,6 +414,7 @@ describe("Form", () => {
 
   describe("#reportError", () => {
     it("triggers reportError on all fields", () => {
+      disableSafeDescriptors();
       const model = new SampleModel();
       const form = Form.get(model);
       const field = form.getField("field");
@@ -407,6 +425,7 @@ describe("Form", () => {
     });
 
     it("recursively triggers reportError on sub-forms", () => {
+      disableSafeDescriptors();
       const model = new NestedModel();
       const form = Form.get(model);
       const sampleForm = Form.get(model.sample);
@@ -1158,6 +1177,7 @@ describe("Form (details)", () => {
     });
 
     it("detaches a disposed sub-form from its parent while leaving it usable", () => {
+      disableSafeDescriptors();
       const model = new CollectionModel();
       const form = Form.get(model);
       const oldSampleForm = Form.get(model.sample);
@@ -1393,6 +1413,7 @@ describe("Form (details)", () => {
       };
 
       it("lists the form itself as a sub-form and recurses into it without bound on reset and reportError", () => {
+        disableSafeDescriptors();
         const node = new Node();
         const form = Form.get(node);
         runInAction(() => {
@@ -2401,6 +2422,7 @@ describe("Form (details)", () => {
       );
 
       it("does not call didSubmit for the cancelled submission, so a didSubmit handler reports no error mid-flight", async () => {
+        disableSafeDescriptors();
         const { form, calls, didSubmit } = setupEnv();
         const reportError = vi.spyOn(form, "reportError");
         // Like apps/example: report errors from didSubmit when a submission fails
@@ -2552,20 +2574,10 @@ describe("Form (details)", () => {
   });
 
   describe("Detached methods", () => {
-    it("allows addHandler, bind, and configure to be called detached, but not the other methods", async () => {
+    it("allows addHandler, bind, configure, and the methods without parameters to be called detached", async () => {
       const form = Form.get(new SampleModel());
-      const {
-        addHandler,
-        bind,
-        configure,
-        submit,
-        reset,
-        reportError,
-        markAsDirty,
-        getField,
-        getErrors,
-        getAllErrors,
-      } = form;
+      const field = form.getField("field");
+      const { addHandler, bind, configure, reset, reportError, markAsDirty } = form;
 
       const didSubmit = vi.fn();
       addHandler("didSubmit", didSubmit);
@@ -2576,11 +2588,22 @@ describe("Form (details)", () => {
       await expect(form.submit()).resolves.toBe(true);
       expect(didSubmit.mock.calls).toEqual([[true]]);
 
-      // PINNED(quirk): addHandler, bind, and configure are bound, but the other public methods rely on `this` and throw when detached (e.g. `onClick={form.submit}`). Decide: should the public methods be bound consistently?
+      // Bound, so that they can be passed as callbacks as they are (e.g. `onClick={form.reset}`)
+      markAsDirty();
+      expect(form.isDirty).toBe(true);
+      reportError();
+      expect(field.isErrorReported).toBe(false);
+      reset();
+      expect(form.isDirty).toBe(false);
+      expect(field.isErrorReported).toBeUndefined();
+    });
+
+    it("does not allow the methods with parameters to be called detached", async () => {
+      const form = Form.get(new SampleModel());
+      const { submit, getField, getErrors, getAllErrors } = form;
+
+      // Not bound, as a callback's own arguments, such as an event, would land in their parameters
       await expect(submit()).rejects.toThrow(TypeError);
-      expect(() => reset()).toThrow(TypeError);
-      expect(() => reportError()).toThrow(TypeError);
-      expect(() => markAsDirty()).toThrow(TypeError);
       expect(() => getField("field")).toThrow(TypeError);
       expect(() => getErrors("field")).toThrow(TypeError);
       expect(() => getAllErrors()).toThrow(TypeError);

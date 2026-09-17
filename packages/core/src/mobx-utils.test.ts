@@ -644,6 +644,7 @@ describe("getMobxObservableAnnotations", () => {
     }
 
     // Actions are not included in the result
+    // biome-ignore lint/plugin/mobxUnboundParameterlessAction: an unbound action is excluded as well as a bound one
     @action action1() {}
     @action.bound action2() {}
   }

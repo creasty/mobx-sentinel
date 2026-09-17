@@ -381,7 +381,7 @@ export class Validator<T> {
    * Running async validations are aborted, and their results are discarded.
    */
   @action
-  reset() {
+  reset = () => {
     this.#reactionTimerIds.clear();
     for (const reset of this.#reactionResets.values()) {
       reset();
@@ -392,7 +392,7 @@ export class Validator<T> {
     }
 
     this.#errors.clear();
-  }
+  };
 
   /**
    * Update the errors immediately

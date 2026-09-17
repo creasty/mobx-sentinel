@@ -143,3 +143,9 @@ form.reset();
 // Note: reset() does NOT clear validation errors
 // Errors are managed by the Validator and remain until revalidation
 ```
+
+`markAsDirty()`, `reset()` and `reportError()` take no parameters and are bound to the form, so they can be passed as event handlers as they are:
+
+```tsx
+<button onClick={form.reset}>Reset</button>
+```

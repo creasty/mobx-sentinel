@@ -109,6 +109,19 @@ function recordReactions<T>(expr: () => T) {
   return { values, dispose };
 }
 
+/**
+ * Turn off MobX's safe descriptors until the test finishes
+ *
+ * An action declared as `@action name = () => {}` is a read-only property, which `vi.spyOn()` can only replace on an
+ * object created while safe descriptors are off. MobX advises against turning them off for all tests.
+ */
+function disableSafeDescriptors() {
+  configureMobx({ safeDescriptors: false });
+  onTestFinished(() => {
+    configureMobx({ safeDescriptors: true });
+  });
+}
+
 describe("FormField", () => {
   beforeEach(() => {
     vi.useFakeTimers();
@@ -813,6 +826,7 @@ describe("FormField", () => {
 
     describe("intermediate", () => {
       it("marks the field as 'intermediately' changed and calls finalizeChangeIfNeeded() after a delay", async () => {
+        disableSafeDescriptors();
         const { field, waitForDelay, updateErrors } = setupEnv();
         const spy = vi.spyOn(field, "finalizeChangeIfNeeded");
 
@@ -831,6 +845,7 @@ describe("FormField", () => {
       });
 
       it("prolongs the delay when changes are made again", async () => {
+        disableSafeDescriptors();
         const { field, waitForDelay, updateErrors } = setupEnv();
         const spy = vi.spyOn(field, "finalizeChangeIfNeeded");
 
@@ -849,6 +864,7 @@ describe("FormField", () => {
       });
 
       it("cancels the delay with markAsChanged(final)", async () => {
+        disableSafeDescriptors();
         const { field, waitForDelay, updateErrors } = setupEnv();
         const spy = vi.spyOn(field, "finalizeChangeIfNeeded");
 
@@ -966,6 +982,7 @@ describe("FormField", () => {
     });
 
     it("cancels the delay and finalizes changes right away", async () => {
+      disableSafeDescriptors();
       const { field, waitForDelay } = setupEnv();
       const spy = vi.spyOn(field, "finalizeChangeIfNeeded");
 
@@ -977,6 +994,7 @@ describe("FormField", () => {
     });
 
     it("cancels the delayed validation when the field is reset", async () => {
+      disableSafeDescriptors();
       const { field, waitForDelay } = setupEnv();
       const spy = vi.spyOn(field, "finalizeChangeIfNeeded");
 
@@ -1187,6 +1205,7 @@ describe("FormField", () => {
     });
 
     it("is reset by Form#reset, which also cancels the pending auto-finalization", () => {
+      disableSafeDescriptors();
       const form = Form.get(new SampleModel());
       form.validator.updateErrors(Symbol(), (b) => b.invalidate("test", "error"));
       const field = form.getField("test");
@@ -1351,8 +1370,36 @@ describe("FormField", () => {
     });
   });
 
+  describe("Detached methods", () => {
+    it("allows the methods without parameters to be called detached", () => {
+      const { field, updateErrors } = setupEnv();
+      updateErrors((b) => b.invalidate("test", "error"));
+      const { markAsTouched, finalizeChangeIfNeeded, reportError, reset } = field;
+
+      // Bound, so that they can be passed as callbacks as they are (e.g. `onBlur={field.finalizeChangeIfNeeded}`)
+      markAsTouched();
+      expect(field.isTouched).toBe(true);
+      field.markAsChanged("intermediate");
+      finalizeChangeIfNeeded();
+      expect(field.isIntermediate).toBe(false);
+      reset();
+      expect(field.isErrorReported).toBe(undefined);
+      reportError();
+      expect(field.isErrorReported).toBe(true);
+    });
+
+    it("does not allow markAsChanged to be called detached", () => {
+      const { field } = setupEnv();
+      const { markAsChanged } = field;
+
+      // Not bound, as a callback's own arguments, such as an event, would land in its parameter
+      expect(() => markAsChanged()).toThrow(TypeError);
+    });
+  });
+
   describe("Misuse", () => {
     it("accepts an unknown change type at runtime as a changed, unreported, non-intermediate state", () => {
+      disableSafeDescriptors();
       const { field, updateErrors } = setupEnv();
       updateErrors((b) => b.invalidate("test", "error"));
       const spy = vi.spyOn(field, "finalizeChangeIfNeeded");
@@ -1371,6 +1418,7 @@ describe("FormField", () => {
     });
 
     it("cancels a pending auto-finalization in finalizeChangeIfNeeded even when the field is no longer intermediate", () => {
+      disableSafeDescriptors();
       const { field } = setupEnv();
       const spy = vi.spyOn(field, "finalizeChangeIfNeeded");
 

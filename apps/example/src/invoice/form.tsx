@@ -519,7 +519,7 @@ const FormActions: React.FC<{ model: Invoice }> = observer(({ model }) => {
         <button className="outline secondary" onClick={model.restoreDraft}>
           Restore draft
         </button>
-        <button className="outline secondary" onClick={() => form.reset()}>
+        <button className="outline secondary" onClick={form.reset}>
           Reset form state
         </button>
         {/* Disabled until the form is dirty, valid and idle. Hovering it reveals why. */}

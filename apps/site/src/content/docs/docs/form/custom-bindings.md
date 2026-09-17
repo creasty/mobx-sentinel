@@ -38,6 +38,8 @@ field.reportError(); // show errors to user
 field.reset(); // clear all state
 ```
 
+The methods that take no parameters are bound to the field, so they can be passed as event handlers as they are, as in `onFocus={field.markAsTouched}`. `markAsChanged()` is not: an event handler would receive the event in place of the change type.
+
 ### Intermediate vs Final Changes
 
 Fields distinguish between "intermediate" changes (typing in progress) and "final" changes (committed), so that a field's errors are first reported once its input is complete, not on the first keystroke. See [Smart Error Reporting](/docs/form/error-reporting/) for the behavior users experience.

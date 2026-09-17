@@ -1175,6 +1175,18 @@ describe("Validator", () => {
       expect(env.validator.invalidKeyPathCount).toBe(0);
     });
 
+    it("works when called without the validator as `this`", () => {
+      const env = setupEnv();
+      env.validator.updateErrors(Symbol(), (builder) => {
+        builder.invalidate("field1", "invalid1");
+      });
+
+      // Bound, so that it can be passed as a callback as it is (e.g. `onClick={validator.reset}`)
+      const { reset } = env.validator;
+      reset();
+      expect(env.validator.invalidKeyPathCount).toBe(0);
+    });
+
     it("cancels pending sync validations", async () => {
       const env = setupEnv({ syncHandler: true });
 

@@ -76,6 +76,10 @@
       }
     }
   },
-  // Ports of eslint-plugin-mobx's rules; see script/biome.
-  "plugins": ["./script/biome/mobxMissingMakeObservable.grit", "./script/biome/mobxUnconditionalMakeObservable.grit"]
+  // Ports of eslint-plugin-mobx's rules, and one of our own; see script/biome.
+  "plugins": [
+    "./script/biome/mobxMissingMakeObservable.grit",
+    "./script/biome/mobxUnconditionalMakeObservable.grit",
+    "./script/biome/mobxUnboundParameterlessAction.grit"
+  ]
 }

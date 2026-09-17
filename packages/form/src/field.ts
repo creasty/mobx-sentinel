@@ -147,12 +147,12 @@ export class FormField {
    * - Cancels any pending auto-finalization
    */
   @action
-  reset() {
+  reset = () => {
     this.#changeType.set(null);
     this.#isTouched.set(false);
     this.#setReported(false);
     this.#cancelFinalizeChangeWithDelay();
-  }
+  };
 
   /**
    * Mark the field as touched
@@ -160,9 +160,9 @@ export class FormField {
    * It's usually triggered by `onFocus`.
    */
   @action
-  markAsTouched() {
+  markAsTouched = () => {
     this.#isTouched.set(true);
-  }
+  };
 
   /**
    * Mark the field as changed
@@ -198,17 +198,18 @@ export class FormField {
    * It will wait until the validation is up-to-date before reporting the errors.
    */
   @action
-  reportError() {
+  reportError = () => {
     this.#setReported(true);
-  }
+  };
 
   /** Finalize the intermediate change if needed (usually triggered by onBlur) */
-  finalizeChangeIfNeeded() {
+  @action
+  finalizeChangeIfNeeded = () => {
     this.#cancelFinalizeChangeWithDelay();
     if (this.isIntermediate) {
       this.markAsChanged("final");
     }
-  }
+  };
 
   /**
    * Set whether the errors are reported, and reflect it in {@link isErrorReported} once the validation is up-to-date.

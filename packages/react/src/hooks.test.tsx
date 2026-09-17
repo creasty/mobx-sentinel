@@ -2,7 +2,7 @@ import React, { StrictMode, Suspense, startTransition, useCallback, useEffect, u
 import "@testing-library/jest-dom/vitest";
 import { act, render, screen } from "@testing-library/react";
 import { userEvent } from "@testing-library/user-event";
-import { makeObservable, observable } from "mobx";
+import { configure, makeObservable, observable } from "mobx";
 import { Form } from "@mobx-sentinel/form";
 import "./extension";
 import { observer } from "mobx-react-lite";
@@ -77,6 +77,19 @@ const setupEnv = () => {
 /** Create a fresh form */
 const newForm = () => Form.get(new SampleModel());
 
+/**
+ * Turn off MobX's safe descriptors until the test finishes
+ *
+ * An action declared as `@action name = () => {}` is a read-only property, which `vi.spyOn()` can only replace on an
+ * object created while safe descriptors are off. MobX advises against turning them off for all tests.
+ */
+function disableSafeDescriptors() {
+  configure({ safeDescriptors: false });
+  onTestFinished(() => {
+    configure({ safeDescriptors: true });
+  });
+}
+
 /** Submit the form regardless of canSubmit, flushing React updates */
 const submit = async (form: Form<any>) => {
   let result: boolean | undefined;
@@ -111,6 +124,7 @@ const Handler: React.FC<HandlerProps> = ({ form, event, handler }) => {
 
 describe("useFormAutoReset", () => {
   test("auto resets the form when mounted/unmounted", async () => {
+    disableSafeDescriptors();
     const env = setupEnv();
     const spy = vi.spyOn(env.form, "reset");
 
@@ -123,6 +137,7 @@ describe("useFormAutoReset", () => {
   });
 
   test("does not reset again on re-render with the same form", () => {
+    disableSafeDescriptors();
     const form = newForm();
     const spy = vi.spyOn(form, "reset");
 
@@ -168,6 +183,7 @@ describe("useFormAutoReset", () => {
   });
 
   test("resets the previous form before the next one when the form changes", () => {
+    disableSafeDescriptors();
     const formA = newForm();
     const formB = newForm();
     const calls: string[] = [];
@@ -185,6 +201,7 @@ describe("useFormAutoReset", () => {
   });
 
   test("resets three times on mount under StrictMode", () => {
+    disableSafeDescriptors();
     const form = newForm();
     const spy = vi.spyOn(form, "reset");
 
@@ -254,6 +271,7 @@ describe("useFormAutoReset", () => {
   });
 
   test("resets on every mount and unmount across remounts", () => {
+    disableSafeDescriptors();
     const form = newForm();
     const spy = vi.spyOn(form, "reset");
 

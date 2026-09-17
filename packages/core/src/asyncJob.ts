@@ -84,14 +84,14 @@ export class AsyncJob<Payload> {
    * - Returns to `idle` state
    */
   @action
-  reset() {
+  reset = () => {
     this.#resetJobTimer();
     this.#abortCtrl?.abort();
     this.#abortCtrl = null;
     this.#nextJobRequested = false;
     this.#state.set("idle");
     this.#payload = nullPayload;
-  }
+  };
 
   #transitionToScheduled() {
     runInAction(() => {
