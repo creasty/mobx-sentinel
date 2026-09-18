@@ -632,28 +632,22 @@ describe("Form#bindLabel", () => {
 });
 
 describe("types", () => {
-  test("Form is augmented with StandardExtensions", () => {
+  test("Form is augmented with a method for each standard binding", () => {
     const { form } = setupEnv();
 
-    type Ext = extensionModule.StandardExtensions<SampleModel>;
-    expectTypeOf(form.bindInput).toEqualTypeOf<Ext["bindInput"]>();
-    expectTypeOf(form.bindTextArea).toEqualTypeOf<Ext["bindTextArea"]>();
-    expectTypeOf(form.bindSelectBox).toEqualTypeOf<Ext["bindSelectBox"]>();
-    expectTypeOf(form.bindCheckBox).toEqualTypeOf<Ext["bindCheckBox"]>();
-    expectTypeOf(form.bindRadioGroup).toEqualTypeOf<Ext["bindRadioGroup"]>();
-    expectTypeOf(form.bindSubmitButton).toEqualTypeOf<Ext["bindSubmitButton"]>();
-    expectTypeOf(form.bindLabel).toEqualTypeOf<Ext["bindLabel"]>();
-    expectTypeOf(form).toExtend<Ext>();
+    expectTypeOf<Extract<keyof typeof form, `bind${string}`>>().toEqualTypeOf<
+      "bind" | (typeof STANDARD_METHODS)[number]
+    >();
 
     // Derived from the binding classes
-    expectTypeOf<Ext["bindInput"]>().toEqualTypeOf<FormBindingMethod<SampleModel, typeof InputBinding>>();
-    expectTypeOf<Ext["bindTextArea"]>().toEqualTypeOf<FormBindingMethod<SampleModel, typeof TextAreaBinding>>();
-    expectTypeOf<Ext["bindSelectBox"]>().toEqualTypeOf<FormBindingMethod<SampleModel, typeof SelectBoxBinding>>();
-    expectTypeOf<Ext["bindCheckBox"]>().toEqualTypeOf<FormBindingMethod<SampleModel, typeof CheckBoxBinding>>();
-    expectTypeOf<Ext["bindSubmitButton"]>().toEqualTypeOf<FormBindingMethod<SampleModel, typeof SubmitButtonBinding>>();
-    expectTypeOf<Ext["bindLabel"]>().toEqualTypeOf<FormBindingMethod<SampleModel, typeof LabelBinding>>();
+    expectTypeOf(form.bindInput).toEqualTypeOf<FormBindingMethod<SampleModel, typeof InputBinding>>();
+    expectTypeOf(form.bindTextArea).toEqualTypeOf<FormBindingMethod<SampleModel, typeof TextAreaBinding>>();
+    expectTypeOf(form.bindSelectBox).toEqualTypeOf<FormBindingMethod<SampleModel, typeof SelectBoxBinding>>();
+    expectTypeOf(form.bindCheckBox).toEqualTypeOf<FormBindingMethod<SampleModel, typeof CheckBoxBinding>>();
+    expectTypeOf(form.bindSubmitButton).toEqualTypeOf<FormBindingMethod<SampleModel, typeof SubmitButtonBinding>>();
+    expectTypeOf(form.bindLabel).toEqualTypeOf<FormBindingMethod<SampleModel, typeof LabelBinding>>();
     // Written out, as RadioGroupBinding is generic, so that the options are typed after the getter
-    expectTypeOf<Ext["bindRadioGroup"]>().toEqualTypeOf<
+    expectTypeOf(form.bindRadioGroup).toEqualTypeOf<
       <V extends RadioGroupBinding.Option>(
         fieldName: FormField.Name<SampleModel>,
         config: RadioGroupBinding.Config<V> & FormBindingFunc.Config

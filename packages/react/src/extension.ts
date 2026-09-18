@@ -10,8 +10,8 @@ import { TextAreaBinding } from "./TextAreaBinding";
 /**
  * Standard bindings for React form elements, by the name of the method they add to `Form`
  *
- * Importing `@mobx-sentinel/react/extension` adds the methods to every form with `extendFormBinding()`.
- * Their types are {@link StandardExtensions}.
+ * Importing `@mobx-sentinel/react/extension` adds the methods to every form with `extendFormBinding()`,
+ * and extends `Form` with their types.
  */
 export const standardBindings = extendFormBinding({
   /**
@@ -143,24 +143,17 @@ export const standardBindings = extendFormBinding({
   bindLabel: LabelBinding,
 });
 
-/**
- * Standard bind methods for React form elements
- *
- * `Form` is extended with these methods when `@mobx-sentinel/react/extension` is imported.
- * Each one binds a class of {@link standardBindings} to the form.
- */
-export type StandardExtensions<T> = FormBindingMethods<
-  T,
-  typeof standardBindings,
-  {
-    // RadioGroupBinding is generic, so its method is written out to type the options after the getter
-    bindRadioGroup: <V extends RadioGroupBinding.Option>(
-      fieldName: FormField.Name<T>,
-      config: RadioGroupBinding.Config<V> & FormBindingFunc.Config
-    ) => RadioGroupBinding<V>["props"];
-  }
->;
-
 declare module "@mobx-sentinel/form" {
-  export interface Form<T> extends StandardExtensions<T> {}
+  export interface Form<T>
+    extends FormBindingMethods<
+      T,
+      typeof standardBindings,
+      {
+        // RadioGroupBinding is generic, so its method is written out to type the options after the getter
+        bindRadioGroup: <V extends RadioGroupBinding.Option>(
+          fieldName: FormField.Name<T>,
+          config: RadioGroupBinding.Config<V> & FormBindingFunc.Config
+        ) => RadioGroupBinding<V>["props"];
+      }
+    > {}
 }
