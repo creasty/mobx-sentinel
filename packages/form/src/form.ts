@@ -1,13 +1,7 @@
 import { action, computed, makeObservable, observable } from "mobx";
 import { Validator, Watcher, StandardNestedFetcher, KeyPath } from "@mobx-sentinel/core";
 import { FormField } from "./field";
-import {
-  FormBinding,
-  FormBindingConstructor,
-  FormBindingFunc,
-  type FormBindingMethods,
-  getSafeBindingName,
-} from "./binding";
+import { bindingExtensions, FormBinding, FormBindingConstructor, FormBindingFunc, getSafeBindingName } from "./binding";
 import { FormConfig, globalConfig } from "./config";
 import { Submission } from "./submission";
 import { randomId } from "./randomId";
@@ -15,14 +9,6 @@ import { randomId } from "./randomId";
 const registry = new WeakMap<object, Map<symbol, Form<any>>>();
 const defaultFormKey = Symbol("form.defaultFormKey");
 const internalToken = Symbol("form.internalToken");
-
-/**
- * Bind methods added by {@link extendFormBinding}
- *
- * Form.prototype inherits from this object (see below the class), so every form has the methods
- * while Form.prototype itself is left as the class defines it.
- */
-const bindingExtensions = {};
 
 /**
  * Form manages submission, fields, and bindings.
@@ -495,76 +481,12 @@ export class Form<T> {
   }
 }
 
+// Forms inherit the bind methods that extendFormBinding() adds, while Form.prototype stays as the class defines it
 Object.setPrototypeOf(Form.prototype, bindingExtensions);
 
 export namespace Form {
   /** @inline */
   export type Handlers = Submission.Handlers;
-}
-
-/**
- * Add a bind method to every form for each binding class
- *
- * A method binds its class to the form it is called on with {@link Form.bind}.
- * It takes the field name (or the list of field names, or nothing for a binding to the form) and the config,
- * and an omitted config becomes an empty object.
- *
- * Type the methods by extending `Form` with {@link FormBindingMethods}:
- *
- * @example
- * ```typescript
- * export const myBindings = extendFormBinding({
- *   bindDropdown: DropdownBinding,
- * });
- *
- * declare module "@mobx-sentinel/form" {
- *   interface Form<T> extends FormBindingMethods<T, typeof myBindings> {}
- * }
- * ```
- * ```tsx
- * <Dropdown {...form.bindDropdown("country", { getter: () => model.country, setter: (v) => (model.country = v) })} />
- * ```
- *
- * @remarks
- * - Forms created before the call get the methods too
- * - Adding a method under a name that is already taken replaces it on every form
- * - The methods are shared by every form, like the methods of a class, so a method detached from its form fails
- *
- * @param bindings Binding classes by method name. Each name is `bind` followed by a capital letter.
- *
- * @returns `bindings` as is, for typing the methods with {@link FormBindingMethods}
- *
- * @throws `TypeError` if a name does not start with `bind` and a capital letter, or a binding is not a class.
- *   No method is added then.
- */
-export function extendFormBinding<const Bindings extends Record<string, abstract new (...args: any) => unknown>>(
-  bindings: Bindings
-): Bindings {
-  const entries = Object.entries(bindings);
-  for (const [name, binding] of entries) {
-    if (!/^bind[A-Z]/.test(name)) {
-      throw new TypeError(`bindings: Expected method names of "bind" followed by a capital letter, got "${name}"`);
-    }
-    if (typeof binding !== "function") {
-      throw new TypeError(`bindings.${name}: Expected a binding class`);
-    }
-  }
-
-  for (const [name, binding] of entries) {
-    Object.defineProperty(bindingExtensions, name, {
-      value: function (this: Form<unknown>, ...args: unknown[]) {
-        // Form#bind tells the subject of the binding by the first argument in the same way
-        const bind = this.bind as (...args: unknown[]) => unknown;
-        return typeof args[0] === "string" || Array.isArray(args[0])
-          ? bind(args[0], binding, args[1] ?? {})
-          : bind(binding, args[0] ?? {});
-      },
-      writable: true,
-      configurable: true,
-      enumerable: false,
-    });
-  }
-  return bindings;
 }
 
 /** @internal @ignore */
