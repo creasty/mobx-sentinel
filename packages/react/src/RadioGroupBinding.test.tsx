@@ -714,6 +714,8 @@ describe("RadioGroupBinding", () => {
         form.bindRadioGroup<SampleEnum>("enumOpt", { getter: () => model.enumOpt, setter: () => {} });
         // @ts-expect-error unknown field name
         form.bindRadioGroup("unknown", { getter: () => null, setter: () => {} });
+        // @ts-expect-error unknown field name, with an explicit type of the options
+        form.bindRadioGroup<SampleEnum>("unknown", { getter: () => model.enum, setter: () => {} });
         // @ts-expect-error bindRadioGroup requires a config
         form.bindRadioGroup("enum");
         // @ts-expect-error the option must be one the field can hold

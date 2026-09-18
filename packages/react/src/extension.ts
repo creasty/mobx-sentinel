@@ -1,4 +1,4 @@
-import { Form, FormBindingFuncExtension, FormField } from "@mobx-sentinel/form";
+import { extendFormBinding, FormBindingFunc, FormBindingMethods, FormField } from "@mobx-sentinel/form";
 import { CheckBoxBinding } from "./CheckBoxBinding";
 import { InputBinding } from "./InputBinding";
 import { RadioGroupBinding } from "./RadioGroupBinding";
@@ -8,13 +8,12 @@ import { LabelBinding } from "./LabelBinding";
 import { TextAreaBinding } from "./TextAreaBinding";
 
 /**
- * Standard binding extensions for React form elements
+ * Standard bindings for React form elements, by the name of the method they add to `Form`
  *
- * `Form` will be extended with these methods.
- *
- * @remarks This interface exists for the sole purpose of documentation.
+ * Importing `@mobx-sentinel/react/extension` adds the methods to every form with `extendFormBinding()`.
+ * Their types are {@link StandardExtensions}.
  */
-export interface StandardExtensions<T> {
+export const standardBindings = extendFormBinding({
   /**
    * Bind the input field to the form.
    *
@@ -40,7 +39,7 @@ export interface StandardExtensions<T> {
    * />
    * ```
    */
-  bindInput: FormBindingFuncExtension.ForField.RequiredConfig<T, typeof InputBinding>;
+  bindInput: InputBinding,
 
   /**
    * Bind the textarea field to the form.
@@ -56,7 +55,7 @@ export interface StandardExtensions<T> {
    * />
    * ```
    */
-  bindTextArea: FormBindingFuncExtension.ForField.RequiredConfig<T, typeof TextAreaBinding>;
+  bindTextArea: TextAreaBinding,
 
   /**
    * Bind the select box field to the form.
@@ -73,7 +72,7 @@ export interface StandardExtensions<T> {
    * </select>
    * ```
    */
-  bindSelectBox: FormBindingFuncExtension.ForField.RequiredConfig<T, typeof SelectBoxBinding>;
+  bindSelectBox: SelectBoxBinding,
 
   /**
    * Bind the checkbox field to the form.
@@ -88,7 +87,7 @@ export interface StandardExtensions<T> {
    * />
    * ```
    */
-  bindCheckBox: FormBindingFuncExtension.ForField.RequiredConfig<T, typeof CheckBoxBinding>;
+  bindCheckBox: CheckBoxBinding,
 
   /**
    * Bind the radio group field to the form.
@@ -120,10 +119,7 @@ export interface StandardExtensions<T> {
    * })
    * ```
    */
-  bindRadioGroup: <V extends RadioGroupBinding.Option>(
-    fieldName: FormField.Name<T>,
-    config: RadioGroupBinding.Config<V> & FormBindingFuncExtension.Config
-  ) => RadioGroupBinding<V>["props"];
+  bindRadioGroup: RadioGroupBinding,
 
   /**
    * Bind the submit button to the form.
@@ -133,7 +129,7 @@ export interface StandardExtensions<T> {
    * <button {...form.bindSubmitButton()}>Submit</button>
    * ```
    */
-  bindSubmitButton: FormBindingFuncExtension.ForForm.OptionalConfig<T, typeof SubmitButtonBinding>;
+  bindSubmitButton: SubmitButtonBinding,
 
   /**
    * Bind the label to the form.
@@ -144,50 +140,27 @@ export interface StandardExtensions<T> {
    * <label {...form.bindLabel(["field1", "field2"])}>Label</label>
    * ```
    */
-  bindLabel: FormBindingFuncExtension.ForMultiField.OptionalConfig<T, typeof LabelBinding>;
-}
+  bindLabel: LabelBinding,
+});
+
+/**
+ * Standard bind methods for React form elements
+ *
+ * `Form` is extended with these methods when `@mobx-sentinel/react/extension` is imported.
+ * Each one binds a class of {@link standardBindings} to the form.
+ */
+export type StandardExtensions<T> = FormBindingMethods<
+  T,
+  typeof standardBindings,
+  {
+    // RadioGroupBinding is generic, so its method is written out to type the options after the getter
+    bindRadioGroup: <V extends RadioGroupBinding.Option>(
+      fieldName: FormField.Name<T>,
+      config: RadioGroupBinding.Config<V> & FormBindingFunc.Config
+    ) => RadioGroupBinding<V>["props"];
+  }
+>;
 
 declare module "@mobx-sentinel/form" {
-  export interface Form<T> extends StandardExtensions<T> {
-    bindInput: StandardExtensions<T>["bindInput"];
-    bindTextArea: StandardExtensions<T>["bindTextArea"];
-    bindSelectBox: StandardExtensions<T>["bindSelectBox"];
-    bindCheckBox: StandardExtensions<T>["bindCheckBox"];
-    bindRadioGroup: StandardExtensions<T>["bindRadioGroup"];
-    bindSubmitButton: StandardExtensions<T>["bindSubmitButton"];
-    bindLabel: StandardExtensions<T>["bindLabel"];
-  }
+  export interface Form<T> extends StandardExtensions<T> {}
 }
-
-Form.prototype.bindInput = function (fieldName, config) {
-  return this.bind(fieldName, InputBinding, {
-    ...config,
-    cacheKey: `${config.valueAs}:${config.cacheKey}`,
-  });
-};
-
-Form.prototype.bindTextArea = function (fieldName, config) {
-  return this.bind(fieldName, TextAreaBinding, config);
-};
-
-Form.prototype.bindSelectBox = function (fieldName, config) {
-  return this.bind(fieldName, SelectBoxBinding, config);
-};
-
-Form.prototype.bindCheckBox = function (fieldName, config) {
-  return this.bind(fieldName, CheckBoxBinding, config);
-};
-
-Form.prototype.bindRadioGroup = function (fieldName, config) {
-  // Form#bind only knows the config of RadioGroupBinding with its options widened to RadioGroupBinding.Option,
-  // which a setter for a narrower type of options doesn't fit
-  return this.bind(fieldName, RadioGroupBinding, config as RadioGroupBinding.Config<any>);
-};
-
-Form.prototype.bindSubmitButton = function (config) {
-  return this.bind(SubmitButtonBinding, config ?? {});
-};
-
-Form.prototype.bindLabel = function (fields, config) {
-  return this.bind(fields, LabelBinding, config ?? {});
-};

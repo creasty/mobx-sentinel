@@ -4,7 +4,8 @@ import {
   FormBinding,
   FormBindingConstructor,
   FormBindingFunc,
-  FormBindingFuncExtension,
+  FormBindingMethod,
+  FormBindingMethods,
   getSafeBindingName,
 } from "./binding";
 import { debugForm, Form } from "./form";
@@ -182,113 +183,260 @@ describe("FormBindingFunc", () => {
   });
 });
 
-describe("FormBindingFuncExtension", () => {
-  test("provides correct type definitions for form and field bindings", () => {
-    const bindForm1: FormBindingFuncExtension.ForForm.OptionalConfig<SampleModel, typeof SampleFormBinding> = () =>
-      ({}) as any;
-    bindForm1();
-    bindForm1({});
-    bindForm1({ cacheKey: "key" });
+describe("FormBindingMethod", () => {
+  class OptionalKeysFieldBinding implements FormBinding {
+    constructor(
+      readonly field: FormField,
+      public config: { label?: string }
+    ) {}
 
-    const bindForm2: FormBindingFuncExtension.ForForm.RequiredConfig<SampleModel, typeof SampleFormBinding> = () =>
-      ({}) as any;
-    // @ts-expect-error Expected 1 arguments, but got 0
-    bindForm2();
-    bindForm2({});
-    bindForm2({ cacheKey: "key" });
+    get props() {
+      return { label: this.config.label };
+    }
+  }
 
-    const bindForm3: FormBindingFuncExtension.ForForm.OptionalConfig<
-      SampleModel,
-      typeof SampleConfigurableFormBinding
-    > = () => ({}) as any;
-    bindForm3();
-    // @ts-expect-error Property 'sample' is missing
-    bindForm3({});
-    bindForm3({ sample: true });
-    bindForm3({ sample: true, cacheKey: "key" });
+  test("takes the config only for a binding to the form", () => {
+    expectTypeOf<Parameters<FormBindingMethod<SampleModel, typeof SampleFormBinding>>>().toEqualTypeOf<
+      [config?: FormBindingFunc.Config]
+    >();
+    expectTypeOf<Parameters<FormBindingMethod<SampleModel, typeof SampleConfigurableFormBinding>>>().toEqualTypeOf<
+      [config: { sample: boolean } & FormBindingFunc.Config]
+    >();
+  });
 
-    const bindForm4: FormBindingFuncExtension.ForForm.RequiredConfig<
-      SampleModel,
-      typeof SampleConfigurableFormBinding
-    > = () => ({}) as any;
-    // @ts-expect-error Expected 1 arguments, but got 0
-    bindForm4();
-    // @ts-expect-error Property 'sample' is missing
-    bindForm4({});
-    bindForm4({ sample: true });
-    bindForm4({ sample: true, cacheKey: "key" });
+  test("takes the field name and the config for a binding to a field", () => {
+    expectTypeOf<Parameters<FormBindingMethod<SampleModel, typeof SampleFieldBinding>>>().toEqualTypeOf<
+      [fieldName: FormField.Name<SampleModel>, config?: FormBindingFunc.Config]
+    >();
+    expectTypeOf<Parameters<FormBindingMethod<SampleModel, typeof SampleConfigurableFieldBinding>>>().toEqualTypeOf<
+      [fieldName: FormField.Name<SampleModel>, config: { sample: boolean } & FormBindingFunc.Config]
+    >();
+  });
 
-    const bindField1: FormBindingFuncExtension.ForField.OptionalConfig<SampleModel, typeof SampleFieldBinding> = () =>
-      ({}) as any;
-    bindField1("string");
-    bindField1("string", {});
-    bindField1("string", { cacheKey: "key" });
+  test("takes the field names and the config for a binding to multiple fields", () => {
+    expectTypeOf<Parameters<FormBindingMethod<SampleModel, typeof SampleMultiFieldBinding>>>().toEqualTypeOf<
+      [fieldNames: FormField.Name<SampleModel>[], config?: FormBindingFunc.Config]
+    >();
+    expectTypeOf<
+      Parameters<FormBindingMethod<SampleModel, typeof SampleConfigurableMultiFieldBinding>>
+    >().toEqualTypeOf<
+      [fieldNames: FormField.Name<SampleModel>[], config: { sample: boolean } & FormBindingFunc.Config]
+    >();
+  });
 
-    const bindField2: FormBindingFuncExtension.ForField.RequiredConfig<SampleModel, typeof SampleFieldBinding> = () =>
-      ({}) as any;
-    // @ts-expect-error Expected 2 arguments, but got 1
-    bindField2("string");
-    bindField2("string", {});
-    bindField2("string", { cacheKey: "key" });
+  test("makes the config optional when an empty object satisfies it", () => {
+    // The constructor requires the config, but none of its keys is required
+    expectTypeOf<Parameters<FormBindingMethod<SampleModel, typeof OptionalKeysFieldBinding>>>().toEqualTypeOf<
+      [fieldName: FormField.Name<SampleModel>, config?: { label?: string } & FormBindingFunc.Config]
+    >();
+  });
 
-    const bindField3: FormBindingFuncExtension.ForField.OptionalConfig<
-      SampleModel,
-      typeof SampleConfigurableFieldBinding
-    > = () => ({}) as any;
-    bindField3("string");
-    // @ts-expect-error Property 'sample' is missing
-    bindField3("string", {});
-    bindField3("string", { sample: true });
-    bindField3("string", { sample: true, cacheKey: "key" });
+  test("returns the props of the binding", () => {
+    expectTypeOf<ReturnType<FormBindingMethod<SampleModel, typeof SampleFormBinding>>>().toEqualTypeOf<
+      SampleFormBinding["props"]
+    >();
+    expectTypeOf<ReturnType<FormBindingMethod<SampleModel, typeof SampleConfigurableFieldBinding>>>().toEqualTypeOf<
+      SampleConfigurableFieldBinding["props"]
+    >();
+    expectTypeOf<ReturnType<FormBindingMethod<SampleModel, typeof SampleMultiFieldBinding>>>().toEqualTypeOf<
+      SampleMultiFieldBinding["props"]
+    >();
+  });
 
-    const bindField4: FormBindingFuncExtension.ForField.RequiredConfig<
-      SampleModel,
-      typeof SampleConfigurableFieldBinding
-    > = () => ({}) as any;
-    // @ts-expect-error Expected 2 arguments, but got 1
-    bindField4("string");
-    // @ts-expect-error Property 'sample' is missing
-    bindField4("string", {});
-    bindField4("string", { sample: true });
-    bindField4("string", { sample: true, cacheKey: "key" });
+  test("is never for a class that is not a binding", () => {
+    expectTypeOf<FormBindingMethod<SampleModel, typeof Date>>().toBeNever();
+  });
+});
 
-    const bindMultiField1: FormBindingFuncExtension.ForMultiField.OptionalConfig<
-      SampleModel,
-      typeof SampleMultiFieldBinding
-    > = () => ({}) as any;
-    bindMultiField1(["string"]);
-    bindMultiField1(["string"], {});
-    bindMultiField1(["string"], { cacheKey: "key" });
+describe("FormBindingMethods", () => {
+  type GenericConfig<V extends string = string> = { getter: () => V; setter: (value: V) => void };
 
-    const bindMultiField2: FormBindingFuncExtension.ForMultiField.RequiredConfig<
-      SampleModel,
-      typeof SampleMultiFieldBinding
-    > = () => ({}) as any;
-    // @ts-expect-error Expected 2 arguments, but got 1
-    bindMultiField2(["string"]);
-    bindMultiField2(["string"], {});
-    bindMultiField2(["string"], { cacheKey: "key" });
+  /** A generic binding, whose props are typed by the value of the getter */
+  class GenericFieldBinding<V extends string = string> implements FormBinding {
+    constructor(
+      readonly field: FormField,
+      public config: GenericConfig<V>
+    ) {}
 
-    const bindMultiField3: FormBindingFuncExtension.ForMultiField.OptionalConfig<
-      SampleModel,
-      typeof SampleConfigurableMultiFieldBinding
-    > = () => ({}) as any;
-    bindMultiField3(["string"]);
-    // @ts-expect-error Property 'sample' is missing
-    bindMultiField3(["string"], {});
-    bindMultiField3(["string"], { sample: true });
-    bindMultiField3(["string"], { sample: true, cacheKey: "key" });
+    get props() {
+      return { value: this.config.getter() };
+    }
+  }
 
-    const bindMultiField4: FormBindingFuncExtension.ForMultiField.RequiredConfig<
-      SampleModel,
-      typeof SampleConfigurableMultiFieldBinding
-    > = () => ({}) as any;
-    // @ts-expect-error Expected 2 arguments, but got 1
-    bindMultiField4(["string"]);
-    // @ts-expect-error Property 'sample' is missing
-    bindMultiField4(["string"], {});
-    bindMultiField4(["string"], { sample: true });
-    bindMultiField4(["string"], { sample: true, cacheKey: "key" });
+  /** The generic binding after its config gained a required option */
+  class LabeledGenericFieldBinding<V extends string = string> extends GenericFieldBinding<V> {
+    constructor(
+      field: FormField,
+      public config: GenericConfig<V> & { label: string }
+    ) {
+      super(field, config);
+    }
+  }
+
+  const bindings = {
+    bindForm: SampleFormBinding,
+    bindField: SampleConfigurableFieldBinding,
+    bindFields: SampleMultiFieldBinding,
+    bindGeneric: GenericFieldBinding,
+  };
+  type Bindings = typeof bindings;
+
+  /** The method for GenericFieldBinding, written out to keep the type of its value */
+  type GenericMethod<T> = <V extends string>(
+    fieldName: FormField.Name<T>,
+    config: GenericConfig<V> & FormBindingFunc.Config
+  ) => GenericFieldBinding<V>["props"];
+
+  test("derives a method for each binding class", () => {
+    type Methods = FormBindingMethods<SampleModel, Bindings>;
+    expectTypeOf<keyof Methods>().toEqualTypeOf<"bindForm" | "bindField" | "bindFields" | "bindGeneric">();
+    expectTypeOf<Methods["bindForm"]>().toEqualTypeOf<FormBindingMethod<SampleModel, typeof SampleFormBinding>>();
+    expectTypeOf<Methods["bindField"]>().toEqualTypeOf<
+      FormBindingMethod<SampleModel, typeof SampleConfigurableFieldBinding>
+    >();
+    expectTypeOf<Methods["bindFields"]>().toEqualTypeOf<
+      FormBindingMethod<SampleModel, typeof SampleMultiFieldBinding>
+    >();
+    // Without an override, the type parameter of a generic binding falls back to its constraint
+    expectTypeOf<Parameters<Methods["bindGeneric"]>>().toEqualTypeOf<
+      [fieldName: FormField.Name<SampleModel>, config: GenericConfig<string> & FormBindingFunc.Config]
+    >();
+  });
+
+  test("uses an override as written, keeping its type parameters", () => {
+    type Methods = FormBindingMethods<SampleModel, Bindings, { bindGeneric: GenericMethod<SampleModel> }>;
+    expectTypeOf<Methods["bindGeneric"]>().toEqualTypeOf<GenericMethod<SampleModel>>();
+    expectTypeOf<Methods["bindField"]>().toEqualTypeOf<
+      FormBindingMethod<SampleModel, typeof SampleConfigurableFieldBinding>
+    >();
+
+    typeOnly(() => {
+      const methods = {} as Methods;
+      const props = methods.bindGeneric("string", {
+        getter: () => "a" as const,
+        setter: (v) => expectTypeOf(v).toEqualTypeOf<"a">(),
+      });
+      expectTypeOf(props.value).toEqualTypeOf<"a">();
+      methods.bindGeneric<"a" | "b">("string", { getter: () => "a", setter: () => {} });
+      // @ts-expect-error Unknown field, with an explicit type argument
+      methods.bindGeneric<"a">("unknown", { getter: () => "a", setter: () => {} });
+    });
+  });
+
+  test("accepts an override written with the binding's own types, in any equivalent form", () => {
+    type Config<V extends string> = GenericConfig<V> & FormBindingFunc.Config;
+    typeOnly(() => {
+      type Reordered = FormBindingMethods<
+        SampleModel,
+        Bindings,
+        {
+          bindGeneric: <V extends string>(
+            fieldName: FormField.Name<SampleModel>,
+            config: FormBindingFunc.Config & GenericConfig<V>
+          ) => GenericFieldBinding<V>["props"];
+        }
+      >;
+      type Aliased = FormBindingMethods<
+        SampleModel,
+        Bindings,
+        {
+          bindGeneric: <V extends string>(
+            fieldName: FormField.Name<SampleModel>,
+            config: Config<V>
+          ) => GenericFieldBinding<V>["props"];
+        }
+      >;
+      type ReturnWrittenOut = FormBindingMethods<
+        SampleModel,
+        Bindings,
+        {
+          bindGeneric: <V extends string>(fieldName: FormField.Name<SampleModel>, config: Config<V>) => { value: V };
+        }
+      >;
+      // An exact copy of the config passes while it matches, and fails once the binding's config changes (see below)
+      type CopiedConfig = FormBindingMethods<
+        SampleModel,
+        Bindings,
+        {
+          bindGeneric: <V extends string>(
+            fieldName: FormField.Name<SampleModel>,
+            config: { getter: () => V; setter: (value: V) => void } & FormBindingFunc.Config
+          ) => GenericFieldBinding<V>["props"];
+        }
+      >;
+      void ({} as [Reordered, Aliased, ReturnWrittenOut, CopiedConfig]);
+    });
+  });
+
+  test("rejects an override that diverges from the binding", () => {
+    typeOnly(() => {
+      // @ts-expect-error No binding for the override
+      type Misspelled = FormBindingMethods<SampleModel, Bindings, { bindGenric: GenericMethod<SampleModel> }>;
+      type WrongConfig = FormBindingMethods<
+        SampleModel,
+        Bindings,
+        // @ts-expect-error The config of another binding
+        {
+          bindGeneric: <V extends string>(
+            fieldName: FormField.Name<SampleModel>,
+            config: { sample: boolean } & FormBindingFunc.Config
+          ) => GenericFieldBinding<V>["props"];
+        }
+      >;
+      type WrongSubject = FormBindingMethods<
+        SampleModel,
+        Bindings,
+        // @ts-expect-error A list of field names for a binding to a field
+        {
+          bindGeneric: <V extends string>(
+            fieldNames: FormField.Name<SampleModel>[],
+            config: GenericConfig<V> & FormBindingFunc.Config
+          ) => GenericFieldBinding<V>["props"];
+        }
+      >;
+      type WrongProps = FormBindingMethods<
+        SampleModel,
+        Bindings,
+        // @ts-expect-error The props of another binding
+        {
+          bindGeneric: <V extends string>(
+            fieldName: FormField.Name<SampleModel>,
+            config: GenericConfig<V> & FormBindingFunc.Config
+          ) => SampleFieldBinding["props"];
+        }
+      >;
+      type LooseFieldName = FormBindingMethods<
+        SampleModel,
+        Bindings,
+        // @ts-expect-error Looser than the binding: any string for the field name
+        {
+          bindGeneric: <V extends string>(
+            fieldName: string,
+            config: GenericConfig<V> & FormBindingFunc.Config
+          ) => GenericFieldBinding<V>["props"];
+        }
+      >;
+      type StaleConfig = FormBindingMethods<
+        SampleModel,
+        { bindGeneric: typeof LabeledGenericFieldBinding },
+        // @ts-expect-error The config from before the binding required `label`
+        {
+          bindGeneric: <V extends string>(
+            fieldName: FormField.Name<SampleModel>,
+            config: GenericConfig<V> & FormBindingFunc.Config
+          ) => GenericFieldBinding<V>["props"];
+        }
+      >;
+      void ({} as [Misspelled, WrongConfig, WrongSubject, WrongProps, LooseFieldName, StaleConfig]);
+    });
+  });
+
+  test("rejects a class that is not a binding", () => {
+    typeOnly(() => {
+      // @ts-expect-error Not a binding class
+      type NotBinding = FormBindingMethods<SampleModel, { bindDate: typeof Date }>;
+      void ({} as NotBinding);
+    });
   });
 });
 
@@ -1048,7 +1196,6 @@ describe("Form#bind (constructor, lifecycle, and misuse)", () => {
     test("describes the FormBinding interface and the bind config", () => {
       expectTypeOf<FormBinding>().toEqualTypeOf<{ config?: object; readonly props: object }>();
       expectTypeOf<FormBindingFunc.Config>().toEqualTypeOf<{ cacheKey?: string }>();
-      expectTypeOf<FormBindingFuncExtension.Config>().toEqualTypeOf<FormBindingFunc.Config>();
       expectTypeOf<FormBindingConstructor>().toEqualTypeOf<
         FormBindingConstructor.ForField | FormBindingConstructor.ForMultiField | FormBindingConstructor.ForForm
       >();
