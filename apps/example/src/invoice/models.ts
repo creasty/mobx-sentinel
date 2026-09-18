@@ -82,17 +82,15 @@ export class LineItem {
   }
 
   /**
-   * Derived amounts are excluded from change detection with `@unwatch`.
+   * Derived amounts stay out of change detection, as any `@computed` does.
    * They move whenever `quantity` or `unitPrice` moves, and repeating that in
    * `changedKeyPaths` would bury the edit the user actually made.
    */
-  @unwatch
   @computed
   get amount(): number {
     return (this.unitPrice ?? 0) * this.quantity;
   }
 
-  @unwatch
   @computed
   get taxRate(): number {
     return TAX_CATEGORIES[this.taxCategory].rate;
@@ -279,34 +277,29 @@ export class Invoice {
     });
   }
 
-  @unwatch
   @computed
   get dueOn(): Date | null {
     const { netDays } = PAYMENT_TERMS[this.paymentTerms];
     return netDays === null ? this.customDueOn : addDays(this.issuedOn, netDays);
   }
 
-  @unwatch
   @computed
   get subtotal(): number {
     const sum = this.lineItems.reduce((total, item) => total + item.amount, 0);
     return roundToMinorUnit(sum, this.currency);
   }
 
-  @unwatch
   @computed
   get taxAmount(): number {
     const sum = this.lineItems.reduce((total, item) => total + item.amount * item.taxRate, 0);
     return roundToMinorUnit(sum, this.currency);
   }
 
-  @unwatch
   @computed
   get total(): number {
     return roundToMinorUnit(this.subtotal + this.taxAmount, this.currency);
   }
 
-  @unwatch
   @computed
   get formattedTotal(): string {
     return formatMoney(this.total, this.currency);

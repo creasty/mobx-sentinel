@@ -26,7 +26,7 @@ const watcher2 = Watcher.get(model);
 // watcher1 === watcher2 (same instance)
 ```
 
-A watcher observes its target through MobX reactions, so it follows the rule for [any reaction](https://mobx.js.org/reactions.html#always-dispose-of-reactions): it is garbage collected together with its target only if everything it observes is too. A `@computed` that reads a store, an `@observable` holding an observable array, set or map that other objects share, or a `@nested` object that outlives the target keeps the watcher alive, and the watcher keeps the target alive. MobX alone would let such a target go, as a `@computed` observes the store only while something observes the computed, and only the watcher reads the elements of the collection or observes the `@nested` object. A watcher cannot be disposed; to let such a target go, exclude the property with `@unwatch`, which also stops tracking its changes.
+A watcher observes its target through MobX reactions, so it follows the rule for [any reaction](https://mobx.js.org/reactions.html#always-dispose-of-reactions): it is garbage collected together with its target only if everything it observes is too. An `@observable` holding an observable array, set or map that other objects share, a `@nested` object that outlives the target, or a `@watch` `@computed` that reads a store keeps the watcher alive, and the watcher keeps the target alive. MobX alone would let such a target go, as only the watcher reads the elements of the collection or observes the `@nested` object, and a `@computed` observes the store only while something observes the computed. A watcher cannot be disposed; to let such a target go, exclude the property with `@unwatch`, or take `@watch` off the `@computed`, which also stops tracking its changes.
 
 Use `Watcher.getSafe()` to get a watcher without throwing errors for non-objects:
 
@@ -81,7 +81,7 @@ watcher.changed // true
 
 ## Basic Change Tracking
 
-`@observable` and `@computed` are automatically tracked unless explicitly excluded with `@unwatch`.
+`@observable` is automatically tracked unless explicitly excluded with `@unwatch`. `@computed` is not: see [Computed properties](#computed-properties).
 
 - Properties are tracked using **shallow comparison** by default (arrays/sets/maps are compared by creating shallow copies)
 - Use `@watch.ref` for **identity comparison** only (reference equality)
@@ -97,11 +97,6 @@ class Model {
   constructor() {
     makeObservable(this);
   }
-
-  @computed
-  get displayName() {
-    return `${this.name} (${this.age})`;
-  }
 }
 
 const model = new Model();
@@ -112,7 +107,7 @@ runInAction(() => {
 });
 
 watcher.changed // true
-watcher.changedKeys // Set(["name", "displayName"])
+watcher.changedKeys // Set(["name"])
 ```
 
 ### Object properties
@@ -182,3 +177,41 @@ runInAction(() => {
 });
 watcher.changed // false
 ```
+
+### Computed properties
+
+`@computed` is not tracked unless you add `@watch` (or `@watch.ref`). A computed value derives from other state, and a change to that state is detected where the state is tracked. Tracking the computed too would report the same edit twice, and would report changes to state the model doesn't own, like a store the computed reads.
+
+```typescript
+class Model {
+  @observable name = "";
+  @observable age = 0;
+
+  constructor() {
+    makeObservable(this);
+  }
+
+  @computed
+  get displayName() {
+    return `${this.name} (${this.age})`;
+  }
+
+  @watch
+  @computed
+  get isAdult() {
+    return this.age >= 18;
+  }
+}
+
+const model = new Model();
+const watcher = Watcher.get(model);
+
+runInAction(() => {
+  model.name = "John";
+  model.age = 20;
+});
+
+watcher.changedKeys // Set(["name", "age", "isAdult"]) - displayName is not tracked
+```
+
+So excluding a property with `@unwatch` excludes the computed values derived from it too, unless they are tracked with `@watch`. See [`@unwatch`](/docs/core/watch-annotations/#unwatch).

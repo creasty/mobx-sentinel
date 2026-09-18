@@ -3,7 +3,7 @@ import type { ValidationErrorMapBuilder } from "./error";
 import { KeyPath } from "./keyPath";
 import { nested } from "./nested";
 import { makeValidatable, Validator } from "./validator";
-import { Watcher } from "./watcher";
+import { Watcher, watch } from "./watcher";
 
 /**
  * Whether the object behind the reference gets garbage collected
@@ -112,6 +112,22 @@ describe("Watcher", () => {
       }
     }
 
+    class WatchedCounter {
+      @observable count = 0;
+      readonly #limit: { readonly value: number };
+
+      constructor(limit: { readonly value: number }) {
+        this.#limit = limit;
+        makeObservable(this);
+      }
+
+      @watch
+      @computed
+      get isOverLimit() {
+        return this.count > this.#limit.value;
+      }
+    }
+
     class Tagged {
       @observable.ref tags: readonly string[];
 
@@ -138,12 +154,21 @@ describe("Watcher", () => {
       expect(shared.value).toBe(0);
     });
 
-    it("keeps the target alive through a @computed reading an outer observable", async () => {
+    it("releases the target although a @computed reads an outer observable", async () => {
       const limit = observable({ value: 10 });
-      const withoutWatcher = create(() => new Counter(limit), false);
       const withWatcher = create(() => new Counter(limit), true);
+      // A watcher does not observe a @computed unless @watch is specified, and a computed that nothing observes does
+      // not observe what it reads
+      expect(await isCollected(withWatcher)).toBe(true);
+      expect(limit.value).toBe(10);
+    });
+
+    it("keeps the target alive through a @watch @computed reading an outer observable", async () => {
+      const limit = observable({ value: 10 });
+      const withoutWatcher = create(() => new WatchedCounter(limit), false);
+      const withWatcher = create(() => new WatchedCounter(limit), true);
       expect(await isCollected(withoutWatcher)).toBe(true);
-      // PINNED(quirk): A watcher observes each @computed of the target with a reaction that cannot be disposed, which keeps the computed observing what it reads, so an outer observable (here `limit`) keeps the watcher and the target alive, although MobX alone would let the target go, as a computed that nothing observes does not observe what it reads. Decide: should Watcher reactions be disposable, or stop observing state outside the target?
+      // PINNED(quirk): A watcher observes a @watch @computed of the target with a reaction that cannot be disposed, which keeps the computed observing what it reads, so an outer observable (here `limit`) keeps the watcher and the target alive, although MobX alone would let the target go, as a computed that nothing observes does not observe what it reads. Decide: should Watcher reactions be disposable, or stop observing state outside the target?
       expect(await isCollected(withWatcher)).toBe(false);
       expect(limit.value).toBe(10);
     });

@@ -1,5 +1,6 @@
 import {
   isBoxedObservable,
+  isComputedProp,
   isObservableArray,
   isObservableSet,
   isObservableMap,
@@ -8,7 +9,6 @@ import {
   getAtom,
   untracked,
   $mobx,
-  type IComputedValue,
   type IObservableValue,
 } from "mobx";
 
@@ -78,9 +78,9 @@ export function* unwrapShallowContents(value: any): Generator<[key: string | sym
 }
 
 /**
- * Get all MobX's `@observable` and `@computed` annotations from the target object
+ * Get all MobX's `@observable` annotations from the target object
  *
- * Also includes their variants such as `@observable.ref` and `@computed.struct`.
+ * Also includes its variants such as `@observable.ref` and `@observable.shallow`, but not `@computed` or its variants.
  *
  * It goes through the public API of MobX, as its production builds mangle every internal name ending in `_`.\
  * The one exception is finding the keys that are not properties, such as ECMAScript private keys, which nothing public
@@ -94,9 +94,12 @@ export function* getMobxObservableAnnotations(
   // Snapshot, as consuming the getters (as Watcher does) or anything done in the meantime can add and remove keys.
   // Untracked, as listing the keys of a proxied observable object is observed by the derivation running it.
   const entries = untracked(() => {
-    const result = new Map<string | symbol | number, ObservableAtom | undefined>();
+    const result = new Map<string | symbol | number, IObservableValue<unknown> | undefined>();
     for (const key of getCandidateKeys(target)) {
       if (!isObservableProp(target, key)) continue;
+      // isComputedProp() goes through getAtom(), which rejects the falsy keys "" and 0, so it throws for those once they
+      // are annotated. They are taken as `@observable`, whatever their annotation.
+      if (key && isComputedProp(target, key)) continue;
       // MobX only removes keys that are own properties, and once it does, the atom is the only way left to read the
       // last value. Capturing the other atoms up front would materialize the annotations that stage3 decorators apply
       // lazily (MobX 6.16+), which the getter leaves until it needs one.
@@ -116,16 +119,14 @@ export function* getMobxObservableAnnotations(
   }
 }
 
-type ObservableAtom = IObservableValue<unknown> | IComputedValue<unknown>;
-
 /**
  * Get the atom holding the value of an annotated key, materializing it if MobX applies the annotation lazily
  *
  * `getAtom()` rejects the falsy keys `""` and `0` as if they were missing, so those yield `undefined`.
  */
-function getObservableAtom(target: object, key: string | symbol | number): ObservableAtom | undefined {
+function getObservableAtom(target: object, key: string | symbol | number): IObservableValue<unknown> | undefined {
   if (!key) return;
-  return getAtom(target, key) as unknown as ObservableAtom;
+  return getAtom(target, key) as unknown as IObservableValue<unknown>;
 }
 
 /**

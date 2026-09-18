@@ -13,7 +13,7 @@ describe("getMobxObservableAnnotations", () => {
     @computed get computed1() {
       return this.field1 * 10;
     }
-    // biome-ignore lint/correctness/noUnusedPrivateClassMembers: read back through the function under test
+    // biome-ignore lint/correctness/noUnusedPrivateClassMembers: left out by the function under test
     @computed.struct get #computed2() {
       return [this.#field2];
     }
@@ -33,13 +33,11 @@ describe("getMobxObservableAnnotations", () => {
   const heldKeysOf = (target: object) =>
     Object.values((target as any)[$mobx]).flatMap((value) => (value instanceof Map ? [[...value.keys()]] : []));
 
-  test("yields public and ECMAScript private keys, but not actions or other members", () => {
+  test("yields public and ECMAScript private keys, but not computed ones, actions or other members", () => {
     expect(readAll(new Sample())).toEqual(
       new Map<string, unknown>([
         ["field1", 1],
-        ["computed1", 10],
         ["#field2", 2],
-        ["#computed2", [2]],
       ])
     );
   });
@@ -53,23 +51,20 @@ describe("getMobxObservableAnnotations", () => {
     }
 
     runInAction(() => obj.setField2(4));
-    expect(effectFn).toBeCalledTimes(2);
-    expect(new Map(effectFn.mock.calls)).toEqual(
-      new Map<string, unknown>([
-        ["#field2", 4],
-        ["#computed2", [4]],
-      ])
-    );
+    expect(effectFn.mock.calls).toEqual([["#field2", 4]]);
 
     for (const dispose of disposers) dispose();
   });
 
-  test("enumeration alone neither evaluates getters nor materializes the annotations MobX 6.16+ applies lazily", () => {
+  test("enumeration leaves out computed getters without evaluating them, and materializes no annotation MobX 6.16+ applies lazily", () => {
     const getterFn = vi.fn(() => 1);
     class Lazy {
       @observable accessor field1 = 1;
-      // biome-ignore lint/correctness/noUnusedPrivateClassMembers: read back through the function under test
+      // biome-ignore lint/correctness/noUnusedPrivateClassMembers: left out by the function under test
       @computed get #computed1() {
+        return getterFn();
+      }
+      @computed get computed2() {
         return getterFn();
       }
     }
@@ -77,12 +72,11 @@ describe("getMobxObservableAnnotations", () => {
     const heldKeys = heldKeysOf(obj);
 
     const getters = new Map(getMobxObservableAnnotations(obj));
-    expect(new Set(getters.keys())).toEqual(new Set(["field1", "#computed1"]));
+    expect([...getters.keys()]).toEqual(["field1"]);
     expect(heldKeysOf(obj)).toEqual(heldKeys);
     expect(getterFn).toBeCalledTimes(0);
 
-    expect(getters.get("#computed1")!()).toBe(1);
-    expect(getterFn).toBeCalledTimes(1);
+    expect(getters.get("field1")!()).toBe(1);
   });
 
   test("getters consumed during the enumeration, as Watcher does, do not make keys yielded again", () => {
@@ -95,13 +89,13 @@ describe("getMobxObservableAnnotations", () => {
       disposers.push(reaction(getValue, () => {}));
     }
 
-    expect(seen).toHaveLength(4);
-    expect(new Set(seen)).toEqual(new Set(["field1", "computed1", "#field2", "#computed2"]));
+    expect(seen).toHaveLength(2);
+    expect(new Set(seen)).toEqual(new Set(["field1", "#field2"]));
 
     for (const dispose of disposers) dispose();
   });
 
-  test("yields annotations of both base and derived classes, once for overridden keys", () => {
+  test("yields annotations of both base and derived classes, but not an overridden computed", () => {
     class Base {
       @observable accessor base = 1;
       @observable accessor #basePrivate = 2;
@@ -121,12 +115,11 @@ describe("getMobxObservableAnnotations", () => {
     }
 
     const derived = [...getMobxObservableAnnotations(new Derived())];
-    expect(derived).toHaveLength(4);
+    expect(derived).toHaveLength(3);
     expect(new Map(derived.map(([key, getValue]) => [key, getValue()]))).toEqual(
       new Map<string, unknown>([
         ["base", 1],
         ["#basePrivate", 2],
-        ["overridden", "derived"],
         ["derived", 3],
       ])
     );
@@ -134,7 +127,6 @@ describe("getMobxObservableAnnotations", () => {
       new Map<string, unknown>([
         ["base", 1],
         ["#basePrivate", 2],
-        ["overridden", "base2"],
       ])
     );
   });

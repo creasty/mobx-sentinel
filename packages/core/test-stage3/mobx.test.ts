@@ -5,7 +5,7 @@
  * ../src/mobx.test.ts has the ones that do not depend on stage-3 decorators.
  */
 
-import { $mobx, computed, getAtom, isObservableProp, observable } from "mobx";
+import { $mobx, computed, getAtom, isComputedProp, isObservableProp, observable } from "mobx";
 
 describe("MobX with stage-3 decorators", () => {
   class Sample {
@@ -30,6 +30,23 @@ describe("MobX with stage-3 decorators", () => {
     expect(isObservableProp(obj, "#computed1")).toBe(true);
     expect(readAtom(obj, "#field1")).toBe(1);
     expect(readAtom(obj, "#computed1")).toBe(10);
+  });
+
+  test("isComputedProp tells the keys of computed annotations apart, without applying the annotations", () => {
+    // Each map separately, as applying an annotation moves its key from one map to another
+    const heldKeysOf = (target: object) =>
+      Object.values((target as any)[$mobx]).flatMap((value) => (value instanceof Map ? [[...value.keys()]] : []));
+    const obj = new Sample();
+    const heldKeys = heldKeysOf(obj);
+
+    expect(isComputedProp(obj, "#computed1")).toBe(true);
+    expect(isComputedProp(obj, "#field1")).toBe(false);
+    expect(heldKeysOf(obj)).toEqual(heldKeys);
+
+    readAtom(obj, "#field1");
+    readAtom(obj, "#computed1");
+    expect(isComputedProp(obj, "#computed1")).toBe(true);
+    expect(isComputedProp(obj, "#field1")).toBe(false);
   });
 
   test("the administration holds private keys as keys of maps among its own enumerable properties", () => {

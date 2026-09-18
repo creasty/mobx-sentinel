@@ -17,7 +17,7 @@ Your model stays a model: plain MobX classes that own the data, the derived valu
 
 ```typescript
 import { action, computed, makeObservable, observable } from "mobx";
-import { makeValidatable, nested, unwatch } from "@mobx-sentinel/core";
+import { makeValidatable, nested } from "@mobx-sentinel/core";
 
 export class Invoice {
   @observable customerEmail = "";
@@ -66,9 +66,8 @@ export class Invoice {
   }
 
   // Derived amounts are business logic, not form state.
-  // `@unwatch` keeps them out of change detection, so the change report below
-  // shows what the user edited rather than everything that recomputed.
-  @unwatch
+  // Like any `@computed`, they stay out of change detection, so the change report
+  // below shows what the user edited rather than everything that recomputed.
   @computed
   get total(): number {
     return this.lineItems.reduce((sum, item) => sum + item.amount * (1 + item.taxRate), 0);

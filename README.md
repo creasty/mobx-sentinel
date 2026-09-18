@@ -28,9 +28,9 @@ The documentation lives at **[mobx-sentinel.creasty.com](https://mobx-sentinel.c
   - `@nested.hoist` annotation can be used to hoist sub-fields in a nested model to the parent model.
   - `StandardNestedFetcher` (low-level API) provides a simple but powerful mechanism for tracking and retrieving nested models. Allowing other modules (even your own code) to integrate nested models into their logic without hassle.
 - `Watcher` detects changes in models automatically.
-  - All `@observable` and `@computed` annotations are automatically watched by default.
-  - `@watch` annotation can be used where `@observable` is not applicable.<br>
-    e.g., on private fields: `@watch #private = observable.box(0)`
+  - All `@observable` annotations are automatically watched by default.
+  - `@watch` annotation can be used for `@computed` getters, and for fields holding an `observable.box()`, `.array()`, `.map()` or `.set()` instead of being annotated with `@observable`.<br>
+    e.g., `@watch readonly count = observable.box(0)`
   - `@watch.ref` annotation can be used to watch values with identity comparison, in contrast to the default behavior which uses shallow comparison.
   - `@unwatch` annotation and `unwatch(() => ...)` function disable change detection when you need to modify values silently.
 - `Validator` and `makeValidatable` provides reactive model validation.

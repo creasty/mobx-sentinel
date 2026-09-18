@@ -937,14 +937,13 @@ describe("unwatch()", () => {
   });
 
   it("has no `ref` variant", () => {
-    // PINNED(bug): the JSDoc of `watch` says @observable/@computed are watched "unless `@unwatch` or `@unwatch.ref` is specified", but `unwatch.ref` does not exist. Expected: the JSDoc stops mentioning `@unwatch.ref`, or it gets implemented (then flip this assertion and drop the @ts-expect-error).
     // @ts-expect-error: unwatch.ref is not defined
     expect(unwatch.ref).toBeUndefined();
   });
 });
 
 describe("Annotations", () => {
-  describe("@observable / @computed", () => {
+  describe("@observable", () => {
     class Sample {
       @observable field1 = false;
       @observable field2 = false;
@@ -952,24 +951,9 @@ describe("Annotations", () => {
       constructor() {
         makeObservable(this);
       }
-
-      @computed
-      get computed1() {
-        return this.field1;
-      }
-
-      @computed
-      get computed2() {
-        return this.field2;
-      }
-
-      @computed
-      get computed3() {
-        return this.field1 || this.field2;
-      }
     }
 
-    test("changes to @observable/@computed fields are tracked", () => {
+    test("changes to @observable fields are tracked", () => {
       const sample = new Sample();
       const watcher = Watcher.get(sample);
       expect(watcher.changed).toBe(false);
@@ -979,13 +963,13 @@ describe("Annotations", () => {
         sample.field1 = true;
       });
       expect(watcher.changed).toBe(true);
-      expect(watcher.changedKeys).toEqual(new Set(["field1", "computed1", "computed3"]));
+      expect(watcher.changedKeys).toEqual(new Set(["field1"]));
 
       runInAction(() => {
         sample.field2 = true;
       });
       expect(watcher.changed).toBe(true);
-      expect(watcher.changedKeys).toEqual(new Set(["field1", "computed1", "field2", "computed2", "computed3"]));
+      expect(watcher.changedKeys).toEqual(new Set(["field1", "field2"]));
     });
 
     test("changedTick is incremented for each change", () => {
@@ -996,23 +980,19 @@ describe("Annotations", () => {
       runInAction(() => {
         sample.field1 = true;
       });
-      // 1 change to 3 fields each (field1, computed1, computed3)
-      expect(watcher.changedTick).toBe(3n);
+      expect(watcher.changedTick).toBe(1n);
 
       runInAction(() => {
         sample.field2 = true;
       });
-      // 1 change to 2 fields each (field2, computed2)
-      // Since the value of computed3 is constant, it won't be counted.
-      expect(watcher.changedTick).toBe(3n + 2n);
+      expect(watcher.changedTick).toBe(1n + 1n);
 
       runInAction(() => {
         sample.field1 = false;
         sample.field2 = false;
       });
-      // 1 change to all 5 fields each
-      // Since runInAction is used, change to field1 and field2 are counted as 1 change.
-      expect(watcher.changedTick).toBe(3n + 2n + 5n);
+      // 1 change to each of the 2 fields, although they are changed in the same transaction
+      expect(watcher.changedTick).toBe(1n + 1n + 2n);
     });
 
     test("when the value is not changed, the watcher is not updated", () => {
@@ -1039,8 +1019,8 @@ describe("Annotations", () => {
         sample.field1 = true;
       });
       expect(watcher.changed).toBe(true);
-      expect(watcher.changedKeys).toEqual(new Set(["field1", "computed1", "computed3"]));
-      expect(watcher.changedTick).toBe(3n);
+      expect(watcher.changedKeys).toEqual(new Set(["field1"]));
+      expect(watcher.changedTick).toBe(1n);
 
       watcher.reset();
       expect(watcher.changed).toBe(false);
@@ -1174,6 +1154,143 @@ describe("Annotations", () => {
     });
   });
 
+  describe("@computed", () => {
+    class Sample {
+      @observable field1 = false;
+      @observable field2 = false;
+
+      constructor() {
+        makeObservable(this);
+      }
+
+      @computed
+      get computed1() {
+        return this.field1;
+      }
+
+      @watch
+      @computed
+      get computed2() {
+        return this.field1 || this.field2;
+      }
+    }
+
+    test("changes to @computed getters are NOT tracked, unless @watch is specified", () => {
+      const sample = new Sample();
+      const watcher = Watcher.get(sample);
+
+      runInAction(() => {
+        sample.field1 = true;
+      });
+      expect(watcher.changedKeys).toEqual(new Set(["field1", "computed2"]));
+      expect(watcher.changedTick).toBe(2n);
+
+      runInAction(() => {
+        sample.field2 = true;
+      });
+      // computed2 stays true
+      expect(watcher.changedKeys).toEqual(new Set(["field1", "field2", "computed2"]));
+      expect(watcher.changedTick).toBe(3n);
+    });
+
+    test("@watch compares the value shallowly, and @watch.ref by identity", () => {
+      class Sample {
+        @observable index = 0;
+        readonly lists = [observable.array([1]), observable.array([2])];
+
+        constructor() {
+          makeObservable(this);
+        }
+
+        @watch
+        @computed
+        get shallow() {
+          return this.lists[this.index];
+        }
+
+        @watch.ref
+        @computed
+        get ref() {
+          return this.lists[this.index];
+        }
+      }
+
+      const sample = new Sample();
+      const watcher = Watcher.get(sample);
+
+      runInAction(() => {
+        sample.lists[0].push(2);
+      });
+      expect(watcher.changedKeys).toEqual(new Set(["shallow"]));
+
+      runInAction(() => {
+        sample.index = 1;
+      });
+      expect(watcher.changedKeys).toEqual(new Set(["shallow", "index", "ref"]));
+    });
+
+    test("@nested watches a @computed as it does any other property", () => {
+      class Sample {
+        @observable index = 0;
+        readonly leaves = [new Leaf(), new Leaf()];
+
+        constructor() {
+          makeObservable(this);
+        }
+
+        @nested
+        @computed
+        get current() {
+          return this.leaves[this.index];
+        }
+      }
+
+      const sample = new Sample();
+      const watcher = Watcher.get(sample);
+
+      runInAction(() => {
+        sample.leaves[0].value = 1;
+      });
+      expect(watcher.changedKeyPaths).toEqual(new Set(["current.value"]));
+
+      runInAction(() => {
+        sample.index = 1;
+      });
+      expect(watcher.changedKeys).toEqual(new Set(["index", "current"]));
+    });
+
+    test("@unwatch is accepted, and prevails over @watch", () => {
+      class Sample {
+        @observable field = 0;
+
+        constructor() {
+          makeObservable(this);
+        }
+
+        @unwatch
+        @computed
+        get unwatched() {
+          return this.field;
+        }
+
+        @unwatch
+        @watch
+        @computed
+        get both() {
+          return this.field;
+        }
+      }
+
+      const sample = new Sample();
+      const watcher = Watcher.get(sample);
+
+      runInAction(() => {
+        sample.field = 1;
+      });
+      expect(watcher.changedKeys).toEqual(new Set(["field"]));
+    });
+  });
+
   describe("@watch", () => {
     class Sample {
       @watch field1 = observable.box(false);
@@ -1231,25 +1348,13 @@ describe("Annotations", () => {
         makeObservable(this);
       }
 
-      @unwatch
       @computed
       get computed1() {
         return this.field1;
       }
-
-      @unwatch
-      @computed
-      get computed2() {
-        return this.field2;
-      }
-
-      @computed
-      get computed3() {
-        return this.field1 || this.field2;
-      }
     }
 
-    test("changes to @unwatch fields are ignored", () => {
+    test("changes to @unwatch fields are ignored, and so are those to the @computed getters deriving from them", () => {
       const sample = new Sample();
       const watcher = Watcher.get(sample);
       expect(watcher.changed).toBe(false);
@@ -1258,14 +1363,14 @@ describe("Annotations", () => {
       runInAction(() => {
         sample.field1 = true;
       });
-      expect(watcher.changed).toBe(true);
-      expect(watcher.changedKeys).toEqual(new Set(["computed3"]));
+      expect(watcher.changed).toBe(false);
+      expect(watcher.changedTick).toBe(0n);
 
       runInAction(() => {
         sample.field2 = true;
       });
       expect(watcher.changed).toBe(true);
-      expect(watcher.changedKeys).toEqual(new Set(["field2", "computed3"]));
+      expect(watcher.changedKeys).toEqual(new Set(["field2"]));
     });
   });
 
@@ -1959,13 +2064,13 @@ describe("Annotations", () => {
       }
     }
 
-    test("observable fields and computed getters are tracked, but actions are not", () => {
+    test("observable fields are tracked, but computed getters and actions are not", () => {
       const sample = new Sample();
       const watcher = Watcher.get(sample);
 
       sample.increment();
-      expect(watcher.changedKeys).toEqual(new Set(["value", "double"]));
-      expect(watcher.changedTick).toBe(2n);
+      expect(watcher.changedKeys).toEqual(new Set(["value"]));
+      expect(watcher.changedTick).toBe(1n);
     });
   });
 
@@ -1987,6 +2092,17 @@ describe("Annotations", () => {
         object.a = 1;
       });
       expect(watcher.changedKeys).toEqual(new Set(["a"]));
+    });
+
+    test("the key '', whose annotation MobX cannot tell, is tracked", () => {
+      const object = observable({ "": 0 });
+      const watcher = Watcher.get(object);
+
+      runInAction(() => {
+        object[""] = 1;
+      });
+      expect(watcher.changed).toBe(true);
+      expect(watcher.changedTick).toBe(1n);
     });
   });
 
@@ -2014,7 +2130,40 @@ describe("Annotations", () => {
   });
 
   describe("@computed evaluation", () => {
-    test("Watcher.get() evaluates each @computed once and keeps it cached", () => {
+    test("Watcher.get() does not evaluate a @computed, so one that throws goes unnoticed", () => {
+      const evaluate = vi.fn();
+      class Sample {
+        @observable fail = true;
+
+        constructor() {
+          makeObservable(this);
+        }
+
+        @computed
+        get risky() {
+          evaluate();
+          if (this.fail) throw new Error("risky");
+          return 1;
+        }
+      }
+
+      const consoleError = vi.spyOn(console, "error").mockImplementation(() => {});
+      try {
+        const sample = new Sample();
+        const watcher = Watcher.get(sample);
+
+        runInAction(() => {
+          sample.fail = false;
+        });
+        expect(evaluate).not.toHaveBeenCalled();
+        expect(consoleError).not.toHaveBeenCalled();
+        expect(watcher.changedKeys).toEqual(new Set(["fail"]));
+      } finally {
+        consoleError.mockRestore();
+      }
+    });
+
+    test("Watcher.get() evaluates each @watch @computed once and keeps it cached", () => {
       const evaluate = vi.fn();
       class Sample {
         @observable value = 0;
@@ -2023,6 +2172,7 @@ describe("Annotations", () => {
           makeObservable(this);
         }
 
+        @watch
         @computed
         get derived() {
           evaluate();
@@ -2041,7 +2191,7 @@ describe("Annotations", () => {
       expect(evaluate).toHaveBeenCalledTimes(1);
     });
 
-    test("an error thrown by a @computed is reported by MobX, and other keys are still tracked", () => {
+    test("an error thrown by a @watch @computed is reported by MobX, and other keys are still tracked", () => {
       class Sample {
         @observable fail = false;
 
@@ -2049,6 +2199,7 @@ describe("Annotations", () => {
           makeObservable(this);
         }
 
+        @watch
         @computed
         get risky() {
           if (this.fail) throw new Error("risky");
@@ -2756,6 +2907,7 @@ describe("Annotations", () => {
         makeObservable(this);
       }
 
+      @watch
       @computed
       get risky() {
         if (this.fail) throw new Error("risky");
@@ -2763,7 +2915,7 @@ describe("Annotations", () => {
       }
     }
 
-    test("a @computed that throws when the watcher is created is counted as changed once it recovers", () => {
+    test("a @watch @computed that throws when the watcher is created is counted as changed once it recovers", () => {
       const consoleError = vi.spyOn(console, "error").mockImplementation(() => {});
       try {
         const sample = new Sample();
@@ -2775,7 +2927,7 @@ describe("Annotations", () => {
           sample.fail = false;
         });
         expect(watcher.changedKeys.has("fail" as KeyPath)).toBe(true);
-        // PINNED(quirk): the reaction has no previous value after its first reading threw, so the recovered value counts as a change (while a value-to-error transition does not, see "an error thrown by a @computed is reported by MobX"). Decide: should an error-to-value transition count as a change?
+        // PINNED(quirk): the reaction has no previous value after its first reading threw, so the recovered value counts as a change (while a value-to-error transition does not, see "an error thrown by a @watch @computed is reported by MobX"). Decide: should an error-to-value transition count as a change?
         expect(watcher.changedKeys.has("risky" as KeyPath)).toBe(true);
       } finally {
         consoleError.mockRestore();
