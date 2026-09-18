@@ -40,8 +40,7 @@ describe("MobX", () => {
     });
   });
 
-  // getMobxObservableAnnotations and isMobxComputedAnnotation go through these, as its production build mangles the
-  // internal API
+  // getMobxObservableAnnotations goes through these, as its production build mangles the internal API
   describe("introspection of observable objects", () => {
     class Sample {
       @observable field1 = 123;

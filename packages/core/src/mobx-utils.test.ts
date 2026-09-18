@@ -21,12 +21,7 @@ import {
   $mobx,
   type IObservableValue,
 } from "mobx";
-import {
-  getMobxObservableAnnotations,
-  isMobxComputedAnnotation,
-  shallowReadValue,
-  unwrapShallowContents,
-} from "./mobx-utils";
+import { getMobxObservableAnnotations, shallowReadValue, unwrapShallowContents } from "./mobx-utils";
 
 /** Create observables with `useProxies: "never"`, which makes observable arrays non-proxied (legacy) arrays */
 function withLegacyArrays<T>(fn: () => T): T {
@@ -643,6 +638,7 @@ describe("getMobxObservableAnnotations", () => {
       makeObservable(this);
     }
 
+    // Computed values are not included in the result
     @computed get computed1() {
       return this.field1 * 2;
     }
@@ -675,8 +671,6 @@ describe("getMobxObservableAnnotations", () => {
         ["field3", obj.field3],
         ["field4", obj.field4],
         ["field5", obj.field5],
-        ["computed1", obj.computed1],
-        ["computed2", obj.computed2],
       ])
     );
   });
@@ -690,11 +684,11 @@ describe("getMobxObservableAnnotations", () => {
 
   test("yields keys in the order of declaration, with the getters returning the current values", () => {
     const obj = new Sample();
-    expect(keysOf(obj)).toEqual(["field1", "field2", "field3", "field4", "field5", "computed1", "computed2"]);
+    expect(keysOf(obj)).toEqual(["field1", "field2", "field3", "field4", "field5"]);
 
     const getters = new Map(getMobxObservableAnnotations(obj));
+    expect(getters.get("field2")!()).toBe(456);
     expect(getters.get("field3")!()).toBe(obj.field3);
-    expect(getters.get("computed2")!()).toEqual([123]);
   });
 
   describe("targets without MobX annotations", () => {
@@ -741,7 +735,7 @@ describe("getMobxObservableAnnotations", () => {
   });
 
   describe("makeObservable with an annotation map", () => {
-    test("yields observable and computed annotations and their variants, but not actions, flows, or unannotated fields", () => {
+    test("yields observable annotations and their variants, but not computed ones, actions, flows, or unannotated fields", () => {
       class Sample {
         field1 = 1;
         field2 = 2;
@@ -780,14 +774,12 @@ describe("getMobxObservableAnnotations", () => {
         ["field3", [1]],
         ["field4", [2]],
         ["field5", { value: 0 }],
-        ["computed1", 2],
-        ["computed2", [2]],
       ]);
     });
   });
 
   describe("makeAutoObservable", () => {
-    test("yields fields and getters, but not methods, flows, or excluded keys", () => {
+    test("yields fields, but not getters, methods, flows, or excluded keys", () => {
       class Sample {
         field1 = 1;
         excluded = 2;
@@ -803,15 +795,12 @@ describe("getMobxObservableAnnotations", () => {
         *flow1() {}
       }
 
-      expect(readAll(new Sample())).toEqual([
-        ["field1", 1],
-        ["computed1", 2],
-      ]);
+      expect(readAll(new Sample())).toEqual([["field1", 1]]);
     });
   });
 
   describe("observable objects", () => {
-    test("yields properties and getters in property order, including integer-like and symbol keys", () => {
+    test("yields properties in property order, including integer-like and symbol keys, but not getters", () => {
       const symbolKey = Symbol("key");
       const obj = observable({
         b: 1,
@@ -828,7 +817,6 @@ describe("getMobxObservableAnnotations", () => {
       expect(result).toEqual([
         ["10", "ten"],
         ["b", 1],
-        ["computed1", 2],
         ["a", "a"],
         [symbolKey, "symbol"],
       ]);
@@ -848,7 +836,7 @@ describe("getMobxObservableAnnotations", () => {
       expect(keysOf(obj)).toEqual(["value", "method", "generator"]);
     });
 
-    test("yields getters with setters", () => {
+    test("does not yield getters, even with setters", () => {
       const obj = observable({
         raw: 1,
         get value() {
@@ -858,10 +846,7 @@ describe("getMobxObservableAnnotations", () => {
           this.raw = value;
         },
       });
-      expect(readAll(obj)).toEqual([
-        ["raw", 1],
-        ["value", 1],
-      ]);
+      expect(readAll(obj)).toEqual([["raw", 1]]);
     });
 
     test("yields properties of non-proxied and non-deep observable objects", () => {
@@ -873,7 +858,7 @@ describe("getMobxObservableAnnotations", () => {
       expect(getters.get("arr")!()).toBe(arr);
     });
 
-    test("yields properties added by extendObservable", () => {
+    test("yields properties added by extendObservable, but not getters", () => {
       class Sample {
         constructor() {
           extendObservable(this, {
@@ -884,10 +869,7 @@ describe("getMobxObservableAnnotations", () => {
           });
         }
       }
-      expect(readAll(new Sample())).toEqual([
-        ["field1", 1],
-        ["computed1", 2],
-      ]);
+      expect(readAll(new Sample())).toEqual([["field1", 1]]);
     });
 
     test("yields properties added after creation, and no longer yields removed ones", () => {
@@ -907,7 +889,7 @@ describe("getMobxObservableAnnotations", () => {
   });
 
   describe("inheritance", () => {
-    test("yields annotations of both base and derived classes, once for overridden keys", () => {
+    test("yields annotations of both base and derived classes, but not an overridden computed", () => {
       class Base {
         @observable base = 1;
 
@@ -935,13 +917,9 @@ describe("getMobxObservableAnnotations", () => {
 
       expect(readAll(new Derived())).toEqual([
         ["base", 1],
-        ["overridden", "derived"],
         ["derived", 2],
       ]);
-      expect(readAll(new Base())).toEqual([
-        ["base", 1],
-        ["overridden", "base"],
-      ]);
+      expect(readAll(new Base())).toEqual([["base", 1]]);
     });
   });
 
@@ -952,7 +930,6 @@ describe("getMobxObservableAnnotations", () => {
 
       runInAction(() => (obj.field1 = 1));
       expect(getters.get("field1")!()).toBe(1);
-      expect(getters.get("computed1")!()).toBe(2);
     });
 
     test("reads are tracked by reactions", () => {
@@ -964,11 +941,7 @@ describe("getMobxObservableAnnotations", () => {
       }
 
       runInAction(() => (obj.field1 = 1));
-      expect(effectFn.mock.calls).toEqual([
-        ["field1", 1],
-        ["computed1", 2],
-        ["computed2", [1]],
-      ]);
+      expect(effectFn.mock.calls).toEqual([["field1", 1]]);
 
       // Keys that do not depend on the updated one are not notified
       effectFn.mockClear();
@@ -976,21 +949,6 @@ describe("getMobxObservableAnnotations", () => {
       expect(effectFn.mock.calls).toEqual([["field2", 0]]);
 
       for (const dispose of disposers) dispose();
-    });
-
-    test("enumeration alone does not evaluate computed getters", () => {
-      const getterFn = vi.fn(() => 1);
-      const obj = observable({
-        get computed1() {
-          return getterFn();
-        },
-      });
-
-      const entries = [...getMobxObservableAnnotations(obj)];
-      expect(getterFn).toBeCalledTimes(0);
-
-      expect(entries[0][1]()).toBe(1);
-      expect(getterFn).toBeCalledTimes(1);
     });
 
     test("falls back to the administration when the key is not reachable on the target", () => {
@@ -1037,20 +995,6 @@ describe("getMobxObservableAnnotations", () => {
       expect(effectFn).lastCalledWith(6, 5, expect.anything());
 
       dispose();
-    });
-
-    test("propagates errors thrown by computed getters, while enumeration alone does not throw", () => {
-      const obj = observable({
-        value: 1,
-        get failing(): number {
-          throw new Error("boom");
-        },
-      });
-
-      const getters = new Map(getMobxObservableAnnotations(obj));
-      expect([...getters.keys()]).toEqual(["value", "failing"]);
-      expect(() => getters.get("failing")!()).toThrow("boom");
-      expect(getters.get("value")!()).toBe(1);
     });
   });
 
@@ -1126,6 +1070,22 @@ describe("getMobxObservableAnnotations", () => {
       dispose2();
     });
 
+    test("does not evaluate computed getters, including ones that throw", () => {
+      const getterFn = vi.fn(() => 1);
+      const obj = observable({
+        value: 1,
+        get computed1() {
+          return getterFn();
+        },
+        get failing(): number {
+          throw new Error("boom");
+        },
+      });
+
+      expect(readAll(obj)).toEqual([["value", 1]]);
+      expect(getterFn).toBeCalledTimes(0);
+    });
+
     test("can be stopped early", () => {
       const generator = getMobxObservableAnnotations(new Sample());
       expect(generator.next().value?.[0]).toBe("field1");
@@ -1175,6 +1135,19 @@ describe("getMobxObservableAnnotations", () => {
       ]);
     });
 
+    test("yields a computed under the key '', as isComputedProp() cannot tell it apart", () => {
+      const obj = observable({
+        get ""() {
+          return 1;
+        },
+        get computed1() {
+          return 2;
+        },
+      });
+
+      expect(readAll(obj)).toEqual([["", 1]]);
+    });
+
     test("still yields the keys of properties when the administration holds no enumerable maps", () => {
       const obj: Record<string, number> = observable({ value: 1, deleted: 2 }, {}, { proxy: false });
       // Bypass MobX so that only the administration knows the key
@@ -1188,165 +1161,5 @@ describe("getMobxObservableAnnotations", () => {
       }
       expect(readAll(obj)).toEqual([["value", 1]]);
     });
-  });
-});
-
-describe("isMobxComputedAnnotation", () => {
-  test("is true for computed annotations and their variants only", () => {
-    class Sample {
-      @observable field1 = 1;
-      @observable.ref field2 = 2;
-      plain = 3;
-
-      constructor() {
-        makeObservable(this);
-      }
-
-      @computed get computed1() {
-        return this.field1 * 2;
-      }
-      @computed.struct get computed2() {
-        return [this.field2];
-      }
-      get getter() {
-        return this.plain;
-      }
-
-      // biome-ignore lint/plugin/mobxUnboundParameterlessAction: models may declare actions as methods, which are not computed
-      @action action1() {}
-    }
-
-    const obj = new Sample();
-    expect(isMobxComputedAnnotation(obj, "computed1")).toBe(true);
-    expect(isMobxComputedAnnotation(obj, "computed2")).toBe(true);
-    for (const key of ["field1", "field2", "plain", "getter", "action1", "missing"]) {
-      expect(isMobxComputedAnnotation(obj, key)).toBe(false);
-    }
-  });
-
-  test("signature", () => {
-    expectTypeOf(isMobxComputedAnnotation).parameter(0).toEqualTypeOf<object>();
-    expectTypeOf(isMobxComputedAnnotation).parameter(1).toEqualTypeOf<string | symbol | number>();
-    expectTypeOf(isMobxComputedAnnotation).returns.toEqualTypeOf<boolean>();
-  });
-
-  test("is true for getters annotated in any way MobX offers", () => {
-    class Mapped {
-      value = 1;
-
-      constructor() {
-        makeObservable(this, { value: observable, double: computed });
-      }
-
-      get double() {
-        return this.value * 2;
-      }
-    }
-
-    class Auto {
-      value = 1;
-
-      constructor() {
-        makeAutoObservable(this);
-      }
-
-      get double() {
-        return this.value * 2;
-      }
-    }
-
-    class Base {
-      @observable value = 1;
-
-      constructor() {
-        makeObservable(this);
-      }
-
-      @computed get double() {
-        return this.value * 2;
-      }
-    }
-
-    class Derived extends Base {
-      constructor() {
-        super();
-        makeObservable(this);
-      }
-
-      @override override get double() {
-        return this.value * 3;
-      }
-    }
-
-    const targets = [
-      new Mapped(),
-      new Auto(),
-      new Derived(),
-      observable({
-        value: 1,
-        get double() {
-          return this.value * 2;
-        },
-      }),
-      extendObservable(
-        {},
-        {
-          value: 1,
-          get double() {
-            return 2;
-          },
-        }
-      ),
-    ];
-    for (const target of targets) {
-      expect(isMobxComputedAnnotation(target, "double")).toBe(true);
-      expect(isMobxComputedAnnotation(target, "value")).toBe(false);
-    }
-  });
-
-  test("is false for targets that are not observable objects", () => {
-    class Plain {
-      get getter() {
-        return 1;
-      }
-    }
-
-    for (const target of [new Plain(), {}, observable.array([1]), observable.map({ key: 1 }), computed(() => 1)]) {
-      expect(isMobxComputedAnnotation(target, "getter")).toBe(false);
-      expect(isMobxComputedAnnotation(target, "key")).toBe(false);
-    }
-  });
-
-  test("does not evaluate the getter", () => {
-    const getterFn = vi.fn(() => 1);
-    const obj = observable({
-      get computed1() {
-        return getterFn();
-      },
-    });
-
-    expect(isMobxComputedAnnotation(obj, "computed1")).toBe(true);
-    expect(getterFn).toBeCalledTimes(0);
-  });
-
-  test("is false for the falsy keys '' and 0, whose annotation MobX cannot tell", () => {
-    const obj = observable<Record<string | number, number>>({
-      "": 1,
-      get computed1() {
-        return 2;
-      },
-    });
-    runInAction(() => set(obj, 0, 3));
-    expect(isMobxComputedAnnotation(obj, "")).toBe(false);
-    expect(isMobxComputedAnnotation(obj, 0)).toBe(false);
-    expect(isMobxComputedAnnotation(obj, "computed1")).toBe(true);
-
-    // Even when the key is computed
-    const computedObj = observable({
-      get ""() {
-        return 1;
-      },
-    });
-    expect(isMobxComputedAnnotation(computedObj, "")).toBe(false);
   });
 });

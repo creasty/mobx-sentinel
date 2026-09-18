@@ -9,7 +9,7 @@ sidebar:
 
 ### `@watch`
 
-Explicitly mark properties for tracking (shallow comparison)
+Explicitly mark properties for tracking (shallow comparison): `@computed` getters, and fields holding an `observable.box()`, `.array()`, `.map()` or `.set()` instead of being annotated with `@observable`.
 
 ```typescript
 class Model {
@@ -21,7 +21,7 @@ class Model {
 }
 ```
 
-It is also how a `@computed` gets tracked, as a watcher leaves `@computed` out by default (see [Computed properties](/docs/core/watcher/#computed-properties)). Here, the prices of the items count through the total, although changes to elements are not tracked on their own:
+A watcher leaves a `@computed` out unless it is marked (see [Computed properties](/docs/core/watcher/#computed-properties)). Here, the prices of the items count through the total, although changes to elements are not tracked on their own:
 
 ```typescript
 class Model {

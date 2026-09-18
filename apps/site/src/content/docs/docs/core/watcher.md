@@ -81,7 +81,7 @@ watcher.changed // true
 
 ## Basic Change Tracking
 
-`@observable` is automatically tracked unless explicitly excluded with `@unwatch`. `@computed` is not tracked unless included with `@watch`: see [Computed properties](#computed-properties).
+`@observable` is automatically tracked unless explicitly excluded with `@unwatch`. `@computed` is not: see [Computed properties](#computed-properties).
 
 - Properties are tracked using **shallow comparison** by default (arrays/sets/maps are compared by creating shallow copies)
 - Use `@watch.ref` for **identity comparison** only (reference equality)

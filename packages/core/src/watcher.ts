@@ -1,12 +1,7 @@
 import { action, autorun, computed, makeObservable, observable, reaction, runInAction, transaction } from "mobx";
 import { randomId } from "./randomId";
 import { createPropertyLikeAnnotation, getAnnotationProcessor } from "./annotationProcessor";
-import {
-  getMobxObservableAnnotations,
-  isMobxComputedAnnotation,
-  shallowReadValue,
-  unwrapShallowContents,
-} from "./mobx-utils";
+import { getMobxObservableAnnotations, shallowReadValue, unwrapShallowContents } from "./mobx-utils";
 import { StandardNestedFetcher, getNestedAnnotations } from "./nested";
 import { KeyPath } from "./keyPath";
 
@@ -115,7 +110,7 @@ const internalToken = Symbol("watcher.internal");
  * Watcher for tracking changes to observable properties
  *
  * - Automatically tracks `@observable` properties
- * - Supports `@watch` and `@watch.ref` annotations, which also opt `@computed` properties in
+ * - Supports `@watch` and `@watch.ref` annotations for what `@observable` does not cover, such as `@computed` properties
  * - Can track nested objects
  * - Provides change detection at both property and path levels
  * - Can be temporarily disabled via `unwatch()`
@@ -290,13 +285,12 @@ export class Watcher {
   /**
    * Process MobX's `@observable` annotations
    *
-   * `@computed` ones are left out: they are watched only with `@watch`, as {@link watch} explains.
+   * `@computed` ones are watched only with `@watch`, as {@link watch} explains.
    */
   #processMobxAnnotations(target: object) {
     for (const [key, getValue] of getMobxObservableAnnotations(target)) {
       if (typeof key !== "string") continue; // symbol and number keys are not supported
       if (this.#processedKeys.has(key)) continue;
-      if (isMobxComputedAnnotation(target, key)) continue;
       this.#processedKeys.add(key);
 
       reaction(
