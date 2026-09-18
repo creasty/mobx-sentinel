@@ -29,7 +29,7 @@
     "pre-commit": "pnpm lint-staged"
   },
   "devDependencies": {
-    "@biomejs/biome": "2.5.13",
+    "@biomejs/biome": "2.5.14",
     "lint-staged": "^17.5.1",
     "simple-git-hooks": "^2.14.0",
     "turbo": "^2.10.12"
