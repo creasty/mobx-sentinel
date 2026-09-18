@@ -22,7 +22,7 @@ To use the convenient `bindInput()`, `bindCheckBox()`, etc. methods, import the 
 import "@mobx-sentinel/react/extension";
 ```
 
-This extends the `Form` class with custom bind methods. Without the extension, you can still use the default `bind()` method with binding classes:
+This adds the standard bindings to every form as methods, with `extendFormBinding()` (see [Adding Bind Methods](/docs/form/bindings/#adding-bind-methods)). Without the extension, you can still use the default `bind()` method with binding classes:
 
 ```tsx
 // With extension

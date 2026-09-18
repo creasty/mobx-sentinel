@@ -1710,7 +1710,7 @@ describe("bindInput", () => {
   });
 
   describe("binding cache", () => {
-    test("reuses the binding for repeated calls with the same valueAs and cacheKey", () => {
+    test("reuses the binding for repeated calls with the same cacheKey", () => {
       const model = new SampleModel();
       const form = Form.get(model);
       const first = form.bindInput("string", { getter: () => model.string, setter: () => {} });
@@ -1719,24 +1719,18 @@ describe("bindInput", () => {
       expect(second.onChange).toBe(first.onChange);
     });
 
-    test("creates separate bindings for an omitted and an explicit valueAs=string", () => {
-      const model = new SampleModel();
-      const form = Form.get(model);
-      const implicit = form.bindInput("string", { getter: () => model.string, setter: () => {} });
-      const explicit = form.bindInput("string", { valueAs: "string", getter: () => model.string, setter: () => {} });
-      // PINNED(quirk): the cache key is `${valueAs}:${cacheKey}`, so an omitted valueAs ("undefined") and the equivalent explicit "string" create two binding instances for the same field. Decide: should valueAs be normalized to "string" before building the cache key?
-      expect(explicit.onChange).not.toBe(implicit.onChange);
-    });
-
-    test("creates separate bindings per valueAs and cacheKey that share the field id", () => {
+    test("separates the bindings of a field by cacheKey only, whatever the valueAs", () => {
       const model = new SampleModel();
       const form = Form.get(model);
       const asString = form.bindInput("string", { getter: () => model.string, setter: () => {} });
+      const explicit = form.bindInput("string", { valueAs: "string", getter: () => model.string, setter: () => {} });
       const asNumber = form.bindInput("string", { valueAs: "number", getter: () => null, setter: () => {} });
       const keyed = form.bindInput("string", { cacheKey: "other", getter: () => model.string, setter: () => {} });
-      expect(asNumber.onChange).not.toBe(asString.onChange);
-      expect(keyed.onChange).not.toBe(asString.onChange);
+      // Inputs bound to the same field share a binding, which takes the latest config, unless their cacheKeys differ
+      expect(explicit.onChange).toBe(asString.onChange);
+      expect(asNumber.onChange).toBe(asString.onChange);
       expect(asNumber.type).toBe("number");
+      expect(keyed.onChange).not.toBe(asString.onChange);
       // PINNED(quirk): every binding of a field gets the same default id, so rendering two inputs for one field (e.g. with distinct cacheKeys) produces duplicate DOM ids. Decide: should bindings with distinct cache keys derive distinct ids?
       expect(keyed.id).toBe(asString.id);
       expect(asNumber.id).toBe(asString.id);
@@ -1942,14 +1936,13 @@ describe("bindInput", () => {
       expect(input).toHaveAttribute("aria-invalid", "false");
     });
 
-    test("creates a binding separate from the one created by bindInput with the same config", () => {
+    test("shares the binding with bindInput given the same config", () => {
       const model = new SampleModel();
       const form = Form.get(model);
       const config = { getter: () => model.string, setter: () => {} };
       const viaBind = form.bind("string", InputBinding, config);
       const viaExtension = form.bindInput("string", config);
-      // PINNED(quirk): bindInput rewrites the cache key to `${valueAs}:${cacheKey}` while Form#bind uses the plain cacheKey, so the two call styles the docs present as equivalent never share a binding instance. Decide: should both styles resolve to the same cache entry? (flip not.toBe -> toBe)
-      expect(viaExtension.onChange).not.toBe(viaBind.onChange);
+      expect(viaExtension.onChange).toBe(viaBind.onChange);
       expect(viaExtension.id).toBe(viaBind.id);
     });
   });

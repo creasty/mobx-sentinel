@@ -5,7 +5,7 @@ import "@testing-library/jest-dom/vitest";
 import { fireEvent, render, screen } from "@testing-library/react";
 import { makeObservable, observable } from "mobx";
 import { observer } from "mobx-react-lite";
-import { Form, FormBindingFuncExtension, FormField } from "@mobx-sentinel/form";
+import { Form, FormBindingFunc, FormBindingMethod, FormField } from "@mobx-sentinel/form";
 import * as extensionModule from "./extension";
 import * as indexModule from "./index";
 import { CheckBoxBinding } from "./CheckBoxBinding";
@@ -47,20 +47,32 @@ const setupEnv = () => {
 };
 
 describe("extension module", () => {
-  test("has no runtime exports", () => {
-    expect(Object.keys(extensionModule)).toEqual([]);
+  test("exports the standard bindings by method name", () => {
+    expect(Object.keys(extensionModule)).toEqual(["standardBindings"]);
+    expect(extensionModule.standardBindings).toEqual({
+      bindInput: InputBinding,
+      bindTextArea: TextAreaBinding,
+      bindSelectBox: SelectBoxBinding,
+      bindCheckBox: CheckBoxBinding,
+      bindRadioGroup: RadioGroupBinding,
+      bindSubmitButton: SubmitButtonBinding,
+      bindLabel: LabelBinding,
+    });
+    expect(Object.keys(extensionModule.standardBindings)).toEqual([...STANDARD_METHODS]);
   });
 
-  test("installs exactly the standard bind methods on Form.prototype", () => {
-    const names = Object.getOwnPropertyNames(Form.prototype).filter((name) => name.startsWith("bind"));
-    expect(names).toEqual([...STANDARD_METHODS]);
+  test("adds exactly the standard bind methods, which forms inherit through Form.prototype", () => {
+    // Form.prototype itself is left as the class defines it
+    expect(Object.getOwnPropertyNames(Form.prototype).filter((name) => name.startsWith("bind"))).toEqual([]);
 
+    const extensions = Object.getPrototypeOf(Form.prototype);
+    expect(Object.getOwnPropertyNames(extensions)).toEqual([...STANDARD_METHODS]);
     for (const name of STANDARD_METHODS) {
-      // Installed by plain assignment, hence writable, enumerable and configurable
-      expect(Object.getOwnPropertyDescriptor(Form.prototype, name)).toEqual({
+      // Defined like the methods of a class
+      expect(Object.getOwnPropertyDescriptor(extensions, name)).toEqual({
         value: expect.any(Function),
         writable: true,
-        enumerable: true,
+        enumerable: false,
         configurable: true,
       });
     }
@@ -103,7 +115,7 @@ describe("extension module", () => {
     expect(bind("text", InputBinding, { getter: () => model.text, setter: noop }).value).toBe("hello");
 
     const { bindInput, bindTextArea, bindSelectBox, bindCheckBox, bindRadioGroup, bindSubmitButton, bindLabel } = form;
-    // PINNED(quirk): the extension methods are prototype functions that call `this.bind`, so detaching them (e.g. `const { bindInput } = Form.get(model)`) throws a TypeError, while the detached Form#bind keeps working. Decide: should the extension methods be bound to the instance like Form#bind?
+    // PINNED(quirk): the extension methods are functions inherited through Form.prototype that call `this.bind`, so detaching them (e.g. `const { bindInput } = Form.get(model)`) throws a TypeError, while the detached Form#bind keeps working. Decide: should the extension methods be bound to the instance like Form#bind?
     expect(() => bindInput("text", { getter: () => model.text, setter: noop })).toThrow(TypeError);
     expect(() => bindTextArea("text", { getter: () => model.text, setter: noop })).toThrow(TypeError);
     expect(() => bindSelectBox("choice", { getter: () => model.choice, setter: noop })).toThrow(TypeError);
@@ -223,28 +235,10 @@ describe("delegation to Form#bind", () => {
     // The spy is typed after the last overload of Form#bind, so read the arguments untyped
     const lastCall = () => bindSpy.mock.lastCall as unknown[] | undefined;
 
-    const getter = () => model.text;
-    const inputConfig = { getter, setter: noop };
-    const inputProps = form.bindInput("text", inputConfig);
-    expect(bindSpy.mock.lastCall).toEqual([
-      "text",
-      InputBinding,
-      { getter, setter: noop, cacheKey: "undefined:undefined" },
-    ]);
-    // bindInput passes a copy and leaves the caller's config untouched
-    expect(lastCall()?.[2]).not.toBe(inputConfig);
-    expect(inputConfig).toEqual({ getter, setter: noop });
-    expect(inputProps).toBe(lastResult());
-    expect(form.bindInput("text", inputConfig).onChange).toBe(inputProps.onChange);
-
-    const dateGetter = () => null;
-    form.bindInput("text", { valueAs: "date", cacheKey: "k", getter: dateGetter, setter: noop });
-    // The composite key is `${valueAs}:${cacheKey}`, in that order
-    expect(bindSpy.mock.lastCall).toEqual([
-      "text",
-      InputBinding,
-      { valueAs: "date", cacheKey: "date:k", getter: dateGetter, setter: noop },
-    ]);
+    const inputConfig = { valueAs: "number" as const, cacheKey: "k", getter: () => model.number, setter: noop };
+    expect(form.bindInput("number", inputConfig)).toBe(lastResult());
+    expect(bindSpy.mock.lastCall).toEqual(["number", InputBinding, inputConfig]);
+    expect(lastCall()?.[2]).toBe(inputConfig);
 
     const textAreaConfig = { getter: () => model.text, setter: noop };
     expect(form.bindTextArea("text", textAreaConfig)).toBe(lastResult());
@@ -280,7 +274,7 @@ describe("delegation to Form#bind", () => {
     form.bindLabel(fields, labelConfig);
     expect(lastCall()?.[2]).toBe(labelConfig);
 
-    expect(bindSpy).toBeCalledTimes(11);
+    expect(bindSpy).toBeCalledTimes(9);
   });
 
   test("uses the bind of the receiver, so the methods can be applied to another form", () => {
@@ -324,7 +318,7 @@ describe("Form#bindInput", () => {
     ).toBe("month");
   });
 
-  test("reuses the cached binding for the same field, valueAs and cacheKey", () => {
+  test("reuses the cached binding for the same field and cacheKey", () => {
     const { model, form } = setupEnv();
 
     const a = form.bindInput("text", { getter: () => model.text, setter: noop });
@@ -336,26 +330,21 @@ describe("Form#bindInput", () => {
     expect(d.onChange).toBe(c.onChange);
   });
 
-  test("keeps separate bindings per valueAs and per cacheKey, all on the same field", () => {
+  test("keeps separate bindings per cacheKey only, whatever the valueAs", () => {
     const { form } = setupEnv();
 
     const plain = form.bindInput("text", { getter: () => "", setter: noop });
+    const asString = form.bindInput("text", { valueAs: "string", getter: () => "", setter: noop });
     const asDate = form.bindInput("text", { valueAs: "date", getter: () => null, setter: noop });
     const withKey = form.bindInput("text", { cacheKey: "k", getter: () => "", setter: noop });
     const asDateWithKey = form.bindInput("text", { valueAs: "date", cacheKey: "k", getter: () => null, setter: noop });
 
-    const handlers = new Set([plain.onChange, asDate.onChange, withKey.onChange, asDateWithKey.onChange]);
-    expect(handlers.size).toBe(4);
-    expect(new Set([plain.id, asDate.id, withKey.id, asDateWithKey.id])).toEqual(new Set([form.getField("text").id]));
-  });
-
-  test("gives valueAs 'string' and an omitted valueAs separate bindings", () => {
-    const { model, form } = setupEnv();
-
-    const omitted = form.bindInput("text", { getter: () => model.text, setter: noop });
-    const explicit = form.bindInput("text", { valueAs: "string", getter: () => model.text, setter: noop });
-    // PINNED(quirk): the composite cacheKey embeds the raw valueAs ("undefined:undefined" vs "string:undefined"), so two configs that behave identically (valueAs defaults to "string") get two cached bindings. Decide: should an omitted valueAs be normalized to "string" before building the cacheKey?
-    expect(explicit.onChange).not.toBe(omitted.onChange);
+    // Like any binding, inputs bound to the same field need distinct cacheKeys to keep their configs apart
+    expect(asString.onChange).toBe(plain.onChange);
+    expect(asDate.onChange).toBe(plain.onChange);
+    expect(asDateWithKey.onChange).toBe(withKey.onChange);
+    expect(withKey.onChange).not.toBe(plain.onChange);
+    expect(new Set([plain.id, withKey.id])).toEqual(new Set([form.getField("text").id]));
   });
 
   test("replaces the config on every call", () => {
@@ -382,29 +371,13 @@ describe("Form#bindInput", () => {
     expect(onChange2).toBeCalledTimes(1);
   });
 
-  test("does not share a binding with Form#bind given the same config", () => {
+  test("shares the cache entry with Form#bind given the same cacheKey", () => {
     const { model, form } = setupEnv();
     const config = { getter: () => model.text, setter: noop };
 
     const viaExtension = form.bindInput("text", config);
-    const viaBind = form.bind("text", InputBinding, config);
-    // bindInput rewrites cacheKey to `${valueAs}:${cacheKey}`, so the two land on different cache entries
-    expect(viaBind.onChange).not.toBe(viaExtension.onChange);
-    expect(viaBind.id).toBe(viaExtension.id);
-  });
-
-  test("shares a binding with Form#bind when bind's cacheKey matches bindInput's composite key", () => {
-    const { model, form } = setupEnv();
-
-    const viaExtension = form.bindInput("text", { getter: () => model.text, setter: noop });
-    const viaBind = form.bind("text", InputBinding, {
-      cacheKey: "undefined:undefined",
-      getter: () => "overwritten",
-      setter: noop,
-    });
-    // PINNED(quirk): the composite key is not namespaced, so a Form#bind call whose cacheKey happens to equal "undefined:undefined" (or `${valueAs}:${cacheKey}` in general) reuses bindInput's binding and replaces its config. Decide: should bindInput build a cacheKey that cannot collide with user-supplied keys?
-    expect(viaBind.onChange).toBe(viaExtension.onChange);
-    expect(form.bindInput("text", { getter: () => model.text, setter: noop }).value).toBe("hello");
+    expect(form.bind("text", InputBinding, config).onChange).toBe(viaExtension.onChange);
+    expect(form.bind("text", InputBinding, { cacheKey: "k", ...config }).onChange).not.toBe(viaExtension.onChange);
   });
 
   test("writes the value through the setter and marks the field as changed and touched", () => {
@@ -659,43 +632,49 @@ describe("Form#bindLabel", () => {
 });
 
 describe("types", () => {
-  test("Form is augmented with StandardExtensions", () => {
+  test("Form is augmented with a method for each standard binding", () => {
     const { form } = setupEnv();
 
-    type Ext = extensionModule.StandardExtensions<SampleModel>;
-    expectTypeOf(form.bindInput).toEqualTypeOf<Ext["bindInput"]>();
-    expectTypeOf(form.bindTextArea).toEqualTypeOf<Ext["bindTextArea"]>();
-    expectTypeOf(form.bindSelectBox).toEqualTypeOf<Ext["bindSelectBox"]>();
-    expectTypeOf(form.bindCheckBox).toEqualTypeOf<Ext["bindCheckBox"]>();
-    expectTypeOf(form.bindRadioGroup).toEqualTypeOf<Ext["bindRadioGroup"]>();
-    expectTypeOf(form.bindSubmitButton).toEqualTypeOf<Ext["bindSubmitButton"]>();
-    expectTypeOf(form.bindLabel).toEqualTypeOf<Ext["bindLabel"]>();
-    expectTypeOf(form).toExtend<Ext>();
+    expectTypeOf<Extract<keyof typeof form, `bind${string}`>>().toEqualTypeOf<
+      "bind" | (typeof STANDARD_METHODS)[number]
+    >();
 
-    expectTypeOf<Ext["bindInput"]>().toEqualTypeOf<
-      FormBindingFuncExtension.ForField.RequiredConfig<SampleModel, typeof InputBinding>
-    >();
-    expectTypeOf<Ext["bindTextArea"]>().toEqualTypeOf<
-      FormBindingFuncExtension.ForField.RequiredConfig<SampleModel, typeof TextAreaBinding>
-    >();
-    expectTypeOf<Ext["bindSelectBox"]>().toEqualTypeOf<
-      FormBindingFuncExtension.ForField.RequiredConfig<SampleModel, typeof SelectBoxBinding>
-    >();
-    expectTypeOf<Ext["bindCheckBox"]>().toEqualTypeOf<
-      FormBindingFuncExtension.ForField.RequiredConfig<SampleModel, typeof CheckBoxBinding>
-    >();
-    // Generic, so that the options are typed after the getter
-    expectTypeOf<Ext["bindRadioGroup"]>().toEqualTypeOf<
+    // Derived from the binding classes
+    expectTypeOf(form.bindInput).toEqualTypeOf<FormBindingMethod<SampleModel, typeof InputBinding>>();
+    expectTypeOf(form.bindTextArea).toEqualTypeOf<FormBindingMethod<SampleModel, typeof TextAreaBinding>>();
+    expectTypeOf(form.bindSelectBox).toEqualTypeOf<FormBindingMethod<SampleModel, typeof SelectBoxBinding>>();
+    expectTypeOf(form.bindCheckBox).toEqualTypeOf<FormBindingMethod<SampleModel, typeof CheckBoxBinding>>();
+    expectTypeOf(form.bindSubmitButton).toEqualTypeOf<FormBindingMethod<SampleModel, typeof SubmitButtonBinding>>();
+    expectTypeOf(form.bindLabel).toEqualTypeOf<FormBindingMethod<SampleModel, typeof LabelBinding>>();
+    // Written out, as RadioGroupBinding is generic, so that the options are typed after the getter
+    expectTypeOf(form.bindRadioGroup).toEqualTypeOf<
       <V extends RadioGroupBinding.Option>(
         fieldName: FormField.Name<SampleModel>,
-        config: RadioGroupBinding.Config<V> & FormBindingFuncExtension.Config
+        config: RadioGroupBinding.Config<V> & FormBindingFunc.Config
       ) => RadioGroupBinding<V>["props"]
     >();
-    expectTypeOf<Ext["bindSubmitButton"]>().toEqualTypeOf<
-      FormBindingFuncExtension.ForForm.OptionalConfig<SampleModel, typeof SubmitButtonBinding>
+  });
+
+  test("parameters are the subject of the binding and its config, optional when it has no required keys", () => {
+    const { form } = setupEnv();
+
+    expectTypeOf(form.bindInput).parameters.toEqualTypeOf<
+      [fieldName: FormField.Name<SampleModel>, config: InputBinding.Config & FormBindingFunc.Config]
     >();
-    expectTypeOf<Ext["bindLabel"]>().toEqualTypeOf<
-      FormBindingFuncExtension.ForMultiField.OptionalConfig<SampleModel, typeof LabelBinding>
+    expectTypeOf(form.bindTextArea).parameters.toEqualTypeOf<
+      [fieldName: FormField.Name<SampleModel>, config: TextAreaBinding.Config & FormBindingFunc.Config]
+    >();
+    expectTypeOf(form.bindSelectBox).parameters.toEqualTypeOf<
+      [fieldName: FormField.Name<SampleModel>, config: SelectBoxBinding.Config & FormBindingFunc.Config]
+    >();
+    expectTypeOf(form.bindCheckBox).parameters.toEqualTypeOf<
+      [fieldName: FormField.Name<SampleModel>, config: CheckBoxBinding.Config & FormBindingFunc.Config]
+    >();
+    expectTypeOf(form.bindSubmitButton).parameters.toEqualTypeOf<
+      [config?: SubmitButtonBinding.Config & FormBindingFunc.Config]
+    >();
+    expectTypeOf(form.bindLabel).parameters.toEqualTypeOf<
+      [fieldNames: FormField.Name<SampleModel>[], config?: LabelBinding.Config & FormBindingFunc.Config]
     >();
   });
 
@@ -769,6 +748,10 @@ describe("types", () => {
       form.bindSubmitButton({ onClick: noop, cacheKey: "k" });
       // @ts-expect-error bindSubmitButton accepts only SubmitButtonBinding options
       form.bindSubmitButton({ htmlFor: "custom" });
+
+      // Detached methods type-check, and fail at runtime (see "methods depend on `this`")
+      const { bindInput } = form;
+      bindInput("text", { getter: () => model.text, setter: noop });
     };
     expectTypeOf(typeOnly).toBeFunction();
   });

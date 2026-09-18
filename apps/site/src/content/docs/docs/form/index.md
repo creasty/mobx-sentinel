@@ -12,4 +12,4 @@ Form and bindings for MobX-based form management with validation and submission 
 - [Submission](/docs/form/submission/) — submission handlers and their lifecycle
 - [Configuration](/docs/form/configuration/)
 - [Smart Error Reporting](/docs/form/error-reporting/) — when users see validation errors
-- [Bindings](/docs/form/bindings/) — connecting forms to UI elements, the element ids they render, and writing your own
+- [Bindings](/docs/form/bindings/) — connecting forms to UI elements, adding them to forms as methods, the element ids they render, and writing your own

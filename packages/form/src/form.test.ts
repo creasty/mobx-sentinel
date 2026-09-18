@@ -2654,7 +2654,8 @@ describe("Form (details)", () => {
       expectTypeOf(form.invalidFieldPathCount).toEqualTypeOf<number>();
       expectTypeOf(form.subForms).toEqualTypeOf<ReadonlyMap<KeyPath, Form<any>>>();
       expectTypeOf(form.firstErrorMessage).toEqualTypeOf<string | null>();
-      expectTypeOf(form.bindInput).toEqualTypeOf<unknown>();
+      // Bind methods exist only once added by extendFormBinding() and typed with FormBindingMethods
+      expectTypeOf(form).not.toHaveProperty("bindInput");
     });
 
     test("methods", () => {

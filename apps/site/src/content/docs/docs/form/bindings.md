@@ -1,6 +1,6 @@
 ---
 title: "Bindings"
-description: "What bindings are, how to use them in a view, and the element ids they render."
+description: "What bindings are, how to use them in a view, how to add them to forms as methods, and the element ids they render."
 sidebar:
   order: 5
 ---
@@ -49,6 +49,64 @@ const form = Form.get(model);
 {/* Bind to the form */}
 <button {...form.bind(SubmitButtonBinding)}>Submit</button>
 ```
+
+## Adding Bind Methods
+
+`form.bind()` works with any binding class. To call a binding as a method of the form instead, as in `form.bindInput(fieldName, config)` from `@mobx-sentinel/react`, add it with `extendFormBinding()` and declare the methods on `Form`:
+
+```ts
+import { extendFormBinding, FormBindingMethods } from "@mobx-sentinel/form";
+
+export const myBindings = extendFormBinding({
+  bindDropdown: DropdownBinding,
+  bindRating: RatingBinding,
+});
+
+declare module "@mobx-sentinel/form" {
+  interface Form<T> extends FormBindingMethods<T, typeof myBindings> {}
+}
+```
+
+```tsx
+<Dropdown
+  {...form.bindDropdown("country", {
+    getter: () => model.country,
+    setter: (v) => (model.country = v),
+  })}
+/>
+```
+
+Each method binds its class with `form.bind()`, so a method and a `form.bind()` call share a binding when the class, the fields and the `cacheKey` are the same. The type of the method comes from the binding class:
+
+- **What it binds to**, from the constructor's first parameter: a method for a `FormField` takes a field name, one for `FormField[]` a list of field names, and one for the `Form` neither.
+- **The config**, from the constructor's second parameter. It is optional when none of its keys is required, and an omitted config reaches the binding as `{}`.
+- **The return type**, the binding's `props`.
+
+The methods are added when the module calling `extendFormBinding()` is imported, and forms created earlier get them too. Every form shares them, like the methods of a class, so call them on the form: a method taken off it, as in `const { bindDropdown } = form`, has no form to bind to.
+
+A method name is `bind` followed by a capital letter, which keeps it apart from `Form`'s own members. Adding a name again replaces its method on every form, as when a module is reloaded.
+
+### Generic Bindings
+
+A generic binding class loses its type parameters in the derived method: they fall back to their constraints. Write the method of such a class by hand, as the third type argument, as `@mobx-sentinel/react` does for `bindRadioGroup()` to type the options after the getter:
+
+```ts
+declare module "@mobx-sentinel/form" {
+  interface Form<T>
+    extends FormBindingMethods<
+      T,
+      typeof myBindings,
+      {
+        bindChoice: <V extends string>(
+          fieldName: FormField.Name<T>,
+          config: ChoiceBinding.Config<V> & FormBindingFunc.Config
+        ) => ChoiceBinding<V>["props"];
+      }
+    > {}
+}
+```
+
+The method written by hand is checked against the one derived from the class. It may differ only in having type parameters of its own, so another config, subject or return type fails to compile, and so does a looser one, such as `fieldName: string`. Write the config with the binding's own types, as `ChoiceBinding.Config<V>` above, so that it follows changes to the class.
 
 ## Element IDs
 

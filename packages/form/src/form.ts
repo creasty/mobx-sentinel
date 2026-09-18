@@ -1,7 +1,7 @@
 import { action, computed, makeObservable, observable } from "mobx";
 import { Validator, Watcher, StandardNestedFetcher, KeyPath } from "@mobx-sentinel/core";
 import { FormField } from "./field";
-import { FormBinding, FormBindingConstructor, FormBindingFunc, getSafeBindingName } from "./binding";
+import { bindingExtensions, FormBinding, FormBindingConstructor, FormBindingFunc, getSafeBindingName } from "./binding";
 import { FormConfig, globalConfig } from "./config";
 import { Submission } from "./submission";
 import { randomId } from "./randomId";
@@ -55,9 +55,6 @@ export class Form<T> {
   readonly #fields = new Map<string, FormField>();
   readonly #bindings = new Map<string, FormBinding>();
   readonly #localConfig = observable.box<Partial<FormConfig>>({});
-
-  /** Extension fields for bindings */
-  [k: `bind${Capitalize<string>}`]: unknown;
 
   /**
    * Get a form instance for the subject.
@@ -483,6 +480,9 @@ export class Form<T> {
     };
   }
 }
+
+// Forms inherit the bind methods that extendFormBinding() adds, while Form.prototype stays as the class defines it
+Object.setPrototypeOf(Form.prototype, bindingExtensions);
 
 export namespace Form {
   /** @inline */
