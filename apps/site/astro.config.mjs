@@ -59,7 +59,7 @@ export default defineConfig({
           details: [
             "mobx-sentinel is three packages. Each builds on the one before it:",
             "",
-            "- `@mobx-sentinel/core`: `Watcher` detects changes in models, `Validator` and `makeValidatable` validate them reactively, synchronously or asynchronously, and `@nested` tracks models inside models.",
+            "- `@mobx-sentinel/core`: `Watcher` detects changes in models, `Validator` and `addValidation` validate them reactively, synchronously or asynchronously, and `@nested` tracks models inside models.",
             "- `@mobx-sentinel/form`: forms with asynchronous submission, nested and array forms, error reporting that shows errors when users are ready for them, and the API for creating bindings. It includes no bindings itself.",
             "- `@mobx-sentinel/react`: hooks, and standard bindings for the most common form elements.",
             "",

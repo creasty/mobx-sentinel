@@ -17,7 +17,7 @@ Your model stays a model: plain MobX classes that own the data, the derived valu
 
 ```typescript
 import { action, computed, makeObservable, observable } from "mobx";
-import { makeValidatable, nested } from "@mobx-sentinel/core";
+import { addValidation, nested } from "@mobx-sentinel/core";
 
 export class Invoice {
   @observable customerEmail = "";
@@ -34,7 +34,7 @@ export class Invoice {
     makeObservable(this);
 
     // 'Reactive validation' is implemented here.
-    makeValidatable(this, (b) => {
+    addValidation(this, (b) => {
       if (!EMAIL_PATTERN.test(this.customerEmail)) {
         b.invalidate("customerEmail", "Enter a valid email address");
       }
@@ -52,7 +52,7 @@ export class Invoice {
     // The Validator throttles the calls; a keystroke made while a request is in
     // flight is checked after that request settles. The signal is aborted when
     // the validator is reset or the handler is removed.
-    makeValidatable(
+    addValidation(
       this,
       () => this.customerEmail,
       async (email, b, abortSignal) => {

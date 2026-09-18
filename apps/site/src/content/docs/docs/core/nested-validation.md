@@ -18,7 +18,7 @@ class Parent {
   constructor() {
     makeObservable(this);
 
-    makeValidatable(this, (builder) => {
+    addValidation(this, (builder) => {
       if (!this.name) {
         builder.invalidate("name", "Name required");
       }
@@ -32,7 +32,7 @@ class Child {
   constructor() {
     makeObservable(this);
 
-    makeValidatable(this, (builder) => {
+    addValidation(this, (builder) => {
       if (!this.email.includes("@")) {
         builder.invalidate("email", "Invalid email");
       }
@@ -85,7 +85,7 @@ class Model {
   constructor() {
     makeObservable(this);
 
-    makeValidatable(this, (builder) => {
+    addValidation(this, (builder) => {
       if (this.startDate > this.endDate) {
         builder.invalidateSelf("Start date must be before end date");
       }

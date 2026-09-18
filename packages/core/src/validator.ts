@@ -19,14 +19,14 @@ const validatorKey = Symbol("validator");
 const internalToken = Symbol("validator.internal");
 
 /**
- * Make a target object validatable
+ * Add an async validation handler to a target object
  *
  * It's just a shorthand of:
  * ```typescript
  * Validator.get(target).addAsyncHandler(expr, handler, opt)
  * ```
  *
- * @remarks If you're using `make(Auto)Observable`, make sure to call `makeValidatable`
+ * @remarks If you're using `make(Auto)Observable`, make sure to call `addValidation`
  * after `make(Auto)Observable`.
  *
  * @param target The target object
@@ -36,7 +36,7 @@ const internalToken = Symbol("validator.internal");
  *
  * @returns A function to remove the handler
  */
-export function makeValidatable<T extends object, Expr>(
+export function addValidation<T extends object, Expr>(
   target: T,
   expr: () => Expr,
   handler: Validator.AsyncHandler<T, NoInfer<Expr>>,
@@ -44,14 +44,14 @@ export function makeValidatable<T extends object, Expr>(
 ): () => void;
 
 /**
- * Make a target object validatable
+ * Add a sync validation handler to a target object
  *
  * It's just a shorthand of:
  * ```typescript
  * Validator.get(target).addSyncHandler(handler, opt)
  * ```
  *
- * @remarks If you're using `make(Auto)Observable`, make sure to call `makeValidatable`
+ * @remarks If you're using `make(Auto)Observable`, make sure to call `addValidation`
  * after `make(Auto)Observable`.
  *
  * @param target The target object
@@ -60,13 +60,13 @@ export function makeValidatable<T extends object, Expr>(
  *
  * @returns A function to remove the handler
  */
-export function makeValidatable<T extends object>(
+export function addValidation<T extends object>(
   target: T,
   handler: Validator.SyncHandler<T>,
   opt?: Validator.HandlerOptions
 ): () => void;
 
-export function makeValidatable(target: object, ...args: any[]) {
+export function addValidation(target: object, ...args: any[]) {
   if (typeof args[0] === "function" && typeof args[1] === "function") {
     const [expr, handler, opt] = args;
     return Validator.get(target).addAsyncHandler(expr, handler, opt);

@@ -1,6 +1,6 @@
 // biome-ignore-all lint/plugin/mobxMissingMakeObservable: stage-3 decorators need no makeObservable(this)
 import { observable, runInAction } from "mobx";
-import { makeValidatable, Validator } from "../src/validator";
+import { addValidation, Validator } from "../src/validator";
 import { nested } from "../src/nested";
 import { KeyPath } from "../src/keyPath";
 
@@ -16,7 +16,7 @@ describe("Validator with stage-3 decorators", () => {
     @observable accessor name = "";
 
     constructor() {
-      makeValidatable(this, (b) => {
+      addValidation(this, (b) => {
         if (!this.name) b.invalidate("name", "required");
       });
     }
@@ -28,10 +28,10 @@ describe("Validator with stage-3 decorators", () => {
     @nested @observable accessor items = [new Item()];
 
     constructor() {
-      makeValidatable(this, (b) => {
+      addValidation(this, (b) => {
         if (!this.title) b.invalidate("title", "required");
       });
-      makeValidatable(
+      addValidation(
         this,
         () => this.title,
         async (title, b) => {
@@ -114,7 +114,7 @@ describe("Validator with stage-3 decorators", () => {
 
       constructor() {
         super();
-        makeValidatable(this, (b) => {
+        addValidation(this, (b) => {
           if (this.quantity <= 0) b.invalidate("quantity", "positive");
         });
       }

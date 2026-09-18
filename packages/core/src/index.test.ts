@@ -2,7 +2,7 @@ import { ValidationError, type ValidationErrorMapBuilder } from "./error";
 import * as indexModule from "./index";
 import { KeyPath } from "./keyPath";
 import { nested, StandardNestedFetcher } from "./nested";
-import { makeValidatable, Validator } from "./validator";
+import { addValidation, Validator } from "./validator";
 import { unwatch, Watcher, watch } from "./watcher";
 
 describe("package entry point", () => {
@@ -13,7 +13,7 @@ describe("package entry point", () => {
       "ValidationError",
       "Validator",
       "Watcher",
-      "makeValidatable",
+      "addValidation",
       "nested",
       "unwatch",
       "watch",
@@ -23,7 +23,7 @@ describe("package entry point", () => {
     expect(indexModule.ValidationError).toBe(ValidationError);
     expect(indexModule.Validator).toBe(Validator);
     expect(indexModule.Watcher).toBe(Watcher);
-    expect(indexModule.makeValidatable).toBe(makeValidatable);
+    expect(indexModule.addValidation).toBe(addValidation);
     expect(indexModule.nested).toBe(nested);
     expect(indexModule.unwatch).toBe(unwatch);
     expect(indexModule.watch).toBe(watch);

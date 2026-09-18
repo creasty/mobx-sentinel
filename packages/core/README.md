@@ -20,7 +20,7 @@ Documentation: [guide](https://mobx-sentinel.creasty.com/docs/core/) · [API ref
     e.g., `@watch readonly count = observable.box(0)`
   - `@watch.ref` annotation can be used to watch values with identity comparison, in contrast to the default behavior which uses shallow comparison.
   - `@unwatch` annotation and `unwatch(() => ...)` function disable change detection when you need to modify values silently.
-- `Validator` and `makeValidatable` provides reactive model validation.
+- `Validator` and `addValidation` provide reactive model validation.
   - Composable from multiple sources.
   - Both sync and async validations are supported.
   - Async validations feature smart job scheduling and are cancellable with [AbortSignal](https://developer.mozilla.org/en-US/docs/Web/API/AbortSignal).
