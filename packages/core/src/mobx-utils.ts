@@ -94,7 +94,7 @@ export function* getMobxObservableAnnotations(
   // Snapshot, as consuming the getters (as Watcher does) or anything done in the meantime can add and remove keys.
   // Untracked, as listing the keys of a proxied observable object is observed by the derivation running it.
   const entries = untracked(() => {
-    const result = new Map<string | symbol | number, ObservableAtom | undefined>();
+    const result = new Map<string | symbol | number, IObservableValue<unknown> | undefined>();
     for (const key of getCandidateKeys(target)) {
       if (!isObservableProp(target, key)) continue;
       // isComputedProp() goes through getAtom(), which rejects the falsy keys "" and 0, so it throws for those once they
@@ -119,16 +119,14 @@ export function* getMobxObservableAnnotations(
   }
 }
 
-type ObservableAtom = IObservableValue<unknown>;
-
 /**
  * Get the atom holding the value of an annotated key, materializing it if MobX applies the annotation lazily
  *
  * `getAtom()` rejects the falsy keys `""` and `0` as if they were missing, so those yield `undefined`.
  */
-function getObservableAtom(target: object, key: string | symbol | number): ObservableAtom | undefined {
+function getObservableAtom(target: object, key: string | symbol | number): IObservableValue<unknown> | undefined {
   if (!key) return;
-  return getAtom(target, key) as unknown as ObservableAtom;
+  return getAtom(target, key) as unknown as IObservableValue<unknown>;
 }
 
 /**
