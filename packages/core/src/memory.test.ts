@@ -2,7 +2,7 @@ import { computed, makeObservable, observable, runInAction } from "mobx";
 import type { ValidationErrorMapBuilder } from "./error";
 import { KeyPath } from "./keyPath";
 import { nested } from "./nested";
-import { makeValidatable, Validator } from "./validator";
+import { addValidation, Validator } from "./validator";
 import { Watcher, watch } from "./watcher";
 
 /**
@@ -191,14 +191,14 @@ describe("Validator", () => {
 
     constructor(opt?: Validator.HandlerOptions) {
       makeObservable(this);
-      makeValidatable(
+      addValidation(
         this,
         (b) => {
           if (!this.name) b.invalidate("name", "required");
         },
         opt
       );
-      makeValidatable(
+      addValidation(
         this,
         () => this.name,
         async (name, b) => {
@@ -309,7 +309,7 @@ describe("Validator", () => {
     const settings = observable({ minLength: 3 });
     const create = (dispose: boolean) => {
       const named = new Named();
-      const disposeHandler = makeValidatable(named, (b) => {
+      const disposeHandler = addValidation(named, (b) => {
         if (named.name.length < settings.minLength) b.invalidate("name", "too short");
       });
       if (dispose) disposeHandler();

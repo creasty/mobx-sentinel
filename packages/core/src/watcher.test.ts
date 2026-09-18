@@ -2124,7 +2124,7 @@ describe("Annotations", () => {
       runInAction(() => {
         sample.value = 1;
       });
-      // PINNED(quirk): the watcher collects MobX annotations once in its constructor and is cached, so annotations applied afterwards are never tracked. Decide: should Watcher collect annotations lazily, or detect this misuse (the docs only warn about the order for makeValidatable())?
+      // PINNED(quirk): the watcher collects MobX annotations once in its constructor and is cached, so annotations applied afterwards are never tracked. Decide: should Watcher collect annotations lazily, or detect this misuse (the docs only warn about the order for addValidation())?
       expect(sample.watcher.changed).toBe(false);
     });
   });

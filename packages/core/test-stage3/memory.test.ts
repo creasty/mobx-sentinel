@@ -1,7 +1,7 @@
 // biome-ignore-all lint/plugin/mobxMissingMakeObservable: stage-3 decorators need no makeObservable(this)
 import { observable, runInAction } from "mobx";
 import { nested } from "../src/nested";
-import { makeValidatable, Validator } from "../src/validator";
+import { addValidation, Validator } from "../src/validator";
 import { Watcher, watch } from "../src/watcher";
 
 /**
@@ -30,7 +30,7 @@ class Sample {
   @nested @observable accessor leaf = new Leaf();
 
   constructor() {
-    makeValidatable(
+    addValidation(
       this,
       (b) => {
         if (this.field < 0) b.invalidate("field", "negative");

@@ -1,5 +1,5 @@
 import { action, computed, makeObservable, observable, runInAction } from "mobx";
-import { makeValidatable, nested, unwatch } from "@mobx-sentinel/core";
+import { addValidation, nested, unwatch } from "@mobx-sentinel/core";
 import * as api from "./api";
 import type { AddressPayload, Customer, InvoicePayload, LineItemPayload } from "./api";
 import type { CountryCode, CurrencyCode } from "./catalog";
@@ -22,7 +22,7 @@ import {
  * These are ordinary MobX classes: they own the business rules, the derived
  * amounts, and the operations. mobx-sentinel is applied from the outside —
  * the only things it adds here are the `@nested` annotation and the
- * `makeValidatable()` calls that declare the rules the model already had.
+ * `addValidation()` calls that declare the rules the model already had.
  */
 
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -52,7 +52,7 @@ export class LineItem {
 
     makeObservable(this);
 
-    makeValidatable(this, (b) => {
+    addValidation(this, (b) => {
       const description = this.description.trim();
       if (!description) {
         b.invalidate("description", "Description is required");
@@ -119,7 +119,7 @@ export class PostalAddress {
 
     // Validation is reactive, so switching the country immediately re-checks
     // the postal code and the region against that country's rules.
-    makeValidatable(this, (b) => {
+    addValidation(this, (b) => {
       const rules = COUNTRIES[this.country];
 
       if (!this.line1.trim()) {
@@ -191,7 +191,7 @@ export class Invoice {
     makeObservable(this);
 
     // (1) The rules of the invoice itself.
-    makeValidatable(this, (b) => {
+    addValidation(this, (b) => {
       const email = this.customerEmail.trim();
       if (!email) {
         b.invalidate("customerEmail", "Customer email is required");
@@ -249,7 +249,7 @@ export class Invoice {
     // (2) An asynchronous rule, composed on top of the synchronous ones.
     // The Validator throttles the calls; a keystroke made while a lookup is in
     // flight is checked after that lookup settles.
-    makeValidatable(
+    addValidation(
       this,
       () => this.customerEmail.trim().toLowerCase(),
       async (email, b, abortSignal) => {
@@ -269,7 +269,7 @@ export class Invoice {
 
     // (3) Errors only the server can produce are just another source of rules.
     // They stay visible until the user edits the value the server rejected.
-    makeValidatable(this, (b) => {
+    addValidation(this, (b) => {
       const rejected = this.rejectedPurchaseOrder;
       if (rejected && rejected.value === this.purchaseOrderNumber.trim()) {
         b.invalidate("purchaseOrderNumber", rejected.message);

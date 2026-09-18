@@ -26,7 +26,7 @@ const validator2 = Validator.get(model);
 // validator1 === validator2 (same instance)
 ```
 
-Validation handlers are MobX reactions, so a validator is garbage collected together with its target only if everything its handlers observe is too, as with [any reaction](https://mobx.js.org/reactions.html#always-dispose-of-reactions). Dispose a handler that reads something outliving the target, such as a store, with the function that `makeValidatable`, `addSyncHandler` or `addAsyncHandler` returns.
+Validation handlers are MobX reactions, so a validator is garbage collected together with its target only if everything its handlers observe is too, as with [any reaction](https://mobx.js.org/reactions.html#always-dispose-of-reactions). Dispose a handler that reads something outliving the target, such as a store, with the function that `addValidation`, `addSyncHandler` or `addAsyncHandler` returns.
 
 Use `Validator.getSafe()` to get a validator without throwing errors for non-objects:
 
@@ -35,9 +35,9 @@ const validator = Validator.getSafe(maybeObject);
 // Returns null if maybeObject is not an object
 ```
 
-## Using `makeValidatable()`
+## Using `addValidation()`
 
-The `makeValidatable()` function is a convenient shorthand for adding validation handlers:
+The `addValidation()` function is a convenient shorthand for adding validation handlers:
 
 ```typescript
 class Model {
@@ -47,9 +47,9 @@ class Model {
     makeObservable(this);
 
     // Sync validation
-    makeValidatable(this, (builder) => { ... });
+    addValidation(this, (builder) => { ... });
     // Async validation
-    makeValidatable(this, () => this.email, async (email, builder, abortSignal) => { ... });
+    addValidation(this, () => this.email, async (email, builder, abortSignal) => { ... });
   }
 }
 ```
@@ -64,7 +64,7 @@ validator.addAsyncHandler(() => this.email, async (email, builder, abortSignal) 
 ```
 
 **⚠️ Important**:
-- If you're using `makeObservable()` or `makeAutoObservable()`, call `makeValidatable()` **after** them to ensure observability is set up first.
+- If you're using `makeObservable()` or `makeAutoObservable()`, call `addValidation()` **after** them to ensure observability is set up first.
 - Handlers run **immediately by default** on registration (`initialRun: true`). Set `initialRun: false` to wait for the first change.
 
 ## Synchronous Validation
@@ -85,7 +85,7 @@ class FormModel {
   constructor() {
     makeObservable(this);
 
-    makeValidatable(this, (builder) => {
+    addValidation(this, (builder) => {
       if (!this.email.includes("@")) {
         builder.invalidate("email", "Invalid email format");
       }

@@ -1,4 +1,4 @@
-import { KeyPath, makeValidatable, nested, unwatch } from "@mobx-sentinel/core";
+import { addValidation, KeyPath, nested, unwatch } from "@mobx-sentinel/core";
 import { makeObservable, observable, runInAction } from "mobx";
 import type { FormBinding } from "./binding";
 import type { FormField } from "./field";
@@ -50,7 +50,7 @@ class SampleModel {
 
   constructor() {
     makeObservable(this);
-    makeValidatable(this, (b) => {
+    addValidation(this, (b) => {
       if (!this.field) b.invalidate("field", "required");
     });
   }

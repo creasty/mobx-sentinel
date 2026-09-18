@@ -1,4 +1,4 @@
-import { KeyPath, makeValidatable, nested, Validator, Watcher } from "@mobx-sentinel/core";
+import { addValidation, KeyPath, nested, Validator, Watcher } from "@mobx-sentinel/core";
 import { autorun, configure as configureMobx, makeObservable, observable, runInAction } from "mobx";
 import { Form, debugForm } from "./form";
 import { FormField } from "./field";
@@ -35,7 +35,7 @@ describe("Form", () => {
     constructor() {
       makeObservable(this);
 
-      makeValidatable(this, (b) => {
+      addValidation(this, (b) => {
         if (!this.field) {
           b.invalidate("field", "invalid");
         }
@@ -793,7 +793,7 @@ describe("Sub-forms", () => {
     constructor() {
       makeObservable(this);
 
-      makeValidatable(this, (b) => {
+      addValidation(this, (b) => {
         if (!this.field) {
           b.invalidate("field", "invalid");
         }
@@ -809,7 +809,7 @@ describe("Sub-forms", () => {
     constructor() {
       makeObservable(this);
 
-      makeValidatable(this, (b) => {
+      addValidation(this, (b) => {
         if (!this.field) {
           b.invalidate("field", "invalid");
         }
@@ -971,7 +971,7 @@ describe("Form (details)", () => {
     constructor() {
       makeObservable(this);
 
-      makeValidatable(this, (b) => {
+      addValidation(this, (b) => {
         if (!this.field) {
           b.invalidate("field", "invalid");
         }

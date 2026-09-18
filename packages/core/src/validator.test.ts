@@ -1,6 +1,6 @@
 import { getEventListeners } from "node:events";
 import { autorun, getObserverTree, IEqualsComparer, makeObservable, observable, runInAction } from "mobx";
-import { Validator, makeValidatable } from "./validator";
+import { Validator, addValidation } from "./validator";
 import { nested } from "./nested";
 import { KeyPath } from "./keyPath";
 import { ValidationError, ValidationErrorMapBuilder } from "./error";
@@ -120,13 +120,13 @@ function buildErrorMap(iter: ReturnType<Validator<any>["findErrors"]>) {
   return result;
 }
 
-describe("makeValidatable", () => {
+describe("addValidation", () => {
   it("throws an error when a non-object is given", () => {
     expect(() => {
-      makeValidatable(null as any, () => void 0);
+      addValidation(null as any, () => void 0);
     }).toThrowError(/Expected an object/);
     expect(() => {
-      makeValidatable(1 as any, () => void 0);
+      addValidation(1 as any, () => void 0);
     }).toThrowError(/Expected an object/);
   });
 
@@ -134,7 +134,7 @@ describe("makeValidatable", () => {
     const target = {};
     const validator = Validator.get(target);
     const spy = vi.spyOn(validator, "addSyncHandler");
-    makeValidatable(target, () => void 0);
+    addValidation(target, () => void 0);
     expect(spy).toBeCalled();
   });
 
@@ -142,7 +142,7 @@ describe("makeValidatable", () => {
     const target = {};
     const validator = Validator.get(target);
     const spy = vi.spyOn(validator, "addAsyncHandler");
-    makeValidatable(
+    addValidation(
       target,
       () => true,
       async () => void 0
@@ -1241,7 +1241,7 @@ describe("Nested validations", () => {
     constructor() {
       makeObservable(this);
 
-      makeValidatable(this, (b) => {
+      addValidation(this, (b) => {
         if (!this.field) {
           b.invalidate("field", "invalid");
         }
@@ -1257,7 +1257,7 @@ describe("Nested validations", () => {
     constructor() {
       makeObservable(this);
 
-      makeValidatable(this, (b) => {
+      addValidation(this, (b) => {
         if (!this.field) {
           b.invalidate("field", "invalid");
         }
@@ -1352,7 +1352,7 @@ describe("Nested validations", () => {
         this.delayMs = delayMs;
         makeObservable(this);
 
-        makeValidatable(
+        addValidation(
           this,
           () => this.field,
           async (value, b) => {
@@ -1471,7 +1471,7 @@ function setupAsyncHandler(opt?: Validator.HandlerOptions<number>, initialValue 
   return { model, validator, runs, dispose };
 }
 
-describe("makeValidatable: dispatch and return value", () => {
+describe("addValidation: dispatch and return value", () => {
   beforeEach(() => {
     vi.useFakeTimers();
   });
@@ -1487,7 +1487,7 @@ describe("makeValidatable: dispatch and return value", () => {
     const handler = () => {};
     const opt = { initialRun: false, delayMs: 10 };
 
-    expect(makeValidatable(target, handler, opt)).toBe(dispose);
+    expect(addValidation(target, handler, opt)).toBe(dispose);
     expect(spy).toHaveBeenCalledTimes(1);
     expect(spy).toHaveBeenCalledWith(handler, opt);
   });
@@ -1501,14 +1501,14 @@ describe("makeValidatable: dispatch and return value", () => {
     const handler = async () => {};
     const opt = { initialRun: false };
 
-    expect(makeValidatable(target, expr, handler, opt)).toBe(dispose);
+    expect(addValidation(target, expr, handler, opt)).toBe(dispose);
     expect(spy).toHaveBeenCalledTimes(1);
     expect(spy).toHaveBeenCalledWith(expr, handler, opt);
   });
 
   it("returns a disposer that removes the errors of a sync handler", () => {
     const target = observable({ field: -1 });
-    const dispose = makeValidatable(target, (b) => {
+    const dispose = addValidation(target, (b) => {
       if (target.field < 0) b.invalidate("field", "negative");
     });
     const validator = Validator.get(target);
@@ -1520,7 +1520,7 @@ describe("makeValidatable: dispatch and return value", () => {
 
   it("returns a disposer that removes the errors of an async handler", async () => {
     const target = observable({ field: -1 });
-    const dispose = makeValidatable(
+    const dispose = addValidation(
       target,
       () => target.field,
       async (field, b) => {
@@ -2901,7 +2901,7 @@ describe("Validator: nested key paths", () => {
 
         constructor() {
           makeObservable(this);
-          makeValidatable(this, (b) => {
+          addValidation(this, (b) => {
             if (!this.field) b.invalidate("field", "invalid");
           });
         }
@@ -3004,19 +3004,19 @@ describe("Validator: types", () => {
       )
     );
 
-    const disposeMakeSync = makeValidatable(model, () => {});
-    expectTypeOf(disposeMakeSync).toEqualTypeOf<() => void>();
-    disposers.push(disposeMakeSync);
+    const disposeAddValidationSync = addValidation(model, () => {});
+    expectTypeOf(disposeAddValidationSync).toEqualTypeOf<() => void>();
+    disposers.push(disposeAddValidationSync);
 
-    const disposeMakeAsync = makeValidatable(
+    const disposeAddValidationAsync = addValidation(
       model,
       () => model.field,
       async (field) => {
         expectTypeOf(field).toEqualTypeOf<number>();
       }
     );
-    expectTypeOf(disposeMakeAsync).toEqualTypeOf<() => void>();
-    disposers.push(disposeMakeAsync);
+    expectTypeOf(disposeAddValidationAsync).toEqualTypeOf<() => void>();
+    disposers.push(disposeAddValidationAsync);
 
     expectTypeOf(validator.updateErrors(Symbol(), () => {})).toEqualTypeOf<() => void>();
     expectTypeOf<Validator.HandlerOptions<string>>().toEqualTypeOf<{
@@ -3050,22 +3050,22 @@ describe("Validator: types", () => {
     expect(validator.firstErrorMessage).toBeNull();
   });
 
-  it("types the makeValidatable overloads and handler signatures", () => {
+  it("types the addValidation overloads and handler signatures", () => {
     const model = observable({ field: 0, name: "" });
     const disposers: Array<() => void> = [];
 
     // @ts-expect-error primitives are rejected as the target
-    expect(() => makeValidatable(1, () => {})).toThrow(TypeError);
+    expect(() => addValidation(1, () => {})).toThrow(TypeError);
 
     disposers.push(
-      makeValidatable(model, (b) => {
+      addValidation(model, (b) => {
         expectTypeOf(b).toEqualTypeOf<ValidationErrorMapBuilder<typeof model>>();
         // @ts-expect-error unknown keys are rejected
         b.invalidate("unknown", "ng");
       })
     );
     disposers.push(
-      makeValidatable(
+      addValidation(
         model,
         () => model.name,
         async (name, b, signal) => {
@@ -3377,7 +3377,7 @@ describe("Validator: async job lifecycle", () => {
     });
     const model = observable({ name: "" });
     const runs: Array<{ name: string; signal: AbortSignal }> = [];
-    makeValidatable(
+    addValidation(
       model,
       () => model.name,
       (name, b, signal) =>
@@ -3645,7 +3645,7 @@ describe("Validator: #waitForValidation", () => {
 
       constructor() {
         makeObservable(this);
-        makeValidatable(this, (b) => {
+        addValidation(this, (b) => {
           if (this.field < 0) b.invalidate("field", "negative");
         });
       }
