@@ -15,6 +15,7 @@ import {
   getAtom,
   isAction,
   isBoxedObservable,
+  isComputedProp,
   isObservableArray,
   isObservableMap,
   isObservableObject,
@@ -39,7 +40,8 @@ describe("MobX", () => {
     });
   });
 
-  // getMobxObservableAnnotations goes through these, as its production build mangles the internal API
+  // getMobxObservableAnnotations and isMobxComputedAnnotation go through these, as its production build mangles the
+  // internal API
   describe("introspection of observable objects", () => {
     class Sample {
       @observable field1 = 123;
@@ -71,6 +73,17 @@ describe("MobX", () => {
       expect(isObservableProp(obj, "missing")).toBe(false);
     });
 
+    test("isComputedProp is true for the keys of computed annotations only", () => {
+      const obj = new Sample();
+
+      expect(isComputedProp(obj, "computed1")).toBe(true);
+      expect(isComputedProp(obj, "computed2")).toBe(true);
+      expect(isComputedProp(obj, "field1")).toBe(false);
+      expect(isComputedProp(obj, "field2")).toBe(false);
+      expect(isComputedProp(obj, "action1")).toBe(false);
+      expect(isComputedProp(obj, "missing")).toBe(false);
+    });
+
     test("getAtom returns the atom holding the current value of an annotated key, and reads through it are tracked", () => {
       const obj = new Sample();
       expect(readAtom(obj, "field1")).toBe(123);
@@ -95,6 +108,15 @@ describe("MobX", () => {
       expect(() => getAtom(obj, "")).toThrow();
       expect(() => getAtom(obj, 0)).toThrow();
       expect(() => getAtom(obj, "missing")).toThrow();
+    });
+
+    test("isComputedProp goes through getAtom, so it throws for the falsy keys '' and 0 when they are annotated", () => {
+      const obj = observable<Record<string | number, number>>({ "": 1 });
+      runInAction(() => set(obj, 0, 2));
+
+      expect(() => isComputedProp(obj, "")).toThrow();
+      expect(() => isComputedProp(obj, 0)).toThrow();
+      expect(isComputedProp(observable({}), "")).toBe(false);
     });
 
     test("removing a key leaves its atom detached, holding the last value", () => {

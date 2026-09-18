@@ -19,18 +19,14 @@ describe("Annotations", () => {
         return this.field1;
       }
 
+      @watch
       @computed
       get computed2() {
-        return this.field2;
-      }
-
-      @computed
-      get computed3() {
         return this.field1 || this.field2;
       }
     }
 
-    test("changes to @observable/@computed fields are tracked", () => {
+    test("changes to @observable fields are tracked, and those to @computed getters only with @watch", () => {
       const sample = new Sample();
       const watcher = Watcher.get(sample);
       expect(watcher.changed).toBe(false);
@@ -40,13 +36,14 @@ describe("Annotations", () => {
         sample.field1 = true;
       });
       expect(watcher.changed).toBe(true);
-      expect(watcher.changedKeys).toEqual(new Set(["field1", "computed1", "computed3"]));
+      expect(watcher.changedKeys).toEqual(new Set(["field1", "computed2"]));
 
       runInAction(() => {
         sample.field2 = true;
       });
+      // computed2 stays true
       expect(watcher.changed).toBe(true);
-      expect(watcher.changedKeys).toEqual(new Set(["field1", "computed1", "field2", "computed2", "computed3"]));
+      expect(watcher.changedKeys).toEqual(new Set(["field1", "field2", "computed2"]));
     });
 
     test("when the value is not changed, the watcher is not updated", () => {
@@ -71,12 +68,17 @@ describe("Annotations", () => {
           return this.#field1;
         }
 
+        // biome-ignore lint/correctness/noUnusedPrivateClassMembers: read back through the watcher under test
+        @watch @computed get #computed2() {
+          return !this.#field1;
+        }
+
         set field1(value: boolean) {
           this.#field1 = value;
         }
       }
 
-      test("private fields are tracked", () => {
+      test("private fields are tracked, and so are private @computed getters with @watch", () => {
         const sample = new Sample();
         const watcher = Watcher.get(sample);
         expect(watcher.changed).toBe(false);
@@ -86,7 +88,7 @@ describe("Annotations", () => {
           sample.field1 = true;
         });
         expect(watcher.changed).toBe(true);
-        expect(watcher.changedKeys).toEqual(new Set(["#field1", "#computed1"]));
+        expect(watcher.changedKeys).toEqual(new Set(["#field1", "#computed2"]));
       });
     });
 
@@ -220,7 +222,6 @@ describe("Annotations", () => {
       @unwatch @observable accessor #field2 = false;
       @observable accessor field3 = false;
 
-      @unwatch
       @computed
       get computed1() {
         return this.field1 || this.#field2;
@@ -231,7 +232,7 @@ describe("Annotations", () => {
       }
     }
 
-    test("changes to @unwatch fields, including private ones, are ignored", () => {
+    test("changes to @unwatch fields, including private ones, are ignored, and so are those to the @computed getters deriving from them", () => {
       const sample = new Sample();
       const watcher = Watcher.get(sample);
 

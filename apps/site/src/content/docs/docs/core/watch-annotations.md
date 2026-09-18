@@ -21,6 +21,33 @@ class Model {
 }
 ```
 
+It is also how a `@computed` gets tracked, as a watcher leaves `@computed` out by default (see [Computed properties](/docs/core/watcher/#computed-properties)). Here, the prices of the items count through the total, although changes to elements are not tracked on their own:
+
+```typescript
+class Model {
+  @observable items = [{ price: 10 }];
+
+  constructor() {
+    makeObservable(this);
+  }
+
+  @watch
+  @computed
+  get total() {
+    return this.items.reduce((sum, item) => sum + item.price, 0);
+  }
+}
+
+const model = new Model();
+const watcher = Watcher.get(model);
+
+runInAction(() => {
+  model.items[0].price = 20;
+});
+
+watcher.changedKeys // Set(["total"])
+```
+
 ### `@watch.ref`
 
 Track with identity comparison only
@@ -53,7 +80,6 @@ class Model {
   @unwatch @observable internalState = false;
   @observable userField = false;
 
-  @unwatch
   @computed
   get derivedState() {
     return this.internalState ? "active" : "inactive";
@@ -72,7 +98,7 @@ runInAction(() => {
 });
 
 watcher.changed // false
-watcher.changedKeys // Set() - derivedState is also not tracked
+watcher.changedKeys // Set() - derivedState is a @computed, so it is not tracked either
 ```
 
 ## Tracking Nested Objects

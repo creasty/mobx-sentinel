@@ -1,7 +1,12 @@
 import { action, autorun, computed, makeObservable, observable, reaction, runInAction, transaction } from "mobx";
 import { randomId } from "./randomId";
 import { createPropertyLikeAnnotation, getAnnotationProcessor } from "./annotationProcessor";
-import { getMobxObservableAnnotations, shallowReadValue, unwrapShallowContents } from "./mobx-utils";
+import {
+  getMobxObservableAnnotations,
+  isMobxComputedAnnotation,
+  shallowReadValue,
+  unwrapShallowContents,
+} from "./mobx-utils";
 import { StandardNestedFetcher, getNestedAnnotations } from "./nested";
 import { KeyPath } from "./keyPath";
 
@@ -45,8 +50,9 @@ function runInUnwatch(action: () => void): void {
  * `@watch` by default unwraps boxed observables, arrays, sets, and maps — meaning it uses shallow comparison.
  * If you don't want this behavior, use `@watch.ref` instead.
  *
- * - `@observable` and `@computed` (and their variants) are automatically assumed to be `@watched`,\
- *    unless `@unwatch` or `@unwatch.ref` is specified.
+ * - `@observable` (and its variants) are automatically assumed to be `@watched`, unless `@unwatch` is specified.
+ * - `@computed` (and its variants) are not watched unless `@watch` or `@watch.ref` is specified.\
+ *   A computed value derives from other state, and a change to that state is detected where the state is watched.
  * - `@nested` (and its variants) are considered `@watched` unless `@unwatch` is specified.
  * - If `@watch` and `@watch.ref` are specified for the same key (in the same inheritance chain),\
  *   the last annotation prevails.
@@ -70,7 +76,8 @@ export const watch = Object.freeze(
  * Annotation for unwatching changes to a property and a getter
  *
  * When used as an annotation:
- * - Combine with `@observable`, `@computed` or `@nested` (and their variants) to stop watching changes.
+ * - Combine with `@observable` or `@nested` (and their variants) to stop watching changes.\
+ *   `@computed` needs none, as it is not watched unless `@watch` is specified.
  * - You cannot re-enable watching once `@unwatch` is specified.
  *
  * When used as a function:
@@ -107,8 +114,8 @@ const internalToken = Symbol("watcher.internal");
 /**
  * Watcher for tracking changes to observable properties
  *
- * - Automatically tracks `@observable` and `@computed` properties
- * - Supports `@watch` and `@watch.ref` annotations
+ * - Automatically tracks `@observable` properties
+ * - Supports `@watch` and `@watch.ref` annotations, which also opt `@computed` properties in
  * - Can track nested objects
  * - Provides change detection at both property and path levels
  * - Can be temporarily disabled via `unwatch()`
@@ -281,12 +288,15 @@ export class Watcher {
   }
 
   /**
-   * Process MobX's `@observable` and `@computed` annotations
+   * Process MobX's `@observable` annotations
+   *
+   * `@computed` ones are left out: they are watched only with `@watch`, as {@link watch} explains.
    */
   #processMobxAnnotations(target: object) {
     for (const [key, getValue] of getMobxObservableAnnotations(target)) {
       if (typeof key !== "string") continue; // symbol and number keys are not supported
       if (this.#processedKeys.has(key)) continue;
+      if (isMobxComputedAnnotation(target, key)) continue;
       this.#processedKeys.add(key);
 
       reaction(

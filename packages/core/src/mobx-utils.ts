@@ -1,5 +1,6 @@
 import {
   isBoxedObservable,
+  isComputedProp,
   isObservableArray,
   isObservableSet,
   isObservableMap,
@@ -114,6 +115,20 @@ export function* getMobxObservableAnnotations(
     };
     yield [key, getValue];
   }
+}
+
+/**
+ * Whether the key of the target is annotated with MobX's `@computed`
+ *
+ * Also true for its variants such as `@computed.struct`, and false for keys that are not annotated at all.\
+ * It does not materialize the annotations that stage3 decorators apply lazily (MobX 6.16+).
+ *
+ * `isComputedProp()` goes through `getAtom()`, which rejects the falsy keys `""` and `0`, so it throws for those once
+ * they are annotated. They are taken as not computed, whatever their annotation.
+ */
+export function isMobxComputedAnnotation(target: object, key: string | symbol | number): boolean {
+  if (!key) return false;
+  return isComputedProp(target, key);
 }
 
 type ObservableAtom = IObservableValue<unknown> | IComputedValue<unknown>;

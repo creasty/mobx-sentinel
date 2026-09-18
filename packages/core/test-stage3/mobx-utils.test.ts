@@ -1,6 +1,10 @@
 // biome-ignore-all lint/plugin/mobxMissingMakeObservable: stage-3 decorators need no makeObservable(this)
 import { $mobx, action, computed, observable, reaction, runInAction } from "mobx";
-import { getMobxObservableAnnotations } from "../src/mobx-utils";
+import { getMobxObservableAnnotations, isMobxComputedAnnotation } from "../src/mobx-utils";
+
+/** The keys of each map held by the administration, which is where MobX keeps track of the annotations */
+const heldKeysOf = (target: object) =>
+  Object.values((target as any)[$mobx]).flatMap((value) => (value instanceof Map ? [[...value.keys()]] : []));
 
 // The order of the keys is left out: stage-3 decorators define accessors on the prototype in an order that depends on
 // how the decorators are compiled, and ../src/mobx-utils.test.ts covers the order of the rest.
@@ -28,10 +32,6 @@ describe("getMobxObservableAnnotations", () => {
 
   const readAll = (target: object) =>
     new Map([...getMobxObservableAnnotations(target)].map(([key, getValue]) => [key, getValue()]));
-
-  /** The keys of each map held by the administration, which is where MobX keeps track of the annotations */
-  const heldKeysOf = (target: object) =>
-    Object.values((target as any)[$mobx]).flatMap((value) => (value instanceof Map ? [[...value.keys()]] : []));
 
   test("yields public and ECMAScript private keys, but not actions or other members", () => {
     expect(readAll(new Sample())).toEqual(
@@ -137,5 +137,31 @@ describe("getMobxObservableAnnotations", () => {
         ["overridden", "base2"],
       ])
     );
+  });
+});
+
+describe("isMobxComputedAnnotation", () => {
+  class Sample {
+    @observable accessor field1 = 1;
+    @observable accessor #field2 = 2;
+
+    @computed get computed1() {
+      return this.field1 * 10;
+    }
+    // biome-ignore lint/correctness/noUnusedPrivateClassMembers: read back through the function under test
+    @computed get #computed2() {
+      return this.#field2 * 10;
+    }
+  }
+
+  test("tells public and ECMAScript private keys apart, without materializing the annotations MobX 6.16+ applies lazily", () => {
+    const obj = new Sample();
+    const heldKeys = heldKeysOf(obj);
+
+    expect(isMobxComputedAnnotation(obj, "computed1")).toBe(true);
+    expect(isMobxComputedAnnotation(obj, "#computed2")).toBe(true);
+    expect(isMobxComputedAnnotation(obj, "field1")).toBe(false);
+    expect(isMobxComputedAnnotation(obj, "#field2")).toBe(false);
+    expect(heldKeysOf(obj)).toEqual(heldKeys);
   });
 });

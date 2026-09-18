@@ -48,11 +48,6 @@ class Model {
   constructor() {
     makeObservable(this);
   }
-
-  @computed
-  get displayName() {
-    return `${this.name} (${this.age})`;
-  }
 }
 
 const model = new Model();
@@ -62,11 +57,12 @@ watcher.changedTick // 0n
 
 runInAction(() => {
   model.name = "John";
+  model.age = 30;
 });
 
 // Each change increments the tick
-watcher.changedTick // 2n (one for name, one for displayName)
-watcher.changedKeys // Set(["name", "displayName"])
+watcher.changedTick // 2n (one for name, one for age)
+watcher.changedKeys // Set(["name", "age"])
 
 watcher.reset();
 
