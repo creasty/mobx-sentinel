@@ -48,8 +48,12 @@ export function shallowReadValue(value: any) {
  * - arrays and observable arrays
  * - sets and observable sets
  * - maps and observable maps
+ *
+ * Keys are indices for arrays and sets, and `null` for a value that is not a collection. Map keys are yielded as they
+ * are, and a `Map` accepts a key of any type, so consumers that turn keys into key paths have to skip the ones they
+ * cannot represent, with {@link isKeyPathKey}.
  */
-export function* unwrapShallowContents(value: any): Generator<[key: string | symbol | number | null, content: any]> {
+export function* unwrapShallowContents(value: any): Generator<[key: unknown, content: any]> {
   if (isBoxedObservable(value)) {
     value = value.get();
   }
@@ -75,6 +79,17 @@ export function* unwrapShallowContents(value: any): Generator<[key: string | sym
     return;
   }
   yield [null, value];
+}
+
+/**
+ * Whether a key yielded by {@link unwrapShallowContents} has a key path form
+ *
+ * Map keys of any other type, such as symbols and objects, cannot be told apart in a key path, so the contents under
+ * them are not tracked at all. `null`, which marks a value that is not a collection, keeps the key path of the
+ * property itself.
+ */
+export function isKeyPathKey(key: unknown): key is string | number | null {
+  return key === null || typeof key === "string" || typeof key === "number";
 }
 
 /**

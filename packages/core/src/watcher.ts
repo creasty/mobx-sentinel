@@ -120,6 +120,7 @@ export class Watcher {
   readonly #assumeChanged = observable.box(false);
   readonly #changedTick = observable.box(0n);
   readonly #changedKeys = observable.set<KeyPath>();
+  /** Keys claimed by an earlier annotation pass, which the later ones skip */
   readonly #processedKeys = new Set<string>();
   readonly #nestedFetcher: StandardNestedFetcher<Watcher>;
 
@@ -304,9 +305,11 @@ export class Watcher {
    * Process `@nested` annotations
    */
   #processNestedAnnotations(target: object) {
+    // Snapshot: a key this pass claims still has to block the later passes, but not its own next member
+    const processedKeys = new Set(this.#processedKeys);
     for (const { key, getValue, hoist } of getNestedAnnotations(target)) {
       if (typeof key !== "string") continue; // symbol and number keys are not supported
-      if (this.#processedKeys.has(key)) continue;
+      if (processedKeys.has(key)) continue;
       this.#processedKeys.add(key);
 
       reaction(
@@ -332,21 +335,30 @@ export class Watcher {
 
   /**
    * Process `@watch` and `@watch.ref` annotations
+   *
+   * @remarks
+   * Annotations come one per annotated member, and two members can spell one key -- same-named private members of
+   * a parent and a child class do. Each needs its own reaction, so the keys the earlier passes claimed are read
+   * from a snapshot taken here: a key this pass takes must not make the next member of that key skip itself.
    */
   #processWatchAnnotations(target: object) {
     const processor = getAnnotationProcessor(target);
     if (!processor) return;
 
-    const watchAnnotations = processor.getPropertyLike(watchKey);
-    if (!watchAnnotations) return;
+    const members = processor.getPropertyLikeMembers(watchKey);
+    if (!members) return;
 
-    for (const [key, metadata] of watchAnnotations) {
+    // Snapshot: a key this pass claims still has to block the later passes, but not its own next member
+    const processedKeys = new Set(this.#processedKeys);
+    for (const member of members.values()) {
+      const key = member.propertyKey;
       if (typeof key !== "string") continue; // symbol and number keys are not supported
-      if (this.#processedKeys.has(key)) continue;
+      if (processedKeys.has(key)) continue;
       this.#processedKeys.add(key);
 
-      const isShallow = metadata.data.at(-1) === WatchMode.Shallow; // Last annotation prevails
-      const getValue = () => (key in target ? (target as any)[key] : metadata.get?.());
+      const isShallow = member.data.at(-1) === WatchMode.Shallow; // Last annotation prevails
+      // The member's own accessor comes first: it reaches a private member, which no key of `target` names
+      const getValue = member.get ?? (() => (target as any)[key]);
 
       reaction(
         () => (isShallow ? shallowReadValue(getValue()) : getValue()),
@@ -357,17 +369,19 @@ export class Watcher {
 
   /**
    * Process `@unwatch` annotations
+   *
+   * Every member spelling the key is unwatched, as the later passes skip the key itself.
    */
   #processUnwatchAnnotations(target: object) {
     const processor = getAnnotationProcessor(target);
     if (!processor) return;
 
-    const unwatchAnnotations = processor.getPropertyLike(unwatchKey);
-    if (!unwatchAnnotations) return;
+    const members = processor.getPropertyLikeMembers(unwatchKey);
+    if (!members) return;
 
-    for (const [key] of unwatchAnnotations) {
-      if (typeof key !== "string") continue; // symbol and number keys are not supported
-      this.#processedKeys.add(key);
+    for (const { propertyKey } of members.values()) {
+      if (typeof propertyKey !== "string") continue; // symbol and number keys are not supported
+      this.#processedKeys.add(propertyKey);
     }
   }
 

@@ -15,7 +15,7 @@ Marks properties as containing nested observable objects that should be tracked 
 
 - For mutable properties, combine with `@observable` to make the property itself observable
 - For readonly properties, `@nested` alone is sufficient to track changes within the nested object
-- Symbol keys in nested objects are ignored
+- Keys with no key path form are ignored: symbol keys, and map keys such as objects and booleans
 - Boxed observables are automatically unwrapped
 - Each nested object gets its own Watcher/Validator instance
 
@@ -124,12 +124,12 @@ A utility class for iterating over nested observable structures with custom data
 - Automatically handles arrays, sets, maps, and boxed observables
 - Supports `@nested.hoist` - hoisted entries use `KeyPath.Self`
 - The `dataMap` is a computed property with **structural equality** (`comparer.shallow`)
-- Only re-computes when the structure changes (add/remove), not when individual items change
+- Re-computes whenever anything it reads changes, including what the data extractor reads, and notifies observers only when the resulting map is not shallowly equal
 - **Null values** from the data extractor are **filtered out** - use this to conditionally include entries
 
 **Important limitations**:
-- **Symbol keys are ignored** - they won't appear in iteration or the dataMap
-- The data extractor function is called for each nested entry
+- **Keys with no key path form are ignored** - symbol keys, and map keys such as objects and booleans, won't appear in iteration or the dataMap
+- The data extractor function is called for each nested entry, inside the `dataMap` computation, so the observables it reads are tracked too
 - The `dataMap` uses structural equality, so changing object references will trigger updates
 
 **Example use case:**
@@ -203,8 +203,8 @@ autorun(() => {
   const item0 = dataMap.get("items.0" as KeyPath);
   const item1 = dataMap.get("items.1" as KeyPath);
 
-  // This autorun re-runs when items array changes (add/remove/reorder)
-  // It does NOT re-run when individual item properties change
+  // This autorun re-runs when the items array changes (add/remove/reorder),
+  // and when anything the data extractor reads changes - here `toString()` reads id and name
   console.log(`Total items: ${dataMap.size}`);
 });
 
@@ -215,8 +215,8 @@ runInAction(() => {
 
 runInAction(() => {
   parent.items[0].name = "Updated";
-  // autorun does NOT trigger - only the item changed, not the structure
+  // autorun triggers: the extractor reads `name`, so the entry at "items.0" is a different string
 });
 ```
 
-**Performance note**: Because `dataMap` uses `comparer.shallow` for structural equality, the computed property only recalculates when the map's structure changes (keys added/removed), not when individual values change. This is efficient for large nested structures.
+**Performance note**: `dataMap` uses `comparer.shallow`, so it notifies its observers only when the recomputed map differs from the previous one by a key or by a value identity. Recomputation itself happens whenever any observable read while computing it changes - including the ones your data extractor reads. Keep the extractor narrow to keep large nested structures cheap: an extractor that reads nothing but `entry.data` re-computes only on structural changes.

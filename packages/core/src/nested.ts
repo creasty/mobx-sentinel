@@ -1,7 +1,7 @@
 import { comparer, computed, makeObservable } from "mobx";
 import { createPropertyLikeAnnotation, getAnnotationProcessor } from "./annotationProcessor";
 import { KeyPath } from "./keyPath";
-import { unwrapShallowContents } from "./mobx-utils";
+import { isKeyPathKey, unwrapShallowContents } from "./mobx-utils";
 
 enum NestedMode {
   /**
@@ -50,6 +50,10 @@ export const nested = Object.assign(createNested, {
 
 /**
  * Get all `@nested` annotations from the target object
+ *
+ * @remarks
+ * Same-named private members of a parent and a child class are separate annotations, since neither overrides the
+ * other, and they are yielded under the one key they spell.
  */
 export function* getNestedAnnotations(target: object): Generator<{
   key: string | symbol;
@@ -59,25 +63,27 @@ export function* getNestedAnnotations(target: object): Generator<{
   const processor = getAnnotationProcessor(target);
   if (!processor) return;
 
-  const annotations = processor.getPropertyLike(nestedKey);
-  if (!annotations) return;
+  const members = processor.getPropertyLikeMembers(nestedKey);
+  if (!members) return;
 
   let hoistedKey: string | symbol | null = null;
-  for (const [key, metadata] of annotations) {
-    const modes = new Set<NestedMode>(metadata.data);
+  for (const member of members.values()) {
+    const key = member.propertyKey;
+    const modes = new Set<NestedMode>(member.data);
     if (modes.size > 1) {
       throw new Error(`Mixed @nested annotations are not allowed for the same key: ${String(key)}`);
     }
     const hoist = modes.has(NestedMode.Hoist);
     if (hoist) {
-      if (hoistedKey) {
+      if (hoistedKey !== null) {
         throw new Error(
           `Multiple @nested.hoist annotations are not allowed in the same class: ${String(hoistedKey)} and ${String(key)}`
         );
       }
       hoistedKey = key;
     }
-    const getValue = () => (key in target ? (target as any)[key] : metadata.get?.());
+    // The member's own accessor comes first: it reaches a private member, which no key of `target` names
+    const getValue = member.get ?? (() => (target as any)[key]);
     yield { key, getValue, hoist };
   }
 }
@@ -92,16 +98,21 @@ export function* getNestedAnnotations(target: object): Generator<{
  * - Maintains parent-child relationships
  *
  * @remarks
- * Symbol keys are not supported
+ * Symbol keys are not supported, nor are map keys with no key path form, such as objects and booleans.\
+ * Several annotations can land on one key path — same-named private members of a parent and a child class always
+ * do — and every one of them is fetched. Key paths are a best-effort aid for debugging: colliding entries are
+ * indistinguishable by key path, and {@link dataMap} keeps only the last of them.
  */
 export class StandardNestedFetcher<T extends object> implements Iterable<StandardNestedFetcher.Entry<T>> {
   readonly #transform: (entry: StandardNestedFetcher.Entry<any>) => T | null;
-  readonly #fetchers = new Map<KeyPath, () => Generator<StandardNestedFetcher.Entry<T>>>();
+  readonly #fetchers = new Map<KeyPath, (() => Generator<StandardNestedFetcher.Entry<T>>)[]>();
 
   /**
    * @param target - The target object
    * @param transform - A function that transforms the entry to the desired type.\
-   *   If the function returns `null`, the entry is ignored.
+   *   If the function returns `null`, the entry is ignored.\
+   *   It runs inside the {@link dataMap} computation, so the observables it reads are tracked as well —
+   *   which is what lets it filter entries reactively, and what makes a wide-reading transform re-compute often.
    */
   constructor(target: object, transform: (entry: StandardNestedFetcher.Entry<any>) => T | null) {
     makeObservable(this);
@@ -112,7 +123,12 @@ export class StandardNestedFetcher<T extends object> implements Iterable<Standar
       if (typeof key !== "string") continue; // symbol keys are not supported
       const keyPath = hoist ? KeyPath.Self : KeyPath.build(key);
       const fetcher = this.#createFetcher(keyPath, getValue);
-      this.#fetchers.set(keyPath, fetcher);
+      const fetchers = this.#fetchers.get(keyPath);
+      if (fetchers) {
+        fetchers.push(fetcher);
+      } else {
+        this.#fetchers.set(keyPath, [fetcher]);
+      }
     }
   }
 
@@ -120,7 +136,7 @@ export class StandardNestedFetcher<T extends object> implements Iterable<Standar
     const that = this;
     return function* (): Generator<StandardNestedFetcher.Entry<T>> {
       for (const [subKey, value] of unwrapShallowContents(getValue())) {
-        if (typeof subKey === "symbol") continue; // symbol keys are not supported
+        if (!isKeyPathKey(subKey)) continue; // keys with no key path form are not supported
         const keyPath = KeyPath.build(key, subKey);
         const data = that.#transform({ key, keyPath, data: value }) ?? null;
         if (data === null) continue;
@@ -131,23 +147,32 @@ export class StandardNestedFetcher<T extends object> implements Iterable<Standar
 
   /** Iterate over all entries */
   *[Symbol.iterator]() {
-    for (const fn of this.#fetchers.values()) {
-      for (const entry of fn()) {
-        yield entry;
+    for (const fetchers of this.#fetchers.values()) {
+      for (const fn of fetchers) {
+        for (const entry of fn()) {
+          yield entry;
+        }
       }
     }
   }
 
   /** Iterate over all entries for the given key path */
   *getForKey(keyPath: KeyPath) {
-    const fetcher = this.#fetchers.get(keyPath);
-    if (!fetcher) return;
-    for (const entry of fetcher()) {
-      yield entry;
+    const fetchers = this.#fetchers.get(keyPath);
+    if (!fetchers) return;
+    for (const fn of fetchers) {
+      for (const entry of fn()) {
+        yield entry;
+      }
     }
   }
 
-  /** Map of key paths to data */
+  /**
+   * Map of key paths to data
+   *
+   * @remarks
+   * Entries that share a key path collapse into the last of them
+   */
   @computed({ equals: comparer.shallow })
   get dataMap(): ReadonlyMap<KeyPath, T> {
     const result = new Map<KeyPath, T>();

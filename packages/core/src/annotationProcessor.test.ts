@@ -3,18 +3,23 @@ import { Decorator202112, Decorator202203 } from "./decorator";
 
 const sampleKey = Symbol("sample");
 
-function mapValues<K, V, R>(map: Map<K, V>, fn: (value: V, key: K) => R) {
-  const result = new Map<K, R>();
-  for (const [key, value] of map) {
-    result.set(key, fn(value, key));
+/** The data of every annotated member, merged under the property key it spells */
+function extractStoredData(processor: AnnotationProcessor) {
+  const result = new Map<string | symbol, any[]>();
+  for (const { propertyKey, data } of processor.getPropertyLikeMembers(sampleKey)!.values()) {
+    const merged = result.get(propertyKey);
+    if (merged) {
+      merged.push(...data);
+    } else {
+      result.set(propertyKey, [...data]);
+    }
   }
   return result;
 }
-function extractStoredData(processor: AnnotationProcessor) {
-  return mapValues(processor.getPropertyLike(sampleKey)!, (v) => v.data);
-}
+/** The property key of every annotated member, in registration order */
 function annotatedKeys(target: object) {
-  return [...(getAnnotationProcessor(target)?.getPropertyLike(sampleKey)?.keys() ?? [])];
+  const members = getAnnotationProcessor(target)?.getPropertyLikeMembers(sampleKey);
+  return Array.from(members?.values() ?? [], (member) => member.propertyKey);
 }
 
 describe("createPropertyLikeAnnotation", () => {
@@ -325,7 +330,7 @@ describe("createPropertyLikeAnnotation", () => {
       expect(obj.accessor1).toBe("value of accessor1");
       expect(getAnnotationProcessor(Sample.prototype)).toBe(getAnnotationProcessor(obj));
       expect(extractStoredData(getAnnotationProcessor(obj)!)).toEqual(new Map([["accessor1", ["data of accessor1"]]]));
-      expect(getAnnotationProcessor(obj)!.getPropertyLike(sampleKey)!.get("accessor1")!.get).toBeUndefined();
+      expect(getAnnotationProcessor(obj)!.getPropertyLikeMembers(sampleKey)!.get("accessor1")!.get).toBeUndefined();
     });
   });
 
@@ -352,14 +357,14 @@ describe("createPropertyLikeAnnotation", () => {
 
     test("decorators are applied bottom-up", () => {
       expect(calls).toEqual(["inner of property1", "outer of property1", "outer of property2", "outer of property2"]);
-      expect(getAnnotationProcessor(new Sample())!.getPropertyLike(sampleKey)!.get("property1")!.data).toEqual([
+      expect(getAnnotationProcessor(new Sample())!.getPropertyLikeMembers(sampleKey)!.get("property1")!.data).toEqual([
         "inner of property1",
         "outer of property1",
       ]);
     });
 
     test("the same annotation applied twice is recorded twice", () => {
-      expect(getAnnotationProcessor(new Sample())!.getPropertyLike(sampleKey)!.get("property2")!.data).toEqual([
+      expect(getAnnotationProcessor(new Sample())!.getPropertyLikeMembers(sampleKey)!.get("property2")!.data).toEqual([
         "outer of property2",
         "outer of property2",
       ]);
@@ -380,7 +385,7 @@ describe("createPropertyLikeAnnotation", () => {
       expect(fn).toBeCalledTimes(1);
       expect(fn).toBeCalledWith(symbolKey);
 
-      const annotations = getAnnotationProcessor(new Sample())!.getPropertyLike(sampleKey)!;
+      const annotations = getAnnotationProcessor(new Sample())!.getPropertyLikeMembers(sampleKey)!;
       expect([...annotations.keys()]).toEqual([symbolKey]);
       expect(annotations.get(symbolKey)!.data).toEqual(["data of Symbol(symbolKey)"]);
       expect(annotations.get("symbolKey")).toBeUndefined();
@@ -404,14 +409,14 @@ describe("createPropertyLikeAnnotation", () => {
     test("share one processor but are stored separately", () => {
       const processor = getAnnotationProcessor(new Sample())!;
       expect(extractStoredData(processor)).toEqual(new Map([["property1", ["sample"]]]));
-      expect([...processor.getPropertyLike(otherKey)!.keys()]).toEqual(["property1", "property2"]);
-      expect(processor.getPropertyLike(otherKey)!.get("property1")!.data).toEqual(["other"]);
-      expect(processor.getPropertyLike(otherKey)!.get("property2")!.data).toEqual(["other"]);
+      expect([...processor.getPropertyLikeMembers(otherKey)!.keys()]).toEqual(["property1", "property2"]);
+      expect(processor.getPropertyLikeMembers(otherKey)!.get("property1")!.data).toEqual(["other"]);
+      expect(processor.getPropertyLikeMembers(otherKey)!.get("property2")!.data).toEqual(["other"]);
     });
 
     test("are looked up by symbol identity, not by description", () => {
       const processor = getAnnotationProcessor(new Sample())!;
-      expect(processor.getPropertyLike(Symbol("sample"))).toBeUndefined();
+      expect(processor.getPropertyLikeMembers(Symbol("sample"))).toBeUndefined();
     });
   });
 
@@ -429,7 +434,7 @@ describe("createPropertyLikeAnnotation", () => {
     }
 
     test("does not capture a value getter", () => {
-      const annotations = getAnnotationProcessor(new Sample())!.getPropertyLike(sampleKey)!;
+      const annotations = getAnnotationProcessor(new Sample())!.getPropertyLikeMembers(sampleKey)!;
       expect(annotations.get("property1")!.get).toBeUndefined();
       expect(annotations.get("getter1")!.get).toBeUndefined();
     });
@@ -464,7 +469,7 @@ describe("createPropertyLikeAnnotation", () => {
 
     test("are registered like properties", () => {
       expect(fn).toBeCalledTimes(2);
-      const annotations = getAnnotationProcessor(new Sample())?.getPropertyLike(sampleKey);
+      const annotations = getAnnotationProcessor(new Sample())?.getPropertyLikeMembers(sampleKey);
       // PINNED(quirk): methods and setters are accepted by the stage-2 typing and registered, although the JSDoc only lists properties, getters and class fields. Decide: should non-property-like members be rejected by the types, or ignored at runtime?
       expect(annotations?.has("method1")).toBe(true);
       expect(annotations?.has("setter1")).toBe(true);
@@ -544,8 +549,8 @@ describe("createPropertyLikeAnnotation", () => {
     });
 
     test("the inherited data arrays are copies", () => {
-      const baseData = getAnnotationProcessor(new Base())!.getPropertyLike(sampleKey)!.get("property1")!.data;
-      const leafData = getAnnotationProcessor(new Leaf())!.getPropertyLike(sampleKey)!.get("property1")!.data;
+      const baseData = getAnnotationProcessor(new Base())!.getPropertyLikeMembers(sampleKey)!.get("property1")!.data;
+      const leafData = getAnnotationProcessor(new Leaf())!.getPropertyLikeMembers(sampleKey)!.get("property1")!.data;
       expect(leafData).toEqual(baseData);
       expect(leafData).not.toBe(baseData);
     });
@@ -691,7 +696,7 @@ describe("createPropertyLikeAnnotation", () => {
       sampleObject(target, "property1");
       sampleUndefined(target, "property1");
 
-      const stored = getAnnotationProcessor(target)!.getPropertyLike(sampleKey)!.get("property1")!.data;
+      const stored = getAnnotationProcessor(target)!.getPropertyLikeMembers(sampleKey)!.get("property1")!.data;
       expect(stored).toHaveLength(2);
       expect(stored[0]).toBe(data);
       expect(stored[1]).toBeUndefined();
@@ -706,10 +711,10 @@ describe("createPropertyLikeAnnotation", () => {
       expect(() => sample(target, "property1")).toThrow("getData failed");
       // PINNED(quirk): the processor is created before getData runs, so a throwing getData leaves an empty processor behind. Decide: should the processor be created only once the data is available?
       expect(getAnnotationProcessor(target)).not.toBeNull();
-      expect(getAnnotationProcessor(target)?.getPropertyLike(sampleKey)).toBeUndefined();
+      expect(getAnnotationProcessor(target)?.getPropertyLikeMembers(sampleKey)).toBeUndefined();
     });
 
-    test("throws for a null context", () => {
+    test("ignores a null context", () => {
       const fn = vi.fn(() => true);
       const sample = createPropertyLikeAnnotation(sampleKey, fn) as unknown as (
         target: unknown,
@@ -717,8 +722,7 @@ describe("createPropertyLikeAnnotation", () => {
       ) => void;
       const target = {};
 
-      // PINNED(bug): a null context reaches isDecorator202203, which throws "TypeError: Cannot read properties of null (reading 'kind')" instead of the call being ignored like an undefined, 0 or {} context. This is the same defect as the isDecorator202203(null) pin in decorator.test.ts, so both flip together. Expected: the call is ignored (`.not.toThrow()`). Flip this assertion when fixing.
-      expect(() => sample(target, null)).toThrow(TypeError);
+      expect(sample(target, null)).toBeUndefined();
       expect(fn).not.toBeCalled();
       expect(getAnnotationProcessor(target)).toBeNull();
     });
@@ -771,7 +775,50 @@ describe("createPropertyLikeAnnotation", () => {
       const processor = getAnnotationProcessor(obj)!;
       expect(extractStoredData(processor)).toEqual(new Map([["extra", ["data of extra"]]]));
       obj.extra = "updated extra";
-      expect(processor.getPropertyLike(sampleKey)!.get("extra")!.get!()).toBe("updated extra");
+      expect(processor.getPropertyLikeMembers(sampleKey)!.get("extra")!.get!()).toBe("updated extra");
+    });
+
+    test("with a stage-3 context for a private member and no metadata, separates members by the identity of access.has", () => {
+      // What `tsc` emits on a runtime without `Symbol.metadata`, as Node is: no metadata object, and one set of
+      // `access` functions per member of a class, which stacked decorators on that member share
+      const sample = createPropertyLikeAnnotation(sampleKey, () => "data") as unknown as (
+        target: unknown,
+        context: unknown
+      ) => void;
+      const obj = { parent: "parent value", child: "child value" };
+      const initializers: ((this: object) => void)[] = [];
+      const context = (has: (o: typeof obj) => boolean, get: (o: typeof obj) => string) => ({
+        kind: "field",
+        name: "#field",
+        private: true,
+        metadata: undefined,
+        addInitializer: (initializer: (this: object) => void) => {
+          initializers.push(initializer);
+        },
+        access: { has, get },
+      });
+      const parentAccess = context(
+        (o) => "parent" in o,
+        (o) => o.parent
+      );
+      const childAccess = context(
+        (o) => "child" in o,
+        (o) => o.child
+      );
+
+      sample(undefined, parentAccess);
+      sample(undefined, { ...parentAccess, access: { ...parentAccess.access } }); // stacked on the same member
+      sample(undefined, childAccess);
+      for (const initializer of initializers) {
+        initializer.call(obj);
+      }
+
+      const members = getAnnotationProcessor(obj)!.getPropertyLikeMembers(sampleKey)!;
+      // One entry per member, the stacked decorators of the first sharing its entry, both spelling "#field"
+      expect(Array.from(members.values(), (member) => [member.propertyKey, member.data, member.get!()])).toEqual([
+        ["#field", ["data", "data"], "parent value"],
+        ["#field", ["data"], "child value"],
+      ]);
     });
   });
 
@@ -810,7 +857,7 @@ describe("createPropertyLikeAnnotation", () => {
       initializers[0].call(obj2);
 
       const processor = getAnnotationProcessor(Sample.prototype)!;
-      const extra = processor.getPropertyLike(sampleKey)!.get("extra")!;
+      const extra = processor.getPropertyLikeMembers(sampleKey)!.get("extra")!;
       // PINNED(quirk): a stage-3 initializer registers without cloning an inherited processor, so on an instance whose prototype holds a stage-2 processor it mutates that shared processor: the annotation appears for every instance, accumulates per initialization, and `get` stays bound to the first instance. Decide: should stage-3 registration clone an inherited processor so each instance owns its annotations?
       expect(getAnnotationProcessor(obj1)).toBe(processor);
       expect(getAnnotationProcessor(obj2)).toBe(processor);
@@ -925,80 +972,99 @@ describe("createPropertyLikeAnnotation", () => {
 describe("AnnotationProcessor", () => {
   const otherKey = Symbol("other");
 
-  test("getPropertyLike returns undefined before anything is registered", () => {
+  test("getPropertyLikeMembers returns undefined before anything is registered", () => {
     const processor = new AnnotationProcessor();
-    expect(processor.getPropertyLike(sampleKey)).toBeUndefined();
+    expect(processor.getPropertyLikeMembers(sampleKey)).toBeUndefined();
   });
 
-  test("registerPropertyLike groups data by annotation key and property key in insertion order", () => {
+  test("registerPropertyLikeMember groups data by annotation key and member key in insertion order", () => {
     const processor = new AnnotationProcessor();
     const symbolKey = Symbol("symbolKey");
 
-    processor.registerPropertyLike(sampleKey, { propertyKey: "b", data: 1 });
-    processor.registerPropertyLike(sampleKey, { propertyKey: symbolKey, data: 2 });
-    processor.registerPropertyLike(sampleKey, { propertyKey: "a", data: 3 });
-    processor.registerPropertyLike(sampleKey, { propertyKey: "b", data: 4 });
-    processor.registerPropertyLike(otherKey, { propertyKey: "b", data: 5 });
+    processor.registerPropertyLikeMember(sampleKey, { propertyKey: "b", data: 1 });
+    processor.registerPropertyLikeMember(sampleKey, { propertyKey: symbolKey, data: 2 });
+    processor.registerPropertyLikeMember(sampleKey, { propertyKey: "a", data: 3 });
+    processor.registerPropertyLikeMember(sampleKey, { propertyKey: "b", data: 4 });
+    processor.registerPropertyLikeMember(otherKey, { propertyKey: "b", data: 5 });
 
-    const annotations = processor.getPropertyLike(sampleKey)!;
+    const annotations = processor.getPropertyLikeMembers(sampleKey)!;
     expect([...annotations.keys()]).toEqual(["b", symbolKey, "a"]);
     expect(annotations.get("b")!.data).toEqual([1, 4]);
     expect(annotations.get(symbolKey)!.data).toEqual([2]);
     expect(annotations.get("a")!.data).toEqual([3]);
 
-    expect([...processor.getPropertyLike(otherKey)!.keys()]).toEqual(["b"]);
-    expect(processor.getPropertyLike(otherKey)!.get("b")!.data).toEqual([5]);
+    expect([...processor.getPropertyLikeMembers(otherKey)!.keys()]).toEqual(["b"]);
+    expect(processor.getPropertyLikeMembers(otherKey)!.get("b")!.data).toEqual([5]);
   });
 
-  test("registerPropertyLike stores data by reference", () => {
+  test("registerPropertyLikeMember stores data by reference", () => {
     const processor = new AnnotationProcessor();
     const data = { some: "data" };
 
-    processor.registerPropertyLike(sampleKey, { propertyKey: "a", data });
-    processor.registerPropertyLike(sampleKey, { propertyKey: "a", data: undefined });
+    processor.registerPropertyLikeMember(sampleKey, { propertyKey: "a", data });
+    processor.registerPropertyLikeMember(sampleKey, { propertyKey: "a", data: undefined });
 
-    const stored = processor.getPropertyLike(sampleKey)!.get("a")!.data;
+    const stored = processor.getPropertyLikeMembers(sampleKey)!.get("a")!.data;
     expect(stored).toHaveLength(2);
     expect(stored[0]).toBe(data);
     expect(stored[1]).toBeUndefined();
   });
 
-  test("registerPropertyLike keeps the get function of the first registration", () => {
+  test("registerPropertyLikeMember keeps the property key and the get function of the first registration", () => {
     const processor = new AnnotationProcessor();
     const get1 = () => "first";
     const get2 = () => "second";
 
-    processor.registerPropertyLike(sampleKey, { propertyKey: "a", data: 1, get: get1 });
-    processor.registerPropertyLike(sampleKey, { propertyKey: "a", data: 2, get: get2 });
+    processor.registerPropertyLikeMember(sampleKey, { propertyKey: "a", data: 1, get: get1 });
+    processor.registerPropertyLikeMember(sampleKey, { memberKey: "a", propertyKey: "later", data: 2, get: get2 });
 
-    expect(processor.getPropertyLike(sampleKey)!.get("a")!.get).toBe(get1);
+    expect(processor.getPropertyLikeMembers(sampleKey)!.get("a")!.propertyKey).toBe("a");
+    expect(processor.getPropertyLikeMembers(sampleKey)!.get("a")!.get).toBe(get1);
   });
 
-  test("registerPropertyLike keeps a missing get function when the first registration had none", () => {
+  test("registerPropertyLikeMember keeps a missing get function when the first registration had none", () => {
     const processor = new AnnotationProcessor();
 
-    processor.registerPropertyLike(sampleKey, { propertyKey: "a", data: 1 });
-    processor.registerPropertyLike(sampleKey, { propertyKey: "a", data: 2, get: () => "second" });
+    processor.registerPropertyLikeMember(sampleKey, { propertyKey: "a", data: 1 });
+    processor.registerPropertyLikeMember(sampleKey, { propertyKey: "a", data: 2, get: () => "second" });
 
-    // PINNED(quirk): `get` is taken only from the first registration for a property, so a later registration cannot fill in a missing one. Decide: should a later `get` replace a missing (or any) earlier one?
-    expect(processor.getPropertyLike(sampleKey)!.get("a")!.get).toBeUndefined();
+    // PINNED(quirk): `get` is taken only from the first registration for a member, so a later registration cannot fill in a missing one. Decide: should a later `get` replace a missing (or any) earlier one?
+    expect(processor.getPropertyLikeMembers(sampleKey)!.get("a")!.get).toBeUndefined();
   });
 
-  test("getPropertyLike returns the live internal map", () => {
+  test("registerPropertyLikeMember keeps registrations with different memberKeys apart under one property key", () => {
     const processor = new AnnotationProcessor();
-    processor.registerPropertyLike(sampleKey, { propertyKey: "a", data: 1 });
+    const memberKey = Symbol("#a");
+    const get1 = () => "first";
+    const get2 = () => "second";
 
-    const annotations = processor.getPropertyLike(sampleKey)!;
-    expect(processor.getPropertyLike(sampleKey)).toBe(annotations);
+    processor.registerPropertyLikeMember(sampleKey, { propertyKey: "#a", data: 1, get: get1 });
+    processor.registerPropertyLikeMember(sampleKey, { propertyKey: "#a", memberKey, data: 2, get: get2 });
 
-    processor.registerPropertyLike(sampleKey, { propertyKey: "b", data: 2 });
+    const annotations = processor.getPropertyLikeMembers(sampleKey)!;
+    // Two entries, each with its own data and `get`, both spelling the one property key
+    expect([...annotations.keys()]).toEqual(["#a", memberKey]);
+    expect(Array.from(annotations.values(), (member) => [member.propertyKey, member.data, member.get])).toEqual([
+      ["#a", [1], get1],
+      ["#a", [2], get2],
+    ]);
+  });
+
+  test("getPropertyLikeMembers returns the live internal map", () => {
+    const processor = new AnnotationProcessor();
+    processor.registerPropertyLikeMember(sampleKey, { propertyKey: "a", data: 1 });
+
+    const annotations = processor.getPropertyLikeMembers(sampleKey)!;
+    expect(processor.getPropertyLikeMembers(sampleKey)).toBe(annotations);
+
+    processor.registerPropertyLikeMember(sampleKey, { propertyKey: "b", data: 2 });
     expect(annotations.has("b")).toBe(true);
 
     annotations.delete("a");
     annotations.get("b")!.data.push(3);
-    // PINNED(quirk): the returned Map and its data arrays are the processor's own state, so callers can mutate registered annotations. Decide: should getPropertyLike return a read-only view or a copy?
-    expect(processor.getPropertyLike(sampleKey)!.has("a")).toBe(false);
-    expect(processor.getPropertyLike(sampleKey)!.get("b")!.data).toEqual([2, 3]);
+    // PINNED(quirk): the returned Map and its data arrays are the processor's own state, so callers can mutate registered annotations. Decide: should getPropertyLikeMembers return a read-only view or a copy?
+    expect(processor.getPropertyLikeMembers(sampleKey)!.has("a")).toBe(false);
+    expect(processor.getPropertyLikeMembers(sampleKey)!.get("b")!.data).toEqual([2, 3]);
   });
 
   describe("clone", () => {
@@ -1006,37 +1072,51 @@ describe("AnnotationProcessor", () => {
       const processor = new AnnotationProcessor();
       const data = { some: "data" };
       const get = () => "value";
-      processor.registerPropertyLike(sampleKey, { propertyKey: "a", data, get });
-      processor.registerPropertyLike(sampleKey, { propertyKey: "a", data: 2 });
-      processor.registerPropertyLike(sampleKey, { propertyKey: "b", data: 3 });
-      processor.registerPropertyLike(otherKey, { propertyKey: "c", data: 4 });
+      processor.registerPropertyLikeMember(sampleKey, { propertyKey: "a", data, get });
+      processor.registerPropertyLikeMember(sampleKey, { propertyKey: "a", data: 2 });
+      processor.registerPropertyLikeMember(sampleKey, { propertyKey: "b", data: 3 });
+      processor.registerPropertyLikeMember(otherKey, { propertyKey: "c", data: 4 });
 
       const clone = processor.clone();
       expect(clone).toBeInstanceOf(AnnotationProcessor);
       expect(clone).not.toBe(processor);
 
-      const annotations = clone.getPropertyLike(sampleKey)!;
-      expect(annotations).not.toBe(processor.getPropertyLike(sampleKey));
+      const annotations = clone.getPropertyLikeMembers(sampleKey)!;
+      expect(annotations).not.toBe(processor.getPropertyLikeMembers(sampleKey));
       expect([...annotations.keys()]).toEqual(["a", "b"]);
       expect(annotations.get("a")!.data).toEqual([data, 2]);
       expect(annotations.get("a")!.data[0]).toBe(data);
-      expect(annotations.get("a")!.data).not.toBe(processor.getPropertyLike(sampleKey)!.get("a")!.data);
+      expect(annotations.get("a")!.data).not.toBe(processor.getPropertyLikeMembers(sampleKey)!.get("a")!.data);
       expect(annotations.get("a")!.get).toBe(get);
       expect(annotations.get("b")!.data).toEqual([3]);
       expect(annotations.get("b")!.get).toBeUndefined();
-      expect([...clone.getPropertyLike(otherKey)!.keys()]).toEqual(["c"]);
-      expect(clone.getPropertyLike(otherKey)!.get("c")!.data).toEqual([4]);
+      expect([...clone.getPropertyLikeMembers(otherKey)!.keys()]).toEqual(["c"]);
+      expect(clone.getPropertyLikeMembers(otherKey)!.get("c")!.data).toEqual([4]);
+    });
+
+    test("keeps the members of a property key apart", () => {
+      const processor = new AnnotationProcessor();
+      const memberKey = Symbol("#a");
+      processor.registerPropertyLikeMember(sampleKey, { propertyKey: "#a", data: 1 });
+      processor.registerPropertyLikeMember(sampleKey, { propertyKey: "#a", memberKey, data: 2 });
+
+      const annotations = processor.clone().getPropertyLikeMembers(sampleKey)!;
+      expect([...annotations.keys()]).toEqual(["#a", memberKey]);
+      expect(Array.from(annotations.values(), (member) => [member.propertyKey, member.data])).toEqual([
+        ["#a", [1]],
+        ["#a", [2]],
+      ]);
     });
 
     test("is independent of the original in both directions", () => {
       const processor = new AnnotationProcessor();
-      processor.registerPropertyLike(sampleKey, { propertyKey: "a", data: 1 });
+      processor.registerPropertyLikeMember(sampleKey, { propertyKey: "a", data: 1 });
       const clone = processor.clone();
 
-      processor.registerPropertyLike(sampleKey, { propertyKey: "a", data: 2 });
-      processor.registerPropertyLike(sampleKey, { propertyKey: "b", data: 3 });
-      clone.registerPropertyLike(sampleKey, { propertyKey: "c", data: 4 });
-      clone.registerPropertyLike(otherKey, { propertyKey: "d", data: 5 });
+      processor.registerPropertyLikeMember(sampleKey, { propertyKey: "a", data: 2 });
+      processor.registerPropertyLikeMember(sampleKey, { propertyKey: "b", data: 3 });
+      clone.registerPropertyLikeMember(sampleKey, { propertyKey: "c", data: 4 });
+      clone.registerPropertyLikeMember(otherKey, { propertyKey: "d", data: 5 });
 
       expect(extractStoredData(processor)).toEqual(
         new Map([
@@ -1044,7 +1124,7 @@ describe("AnnotationProcessor", () => {
           ["b", [3]],
         ])
       );
-      expect(processor.getPropertyLike(otherKey)).toBeUndefined();
+      expect(processor.getPropertyLikeMembers(otherKey)).toBeUndefined();
       expect(extractStoredData(clone)).toEqual(
         new Map([
           ["a", [1]],
@@ -1055,36 +1135,39 @@ describe("AnnotationProcessor", () => {
 
     test("of an empty processor has no annotations", () => {
       const clone = new AnnotationProcessor().clone();
-      expect(clone.getPropertyLike(sampleKey)).toBeUndefined();
+      expect(clone.getPropertyLikeMembers(sampleKey)).toBeUndefined();
     });
 
-    test("drops properties and annotation keys whose entries were emptied through the live map", () => {
+    test("drops members and annotation keys whose entries were emptied through the live map", () => {
       const processor = new AnnotationProcessor();
-      processor.registerPropertyLike(sampleKey, { propertyKey: "a", data: 1, get: () => "value" });
-      processor.registerPropertyLike(sampleKey, { propertyKey: "b", data: 2 });
-      processor.registerPropertyLike(otherKey, { propertyKey: "c", data: 3 });
+      processor.registerPropertyLikeMember(sampleKey, { propertyKey: "a", data: 1, get: () => "value" });
+      processor.registerPropertyLikeMember(sampleKey, { propertyKey: "b", data: 2 });
+      processor.registerPropertyLikeMember(otherKey, { propertyKey: "c", data: 3 });
 
-      processor.getPropertyLike(sampleKey)!.get("a")!.data.length = 0;
-      processor.getPropertyLike(otherKey)!.clear();
+      processor.getPropertyLikeMembers(sampleKey)!.get("a")!.data.length = 0;
+      processor.getPropertyLikeMembers(otherKey)!.clear();
       const clone = processor.clone();
 
-      expect(processor.getPropertyLike(sampleKey)!.has("a")).toBe(true);
-      expect(processor.getPropertyLike(otherKey)).toEqual(new Map());
-      // clone replays one registration per data item, so an entry whose data array is empty (and its `get`) and an
-      // annotation key whose map is empty are not copied. Such entries can only arise by mutating the live map
-      // (see "getPropertyLike returns the live internal map"), never through registerPropertyLike.
-      expect(clone.getPropertyLike(sampleKey)!.has("a")).toBe(false);
-      expect(clone.getPropertyLike(otherKey)).toBeUndefined();
-      expect(clone.getPropertyLike(sampleKey)!.get("b")!.data).toEqual([2]);
+      expect(processor.getPropertyLikeMembers(sampleKey)!.has("a")).toBe(true);
+      expect(processor.getPropertyLikeMembers(otherKey)).toEqual(new Map());
+      // clone replays one registration per data item of a member, so a member holding no data (and its `get`) and
+      // an annotation key whose map is empty are not copied. Such entries can only arise by mutating the live map
+      // (see "getPropertyLikeMembers returns the live internal map"), never through registerPropertyLikeMember.
+      expect(clone.getPropertyLikeMembers(sampleKey)!.has("a")).toBe(false);
+      expect(clone.getPropertyLikeMembers(otherKey)).toBeUndefined();
+      expect(clone.getPropertyLikeMembers(sampleKey)!.get("b")!.data).toEqual([2]);
     });
   });
 
   test("types", () => {
-    expectTypeOf<ReturnType<AnnotationProcessor["getPropertyLike"]>>().toEqualTypeOf<
-      Map<string | symbol, { data: any[]; get?: () => any }> | undefined
+    expectTypeOf<ReturnType<AnnotationProcessor["getPropertyLikeMembers"]>>().toEqualTypeOf<
+      Map<string | symbol, { propertyKey: string | symbol; data: any[]; get?: () => any }> | undefined
     >();
-    expectTypeOf<Parameters<AnnotationProcessor["registerPropertyLike"]>>().toEqualTypeOf<
-      [annotationKey: symbol, args: { propertyKey: string | symbol; data: any; get?: () => any }]
+    expectTypeOf<Parameters<AnnotationProcessor["registerPropertyLikeMember"]>>().toEqualTypeOf<
+      [
+        annotationKey: symbol,
+        args: { propertyKey: string | symbol; memberKey?: string | symbol; data: any; get?: () => any },
+      ]
     >();
     expectTypeOf<ReturnType<AnnotationProcessor["clone"]>>().toEqualTypeOf<AnnotationProcessor>();
   });

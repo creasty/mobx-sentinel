@@ -34,9 +34,8 @@ describe("isDecorator202203", () => {
     expect(isDecorator202203(Object.assign(() => {}, { kind: "field" }))).toBe(false);
   });
 
-  test("throws for null", () => {
-    // PINNED(bug): isDecorator202203(null) throws "TypeError: Cannot read properties of null" because `typeof null == "object"` passes the first check. Expected: it returns false like any other non-context value, as its `(context: any): context is DecoratorContext` signature promises. Flip this assertion when fixing (to `expect(isDecorator202203(null)).toBe(false)`).
-    expect(() => isDecorator202203(null)).toThrow(TypeError);
+  test("returns false for null", () => {
+    expect(isDecorator202203(null)).toBe(false);
   });
 
   test("returns false for every argument of a stage-2 decorator", () => {

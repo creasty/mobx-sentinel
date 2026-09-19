@@ -727,7 +727,7 @@ describe("StandardNestedFetcher", () => {
       expect(fetcher.dataMap.get("map.1" as KeyPath)).toBe(objects[1]);
     });
 
-    it("collapses map keys that are not strings, numbers or symbols onto the property key path", () => {
+    it("skips map keys that have no key path form, while a null key takes the property key path", () => {
       const objects = [new Other(), new Other(), new Other(), new Other(), new Other()];
       class Sample {
         @nested @observable.shallow map = new Map<unknown, Other>([
@@ -743,16 +743,14 @@ describe("StandardNestedFetcher", () => {
         }
       }
       const fetcher = new StandardNestedFetcher(new Sample(), (entry) => entry.data);
-      // PINNED(bug): Object, boolean, null and undefined map keys are dropped from the key path, so four distinct entries all get the key path "map" (indistinguishable from a non-collection property) and dataMap keeps only the last of them. Expected: each map entry gets a distinct key path (or such keys are rejected explicitly); unwrapShallowContents is typed to yield only string | symbol | number | null keys. Flip this assertion when fixing.
+      // The object, boolean and undefined keys are ignored, as symbol keys are; `null` marks a value that is not a
+      // collection, so that entry keeps the key path of the property itself
       expect(summarize(fetcher, objects)).toEqual([
-        ["map", "map", 0],
-        ["map", "map", 1],
         ["map", "map", 2],
-        ["map", "map", 3],
         ["map", "map.key", 4],
       ]);
       expect(fetcher.dataMap.size).toBe(2);
-      expect(fetcher.dataMap.get("map" as KeyPath)).toBe(objects[3]);
+      expect(fetcher.dataMap.get("map" as KeyPath)).toBe(objects[2]);
     });
 
     it("yields cyclic references as they are without recursing", () => {
@@ -1264,23 +1262,17 @@ describe("getNestedAnnotations (edge cases)", () => {
     ).toEqual([["field", false, ["child"]]]);
   });
 
-  it("does not count a hoisted key named with an empty string towards the single @nested.hoist restriction", () => {
+  it("counts a hoisted key named with an empty string towards the single @nested.hoist restriction", () => {
     const objects = [new Other(), new Other()];
     class Sample {
       @nested.hoist "" = [objects[0]];
       @nested.hoist list = [objects[1]];
     }
-    // PINNED(bug): `if (hoistedKey)` tests truthiness, so a first hoisted key "" is forgotten and a second hoisted key is accepted. Expected: throw "Multiple @nested.hoist annotations are not allowed in the same class:  and list" (compare with `hoistedKey !== null`). Flip this assertion when fixing.
-    expect(() => Array.from(getNestedAnnotations(new Sample()))).not.toThrow();
-    expect(Array.from(getNestedAnnotations(new Sample()), ({ key, hoist }) => [key, hoist])).toEqual([
-      ["", true],
-      ["list", true],
-    ]);
-
-    // Both keys resolve to KeyPath.Self, so the fetcher registered for "" is replaced by the one for "list"
-    const fetcher = new StandardNestedFetcher(new Sample(), (entry) => entry.data);
-    // PINNED(bug): The elements of the hoisted "" property are silently dropped. Expected: construction throws (see above), so no data is lost silently. Flip this assertion when fixing.
-    expect(summarize(fetcher, objects)).toEqual([[KeyPath.Self, "0", 1]]);
+    expect(() => Array.from(getNestedAnnotations(new Sample()))).toThrow(
+      new Error("Multiple @nested.hoist annotations are not allowed in the same class:  and list")
+    );
+    // Both keys would resolve to KeyPath.Self, so the fetcher rejects them instead of dropping one
+    expect(() => new StandardNestedFetcher(new Sample(), (entry) => entry.data)).toThrow(/Multiple @nested.hoist/);
   });
 });
 
@@ -1340,7 +1332,7 @@ describe("StandardNestedFetcher (edge cases)", () => {
     expect(Array.from(fetcher.getForKey(KeyPath.Self))).toHaveLength(1);
   });
 
-  it("lets a hoisted key replace a property named with an empty string, in the position of the latter", () => {
+  it("fetches a hoisted key alongside a property named with an empty string, in the position of the latter", () => {
     const objects = [new Other(), new Other(), new Other()];
     class Sample {
       @nested "" = [objects[0]];
@@ -1348,11 +1340,13 @@ describe("StandardNestedFetcher (edge cases)", () => {
       @nested.hoist list = [objects[2]];
     }
     const fetcher = new StandardNestedFetcher(new Sample(), (entry) => entry.data);
-    // PINNED(quirk): Both "" and the hoisted "list" resolve to KeyPath.Self; the later fetcher overwrites the earlier one in a Map, so the elements of "" are dropped and those of "list" are yielded first, before "other". Decide: should key collisions on KeyPath.Self throw at construction?
+    // PINNED(quirk): Both "" and the hoisted "list" resolve to KeyPath.Self, so both are fetched under it and are yielded together, before "other"; their elements share the key path "0" and dataMap keeps only the last. Decide: should key collisions on KeyPath.Self throw at construction?
     expect(summarize(fetcher, objects)).toEqual([
+      [KeyPath.Self, "0", 0],
       [KeyPath.Self, "0", 2],
       ["other", "other", 1],
     ]);
+    expect(fetcher.dataMap.get("0" as KeyPath)).toBe(objects[2]);
   });
 
   it("stops reading values and calling transform when iteration is abandoned early", () => {
@@ -1570,7 +1564,8 @@ describe("StandardNestedFetcher (edge cases)", () => {
     runInAction(() => {
       parent.items[0].name = "Updated";
     });
-    // PINNED(bug): transform runs inside the dataMap computed, so the observables it reads (id and name, via toString) are tracked and the item change produces a different value at "items.0"; the autorun re-runs. Expected: the docs say "autorun does NOT trigger - only the item changed, not the structure" (and "It does NOT re-run when individual item properties change"), so runs stays 2 — either untrack transform or correct the docs. Flip this assertion when fixing.
+    // transform runs inside the dataMap computed, so the observables it reads (id and name, via toString) are tracked,
+    // and the item change produces a different value at "items.0"
     expect(observer.runs).toBe(3);
     expect(observer.last!.get("items.0" as KeyPath)).toBe("Item(id = 1, name = Updated)");
   });

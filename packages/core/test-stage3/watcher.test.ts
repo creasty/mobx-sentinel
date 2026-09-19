@@ -415,6 +415,99 @@ describe("Annotations", () => {
       expect(watcher.changedKeys).toEqual(new Set(["value", "#doubled", "#wrapped"]));
       expect(watcher.changedTick).toBe(3n);
     });
+
+    test("@watch on a setter is inert rather than an error", () => {
+      class WithSetter {
+        @observable accessor value = 0;
+
+        // @ts-expect-error the declared decorator type has no setter overload
+        @watch
+        set assign(next: number) {
+          this.value = next;
+        }
+      }
+
+      // A setter has no `access.get`, so the watcher reads the property instead, which a set-only accessor answers
+      // with undefined: the member never changes, and reading it reports no error. MobX catches what a reaction
+      // throws and reports it rather than letting it escape, so a spy is what shows the difference.
+      const consoleError = vi.spyOn(console, "error").mockImplementation(() => {});
+      try {
+        const sample = new WithSetter();
+        const watcher = Watcher.get(sample);
+        runInAction(() => {
+          sample.assign = 1;
+        });
+        expect(watcher.changedKeys).toEqual(new Set(["value"]));
+        expect(consoleError).not.toHaveBeenCalled();
+      } finally {
+        consoleError.mockRestore();
+      }
+    });
+  });
+
+  describe("@watch on same-named ECMAScript private members", () => {
+    class Parent {
+      @watch readonly #box = observable.box(0);
+
+      setParentBox(value: number) {
+        this.#box.set(value);
+      }
+    }
+
+    class Child extends Parent {
+      @watch readonly #box = observable.box(0);
+
+      setChildBox(value: number) {
+        this.#box.set(value);
+      }
+    }
+
+    test("each member is watched on its own, under the one key they spell", () => {
+      const child = new Child();
+      const watcher = Watcher.get(child);
+
+      runInAction(() => {
+        child.setChildBox(1);
+      });
+      expect(watcher.changedKeys).toEqual(new Set(["#box"]));
+      expect(watcher.changedTick).toBe(1n);
+
+      runInAction(() => {
+        child.setParentBox(1);
+      });
+      // The parent's field is a member of its own, so its change is counted too, under the same key
+      expect(watcher.changedKeys).toEqual(new Set(["#box"]));
+      expect(watcher.changedTick).toBe(2n);
+    });
+  });
+
+  describe("@watch on an ECMAScript private member spelled like a public property", () => {
+    class Sample {
+      // A public property that merely spells a private name; `this.#value` is a different member
+      readonly ["#value"] = observable.box(0);
+
+      @watch readonly #value = observable.box(0);
+
+      setPrivateValue(value: number) {
+        this.#value.set(value);
+      }
+    }
+
+    test("the annotated private member is watched, and the public property is not", () => {
+      const sample = new Sample();
+      const watcher = Watcher.get(sample);
+
+      runInAction(() => {
+        sample["#value"].set(1);
+      });
+      expect(watcher.changed).toBe(false);
+
+      runInAction(() => {
+        sample.setPrivateValue(1);
+      });
+      expect(watcher.changedKeys).toEqual(new Set(["#value"]));
+      expect(watcher.changedTick).toBe(1n);
+    });
   });
 
   describe("inheritance", () => {
@@ -445,6 +538,34 @@ describe("Annotations", () => {
       });
       expect(derivedWatcher.changedKeys).toEqual(new Set(["refInBase"]));
       expect(baseWatcher.changedKeys).toEqual(new Set(["shallowInBase"]));
+    });
+
+    test("a same-named private @nested member of a subclass is watched on its own", () => {
+      class Parent {
+        @nested accessor #child = new Leaf();
+
+        changeParentChild() {
+          this.#child.value = 1;
+        }
+      }
+      class Child extends Parent {
+        @nested accessor #child = new Leaf();
+
+        changeChildChild() {
+          this.#child.value = 1;
+        }
+      }
+
+      // Neither member overrides the other, so each one is watched, although they share the key path "#child"
+      const changingParent = new Child();
+      const parentWatcher = Watcher.get(changingParent);
+      runInAction(() => changingParent.changeParentChild());
+      expect(parentWatcher.changed).toBe(true);
+
+      const changingChild = new Child();
+      const childWatcher = Watcher.get(changingChild);
+      runInAction(() => changingChild.changeChildChild());
+      expect(childWatcher.changed).toBe(true);
     });
   });
 

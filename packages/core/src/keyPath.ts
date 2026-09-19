@@ -88,11 +88,14 @@ export namespace KeyPath {
   /**
    * Get all ancestors of a key path
    *
+   * @remarks
+   * The root object is not an ancestor, so a top-level key has no ancestors.
+   *
    * @param includeSelf Whether to include the path itself
    *
    * @returns
-   * - {@link KeyPath.Self} for single-level paths when `includeSelf` is false
-   * - Key paths starting from the closest ancestor and moving up to the root
+   * - The key path itself when `includeSelf` is true ({@link KeyPath.Self} for self paths)
+   * - Key paths starting from the closest ancestor and moving up to the top-level key
    */
   export function* getAncestors(keyPath: KeyPath, includeSelf = true): Generator<KeyPath> {
     if (includeSelf) {
@@ -146,6 +149,10 @@ export class KeyPathMultiMap<T> implements ReadonlyKeyPathMultiMap<T> {
       return true;
     }
     if (prefixMatch) {
+      // Self paths prefix-match every key path, as in findPrefix()
+      if (KeyPath.isSelf(keyPath)) {
+        return this.#map.size > 0;
+      }
       return this.#prefixMap.has(keyPath);
     }
     return false;
