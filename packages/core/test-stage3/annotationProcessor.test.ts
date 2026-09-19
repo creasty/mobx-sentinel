@@ -953,7 +953,7 @@ describe("createPropertyLikeAnnotation", () => {
   });
 
   describe("methods and setters", () => {
-    test("are registered, with a get that returns the method and throws for a setter", () => {
+    test("are registered, with a get that returns the method and none for a setter", () => {
       const fn = vi.fn((propertyKey: string | symbol) => `data of ${String(propertyKey)}`);
       const sample = createPropertyLikeAnnotation(sampleKey, fn);
 
@@ -975,8 +975,8 @@ describe("createPropertyLikeAnnotation", () => {
       expect(annotations?.has("method1")).toBe(true);
       expect(annotations?.has("setter1")).toBe(true);
       expect(annotations?.get("method1")?.get?.()).toBe(Sample.prototype.method1);
-      // PINNED(quirk): a setter context has no `access.get`, yet a `get` is registered unconditionally, so calling it throws "context.access.get is not a function". Decide: should setters be skipped, or registered without `get`?
-      expect(() => annotations?.get("setter1")?.get?.()).toThrow(TypeError);
+      // A setter has no `access.get`, so it is registered without one
+      expect(annotations?.get("setter1")?.get).toBeUndefined();
     });
   });
 

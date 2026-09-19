@@ -415,6 +415,34 @@ describe("Annotations", () => {
       expect(watcher.changedKeys).toEqual(new Set(["value", "#doubled", "#wrapped"]));
       expect(watcher.changedTick).toBe(3n);
     });
+
+    test("@watch on a setter is inert rather than an error", () => {
+      class WithSetter {
+        @observable accessor value = 0;
+
+        // @ts-expect-error the declared decorator type has no setter overload
+        @watch
+        set assign(next: number) {
+          this.value = next;
+        }
+      }
+
+      // A setter has no `access.get`, so the watcher reads the property instead, which a set-only accessor answers
+      // with undefined: the member never changes, and reading it reports no error. MobX catches what a reaction
+      // throws and reports it rather than letting it escape, so a spy is what shows the difference.
+      const consoleError = vi.spyOn(console, "error").mockImplementation(() => {});
+      try {
+        const sample = new WithSetter();
+        const watcher = Watcher.get(sample);
+        runInAction(() => {
+          sample.assign = 1;
+        });
+        expect(watcher.changedKeys).toEqual(new Set(["value"]));
+        expect(consoleError).not.toHaveBeenCalled();
+      } finally {
+        consoleError.mockRestore();
+      }
+    });
   });
 
   describe("@watch on same-named ECMAScript private members", () => {

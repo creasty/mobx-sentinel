@@ -207,7 +207,9 @@ export function createPropertyLikeAnnotation<T extends object, Data>(
           propertyKey: context.name,
           memberKey,
           data: getData(context.name),
-          get: () => context.access.get(this),
+          // A setter has no `access.get`. Leaving the member without one lets the consumers fall back to reading the
+          // property, which yields undefined for a set-only accessor rather than throwing.
+          get: context.access.get ? () => context.access.get(this) : undefined,
         });
       });
     } else if (target && isDecorator202112(context)) {
