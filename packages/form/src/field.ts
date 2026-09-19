@@ -108,7 +108,7 @@ export class FormField {
    * - `true` - Field is invalid
    *
    * @remarks
-   * - Error reporting is delayed until validation is complete.
+   * - Error reporting is delayed until validation is complete. Withdrawing a report is not.
    * - It can be used directly with the `aria-invalid` attribute.
    */
   @computed
@@ -212,7 +212,10 @@ export class FormField {
   };
 
   /**
-   * Set whether the errors are reported, and reflect it in {@link isErrorReported} once the validation is up-to-date.
+   * Set whether the errors are reported, and reflect it in {@link isErrorReported}.
+   *
+   * Only reporting waits until the validation is up-to-date: withdrawing a report shows nothing, so it has nothing to
+   * wait for.
    *
    * Waiting means observing the validator, and what a reaction observes references it, so the subject, and the objects
    * nested in it, would keep the field and its form alive. The reaction therefore lives only while a change waits, and
@@ -226,7 +229,7 @@ export class FormField {
     reaction(
       () => [this.#isReported.get(), this.validator.isValidating] as const,
       ([isReported, isValidating], _, r) => {
-        if (!isValidating) {
+        if (!isReported || !isValidating) {
           this.#isReportedDelayed.set(isReported);
         }
         if (isReported === this.#isReportedDelayed.get()) {
