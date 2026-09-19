@@ -15,7 +15,7 @@ import { StandardNestedFetcher } from "./nested";
 import { KeyPath, ReadonlyKeyPathMultiMap } from "./keyPath";
 import { AsyncJob } from "./asyncJob";
 
-const validatorKey = Symbol("validator");
+const registry = new WeakMap<object, Validator<any>>();
 const internalToken = Symbol("validator.internal");
 
 /**
@@ -101,7 +101,9 @@ export class Validator<T> {
    * @remarks
    * - Returns existing instance if one exists for the target
    * - Creates new instance if none exists
-   * - Instances are cached, and garbage collected with the target only if everything their handlers observe is too
+   * - Instances are cached by the identity of the target, so an object inheriting from a validated one gets its own
+   * - Nothing is written to the target, so frozen, sealed and non-extensible objects are supported
+   * - Instances are garbage collected with the target only if everything their handlers observe is too
    *
    * @throws `TypeError` if the target is not an object.
    */
@@ -121,10 +123,10 @@ export class Validator<T> {
       return null;
     }
 
-    let validator: Validator<T> | null = (target as any)[validatorKey] ?? null;
+    let validator: Validator<T> | null = registry.get(target) ?? null;
     if (!validator) {
       validator = new this(internalToken, target);
-      Object.defineProperty(target, validatorKey, { value: validator });
+      registry.set(target, validator);
     }
     return validator;
   }
@@ -226,7 +228,8 @@ export class Validator<T> {
    *
    * - Can do exact or prefix matching
    * - Returns all errors that match the key path
-   * - Includes errors from nested validators when using prefix match
+   * - Searches nested validators, including hoisted ones, for the rest of the key path
+   * - Includes errors of every nested validator below the key path when using prefix match
    */
   *findErrors(searchKeyPath: KeyPath, prefixMatch = false) {
     yield* this.#findErrors(searchKeyPath, prefixMatch, false);
@@ -280,17 +283,22 @@ export class Validator<T> {
           yield [error.keyPath, error];
         }
       }
-      ancestorLoop: for (const ancestorKeyPath of KeyPath.getAncestors(searchKeyPath, true)) {
+      // Hoisted entries are fetched by a self path, which is never an ancestor of a non-self key path,
+      // although their contents appear on this object
+      const ancestorKeyPaths = new Set(KeyPath.getAncestors(searchKeyPath, true));
+      ancestorKeyPaths.add(KeyPath.Self);
+      for (const ancestorKeyPath of ancestorKeyPaths) {
         for (const entry of this.#nestedFetcher.getForKey(ancestorKeyPath)) {
-          const childKeyPath =
-            prefixMatch && entry.key !== entry.keyPath && KeyPath.getRelative(entry.keyPath, entry.key)
-              ? KeyPath.Self
-              : KeyPath.getRelative(searchKeyPath, entry.keyPath);
-          if (!childKeyPath) continue;
+          let childKeyPath = KeyPath.getRelative(searchKeyPath, entry.keyPath);
+          if (!childKeyPath) {
+            // The entry is below the searched key path (like an element of a searched array),
+            // so all of its errors match the prefix
+            if (!prefixMatch || !KeyPath.getRelative(entry.keyPath, searchKeyPath)) continue;
+            childKeyPath = KeyPath.Self;
+          }
           for (const [relativeKeyPath, error] of entry.data.#findErrors(childKeyPath, prefixMatch, exact)) {
             yield [KeyPath.build(entry.keyPath, relativeKeyPath), error];
           }
-          break ancestorLoop;
         }
       }
     }
@@ -501,6 +509,7 @@ export class Validator<T> {
     return this.#createReaction({
       key,
       opt,
+      equals: opt?.equals,
       expr,
       effect: (expr) => {
         job.request(expr);
@@ -515,6 +524,7 @@ export class Validator<T> {
   #createReaction<Expr>(args: {
     key: symbol;
     opt?: Validator.HandlerOptions<NoInfer<Expr>>;
+    equals?: IEqualsComparer<NoInfer<Expr>>;
     expr: () => Expr;
     effect: (expr: NoInfer<Expr>) => void;
     dispose?: () => void;
@@ -522,9 +532,12 @@ export class Validator<T> {
     const reactionDelayMs = args.opt?.delayMs ?? Validator.defaultDelayMs;
     let initialRun = args.opt?.initialRun ?? true;
     let evaluated = false; // Whether the last evaluation of the expression returned rather than threw
+    let recorded = false; // Whether MobX holds a value of the expression, which the comparer compares against
+    const equals = args.equals;
 
     const dispose = reaction(
       () => {
+        recorded ||= evaluated; // MobX records the value of an evaluation that returned, after comparing it
         evaluated = false;
         const expr = args.expr();
         evaluated = true;
@@ -540,6 +553,9 @@ export class Validator<T> {
         args.effect(expr);
       },
       {
+        // The comparer is skipped until a value is recorded: MobX leaves the value undefined when the initial
+        // evaluation throws, and a comparer that fails on it would wedge the reaction, as MobX then never records one.
+        equals: equals && ((a, b) => recorded && equals(a, b)),
         fireImmediately: args.opt?.initialRun ?? true,
         scheduler: (fn) => {
           // No need for clearing timer
