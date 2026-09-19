@@ -1099,14 +1099,13 @@ describe("Form (details)", () => {
       expect(() => get(model)).toThrow(TypeError);
     });
 
-    it("throws for a non-extensible subject, even from getSafe", () => {
+    it("accepts a non-extensible subject, from get and getSafe", () => {
       const frozen = Object.freeze({});
       const nonExtensible = Object.preventExtensions({});
 
-      // PINNED(bug): Watcher.getSafe (core) stores the watcher on the subject with Object.defineProperty, so Form.getSafe throws a TypeError for a non-extensible object, and Form.get throws a TypeError for a value that is an object. Expected: getSafe does not throw (either a form is returned, e.g. by keeping the watcher and the validator in a WeakMap, or null), as its JSDoc says it returns null instead of throwing and Form.get documents a TypeError only for non-objects. Flip these assertions to `.not.toThrow()` when fixing.
-      expect(() => Form.getSafe(frozen)).toThrow(/not extensible/);
-      expect(() => Form.getSafe(nonExtensible)).toThrow(/not extensible/);
-      expect(() => Form.get(frozen)).toThrow(/not extensible/);
+      expect(Form.getSafe(frozen)).toBeInstanceOf(Form);
+      expect(Form.getSafe(nonExtensible)).toBeInstanceOf(Form);
+      expect(Form.get(frozen)).toBeInstanceOf(Form);
     });
   });
 
@@ -1165,7 +1164,7 @@ describe("Form (details)", () => {
       Form.dispose(model);
       const recreated = Form.get(model);
 
-      // PINNED(quirk): Watcher and Validator are attached to the subject itself, so a re-created form inherits the dirty state and the errors of the disposed one. Decide: should Form.dispose also reset (or detach) the watcher and the validator so that the re-created form starts clean?
+      // PINNED(quirk): Watcher and Validator belong to the subject rather than to the form, so a re-created form inherits the dirty state and the errors of the disposed one. Decide: should Form.dispose also reset (or detach) the watcher and the validator so that the re-created form starts clean?
       expect(recreated.watcher).toBe(form.watcher);
       expect(recreated.validator).toBe(form.validator);
       expect(recreated.isDirty).toBe(true);
@@ -1921,7 +1920,7 @@ describe("Form (details)", () => {
       expect(form.getAllErrors()).toEqual(new Set(["map error", "set error"]));
     });
 
-    it("returns only the errors of the first element for a field holding multiple sub-forms", () => {
+    it("returns the errors of every sub-form held by a field", () => {
       const model = new CollectionModel();
       const form = Form.get(model);
       runInAction(() => {
@@ -1931,11 +1930,10 @@ describe("Form (details)", () => {
       Form.get(model.array[1]).validator.updateErrors(Symbol(), (b) => b.invalidate("field", "error at 1"));
 
       expect(form.getAllErrors()).toEqual(new Set(["error at 0", "error at 1"]));
-      // PINNED(bug): Validator#findErrors (prefix match) stops after the first nested entry of the field, so the errors of array.1 are missing. Expected: Set(["error at 0", "error at 1"]), as getAllErrors is documented to return the errors of the field and its nested forms. Flip this assertion when fixing.
-      expect(form.getAllErrors("array")).toEqual(new Set(["error at 0"]));
+      expect(form.getAllErrors("array")).toEqual(new Set(["error at 0", "error at 1"]));
     });
 
-    it("returns the errors of the first element for a key path pointing at another element", () => {
+    it("returns the errors of the element the key path points at", () => {
       const model = new CollectionModel();
       const form = Form.get(model);
       runInAction(() => {
@@ -1946,8 +1944,7 @@ describe("Form (details)", () => {
 
       // The runtime accepts any key path string even though the type only allows field names
       const getAllErrors = form.getAllErrors as (fieldName?: string) => Set<string>;
-      // PINNED(bug): For a prefix match, Validator#findErrors replaces the searched key path with the first nested entry of the field, so "array.1" yields the errors of array.0. Expected: Set(["error at 1"]). Flip this assertion when fixing.
-      expect(getAllErrors.call(form, "array.1")).toEqual(new Set(["error at 0"]));
+      expect(getAllErrors.call(form, "array.1")).toEqual(new Set(["error at 1"]));
     });
   });
 

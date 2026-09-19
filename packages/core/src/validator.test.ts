@@ -1553,28 +1553,26 @@ describe("Validator.get / Validator.getSafe: targets", () => {
     expect(() => Validator.get("str" as any)).toThrow(new TypeError("target: Expected an object"));
   });
 
-  it("throws from get for functions although the signature accepts them", () => {
+  it("rejects functions at compile time and still throws from get at runtime", () => {
     const fn = () => {};
-    // PINNED(bug): Validator.get(fn) type-checks (T extends object includes functions) but throws "target: Expected an object" at runtime. Expected: the signature and the runtime check agree (reject functions at the type level, or support them). Flip this assertion when fixing.
+    // @ts-expect-error functions are rejected by get()
     expect(() => Validator.get(fn)).toThrow(TypeError);
   });
 
-  it("throws from getSafe for a non-extensible object", () => {
+  it("returns a validator for a non-extensible object", () => {
     const target = Object.freeze({ field: 1 });
-    // PINNED(bug): getSafe() defines a symbol property on the target, which throws "Cannot define property Symbol(validator), object is not extensible" for frozen/sealed/non-extensible objects. Expected: getSafe never throws for objects ("returns null instead of throwing an error"); e.g. keep validators in a WeakMap or return null. Flip this assertion when fixing.
-    expect(() => Validator.getSafe(target)).toThrow(TypeError);
+    expect(Validator.getSafe(target)).toBeInstanceOf(Validator);
   });
 
-  it("shares the validator of a prototype with the objects inheriting from it", () => {
+  it("does not share the validator of a prototype with the objects inheriting from it", () => {
     const proto = {};
     const protoValidator = Validator.get(proto);
 
     class Model {}
     const classProtoValidator = Validator.get(Model.prototype);
 
-    // PINNED(bug): The cached validator is read through the prototype chain, so Object.create(proto) and instances of a class whose prototype was passed to get() reuse that validator. Expected: every target gets its own validator ("Returns existing instance if one exists for the target"). Flip these assertions (toBe -> not.toBe) when fixing.
-    expect(Validator.get(Object.create(proto) as object)).toBe(protoValidator);
-    expect(Validator.get(new Model())).toBe(classProtoValidator);
+    expect(Validator.get(Object.create(proto) as object)).not.toBe(protoValidator);
+    expect(Validator.get(new Model())).not.toBe(classProtoValidator);
   });
 
   it("creates separate validators for instances of the same class", () => {
@@ -1590,18 +1588,16 @@ describe("Validator.get / Validator.getSafe: targets", () => {
     const proxy = observable({ field: 1 });
     const validator = Validator.get(proxy);
     expect(Validator.get(proxy)).toBe(validator);
-    // A spread copies enumerable symbol properties, so the cached validator must not travel with it
+    // The cache is keyed by the identity of the target, so a copy gets its own validator
     expect(Validator.get({ ...proxy })).not.toBe(validator);
   });
 
-  it("does not add enumerable properties to the target", () => {
+  it("does not write to the target", () => {
     const target = { field: 1 };
     const validator = Validator.get(target);
     expect(Object.keys(target)).toEqual(["field"]);
     expect(JSON.stringify(target)).toBe('{"field":1}');
-    const symbols = Object.getOwnPropertySymbols(target);
-    expect(symbols).toHaveLength(1);
-    expect(Object.prototype.propertyIsEnumerable.call(target, symbols[0])).toBe(false);
+    expect(Object.getOwnPropertySymbols(target)).toHaveLength(0);
 
     const copy = { ...target };
     expect(Validator.get(copy)).not.toBe(validator);
@@ -2170,7 +2166,7 @@ describe("Validator: async handler scheduling", () => {
     expect(env.validator.isValidating).toBe(false);
   });
 
-  it("ignores the equals option", async () => {
+  it("does not re-run the handler when the expression value is equal by the equals option", async () => {
     const model = observable({ field: 1 });
     const validator = Validator.get(model);
     const handler = vi.fn(async () => {});
@@ -2187,8 +2183,8 @@ describe("Validator: async handler scheduling", () => {
     // so this holds whether or not the comparer is honored.
     expect(validator.reactionState).toBe(1);
     await vi.advanceTimersByTimeAsync(100);
-    // PINNED(bug): HandlerOptions.equals is documented as "The equality comparer for the expression" but is never passed to reaction(), so an expression result that is equal by the comparer still re-runs the handler. Expected: the handler is called only once (toHaveBeenCalledTimes(2) -> toHaveBeenCalledTimes(1)). Flip this assertion when fixing.
-    expect(handler).toHaveBeenCalledTimes(2);
+    expect(handler).toHaveBeenCalledTimes(1);
+    expect(validator.reactionState).toBe(0);
   });
 
   it("counts the job of each handler in asyncState", async () => {
@@ -2278,6 +2274,36 @@ describe("Validator: async handler failures and cancellation", () => {
     expect(payloads).toEqual([-1]);
     expect(validator.getErrorMessages("field" as KeyPath)).toEqual(new Set(["negative"]));
     expect(validator.isValidating).toBe(false);
+  });
+
+  it("does not compare with the equals option until a value of the expression is recorded", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    const model = observable({ field: 0 });
+    const validator = Validator.get(model);
+    const handler = vi.fn(async () => {});
+    validator.addAsyncHandler(
+      () => {
+        if (model.field === 0) throw new Error("expression failure");
+        return { positive: model.field > 0 };
+      },
+      handler,
+      // The comparer would throw on the value of the initial run, which MobX left undefined
+      { equals: (a, b) => a.positive === b.positive }
+    );
+    await flushMicrotasks();
+    expect(handler).not.toHaveBeenCalled();
+
+    runInAction(() => {
+      model.field = 1;
+    });
+    await vi.advanceTimersByTimeAsync(100);
+    expect(handler).toHaveBeenCalledTimes(1);
+
+    runInAction(() => {
+      model.field = 2;
+    });
+    await vi.advanceTimersByTimeAsync(100);
+    expect(handler).toHaveBeenCalledTimes(1);
   });
 
   it("calls the handler on the initial run when the expression returns undefined rather than throwing", () => {
@@ -2805,38 +2831,38 @@ describe("Validator: nested key paths", () => {
     expect(listErrors(validator.findErrors("items.1.field" as KeyPath))).toEqual([["items.1.field", "second item"]]);
   });
 
-  it("stops at the first array element with a prefix search on the array", () => {
+  it("finds the errors of every array element with a prefix search on the array", () => {
     const container = new Container();
     const validator = Validator.get(container);
     invalidateLeaf(container.items[0], "first item");
     invalidateLeaf(container.items[1], "second item");
 
-    // PINNED(bug): #findErrors breaks out of the ancestor loop after the first element of "items", so the errors of items.1 are missing. Expected: [["items.0.field", "first item"], ["items.1.field", "second item"]] ("Includes errors from nested validators when using prefix match"). Flip this assertion when fixing.
-    expect(listErrors(validator.findErrors("items" as KeyPath, true))).toEqual([["items.0.field", "first item"]]);
+    expect(listErrors(validator.findErrors("items" as KeyPath, true))).toEqual([
+      ["items.0.field", "first item"],
+      ["items.1.field", "second item"],
+    ]);
   });
 
-  it("misses an invalid later array element in prefix-matched hasErrors/getErrorMessages", () => {
+  it("finds an invalid later array element with prefix-matched hasErrors/getErrorMessages", () => {
     const container = new Container();
     const validator = Validator.get(container);
     invalidateLeaf(container.items[1], "second item");
     expect(validator.invalidKeyPaths).toEqual(new Set(["items.1.field"]));
 
-    // PINNED(bug): Only the first element under "items" is searched with prefixMatch, so an error on items.1 is not found. Expected: hasErrors("items", true) is true and getErrorMessages("items", true) is Set(["second item"]). Flip these assertions when fixing.
-    expect(validator.hasErrors("items" as KeyPath, true)).toBe(false);
-    expect(validator.getErrorMessages("items" as KeyPath, true)).toEqual(new Set());
+    expect(validator.hasErrors("items" as KeyPath, true)).toBe(true);
+    expect(validator.getErrorMessages("items" as KeyPath, true)).toEqual(new Set(["second item"]));
   });
 
-  it("returns the errors of the first element when prefix-searching another element", () => {
+  it("returns the errors of the searched element when prefix-searching one element", () => {
     const container = new Container();
     const validator = Validator.get(container);
     invalidateLeaf(container.items[0], "first item");
     invalidateLeaf(container.items[1], "second item");
 
-    // PINNED(bug): With prefixMatch, the relative path of every element under an array key is replaced by KeyPath.Self, so searching "items.1" yields the errors of items.0. Expected: [["items.1.field", "second item"]]. Flip this assertion when fixing.
-    expect(listErrors(validator.findErrors("items.1" as KeyPath, true))).toEqual([["items.0.field", "first item"]]);
+    expect(listErrors(validator.findErrors("items.1" as KeyPath, true))).toEqual([["items.1.field", "second item"]]);
   });
 
-  it("returns every error of an array element when prefix-searching a key path below it", () => {
+  it("searches only below the key path when prefix-searching inside an array element", () => {
     class Row {
       @observable field = 0;
       @observable other = 0;
@@ -2858,12 +2884,11 @@ describe("Validator: nested key paths", () => {
 
     expect(validator.hasErrors("rows.0.field" as KeyPath)).toBe(false);
     expect(listErrors(validator.findErrors("rows.0" as KeyPath, true))).toEqual([["rows.0.other", "other"]]);
-    // PINNED(bug): With prefixMatch, the path below an array element is replaced by KeyPath.Self, so searching "rows.0.field" yields the errors of "rows.0.other" too. Expected: findErrors("rows.0.field", true) is empty and hasErrors("rows.0.field", true) is false. Flip these assertions when fixing.
-    expect(listErrors(validator.findErrors("rows.0.field" as KeyPath, true))).toEqual([["rows.0.other", "other"]]);
-    expect(validator.hasErrors("rows.0.field" as KeyPath, true)).toBe(true);
+    expect(listErrors(validator.findErrors("rows.0.field" as KeyPath, true))).toEqual([]);
+    expect(validator.hasErrors("rows.0.field" as KeyPath, true)).toBe(false);
   });
 
-  it("includes errors of a hoisted object in findErrors(Self) but not in lookups by key path", () => {
+  it("includes errors of a hoisted object in findErrors(Self) and in lookups by key path", () => {
     const hoisted = new HoistedObject();
     const validator = Validator.get(hoisted);
     invalidateLeaf(hoisted.inner, "hoisted");
@@ -2874,13 +2899,12 @@ describe("Validator: nested key paths", () => {
     // PINNED(quirk): invalidKeys/invalidKeyCount ignore hoisted errors although hoisted objects are "treated as part of the parent object". Decide: should hoisted keys count as the parent's own keys?
     expect(validator.invalidKeys).toEqual(new Set());
     expect(validator.invalidKeyCount).toBe(0);
-    // PINNED(bug): Lookups by key path only consult fetchers for the ancestors of the searched path and never the hoisted (KeyPath.Self) one, so "field" of the hoisted object is not found although invalidKeyPaths lists it. Expected: hasErrors("field") is true and getErrorMessages("field") is Set(["hoisted"]) ("Changes and errors from nested objects appear on the parent"). Flip these assertions when fixing.
-    expect(validator.hasErrors("field" as KeyPath)).toBe(false);
-    expect(validator.hasErrors("field" as KeyPath, true)).toBe(false);
-    expect(validator.getErrorMessages("field" as KeyPath)).toEqual(new Set());
+    expect(validator.hasErrors("field" as KeyPath)).toBe(true);
+    expect(validator.hasErrors("field" as KeyPath, true)).toBe(true);
+    expect(validator.getErrorMessages("field" as KeyPath)).toEqual(new Set(["hoisted"]));
   });
 
-  it("includes errors of hoisted array elements only in a prefix search from Self", () => {
+  it("includes errors of hoisted array elements in lookups by key path", () => {
     const hoisted = new HoistedArray();
     const validator = Validator.get(hoisted);
     invalidateLeaf(hoisted.list[1], "second");
@@ -2888,9 +2912,8 @@ describe("Validator: nested key paths", () => {
     expect(validator.invalidKeyPaths).toEqual(new Set(["1.field"]));
     expect(listErrors(validator.findErrors(KeyPath.Self, true))).toEqual([["1.field", "second"]]);
     expect(listErrors(validator.findErrors(KeyPath.Self))).toEqual([]); // only self errors of hoisted elements
-    // PINNED(bug): Same as for hoisted objects: key path lookups never consult the hoisted fetcher, so "1.field" and the prefix "1" are not found. Expected: [["1.field", "second"]] and hasErrors("1", true) === true. Flip these assertions when fixing.
-    expect(listErrors(validator.findErrors("1.field" as KeyPath))).toEqual([]);
-    expect(validator.hasErrors("1" as KeyPath, true)).toBe(false);
+    expect(listErrors(validator.findErrors("1.field" as KeyPath))).toEqual([["1.field", "second"]]);
+    expect(validator.hasErrors("1" as KeyPath, true)).toBe(true);
   });
 
   it("reports isValidating while a reaction of a nested validator is pending", () => {
