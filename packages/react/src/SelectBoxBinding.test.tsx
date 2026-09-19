@@ -198,9 +198,8 @@ describe("SelectBoxBinding", () => {
       expect(env.binding.props.multiple).toBe(false);
     });
 
-    it("does not set aria-multiselectable for a multiple select", () => {
+    it("omits aria-multiselectable, which a native multiple select exposes implicitly", () => {
       const env = setupModelEnv({ multiple: true, getter: () => [], setter: () => {} });
-      // PINNED(bug): no aria-multiselectable attribute is produced, although the react docs say "For multiple selection, `aria-multiselectable` is automatically set". Expected: props["aria-multiselectable"] is true for multiple selects (or the docs are corrected, since a native <select multiple> already exposes it implicitly). Flip this assertion when fixing.
       expect(env.binding.props).not.toHaveProperty("aria-multiselectable");
     });
 
@@ -909,14 +908,14 @@ describe("bindSelectBox", () => {
       expect(env.select).toHaveDisplayValue([]);
     });
 
-    test("renders the multiple attribute", () => {
+    test("renders the multiple attribute without aria-multiselectable", () => {
       const env = setupEnv("multiple");
       const form = Form.get(env.model);
 
       expect(env.select).toHaveAttribute("id", form.getField("multiple").id);
       expect(env.select).toHaveAttribute("multiple");
       expect(env.select.multiple).toBe(true);
-      // PINNED(bug): aria-multiselectable is not rendered, although the react docs say it "is automatically set" for multiple selection. Expected: aria-multiselectable="true" (or the docs are corrected, since a native <select multiple> already exposes it implicitly). Flip this assertion when fixing.
+      // A native <select multiple> already exposes multi-selectability to assistive technology.
       expect(env.select).not.toHaveAttribute("aria-multiselectable");
     });
 
