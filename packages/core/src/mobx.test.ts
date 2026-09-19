@@ -455,4 +455,54 @@ describe("MobX", () => {
       });
     });
   });
+
+  describe("order of pending reactions", () => {
+    // Watcher#unwatch() relies on both of these: it fences the reactions its callback makes stale between two
+    // autoruns created inside the transaction, and reads the fence when the queue is drained.
+    test("pending reactions run in the order they went stale, and an autorun created in a batch takes its place in that order", () => {
+      const first = observable.box(0);
+      const second = observable.box(0);
+      const order: string[] = [];
+
+      autorun(() => {
+        first.get();
+        order.push("first");
+      });
+      autorun(() => {
+        second.get();
+        order.push("second");
+      });
+      order.length = 0;
+
+      runInAction(() => {
+        second.set(1);
+        first.set(1);
+        autorun(() => order.push("created in the batch"));
+      });
+      expect(order).toEqual(["second", "first", "created in the batch"]);
+    });
+
+    test("a reaction made stale before a new autorun runs ahead of it, and one made stale after runs behind it", () => {
+      const before = observable.box(0);
+      const after = observable.box(0);
+      const order: string[] = [];
+
+      autorun(() => {
+        before.get();
+        order.push("before");
+      });
+      autorun(() => {
+        after.get();
+        order.push("after");
+      });
+      order.length = 0;
+
+      runInAction(() => {
+        before.set(1);
+        autorun(() => order.push("fence"));
+        after.set(1);
+      });
+      expect(order).toEqual(["before", "fence", "after"]);
+    });
+  });
 });

@@ -78,28 +78,28 @@ describe("Watcher", () => {
       expect(Watcher.get(target)).toBe(Watcher.get(target));
     });
 
-    it("does not leave any enumerable trace on the target", () => {
+    it("does not write to the target", () => {
       const target = { a: 1 };
       const watcher = Watcher.get(target);
       expect(Object.keys(target)).toEqual(["a"]);
       expect(JSON.stringify(target)).toBe('{"a":1}');
+      expect(Object.getOwnPropertySymbols(target)).toHaveLength(0);
 
-      // A spread copy does not carry the cached watcher over
+      // The cache is keyed by the identity of the target, so a copy gets its own watcher
       const copy = { ...target };
       expect(Watcher.get(copy)).not.toBe(watcher);
     });
 
-    it("returns the watcher of the prototype for an object created with Object.create()", () => {
+    it("creates a separate watcher for an object created with Object.create()", () => {
       const parent = {};
       const parentWatcher = Watcher.get(parent);
       const child = Object.create(parent);
-      // PINNED(quirk): the cache is looked up with a plain property read, which follows the prototype chain, so an object inheriting from a watched object shares its watcher (only when the prototype's watcher is created first). Decide: should the cache check own properties only (e.g. Object.hasOwn) so that each object gets its own watcher?
-      expect(Watcher.get(child)).toBe(parentWatcher);
+      expect(Watcher.get(child)).not.toBe(parentWatcher);
     });
 
-    it("throws a TypeError when the target is not extensible", () => {
-      expect(() => Watcher.get(Object.freeze({}))).toThrowError(TypeError);
-      expect(() => Watcher.get(Object.preventExtensions({}))).toThrowError(/not extensible/);
+    it("accepts a non-extensible target", () => {
+      expect(Watcher.get(Object.freeze({}))).toBeInstanceOf(Watcher);
+      expect(Watcher.get(Object.preventExtensions({}))).toBeInstanceOf(Watcher);
     });
 
     it("returns a watcher that tracks nothing for observable collections and boxed observables", () => {
@@ -132,10 +132,9 @@ describe("Watcher", () => {
       }
     });
 
-    it("throws when the target is not extensible", () => {
-      // PINNED(bug): getSafe() lets the TypeError from caching the watcher on a frozen / sealed / non-extensible object escape, although its JSDoc says it "returns null instead of throwing an error" (the guide only mentions non-objects; Validator.getSafe has the identical JSDoc and is pinned as a bug in validator.test.ts). Expected: getSafe does not throw for objects, either by giving non-extensible objects a watcher (e.g. cached in a WeakMap; flip to `.toBeInstanceOf(Watcher)`) or by returning null (flip to `.toBeNull()`). Flip these assertions when fixing.
-      expect(() => Watcher.getSafe(Object.freeze({}))).toThrowError(/not extensible/);
-      expect(() => Watcher.getSafe(Object.seal({}))).toThrowError(/not extensible/);
+    it("returns a watcher for a non-extensible target", () => {
+      expect(Watcher.getSafe(Object.freeze({}))).toBeInstanceOf(Watcher);
+      expect(Watcher.getSafe(Object.seal({}))).toBeInstanceOf(Watcher);
     });
 
     it("throws when the target has invalid @nested annotations", () => {
@@ -147,7 +146,10 @@ describe("Watcher", () => {
         }
       }
       // getSafe() only guards against non-object targets; the deliberate annotation misuse error raised by getNestedAnnotations() is not swallowed
-      expect(() => Watcher.getSafe(new Mixed())).toThrowError(/Mixed @nested annotations are not allowed/);
+      const mixed = new Mixed();
+      expect(() => Watcher.getSafe(mixed)).toThrowError(/Mixed @nested annotations are not allowed/);
+      // The watcher that failed to build is not left in the cache
+      expect(() => Watcher.getSafe(mixed)).toThrowError(/Mixed @nested annotations are not allowed/);
     });
   });
 
@@ -199,15 +201,14 @@ describe("Watcher", () => {
       }
     });
 
-    it("is ignored after unwatch() within the same transaction", () => {
+    it("is recorded after unwatch() returns within the same transaction", () => {
       const watcher = Watcher.get({});
       runInAction(() => {
         unwatch(() => {});
-        expect(Watcher.isWatching).toBe(false);
+        expect(Watcher.isWatching).toBe(true);
         watcher.assumeChanged();
       });
-      expect(Watcher.isWatching).toBe(true);
-      expect(watcher.changed).toBe(false);
+      expect(watcher.changed).toBe(true);
     });
 
     it("is cleared by reset()", () => {
@@ -590,20 +591,19 @@ describe("Watcher", () => {
   });
 
   describe("creation inside a transaction", () => {
-    it("does NOT track changes made later in the same transaction", () => {
+    it("tracks changes made later in the same transaction", () => {
       const object = observable({ value: 0, other: 0 });
       let watcher!: Watcher;
       runInAction(() => {
         watcher = Watcher.get(object);
         object.value = 1;
       });
-      // PINNED(bug): the reactions of a watcher created inside a transaction take their first reading only when the transaction ends, so changes made after Watcher.get() in the same transaction become the baseline (e.g. a model created and edited inside one action). Expected: tracked, as the docs say "Watching starts immediately when the Watcher instance is created". Flip this assertion when fixing.
-      expect(watcher.changed).toBe(false);
+      expect(watcher.changed).toBe(true);
 
       runInAction(() => {
         object.other = 1;
       });
-      expect(watcher.changedKeys).toEqual(new Set(["other"]));
+      expect(watcher.changedKeys).toEqual(new Set(["value", "other"]));
     });
 
     it("tracks changes made after unwatch() ends when created inside unwatch()", () => {
@@ -748,15 +748,16 @@ describe("unwatch()", () => {
     expect(Watcher.isWatching).toBe(true);
   });
 
-  it("unwatch() ends when the current transaction completes", () => {
+  it("ends as soon as the function returns, even inside a transaction", () => {
     runInAction(() => {
       unwatch(() => {
         expect(Watcher.isWatching).toBe(false);
       });
-      expect(Watcher.isWatching).toBe(false); // Doesn't become true until the current transaction completes
+      expect(Watcher.isWatching).toBe(true);
       unwatch(() => {
         expect(Watcher.isWatching).toBe(false);
       });
+      expect(Watcher.isWatching).toBe(true);
     });
     expect(Watcher.isWatching).toBe(true);
   });
@@ -837,12 +838,12 @@ describe("unwatch()", () => {
           throw new Error("boom");
         })
       ).toThrowError("boom");
-      expect(Watcher.isWatching).toBe(false);
+      expect(Watcher.isWatching).toBe(true);
     });
     expect(Watcher.isWatching).toBe(true);
   });
 
-  it("drops a change made before unwatch() in the same transaction, and tracks one made after", () => {
+  it("only drops what the unwatch() function changes, not what is changed around it in the same transaction", () => {
     // The example of "Warning about transactions" in the docs of the core package
     const object = observable({ field1: false, field2: false, field3: false });
     const watcher = Watcher.get(object);
@@ -855,13 +856,11 @@ describe("unwatch()", () => {
       object.field3 = true;
     });
     expect(watcher.changedKeys.has("field2" as KeyPath)).toBe(false);
-    // PINNED(bug): the reaction for field1 is scheduled before unwatch() but only runs when the transaction ends, while unwatching is still in effect, so the change is dropped. Expected: tracked, as the docs say ("Tracked: Before unwatch begins"). Flip this assertion when fixing.
-    expect(watcher.changedKeys.has("field1" as KeyPath)).toBe(false);
-    // PINNED(quirk): field3 is tracked because its reaction is scheduled after unwatching ends, contradicting the docs ("NOT tracked: Still in the same transaction as unwatch"); the test "works when unwatch() function has outer transactions" relies on this. Decide: fix the docs, or the behavior?
+    expect(watcher.changedKeys.has("field1" as KeyPath)).toBe(true);
     expect(watcher.changedKeys.has("field3" as KeyPath)).toBe(true);
   });
 
-  it("drops a change to a key that is changed both before and after unwatch() in the same transaction", () => {
+  it("tracks a key that is changed both before and after unwatch() in the same transaction", () => {
     const object = observable({ value: 0, other: 0 });
     const watcher = Watcher.get(object);
 
@@ -872,8 +871,36 @@ describe("unwatch()", () => {
       });
       object.value = 2;
     });
-    // PINNED(bug): the reaction for "value" is already scheduled before unwatch(), so both changes are dropped. Expected: `true` (the key was changed outside unwatch() twice). Flip this assertion when fixing.
-    expect(watcher.changed).toBe(false);
+    expect(watcher.changed).toBe(true);
+    expect(watcher.changedKeys).toEqual(new Set(["value"])); // "other" was only changed inside unwatch()
+  });
+
+  it("drops a key that unwatch() changes before it changes again in the same transaction", () => {
+    const object = observable({ value: 0, otherValue: 0 });
+    const watcher = Watcher.get(object);
+
+    runInAction(() => {
+      unwatch(() => {
+        object.value = 1;
+      });
+      object.value = 2;
+      object.otherValue = 1;
+    });
+    // A watcher processes the changes of a transaction when the outermost one ends, where all it can tell is when
+    // the key first changed in it -- which was inside unwatch(). The other order is detected, see the test above.
+    // Only that one key is dropped: every other key changed after unwatch() returns is detected as usual.
+    expect(watcher.changedKeys).toEqual(new Set(["otherValue"]));
+
+    // Outside a transaction the two changes are processed separately, so the second one is detected
+    const other = observable({ value: 0 });
+    const otherWatcher = Watcher.get(other);
+    unwatch(() => {
+      other.value = 1;
+    });
+    runInAction(() => {
+      other.value = 2;
+    });
+    expect(otherWatcher.changedKeys).toEqual(new Set(["value"]));
   });
 
   it("returns undefined for an async function, and changes after the first await are tracked", async () => {
@@ -2518,7 +2545,7 @@ describe("Annotations", () => {
       expect(watcher.changedKeys).toEqual(new Set());
     });
 
-    test("changes to the nested object do not mark the parent as changed, but appear in changedKeyPaths", () => {
+    test("changes to the nested object do not mark the parent as changed, nor appear in changedKeyPaths", () => {
       const sample = new Sample();
       const watcher = Watcher.get(sample);
       const childWatcher = Watcher.get(sample.child);
@@ -2530,19 +2557,18 @@ describe("Annotations", () => {
       expect(watcher.changed).toBe(false);
       expect(watcher.changedTick).toBe(0n);
       expect(watcher.nested.get("child" as KeyPath)).toBe(childWatcher);
-      // PINNED(bug): @unwatch only skips the reactions, not the nested fetcher, so the nested changes leak into changedKeyPaths while `changed` is false. Expected: an empty set, as @nested is "considered @watched unless @unwatch is specified" (JSDoc of `watch`). Flip this assertion when fixing.
-      expect(watcher.changedKeyPaths).toEqual(new Set(["child.value"]));
+      expect(watcher.changedKeyPaths).toEqual(new Set());
     });
 
-    test("changes to the nested object are lost until its watcher is created", () => {
+    test("the nested watcher is only created on first access", () => {
       const sample = new Sample();
       const watcher = Watcher.get(sample);
 
       runInAction(() => {
         sample.child.value = 1;
       });
-      // PINNED(quirk): without the reactions of @nested, the nested watcher is only created on first access, so whether a change shows up in changedKeyPaths depends on who accessed it before. Decide: settle together with the changedKeyPaths leak above.
       expect(watcher.changedKeyPaths).toEqual(new Set());
+      // PINNED(quirk): without the reactions of @nested, the nested watcher is only created on first access, so a change made before that is recorded nowhere — unlike the test above, where it was created upfront. Decide: should @unwatch @nested create the nested watcher upfront, as a watched @nested does?
       expect(Watcher.get(sample.child).changed).toBe(false);
     });
 
@@ -2556,6 +2582,27 @@ describe("Annotations", () => {
       });
       watcher.reset();
       expect(childWatcher.changed).toBe(false);
+    });
+
+    test("changes to a hoisted nested object do not appear in changedKeyPaths either", () => {
+      class HoistSample {
+        @unwatch @nested.hoist @observable child = new Leaf();
+
+        constructor() {
+          makeObservable(this);
+        }
+      }
+
+      const sample = new HoistSample();
+      const watcher = Watcher.get(sample);
+      const childWatcher = Watcher.get(sample.child);
+
+      runInAction(() => {
+        sample.child.value = 1;
+      });
+      expect(childWatcher.changed).toBe(true);
+      expect(watcher.changed).toBe(false);
+      expect(watcher.changedKeyPaths).toEqual(new Set());
     });
   });
 
@@ -2604,7 +2651,7 @@ describe("Annotations", () => {
       }
     }
 
-    test("the parent's changedTick increments only when a nested watcher becomes changed", () => {
+    test("the parent's changedTick increments on every nested change", () => {
       const sample = new Sample();
       const watcher = Watcher.get(sample);
       const childWatcher = Watcher.get(sample.child);
@@ -2622,9 +2669,8 @@ describe("Annotations", () => {
           sample.child.value = 2;
         });
         expect(childWatcher.changedTick).toBe(2n);
-        // PINNED(bug): the parent only reacts to the nested `changed` flipping to true, so further nested changes neither increment its changedTick nor notify reactions observing it (the autosave/sync use case in the Overview at /docs/). Expected: 2n and 2 calls. Flip these assertions when fixing.
-        expect(watcher.changedTick).toBe(1n);
-        expect(onTick).toHaveBeenCalledTimes(1);
+        expect(watcher.changedTick).toBe(2n);
+        expect(onTick).toHaveBeenCalledTimes(2);
       } finally {
         dispose();
       }
@@ -2665,7 +2711,7 @@ describe("Annotations", () => {
       expect(watcher.changedKeyPaths).toEqual(new Set(["items", "items.0.value"]));
     });
 
-    test("adding an object that is already changed inside unwatch() hides its later changes from the parent", () => {
+    test("adding an object that is already changed inside unwatch() does not make the parent changed, but its later changes do", () => {
       const sample = new Sample();
       const watcher = Watcher.get(sample);
       const leaf = new Leaf();
@@ -2686,8 +2732,7 @@ describe("Annotations", () => {
         leaf.value = 2;
       });
       expect(Watcher.get(leaf).changedTick).toBe(2n);
-      // PINNED(bug): the nested `changed` already flipped to true inside unwatch(), and the parent only reacts to that flip, so a change made outside unwatch() never reaches the parent. Expected: `true`. Flip this assertion when fixing.
-      expect(watcher.changed).toBe(false);
+      expect(watcher.changed).toBe(true);
     });
 
     test("key paths follow the current position of nested objects", () => {
@@ -2761,7 +2806,16 @@ describe("Annotations", () => {
       expect(watcher.changedTick).toBe(1n);
     });
 
-    test("objects under symbol keys of a map affect `changed` but are out of reach of reset()", () => {
+    test("assumeChanged() on a nested watcher that already assumes a change does not increment the parent again", () => {
+      const sample = new Sample();
+      const watcher = Watcher.get(sample);
+
+      Watcher.get(sample.child).assumeChanged();
+      Watcher.get(sample.child).assumeChanged();
+      expect(watcher.changedTick).toBe(1n);
+    });
+
+    test("objects under symbol keys of a map are NOT tracked and are out of reach of reset()", () => {
       const key = Symbol("key");
       class MapSample {
         @nested @observable map = new Map<symbol, Leaf>([[key, new Leaf()]]);
@@ -2774,27 +2828,27 @@ describe("Annotations", () => {
       const sample = new MapSample();
       const watcher = Watcher.get(sample);
       const leaf = sample.map.get(key)!;
+      const leafWatcher = Watcher.get(leaf); // Nothing else creates it, as the entry is out of reach of the parent
       expect(watcher.nested.size).toBe(0);
 
       runInAction(() => {
         leaf.value = 1;
       });
       expect(watcher.changedKeyPaths).toEqual(new Set());
-      // PINNED(bug): symbol-keyed entries are skipped by the nested fetcher but not by the change propagation, so they flip `changed`. Expected: `false`, as the docs say "Symbol keys in nested objects are ignored". Flip this assertion when fixing.
-      expect(watcher.changed).toBe(true);
+      expect(watcher.changed).toBe(false);
 
       watcher.reset();
       expect(watcher.changed).toBe(false);
-      expect(Watcher.get(leaf).changed).toBe(true);
+      expect(leafWatcher.changed).toBe(true);
 
       runInAction(() => {
         leaf.value = 2;
       });
-      // PINNED(quirk): as reset() cannot reach the entry, it stays changed and its later changes never reach the parent again. Decide: settle together with the bug above (ignore symbol-keyed entries entirely, or support them).
+      // PINNED(quirk): the entry is ignored, so reset() cannot reach it and its changes never reach the parent, yet mutating the map under a symbol key still counts as a change of the map itself. Decide: should symbol keys be supported instead of ignored?
       expect(watcher.changed).toBe(false);
     });
 
-    test("a watcher created after a nested object has changed does not become changed by its later changes", () => {
+    test("a watcher created after a nested object has changed becomes changed by its later changes", () => {
       const sample = new Sample();
       const childWatcher = Watcher.get(sample.child);
       runInAction(() => {
@@ -2810,15 +2864,14 @@ describe("Annotations", () => {
         sample.child.value = 2;
       });
       expect(childWatcher.changedTick).toBe(2n);
-      // PINNED(bug): the nested `changed` was already true when the parent's reaction took its first reading, and the parent only reacts to it flipping, so a change made after the parent watcher was created never reaches it. Expected: `true` ("Watching starts immediately when the Watcher instance is created"). Flip this assertion when fixing.
-      expect(watcher.changed).toBe(false);
+      expect(watcher.changed).toBe(true);
 
       childWatcher.reset();
       runInAction(() => {
         sample.child.value = 3;
       });
       expect(watcher.changed).toBe(true);
-      expect(watcher.changedTick).toBe(1n);
+      expect(watcher.changedTick).toBe(2n);
     });
 
     test("an object added while another nested object is changed is watched from the moment it is added", () => {
@@ -2841,6 +2894,63 @@ describe("Annotations", () => {
       // Only the parent's reactions have seen `added` so far, so this is true only if they created its watcher
       expect(Watcher.get(added).changed).toBe(true);
       expect(watcher.changedKeyPaths).toEqual(new Set(["items", "items.0.value", "items.1.value"]));
+    });
+
+    test("a change of one nested object is not hidden by a reset of another in the same transaction", () => {
+      const sample = new Sample();
+      runInAction(() => {
+        sample.items.push(new Leaf(), new Leaf());
+      });
+      const watcher = Watcher.get(sample);
+      const [first, second] = sample.items;
+
+      runInAction(() => {
+        first.value = 1;
+      });
+      const tick = watcher.changedTick;
+
+      // The parent compares how far the changes of its nested watchers have progressed, which a reset does not take back
+      runInAction(() => {
+        Watcher.get(first).reset();
+        second.value = 1;
+      });
+      expect(watcher.changedTick).toBe(tick + 1n);
+    });
+
+    test("a nested object dropped from a sub-tree does not hide the change that dropped it", () => {
+      class Middle {
+        @nested @observable leaf: Leaf | null = new Leaf();
+
+        constructor() {
+          makeObservable(this);
+        }
+      }
+      class Root {
+        @nested @observable middles: Middle[] = [];
+
+        constructor() {
+          makeObservable(this);
+        }
+      }
+
+      const root = new Root();
+      const watcher = Watcher.get(root);
+      const middle = new Middle();
+      Watcher.get(middle); // A sub-form often has a watcher before its subject joins the collection
+      runInAction(() => {
+        root.middles.push(middle);
+      });
+      runInAction(() => {
+        middle.leaf!.value = 1;
+      });
+      watcher.reset();
+
+      // Dropping the leaf is a change of `middle`, which reaches the root although the changes recorded by the leaf leave with it
+      runInAction(() => {
+        middle.leaf = null;
+      });
+      expect(watcher.changedTick).toBe(1n);
+      expect(watcher.changed).toBe(true);
     });
   });
 
@@ -2944,17 +3054,16 @@ describe("Annotations", () => {
       }
     }
 
-    test("nested, changedKeyPaths and reset() throw", () => {
+    test("nested, changedKeyPaths and reset() work", () => {
       const consoleError = vi.spyOn(console, "error").mockImplementation(() => {});
       try {
         const watcher = Watcher.get(new Sample());
-        // The change propagation reaction fails on its first run, which MobX reports
-        expect(consoleError).toHaveBeenCalled();
+        // The change propagation reaction takes its first reading without failing
+        expect(consoleError).not.toHaveBeenCalled();
 
-        // PINNED(bug): nested watchers are created with Watcher.getSafe(), which throws for non-extensible objects (see ".getSafe"), so a model holding a frozen plain object (e.g. Immer output) under @nested cannot even be reset(), although @nested "supports objects" (docs). Expected: none of them throws (the frozen object is either skipped or given a watcher). Flip these assertions to `.not.toThrow()` when fixing.
-        expect(() => watcher.nested).toThrowError(/not extensible/);
-        expect(() => watcher.changedKeyPaths).toThrowError(/not extensible/);
-        expect(() => watcher.reset()).toThrowError(/not extensible/);
+        expect(watcher.nested.get("child" as KeyPath)).toBeInstanceOf(Watcher);
+        expect(watcher.changedKeyPaths).toEqual(new Set());
+        expect(() => watcher.reset()).not.toThrow();
       } finally {
         consoleError.mockRestore();
       }
@@ -2971,7 +3080,7 @@ describe("Annotations", () => {
       }
     }
 
-    test("Watcher.get() throws on the first call, and the watchers cached meanwhile work", () => {
+    test("one watcher is created per object, and a self-reference gets a single one", () => {
       const a = new Node();
       const b = new Node();
       const self = new Node();
@@ -2981,20 +3090,43 @@ describe("Annotations", () => {
         self.other = self;
       });
 
-      // PINNED(quirk): building the reactions of a's watcher creates b's watcher, which creates and caches a second watcher for `a` before the first one is cached, so caching the first one throws (a self-reference too). Decide: support cycles (e.g. cache the watcher before building its reactions), or detect them with a clear error?
-      expect(() => Watcher.get(a)).toThrowError(/Cannot redefine property/);
-      expect(() => Watcher.get(self)).toThrowError(/Cannot redefine property/);
-
       const aWatcher = Watcher.get(a);
       const bWatcher = Watcher.get(b);
+      const selfWatcher = Watcher.get(self);
       expect(aWatcher.nested.get("other" as KeyPath)).toBe(bWatcher);
       expect(bWatcher.nested.get("other" as KeyPath)).toBe(aWatcher);
+      expect(selfWatcher.nested.get("other" as KeyPath)).toBe(selfWatcher);
 
       runInAction(() => {
         b.value = 1;
       });
       expect(bWatcher.changed).toBe(true);
       expect(aWatcher.changed).toBe(true);
+    });
+
+    test("a nested change propagates through a cycle without looping", () => {
+      const a = new Node();
+      const b = new Node();
+      runInAction(() => {
+        a.other = b;
+        b.other = a;
+      });
+      const aWatcher = Watcher.get(a);
+      const bWatcher = Watcher.get(b);
+
+      // The propagation reads how many changes each watcher recorded itself, never their changedTick, so the two
+      // watchers do not keep incrementing each other until MobX gives up ("Reaction doesn't converge to a stable state")
+      const consoleError = vi.spyOn(console, "error").mockImplementation(() => {});
+      try {
+        runInAction(() => {
+          b.value = 1;
+        });
+        expect(consoleError).not.toHaveBeenCalled();
+      } finally {
+        consoleError.mockRestore();
+      }
+      expect(bWatcher.changedTick).toBe(1n);
+      expect(aWatcher.changedTick).toBe(1n);
     });
 
     test("changedKeyPaths throws a cycle error when the watchers are created in a transaction", () => {
