@@ -469,13 +469,20 @@ describe("InputBinding", () => {
         }
       });
 
-      test("yields null for type=datetime-local", () => {
+      test.each([
+        { input: "2024-12-31T23:59", expected: "2024-12-31T23:59:00.000Z" },
+        { input: "2024-12-31T23:59:30.250", expected: "2024-12-31T23:59:30.250Z" },
+        { input: "", expected: null },
+      ])("converts type=datetime-local $input to $expected (in UTC)", ({ input, expected }) => {
         const setter = vi.fn<(value: Date | null) => void>();
         const env = setupBinding(() => ({ valueAs: "date", type: "datetime-local", getter: () => null, setter }));
-        env.binding.onChange(inputEventOf("datetime-local", "2024-12-31T23:59"));
+        env.binding.onChange(inputEventOf("datetime-local", input));
         expect(setter).toHaveBeenCalledTimes(1);
-        // PINNED(bug): valueAsDate does not apply to datetime-local inputs (HTML spec), so the setter always receives null although the docs show `type: "datetime-local"` with `valueAs: "date"` and the Config type accepts it. Expected: the setter receives a Date for 2024-12-31T23:59 (the fix must decide between local time and UTC; `valueAsNumber` above reads it as UTC). Flip this assertion when fixing.
-        expect(isoOf(setter.mock.calls[0][0])).toBeNull();
+        const value = setter.mock.calls[0][0];
+        expect(isoOf(value)).toBe(expected);
+        if (value !== null) {
+          expect(Object.prototype.toString.call(value)).toBe("[object Date]");
+        }
       });
     });
   });
@@ -1462,7 +1469,7 @@ describe("bindInput", () => {
       expect(input).toHaveDisplayValue("08:30");
     });
 
-    test("clears the model for type=datetime-local as documented", () => {
+    test("works with type=datetime-local as documented", () => {
       vi.useFakeTimers();
       onTestFinished(() => {
         vi.useRealTimers();
@@ -1490,9 +1497,8 @@ describe("bindInput", () => {
 
       expect(input).toHaveDisplayValue("2024-12-31T23:59");
       fireEvent.change(input, { target: { value: "2025-01-02T03:04" } });
-      // PINNED(bug): valueAsDate does not apply to datetime-local inputs, so the documented example writes null to the model and the input is emptied. Expected: the model holds the entered date-time and the input keeps displaying it. Flip these assertions when fixing.
-      expect(model.time).toBeNull();
-      expect(input).toHaveDisplayValue("");
+      expect(isoOf(model.time)).toBe("2025-01-02T03:04:00.000Z");
+      expect(input).toHaveDisplayValue("2025-01-02T03:04");
     });
   });
 
