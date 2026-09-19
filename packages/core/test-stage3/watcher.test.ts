@@ -574,15 +574,14 @@ describe("Annotations", () => {
       @observable accessor value = 0;
     }
 
-    test("changes made later in the same transaction are NOT tracked", () => {
+    test("changes made later in the same transaction are tracked", () => {
       const sample = new Sample();
       let watcher!: Watcher;
       runInAction(() => {
         watcher = Watcher.get(sample);
         sample.value = 1;
       });
-      // PINNED(bug): same as with stage-2 decorators: the watcher's reactions take their first reading when the transaction ends, so the change becomes the baseline. Expected: tracked, as the docs say "Watching starts immediately when the Watcher instance is created". Flip this assertion when fixing.
-      expect(watcher.changed).toBe(false);
+      expect(watcher.changed).toBe(true);
     });
   });
 });
