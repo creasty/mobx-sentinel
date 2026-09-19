@@ -94,6 +94,13 @@ export namespace InputBinding {
          * | week           | YYYY-Www          | 2024-W52          |
          * | month          | YYYY-MM           | 2024-12           |
          *
+         * The Date given to the setter is the element's wall clock read as UTC,
+         * not the instant in the browser's timezone:
+         * `date` is midnight UTC, `time` is on 1970-01-01 UTC,
+         * and `datetime-local` is the entered date-time as UTC.
+         * `toISOString()` thus formats it back to the same wall clock, which the getter
+         * slices down to the format of the type.
+         *
          * @example
          * ```
          * date.toISOString().split("T")[0]
@@ -148,9 +155,17 @@ export class InputBinding implements FormBinding {
         this.config.setter(isNaN(value) ? null : value);
         break;
       }
-      case "date":
-        this.config.setter(e.currentTarget.valueAsDate);
+      case "date": {
+        const element = e.currentTarget;
+        if (element.type === "datetime-local") {
+          // valueAsDate does not apply to datetime-local inputs, so read the wall clock through valueAsNumber
+          const value = element.valueAsNumber;
+          this.config.setter(isNaN(value) ? null : new Date(value));
+        } else {
+          this.config.setter(element.valueAsDate);
+        }
         break;
+      }
       default:
         this.config.setter(e.currentTarget.value);
         break;
