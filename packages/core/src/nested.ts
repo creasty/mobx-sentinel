@@ -63,29 +63,28 @@ export function* getNestedAnnotations(target: object): Generator<{
   const processor = getAnnotationProcessor(target);
   if (!processor) return;
 
-  const annotations = processor.getPropertyLike(nestedKey);
-  if (!annotations) return;
+  const members = processor.getPropertyLikeMembers(nestedKey);
+  if (!members) return;
 
   let hoistedKey: string | symbol | null = null;
-  for (const [key, metadata] of annotations) {
-    for (const member of metadata.members.values()) {
-      const modes = new Set<NestedMode>(member.data);
-      if (modes.size > 1) {
-        throw new Error(`Mixed @nested annotations are not allowed for the same key: ${String(key)}`);
-      }
-      const hoist = modes.has(NestedMode.Hoist);
-      if (hoist) {
-        if (hoistedKey !== null) {
-          throw new Error(
-            `Multiple @nested.hoist annotations are not allowed in the same class: ${String(hoistedKey)} and ${String(key)}`
-          );
-        }
-        hoistedKey = key;
-      }
-      // The member's own accessor comes first: it reaches a private member, which no key of `target` names
-      const getValue = member.get ?? (() => (target as any)[key]);
-      yield { key, getValue, hoist };
+  for (const member of members.values()) {
+    const key = member.propertyKey;
+    const modes = new Set<NestedMode>(member.data);
+    if (modes.size > 1) {
+      throw new Error(`Mixed @nested annotations are not allowed for the same key: ${String(key)}`);
     }
+    const hoist = modes.has(NestedMode.Hoist);
+    if (hoist) {
+      if (hoistedKey !== null) {
+        throw new Error(
+          `Multiple @nested.hoist annotations are not allowed in the same class: ${String(hoistedKey)} and ${String(key)}`
+        );
+      }
+      hoistedKey = key;
+    }
+    // The member's own accessor comes first: it reaches a private member, which no key of `target` names
+    const getValue = member.get ?? (() => (target as any)[key]);
+    yield { key, getValue, hoist };
   }
 }
 

@@ -1,6 +1,26 @@
 import { Decorator202112, Decorator202203, isDecorator202112, isDecorator202203 } from "./decorator";
 
 /**
+ * One class member annotated with a property-like annotation
+ *
+ * @remarks
+ * A member is not the same thing as a property key: same-named ECMAScript private members of a parent and a child
+ * class are members of their own that spell one key, so several records can share a `propertyKey`.
+ */
+export type PropertyLikeMember = {
+  /** Key the member is spelled with, such as `"items"` or `"#items"`, taken from the first registration */
+  propertyKey: string | symbol;
+  /** Data of every annotation registered for this member, in registration order */
+  data: any[];
+  /**
+   * Read the member's value
+   *
+   * Only stage3 decorators provide one; it reaches private members, which no key of the object names.
+   */
+  get?: () => any;
+};
+
+/**
  * Processor for handling property-like annotations
  *
  * Key features:
@@ -10,70 +30,56 @@ import { Decorator202112, Decorator202203, isDecorator202112, isDecorator202203 
  * - Supports private fields and methods, which a child class declares anew rather than overrides
  */
 export class AnnotationProcessor {
-  readonly #propertyLike = new Map<
-    symbol,
-    Map<
-      string | symbol,
-      {
-        data: any[];
-        get?: () => any;
-        members: Map<string | symbol, { data: any[]; get?: () => any }>;
-      }
-    >
-  >();
+  readonly #propertyLike = new Map<symbol, Map<string | symbol, PropertyLikeMember>>();
 
   /**
-   * Register a property-like annotation
+   * Register a property-like annotation on one class member
    *
    * @remarks
-   * - Multiple annotations can be registered for the same property
-   * - When a property is overridden in a child class, both parent and child annotations are preserved
-   * - `memberKey` tells apart class members that share a property key. Only ECMAScript private members can:
-   *   a `#name` belongs to the class that declares it, so a child's `#name` is a member of its own rather than
-   *   an override of the parent's.
+   * - Multiple annotations can be registered for the same member; their data accumulates in registration order
+   * - A property overridden in a child class is the same member, so both parent and child annotations are
+   *   preserved under one entry
+   * - `memberKey` is the identity of the annotated member and defaults to `propertyKey`, which is what makes an
+   *   override merge. Only ECMAScript private members need a key of their own: a `#name` belongs to the class
+   *   that declares it, so a child's `#name` is a member of its own rather than an override of the parent's.
+   * - `propertyKey` and `get` are taken from the first registration for a member; later ones only add data
    */
-  registerPropertyLike(
+  registerPropertyLikeMember(
     annotationKey: symbol,
     args: {
+      /** Key the member is spelled with */
       propertyKey: string | symbol;
       /** Identity of the annotated member; defaults to `propertyKey` */
       memberKey?: string | symbol;
+      /** Annotation data to record */
       data: any;
+      /** Reads the member's value; see {@link PropertyLikeMember.get} */
       get?: () => any;
     }
   ) {
-    let annotations = this.#propertyLike.get(annotationKey);
-    if (!annotations) {
-      annotations = new Map();
-      this.#propertyLike.set(annotationKey, annotations);
-    }
-
-    let propertyMetadata = annotations.get(args.propertyKey);
-    if (!propertyMetadata) {
-      propertyMetadata = { data: [], get: args.get, members: new Map() };
-      annotations.set(args.propertyKey, propertyMetadata);
+    let members = this.#propertyLike.get(annotationKey);
+    if (!members) {
+      members = new Map();
+      this.#propertyLike.set(annotationKey, members);
     }
 
     const memberKey = args.memberKey ?? args.propertyKey;
-    let member = propertyMetadata.members.get(memberKey);
+    let member = members.get(memberKey);
     if (!member) {
-      member = { data: [], get: args.get };
-      propertyMetadata.members.set(memberKey, member);
+      member = { propertyKey: args.propertyKey, data: [], get: args.get };
+      members.set(memberKey, member);
     }
 
     member.data.push(args.data);
-    propertyMetadata.data.push(args.data);
   }
 
   /**
-   * Get all registered property-like annotations
+   * Get every member registered with the given annotation
    *
-   * @returns Map of property keys to their metadata, or undefined if no annotations exist.\
-   *   `members` holds the registrations, one record per annotated member -- more than one only for same-named
-   *   private members. `data` and `get` are a merged view over them: the data of every registration in order,
-   *   and the `get` of the first one.
+   * @returns Map of member keys to their annotations in registration order, or undefined if no annotations exist.\
+   *   Two entries share a `propertyKey` only for same-named private members.
    */
-  getPropertyLike(annotationKey: symbol) {
+  getPropertyLikeMembers(annotationKey: symbol) {
     return this.#propertyLike.get(annotationKey);
   }
 
@@ -84,17 +90,15 @@ export class AnnotationProcessor {
    */
   clone() {
     const clone = new AnnotationProcessor();
-    for (const [annotationKey, properties] of this.#propertyLike) {
-      for (const [propertyKey, propertyMetadata] of properties) {
-        for (const [memberKey, member] of propertyMetadata.members) {
-          for (const data of member.data) {
-            clone.registerPropertyLike(annotationKey, {
-              propertyKey,
-              memberKey,
-              data,
-              get: member.get,
-            });
-          }
+    for (const [annotationKey, members] of this.#propertyLike) {
+      for (const [memberKey, member] of members) {
+        for (const data of member.data) {
+          clone.registerPropertyLikeMember(annotationKey, {
+            propertyKey: member.propertyKey,
+            memberKey,
+            data,
+            get: member.get,
+          });
         }
       }
     }
@@ -199,7 +203,7 @@ export function createPropertyLikeAnnotation<T extends object, Data>(
         : undefined;
       context.addInitializer(function () {
         const processor = createStored(this as T, false);
-        processor.registerPropertyLike(annotationKey, {
+        processor.registerPropertyLikeMember(annotationKey, {
           propertyKey: context.name,
           memberKey,
           data: getData(context.name),
@@ -208,7 +212,7 @@ export function createPropertyLikeAnnotation<T extends object, Data>(
       });
     } else if (target && isDecorator202112(context)) {
       const processor = createStored(target, true);
-      processor.registerPropertyLike(annotationKey, {
+      processor.registerPropertyLikeMember(annotationKey, {
         propertyKey: context,
         data: getData(context),
       });

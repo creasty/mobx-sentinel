@@ -1,31 +1,43 @@
 // biome-ignore-all lint/correctness/noUnusedPrivateClassMembers: these private members exist to be decorated and read back through the processor
-import { AnnotationProcessor, createPropertyLikeAnnotation, getAnnotationProcessor } from "../src/annotationProcessor";
+import {
+  AnnotationProcessor,
+  PropertyLikeMember,
+  createPropertyLikeAnnotation,
+  getAnnotationProcessor,
+} from "../src/annotationProcessor";
 import { isDecorator202112, isDecorator202203 } from "../src/decorator";
 
 const sampleKey = Symbol("sample");
 
-function mapValues<K, V, R>(map: Map<K, V>, fn: (value: V, key: K) => R) {
-  const result = new Map<K, R>();
-  for (const [key, value] of map) {
-    result.set(key, fn(value, key));
+/** Group the annotated members under the property key each spells; only same-named private members share one */
+function groupByPropertyKey<R>(processor: AnnotationProcessor, fn: (member: PropertyLikeMember) => R) {
+  const result = new Map<string | symbol, R[]>();
+  for (const member of processor.getPropertyLikeMembers(sampleKey)!.values()) {
+    const group = result.get(member.propertyKey);
+    if (group) {
+      group.push(fn(member));
+    } else {
+      result.set(member.propertyKey, [fn(member)]);
+    }
   }
   return result;
 }
+/** The data of every annotated member, merged under the property key it spells */
 function extractStoredData(processor: AnnotationProcessor) {
-  return mapValues(processor.getPropertyLike(sampleKey)!, (v) => v.data);
+  const result = new Map<string | symbol, any[]>();
+  for (const [propertyKey, perMember] of groupByPropertyKey(processor, (member) => member.data)) {
+    result.set(propertyKey, perMember.flat());
+  }
+  return result;
 }
-/** The merged view of each property key, whose `get` is the one of its first member */
+/** The value of every annotated member, one entry per member of the property key it spells */
 function extractValues(processor: AnnotationProcessor) {
-  return mapValues(processor.getPropertyLike(sampleKey)!, (v) => v.get?.());
+  return groupByPropertyKey(processor, (member) => member.get?.());
 }
-/** The value of every member of each property key; only same-named private members give more than one */
-function extractMemberValues(processor: AnnotationProcessor) {
-  return mapValues(processor.getPropertyLike(sampleKey)!, (v) =>
-    Array.from(v.members.values(), (member) => member.get?.())
-  );
-}
+/** The property key of every annotated member, in registration order */
 function annotatedKeys(target: object) {
-  return [...(getAnnotationProcessor(target)?.getPropertyLike(sampleKey)?.keys() ?? [])];
+  const members = getAnnotationProcessor(target)?.getPropertyLikeMembers(sampleKey);
+  return Array.from(members?.values() ?? [], (member) => member.propertyKey);
 }
 
 describe("createPropertyLikeAnnotation", () => {
@@ -105,12 +117,24 @@ describe("createPropertyLikeAnnotation", () => {
       `);
       expect(extractValues(processor!)).toMatchInlineSnapshot(`
         Map {
-          "getter1" => "value of getter1",
-          "#privateGetter1" => "value of privateGetter1",
-          "property1" => "value of property1",
-          "accessor1" => "value of accessor1",
-          "#privateProperty1" => "value of privateProperty1",
-          "#privateAccessor1" => "value of privateAccessor1",
+          "getter1" => [
+            "value of getter1",
+          ],
+          "#privateGetter1" => [
+            "value of privateGetter1",
+          ],
+          "property1" => [
+            "value of property1",
+          ],
+          "accessor1" => [
+            "value of accessor1",
+          ],
+          "#privateProperty1" => [
+            "value of privateProperty1",
+          ],
+          "#privateAccessor1" => [
+            "value of privateAccessor1",
+          ],
         }
       `);
     });
@@ -222,12 +246,24 @@ describe("createPropertyLikeAnnotation", () => {
       `);
       expect(extractValues(processor!)).toMatchInlineSnapshot(`
         Map {
-          "getter1" => "value of getter1",
-          "#privateGetter1" => "value of privateGetter1",
-          "property1" => "value of property1",
-          "accessor1" => "value of accessor1",
-          "#privateProperty1" => "value of privateProperty1",
-          "#privateAccessor1" => "value of privateAccessor1",
+          "getter1" => [
+            "value of getter1",
+          ],
+          "#privateGetter1" => [
+            "value of privateGetter1",
+          ],
+          "property1" => [
+            "value of property1",
+          ],
+          "accessor1" => [
+            "value of accessor1",
+          ],
+          "#privateProperty1" => [
+            "value of privateProperty1",
+          ],
+          "#privateAccessor1" => [
+            "value of privateAccessor1",
+          ],
         }
       `);
     });
@@ -278,18 +314,42 @@ describe("createPropertyLikeAnnotation", () => {
       `);
       expect(extractValues(processor!)).toMatchInlineSnapshot(`
         Map {
-          "getter1" => "value of getter1",
-          "#privateGetter1" => "value of privateGetter1",
-          "property1" => "value of property1",
-          "accessor1" => "value of accessor1",
-          "#privateProperty1" => "value of privateProperty1",
-          "#privateAccessor1" => "value of privateAccessor1",
-          "getter2" => "value of getter2",
-          "#privateGetter2" => "value of privateGetter2",
-          "property2" => "value of property2",
-          "accessor2" => "value of accessor2",
-          "#privateProperty2" => "value of privateProperty2",
-          "#privateAccessor2" => "value of privateAccessor2",
+          "getter1" => [
+            "value of getter1",
+          ],
+          "#privateGetter1" => [
+            "value of privateGetter1",
+          ],
+          "property1" => [
+            "value of property1",
+          ],
+          "accessor1" => [
+            "value of accessor1",
+          ],
+          "#privateProperty1" => [
+            "value of privateProperty1",
+          ],
+          "#privateAccessor1" => [
+            "value of privateAccessor1",
+          ],
+          "getter2" => [
+            "value of getter2",
+          ],
+          "#privateGetter2" => [
+            "value of privateGetter2",
+          ],
+          "property2" => [
+            "value of property2",
+          ],
+          "accessor2" => [
+            "value of accessor2",
+          ],
+          "#privateProperty2" => [
+            "value of privateProperty2",
+          ],
+          "#privateAccessor2" => [
+            "value of privateAccessor2",
+          ],
         }
       `);
     });
@@ -418,12 +478,24 @@ describe("createPropertyLikeAnnotation", () => {
       `);
       expect(extractValues(processor!)).toMatchInlineSnapshot(`
         Map {
-          "getter1" => "value of getter1",
-          "#privateGetter1" => "value of privateGetter1",
-          "property1" => "value of property1",
-          "accessor1" => "value of accessor1",
-          "#privateProperty1" => "value of privateProperty1",
-          "#privateAccessor1" => "value of privateAccessor1",
+          "getter1" => [
+            "value of getter1",
+          ],
+          "#privateGetter1" => [
+            "value of privateGetter1",
+          ],
+          "property1" => [
+            "value of property1",
+          ],
+          "accessor1" => [
+            "value of accessor1",
+          ],
+          "#privateProperty1" => [
+            "value of privateProperty1",
+          ],
+          "#privateAccessor1" => [
+            "value of privateAccessor1",
+          ],
         }
       `);
     });
@@ -462,7 +534,7 @@ describe("createPropertyLikeAnnotation", () => {
       `);
       // An overridden public property is one member, whose accessor reads the override; each private member of
       // Overridden is one of its own, next to the parent's
-      expect(extractMemberValues(processor!)).toMatchInlineSnapshot(`
+      expect(extractValues(processor!)).toMatchInlineSnapshot(`
         Map {
           "getter1" => [
             "value of getter1 (overridden)",
@@ -605,12 +677,24 @@ describe("createPropertyLikeAnnotation", () => {
       `);
       expect(extractValues(processor1!)).toMatchInlineSnapshot(`
         Map {
-          "getter1" => "value of getter1",
-          "#privateGetter1" => "value of privateGetter1",
-          "property1" => "value of property1",
-          "accessor1" => "value of accessor1",
-          "#privateProperty1" => "value of privateProperty1",
-          "#privateAccessor1" => "value of privateAccessor1",
+          "getter1" => [
+            "value of getter1",
+          ],
+          "#privateGetter1" => [
+            "value of privateGetter1",
+          ],
+          "property1" => [
+            "value of property1",
+          ],
+          "accessor1" => [
+            "value of accessor1",
+          ],
+          "#privateProperty1" => [
+            "value of privateProperty1",
+          ],
+          "#privateAccessor1" => [
+            "value of privateAccessor1",
+          ],
         }
       `);
 
@@ -641,12 +725,24 @@ describe("createPropertyLikeAnnotation", () => {
       `);
       expect(extractValues(processor2!)).toMatchInlineSnapshot(`
         Map {
-          "getter1" => "value of getter1",
-          "#privateGetter1" => "value of privateGetter1",
-          "property1" => "value of property1",
-          "accessor1" => "value of accessor1",
-          "#privateProperty1" => "value of privateProperty1",
-          "#privateAccessor1" => "value of privateAccessor1",
+          "getter1" => [
+            "value of getter1",
+          ],
+          "#privateGetter1" => [
+            "value of privateGetter1",
+          ],
+          "property1" => [
+            "value of property1",
+          ],
+          "accessor1" => [
+            "value of accessor1",
+          ],
+          "#privateProperty1" => [
+            "value of privateProperty1",
+          ],
+          "#privateAccessor1" => [
+            "value of privateAccessor1",
+          ],
         }
       `);
     });
@@ -727,21 +823,21 @@ describe("createPropertyLikeAnnotation", () => {
       obj1[symbolKey] = "updated symbolKey";
 
       expect(extractValues(getAnnotationProcessor(obj1)!)).toEqual(
-        new Map<string | symbol, unknown>([
-          ["getter1", "getter of updated property1"],
-          ["property1", "updated property1"],
-          ["accessor1", "updated accessor1"],
-          ["#privateProperty1", "updated privateProperty1"],
-          [symbolKey, "updated symbolKey"],
+        new Map<string | symbol, unknown[]>([
+          ["getter1", ["getter of updated property1"]],
+          ["property1", ["updated property1"]],
+          ["accessor1", ["updated accessor1"]],
+          ["#privateProperty1", ["updated privateProperty1"]],
+          [symbolKey, ["updated symbolKey"]],
         ])
       );
       expect(extractValues(getAnnotationProcessor(obj2)!)).toEqual(
-        new Map<string | symbol, unknown>([
-          ["getter1", "getter of value of property1"],
-          ["property1", "value of property1"],
-          ["accessor1", "value of accessor1"],
-          ["#privateProperty1", "value of privateProperty1"],
-          [symbolKey, "value of symbolKey"],
+        new Map<string | symbol, unknown[]>([
+          ["getter1", ["getter of value of property1"]],
+          ["property1", ["value of property1"]],
+          ["accessor1", ["value of accessor1"]],
+          ["#privateProperty1", ["value of privateProperty1"]],
+          [symbolKey, ["value of symbolKey"]],
         ])
       );
     });
@@ -758,7 +854,7 @@ describe("createPropertyLikeAnnotation", () => {
         [symbolKey] = "value of symbolKey";
       }
 
-      const annotations = getAnnotationProcessor(new Sample())!.getPropertyLike(sampleKey)!;
+      const annotations = getAnnotationProcessor(new Sample())!.getPropertyLikeMembers(sampleKey)!;
       expect(fn).toBeCalledTimes(1);
       expect(fn).toBeCalledWith(symbolKey);
       expect([...annotations.keys()]).toEqual([symbolKey]);
@@ -788,7 +884,7 @@ describe("createPropertyLikeAnnotation", () => {
         property2 = "value of property2";
       }
 
-      const annotations = getAnnotationProcessor(new Sample())!.getPropertyLike(sampleKey)!;
+      const annotations = getAnnotationProcessor(new Sample())!.getPropertyLikeMembers(sampleKey)!;
       expect(calls).toEqual(["inner of property1", "outer of property1", "outer of property2", "outer of property2"]);
       expect(annotations.get("property1")!.data).toEqual(["inner of property1", "outer of property1"]);
       expect(annotations.get("property2")!.data).toEqual(["outer of property2", "outer of property2"]);
@@ -822,13 +918,7 @@ describe("createPropertyLikeAnnotation", () => {
         }
       }
 
-      expect([...getAnnotationProcessor(new Sample())!.getPropertyLike(sampleKey)!.keys()]).toEqual([
-        "baseProperty",
-        "getter1",
-        "method1",
-        "property1",
-        "accessor1",
-      ]);
+      expect(annotatedKeys(new Sample())).toEqual(["baseProperty", "getter1", "method1", "property1", "accessor1"]);
     });
   });
 
@@ -842,7 +932,7 @@ describe("createPropertyLikeAnnotation", () => {
         baseProperty = "value of baseProperty";
 
         constructor() {
-          keysInBaseConstructor = [...(getAnnotationProcessor(this)?.getPropertyLike(sampleKey)?.keys() ?? [])];
+          keysInBaseConstructor = annotatedKeys(this);
         }
       }
       class Sample extends Base {
@@ -858,11 +948,7 @@ describe("createPropertyLikeAnnotation", () => {
       const obj = new Sample();
       // PINNED(quirk): stage-3 annotations are registered by initializers during construction, so code in a base class constructor (e.g. a `Watcher.get(this)` call) sees only the base class's annotations, whereas stage-2 annotations are all available up front. Decide: is this an accepted stage-3 limitation to document, or should consumers defer reading annotations until construction completes?
       expect(keysInBaseConstructor).toEqual(["baseProperty"]);
-      expect([...getAnnotationProcessor(obj)!.getPropertyLike(sampleKey)!.keys()]).toEqual([
-        "baseProperty",
-        "getter1",
-        "property1",
-      ]);
+      expect(annotatedKeys(obj)).toEqual(["baseProperty", "getter1", "property1"]);
     });
   });
 
@@ -883,7 +969,7 @@ describe("createPropertyLikeAnnotation", () => {
         set setter1(_value: string) {}
       }
 
-      const annotations = getAnnotationProcessor(new Sample())?.getPropertyLike(sampleKey);
+      const annotations = getAnnotationProcessor(new Sample())?.getPropertyLikeMembers(sampleKey);
       expect(fn).toBeCalledTimes(2);
       // PINNED(quirk): methods and setters are registered even though the JSDoc only lists properties, getters and class fields, and the declared decorator type has no method or setter overload (tsc reports TS1241; see "the stage-3 signature does not accept methods or setters" in src/annotationProcessor.test.ts). Decide: should non-property-like members be rejected or ignored?
       expect(annotations?.has("method1")).toBe(true);
@@ -919,12 +1005,12 @@ describe("createPropertyLikeAnnotation", () => {
       const obj = new Sample();
       // PINNED(quirk): static initializers register on a processor stored against the constructor, but getAnnotationProcessor only walks values whose typeof is "object", so static annotations are silently unreachable. Decide: should static members be supported, or rejected when decorated?
       expect(getAnnotationProcessor(Sample)).toBeNull();
-      expect([...getAnnotationProcessor(obj)!.getPropertyLike(sampleKey)!.keys()]).toEqual(["property1"]);
+      expect(annotatedKeys(obj)).toEqual(["property1"]);
     });
   });
 
   describe("private names", () => {
-    test("a private name and a public string key with the same spelling share one entry, as separate members", () => {
+    test("a private name and a public string key with the same spelling are separate members spelling one key", () => {
       const sample = createPropertyLikeAnnotation(sampleKey, (propertyKey) => `data of ${String(propertyKey)}`);
 
       class Sample {
@@ -940,15 +1026,35 @@ describe("createPropertyLikeAnnotation", () => {
       }
 
       const obj = new Sample();
-      const annotations = getAnnotationProcessor(obj)!.getPropertyLike(sampleKey)!;
+      const members = getAnnotationProcessor(obj)!.getPropertyLikeMembers(sampleKey)!;
       expect(obj.readPrivate()).toBe("private value");
-      // PINNED(quirk): private members are keyed by their spelling ("#field"), so they collide with a public string key of the same spelling; they are separate members, but the merged view of the entry still reports their data together and reads whichever member registered first (here the public one). Decide: should private members be keyed distinctly from public string keys?
-      expect([...annotations.keys()]).toEqual(["#field"]);
-      expect(annotations.get("#field")!.data).toEqual(["data of #field", "data of #field"]);
-      expect(annotations.get("#field")!.get!()).toBe("public value");
-      expect(Array.from(annotations.get("#field")!.members.values(), (member) => member.get!())).toEqual([
-        "public value",
-        "private value",
+      expect(Array.from(members.values(), (member) => [member.data, member.get!()])).toEqual([
+        [["data of #field"], "public value"],
+        [["data of #field"], "private value"],
+      ]);
+      // PINNED(quirk): the two are separate members now, but a private member keeps its spelling ("#field") as its property key, so they stay indistinguishable wherever the property key is what counts: they share a key path, and in Watcher an `@unwatch` or a `@nested` on either of them covers both. Decide: should private members spell a property key of their own?
+      expect(annotatedKeys(obj)).toEqual(["#field", "#field"]);
+    });
+
+    test("stacked annotations on one private member merge into a single entry", () => {
+      const outer = createPropertyLikeAnnotation(sampleKey, () => "outer");
+      const inner = createPropertyLikeAnnotation(sampleKey, () => "inner");
+
+      class Sample {
+        @outer
+        @inner
+        #field = "private value";
+
+        readPrivate() {
+          return this.#field;
+        }
+      }
+
+      const obj = new Sample();
+      const members = getAnnotationProcessor(obj)!.getPropertyLikeMembers(sampleKey)!;
+      expect(obj.readPrivate()).toBe("private value");
+      expect(Array.from(members.values(), (member) => [member.propertyKey, member.data, member.get!()])).toEqual([
+        ["#field", ["inner", "outer"], "private value"],
       ]);
     });
 
@@ -974,16 +1080,14 @@ describe("createPropertyLikeAnnotation", () => {
       }
 
       const obj = new Child();
-      const entry = getAnnotationProcessor(obj)!.getPropertyLike(sampleKey)!.get("#field")!;
+      const members = getAnnotationProcessor(obj)!.getPropertyLikeMembers(sampleKey)!;
       expect(obj.readParentField()).toBe("parent value");
       expect(obj.readChildField()).toBe("child value");
-      expect(entry.data).toEqual(["parent", "child"]);
-      expect(Array.from(entry.members.values(), (member) => [member.data, member.get!()])).toEqual([
-        [["parent"], "parent value"],
-        [["child"], "child value"],
+      // One entry per member, each with its own data and its own accessor, both spelling the one name
+      expect(Array.from(members.values(), (member) => [member.propertyKey, member.data, member.get!()])).toEqual([
+        ["#field", ["parent"], "parent value"],
+        ["#field", ["child"], "child value"],
       ]);
-      // The merged view of the entry keeps the `get` of the member registered first, the parent's
-      expect(entry.get!()).toBe("parent value");
     });
   });
 
@@ -1008,7 +1112,10 @@ describe("createPropertyLikeAnnotation", () => {
       }
 
       const obj = new Sample();
-      const entry = getAnnotationProcessor(obj)!.getPropertyLike(sampleKey)!.get("#privateMethod1")!;
+      const members = [...getAnnotationProcessor(obj)!.getPropertyLikeMembers(sampleKey)!.values()];
+      expect(members).toHaveLength(1);
+      const entry = members[0];
+      expect(entry.propertyKey).toBe("#privateMethod1");
       expect(entry.data).toEqual(["data of #privateMethod1"]);
       const method = entry.get!();
       expect(method).toBeTypeOf("function");
