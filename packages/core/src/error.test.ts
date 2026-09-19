@@ -1,3 +1,4 @@
+import { runInNewContext } from "node:vm";
 import { ValidationError, type ValidationErrorMapBuilder, ValidationErrorMapBuilderImpl } from "./error";
 import { KeyPath, KeyPathMultiMap, type ReadonlyKeyPathMultiMap } from "./keyPath";
 
@@ -171,13 +172,20 @@ describe("ValidationError (details)", () => {
     expect(error.cause?.message).toBe("after");
   });
 
-  it("uses an Error-shaped object that is not an Error instance as the message itself", () => {
+  it("unwraps an Error-shaped object that is not an Error instance", () => {
     const reason = { name: "CustomError", message: "plain message" };
     expectTypeOf(reason).toExtend<string | Error>();
     const error = create(KeyPath.build("a"), reason);
-    // PINNED(bug): the reason type accepts any structurally Error-shaped object (e.g. an error from another realm), but only `instanceof Error` is unwrapped, so message becomes the object itself and cause is undefined. Expected: message is "plain message" and cause is the reason. Flip these assertions when fixing.
-    expect(error.message).toBe(reason);
-    expect(error.cause).toBeUndefined();
+    expect(error.message).toBe("plain message");
+    expect(error.cause).toBe(reason);
+  });
+
+  it("unwraps an Error from another realm", () => {
+    const reason: Error = runInNewContext('new Error("foreign")');
+    expect(reason).not.toBeInstanceOf(Error);
+    const error = create(KeyPath.build("a"), reason);
+    expect(error.message).toBe("foreign");
+    expect(error.cause).toBe(reason);
   });
 
   it("derives key from the first segment of the key path", () => {

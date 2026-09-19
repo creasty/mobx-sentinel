@@ -14,8 +14,15 @@ function mapValues<K, V, R>(map: Map<K, V>, fn: (value: V, key: K) => R) {
 function extractStoredData(processor: AnnotationProcessor) {
   return mapValues(processor.getPropertyLike(sampleKey)!, (v) => v.data);
 }
+/** The merged view of each property key, whose `get` is the one of its first member */
 function extractValues(processor: AnnotationProcessor) {
   return mapValues(processor.getPropertyLike(sampleKey)!, (v) => v.get?.());
+}
+/** The value of every member of each property key; only same-named private members give more than one */
+function extractMemberValues(processor: AnnotationProcessor) {
+  return mapValues(processor.getPropertyLike(sampleKey)!, (v) =>
+    Array.from(v.members.values(), (member) => member.get?.())
+  );
 }
 function annotatedKeys(target: object) {
   return [...(getAnnotationProcessor(target)?.getPropertyLike(sampleKey)?.keys() ?? [])];
@@ -338,8 +345,8 @@ describe("createPropertyLikeAnnotation", () => {
       }
 
       // A #private name belongs to the class that declares it, so these three override nothing and TypeScript
-      // rejects `override` (TS4113). They are kept as written: the processor keys annotations by name, so it
-      // still merges them with the parent's -- the collision the snapshots below pin.
+      // rejects `override` (TS4113). They are kept as written: the processor registers them under the name they
+      // spell, but as members of their own -- the separation the snapshots below pin.
       @sample2
       // @ts-expect-error TS4113: see above
       override #privateProperty1 = "value of privateProperty1 (overridden)";
@@ -453,15 +460,31 @@ describe("createPropertyLikeAnnotation", () => {
           ],
         }
       `);
-      // PINNED(bug): Overridden's `#privateGetter1`, `#privateProperty1` and `#privateAccessor1` are new private members rather than overrides (tsc rejects `override` on them with TS4113), yet they merge into the parent's entries and `get` reads the parent's members, so the child's "(overridden)" values are unreachable through the processor. This is the defect pinned in "private names > same-named private fields of a parent and a child share one entry that reads the parent's field". Expected: the child's private members are reachable (the three private values would read "... (overridden)" or get separate entries). Flip this assertion when fixing.
-      expect(extractValues(processor!)).toMatchInlineSnapshot(`
+      // An overridden public property is one member, whose accessor reads the override; each private member of
+      // Overridden is one of its own, next to the parent's
+      expect(extractMemberValues(processor!)).toMatchInlineSnapshot(`
         Map {
-          "getter1" => "value of getter1 (overridden)",
-          "#privateGetter1" => "value of privateGetter1",
-          "property1" => "value of property1 (overridden)",
-          "accessor1" => "value of accessor1 (overridden)",
-          "#privateProperty1" => "value of privateProperty1",
-          "#privateAccessor1" => "value of privateAccessor1",
+          "getter1" => [
+            "value of getter1 (overridden)",
+          ],
+          "#privateGetter1" => [
+            "value of privateGetter1",
+            "value of privateGetter1 (overridden)",
+          ],
+          "property1" => [
+            "value of property1 (overridden)",
+          ],
+          "accessor1" => [
+            "value of accessor1 (overridden)",
+          ],
+          "#privateProperty1" => [
+            "value of privateProperty1",
+            "value of privateProperty1 (overridden)",
+          ],
+          "#privateAccessor1" => [
+            "value of privateAccessor1",
+            "value of privateAccessor1 (overridden)",
+          ],
         }
       `);
     });
@@ -901,7 +924,7 @@ describe("createPropertyLikeAnnotation", () => {
   });
 
   describe("private names", () => {
-    test("a private name and a public string key with the same spelling share one entry", () => {
+    test("a private name and a public string key with the same spelling share one entry, as separate members", () => {
       const sample = createPropertyLikeAnnotation(sampleKey, (propertyKey) => `data of ${String(propertyKey)}`);
 
       class Sample {
@@ -919,13 +942,17 @@ describe("createPropertyLikeAnnotation", () => {
       const obj = new Sample();
       const annotations = getAnnotationProcessor(obj)!.getPropertyLike(sampleKey)!;
       expect(obj.readPrivate()).toBe("private value");
-      // PINNED(quirk): private members are keyed by their spelling ("#field"), so they collide with a public string key of the same spelling; the data is merged and `get` reads whichever member registered first (here the public one). Decide: should private members be keyed distinctly from public string keys?
+      // PINNED(quirk): private members are keyed by their spelling ("#field"), so they collide with a public string key of the same spelling; they are separate members, but the merged view of the entry still reports their data together and reads whichever member registered first (here the public one). Decide: should private members be keyed distinctly from public string keys?
       expect([...annotations.keys()]).toEqual(["#field"]);
       expect(annotations.get("#field")!.data).toEqual(["data of #field", "data of #field"]);
       expect(annotations.get("#field")!.get!()).toBe("public value");
+      expect(Array.from(annotations.get("#field")!.members.values(), (member) => member.get!())).toEqual([
+        "public value",
+        "private value",
+      ]);
     });
 
-    test("same-named private fields of a parent and a child share one entry that reads the parent's field", () => {
+    test("same-named private fields of a parent and a child are members of their own, each reading its field", () => {
       const parent = createPropertyLikeAnnotation(sampleKey, () => "parent");
       const child = createPropertyLikeAnnotation(sampleKey, () => "child");
 
@@ -951,7 +978,11 @@ describe("createPropertyLikeAnnotation", () => {
       expect(obj.readParentField()).toBe("parent value");
       expect(obj.readChildField()).toBe("child value");
       expect(entry.data).toEqual(["parent", "child"]);
-      // PINNED(bug): the child's #field is a member distinct from the parent's #field (private names cannot be overridden), but both are merged under "#field" and `get` reads the parent's field, so the child's annotated private field can never be read through the processor (e.g. `@watch #field` in the child watches the parent's field instead). Expected: the child's private field is reachable through its own entry or getter. Flip this assertion when fixing.
+      expect(Array.from(entry.members.values(), (member) => [member.data, member.get!()])).toEqual([
+        [["parent"], "parent value"],
+        [["child"], "child value"],
+      ]);
+      // The merged view of the entry keeps the `get` of the member registered first, the parent's
       expect(entry.get!()).toBe("parent value");
     });
   });

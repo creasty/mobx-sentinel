@@ -1,6 +1,21 @@
 import { KeyPath, KeyPathMultiMap } from "./keyPath";
 
 /**
+ * Whether a reason is an error rather than an error message
+ *
+ * @remarks
+ * `instanceof Error` misses an error from another realm, such as an iframe or a worker, so anything shaped like the
+ * `Error` the reason type accepts — an object with a string `name` and a string `message` — counts as one.
+ */
+function isErrorLike(reason: unknown): reason is Error {
+  if (reason instanceof Error) return true;
+  if (typeof reason !== "object" || reason === null) return false;
+  return (
+    "name" in reason && typeof reason.name === "string" && "message" in reason && typeof reason.message === "string"
+  );
+}
+
+/**
  * Represents a validation error for a specific key path
  */
 export class ValidationError extends Error {
@@ -12,6 +27,11 @@ export class ValidationError extends Error {
   /**
    * Create a validation error
    *
+   * @remarks
+   * An Error reason becomes the `cause`, and its message at that moment becomes the error's message.
+   * An error from another realm is recognized by its shape rather than by `instanceof`, so a `cause` is
+   * not necessarily an instance of `Error`.
+   *
    * @param args.keyPath Path to the invalid field
    * @param args.reason Error message or Error object
    */
@@ -19,8 +39,8 @@ export class ValidationError extends Error {
     super();
     this.key = KeyPath.getParentKey(args.keyPath);
     this.keyPath = args.keyPath;
-    this.message = args.reason instanceof Error ? args.reason.message : args.reason;
-    this.cause = args.reason instanceof Error ? args.reason : undefined;
+    this.message = isErrorLike(args.reason) ? args.reason.message : args.reason;
+    this.cause = isErrorLike(args.reason) ? args.reason : undefined;
   }
 }
 

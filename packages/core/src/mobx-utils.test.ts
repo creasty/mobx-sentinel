@@ -388,9 +388,7 @@ describe("unwrapShallowContents", () => {
 
   test("signature", () => {
     expectTypeOf(unwrapShallowContents).parameter(0).toBeAny();
-    expectTypeOf(unwrapShallowContents(null)).toEqualTypeOf<
-      Generator<[key: string | symbol | number | null, content: any]>
-    >();
+    expectTypeOf(unwrapShallowContents(null)).toEqualTypeOf<Generator<[key: unknown, content: any]>>();
   });
 
   describe("non-collection values", () => {
@@ -517,7 +515,7 @@ describe("unwrapShallowContents", () => {
       expect(entriesOf(new Map([["key", element]]))[0][1]).toBe(element);
     });
 
-    test("yields map keys of any type as-is, including ones outside the declared key type", () => {
+    test("yields map keys of any type as-is, in insertion order", () => {
       const objectKey = {};
       const symbolKey = Symbol("key");
       const result = entriesOf(
@@ -531,19 +529,14 @@ describe("unwrapShallowContents", () => {
         ])
       );
 
-      const isDeclaredKeyType = (key: unknown) => key === null || ["string", "symbol", "number"].includes(typeof key);
-
-      // Keys of the declared types are yielded as-is, in insertion order
-      expect(result.filter(([key]) => isDeclaredKeyType(key))).toEqual([
-        ["str", 4],
-        [5, 5],
-        [symbolKey, 6],
-      ]);
-      // PINNED(bug): map keys that are not string | symbol | number (here an object, a boolean, and undefined) are yielded as-is, although the signature declares `key: string | symbol | number | null`; consumers such as StandardNestedFetcher pass them to KeyPath.build. Expected: such keys are skipped, making this toEqual([]) (or the declared key type is widened instead). Flip this assertion when fixing.
-      expect(result.filter(([key]) => !isDeclaredKeyType(key))).toEqual([
+      // Keys with no key path form are left to the consumers to skip (see StandardNestedFetcher)
+      expect(result).toEqual([
         [objectKey, 1],
         [true, 2],
         [undefined, 3],
+        ["str", 4],
+        [5, 5],
+        [symbolKey, 6],
       ]);
     });
 

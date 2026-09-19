@@ -43,7 +43,7 @@ export namespace Decorator202203 {
 }
 
 export function isDecorator202203(context: any): context is DecoratorContext {
-  return typeof context == "object" && typeof context["kind"] == "string";
+  return !!context && typeof context == "object" && typeof context["kind"] == "string";
 }
 
 export function isDecorator202112(context: any): context is string | symbol {
