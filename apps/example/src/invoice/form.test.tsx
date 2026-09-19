@@ -264,7 +264,7 @@ describe("drafts and autosave", () => {
     expect(sendButton()).toBeEnabled();
   });
 
-  test("autosaves after an edit, but not after a second edit inside a line item", async () => {
+  test("autosaves after every edit, including a second edit inside a line item", async () => {
     const user = setup();
     const lastAutosave = () => screen.queryByText(/Draft autosaved at/)?.textContent;
 
@@ -273,7 +273,7 @@ describe("drafts and autosave", () => {
     const afterNameEdit = lastAutosave();
     expect(afterNameEdit).toBeDefined();
 
-    // A line item is a nested model, and its first edit reaches the invoice's autosave
+    // A line item is a nested model, and its edits reach the invoice's autosave too
     await elapse(60_000);
     await user.type(screen.getByLabelText("Description"), "Consulting");
     await elapse(AUTOSAVE_MS);
@@ -283,8 +283,7 @@ describe("drafts and autosave", () => {
     await elapse(60_000);
     await user.type(screen.getByLabelText("Unit price"), "100");
     await elapse(AUTOSAVE_MS);
-    // PINNED(bug): the invoice's watcher only reacts when a line item's `changed` flips to true, so further edits of a line already edited do not advance the invoice's changedTick, and the autosave never runs for them. Expected: the autosave runs after this edit too. Flip this assertion when fixing (see "the parent only reacts to the nested `changed` flipping to true" in packages/core/src/watcher.test.ts).
-    expect(lastAutosave()).toBe(afterDescriptionEdit);
+    expect(lastAutosave()).not.toBe(afterDescriptionEdit);
   });
 });
 

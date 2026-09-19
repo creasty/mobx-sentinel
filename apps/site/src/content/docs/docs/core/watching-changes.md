@@ -117,19 +117,35 @@ runInAction(() => {
 watcher.changed // true
 ```
 
-**⚠️ Warning about transactions**: When used inside a transaction, watching only resumes when the outermost transaction completes. This is a fundamental limitation of the implementation.
+Only what the function itself changes goes untracked. Watching resumes as soon as it returns, so the changes made around it are tracked as usual, even when all of it happens in one transaction.
 
 ```typescript
 runInAction(() => {
-  model.field1 = true; // Tracked: Before unwatch begins
+  model.field1 = true; // Tracked: before unwatch begins
 
   unwatch(() => {
     model.field2 = true; // Not tracked
   });
 
-  model.field3 = true; // ⚠️ NOT tracked: Still in the same transaction as unwatch
+  model.field3 = true; // Tracked: unwatch has returned
 });
-// The transaction completes here; watching finally resumes
 
-watcher.changedKeys // Set(["field1"])
+watcher.changedKeys // Set(["field1", "field3"])
 ```
+
+**⚠️ One limitation**: a watcher processes the changes of a transaction when the outermost one ends, where all it can tell is when a key *first* changed in it. So a key the function changes stays untracked for the rest of that transaction:
+
+```typescript
+runInAction(() => {
+  unwatch(() => {
+    model.field1 = true; // Not tracked
+  });
+
+  model.field1 = false; // ⚠️ NOT tracked: the same key, already changed inside unwatch
+  model.field2 = true; // Tracked: a different key
+});
+
+watcher.changedKeys // Set(["field2"])
+```
+
+The reverse order is fine: a key changed before the function and again inside it is tracked.

@@ -1427,14 +1427,14 @@ describe("Form (details)", () => {
         expect(reportErrorCalls()).toBe(4);
       });
 
-      it("throws when a form is created for a subject that already references itself", () => {
+      it("creates a form for a subject that already references itself", () => {
         const node = new Node();
         runInAction(() => {
           node.other = node;
         });
 
-        // PINNED(quirk): The Watcher constructor (core) already reads the watchers of nested objects, so for a subject referencing itself a second Watcher gets registered on the subject first, and registering the outer one fails. Decide: should Watcher.getSafe register itself before processing nested objects, so that cyclic @nested references are supported (or rejected with a clear error)?
-        expect(() => Form.get(node)).toThrow(/Cannot redefine property/);
+        const form = Form.get(node);
+        expect(form.subForms.get("other" as KeyPath)).toBe(form);
       });
     });
   });

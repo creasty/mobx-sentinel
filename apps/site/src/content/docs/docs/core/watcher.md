@@ -58,7 +58,7 @@ watcher.changedTick // bigint
 ## Starting a Watcher
 
 Watching starts immediately when the Watcher instance is created.
-The watcher begins tracking changes as soon as `Watcher.get()` is called for the first time.
+The watcher begins tracking changes as soon as `Watcher.get()` is called for the first time, including the changes made after it in the same transaction.
 
 To set a new starting point after initialization, use the `reset()` method. For fine-grained control over what gets tracked, see [Temporarily Disable Tracking](/docs/core/watching-changes/#temporarily-disable-tracking).
 
