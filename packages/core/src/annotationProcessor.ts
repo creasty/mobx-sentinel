@@ -49,8 +49,12 @@ export class AnnotationProcessor {
     args: {
       /** Key the member is spelled with */
       propertyKey: string | symbol;
-      /** Identity of the annotated member; defaults to `propertyKey` */
-      memberKey?: string | symbol;
+      /**
+       * Identity of the annotated member, minted per declaring class; defaults to `propertyKey`
+       *
+       * Only an ECMAScript private member needs one: every other member is identified by the key it spells.
+       */
+      memberKey?: symbol;
       /** Annotation data to record */
       data: any;
       /** Reads the member's value; see {@link PropertyLikeMember.get} */
@@ -91,16 +95,13 @@ export class AnnotationProcessor {
   clone() {
     const clone = new AnnotationProcessor();
     for (const [annotationKey, members] of this.#propertyLike) {
+      const copy = new Map<string | symbol, PropertyLikeMember>();
       for (const [memberKey, member] of members) {
-        for (const data of member.data) {
-          clone.registerPropertyLikeMember(annotationKey, {
-            propertyKey: member.propertyKey,
-            memberKey,
-            data,
-            get: member.get,
-          });
-        }
+        if (!member.data.length) continue; // Carries nothing; only mutating the live map can leave one behind
+        // A copy of the data, since a later registration pushes onto it
+        copy.set(memberKey, { propertyKey: member.propertyKey, data: [...member.data], get: member.get });
       }
+      if (copy.size) clone.#propertyLike.set(annotationKey, copy);
     }
     return clone;
   }

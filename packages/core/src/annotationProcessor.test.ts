@@ -1015,11 +1015,12 @@ describe("AnnotationProcessor", () => {
     const get1 = () => "first";
     const get2 = () => "second";
 
-    processor.registerPropertyLikeMember(sampleKey, { propertyKey: "a", data: 1, get: get1 });
-    processor.registerPropertyLikeMember(sampleKey, { memberKey: "a", propertyKey: "later", data: 2, get: get2 });
+    const memberKey = Symbol("a");
+    processor.registerPropertyLikeMember(sampleKey, { memberKey, propertyKey: "a", data: 1, get: get1 });
+    processor.registerPropertyLikeMember(sampleKey, { memberKey, propertyKey: "later", data: 2, get: get2 });
 
-    expect(processor.getPropertyLikeMembers(sampleKey)!.get("a")!.propertyKey).toBe("a");
-    expect(processor.getPropertyLikeMembers(sampleKey)!.get("a")!.get).toBe(get1);
+    expect(processor.getPropertyLikeMembers(sampleKey)!.get(memberKey)!.propertyKey).toBe("a");
+    expect(processor.getPropertyLikeMembers(sampleKey)!.get(memberKey)!.get).toBe(get1);
   });
 
   test("registerPropertyLikeMember keeps a missing get function when the first registration had none", () => {
@@ -1150,9 +1151,9 @@ describe("AnnotationProcessor", () => {
 
       expect(processor.getPropertyLikeMembers(sampleKey)!.has("a")).toBe(true);
       expect(processor.getPropertyLikeMembers(otherKey)).toEqual(new Map());
-      // clone replays one registration per data item of a member, so a member holding no data (and its `get`) and
-      // an annotation key whose map is empty are not copied. Such entries can only arise by mutating the live map
-      // (see "getPropertyLikeMembers returns the live internal map"), never through registerPropertyLikeMember.
+      // clone skips a member holding no data (and its `get`), and an annotation key left with no member at all.
+      // Such entries can only arise by mutating the live map (see "getPropertyLikeMembers returns the live internal
+      // map"), never through registerPropertyLikeMember, and they carry nothing worth copying.
       expect(clone.getPropertyLikeMembers(sampleKey)!.has("a")).toBe(false);
       expect(clone.getPropertyLikeMembers(otherKey)).toBeUndefined();
       expect(clone.getPropertyLikeMembers(sampleKey)!.get("b")!.data).toEqual([2]);
@@ -1164,10 +1165,7 @@ describe("AnnotationProcessor", () => {
       Map<string | symbol, { propertyKey: string | symbol; data: any[]; get?: () => any }> | undefined
     >();
     expectTypeOf<Parameters<AnnotationProcessor["registerPropertyLikeMember"]>>().toEqualTypeOf<
-      [
-        annotationKey: symbol,
-        args: { propertyKey: string | symbol; memberKey?: string | symbol; data: any; get?: () => any },
-      ]
+      [annotationKey: symbol, args: { propertyKey: string | symbol; memberKey?: symbol; data: any; get?: () => any }]
     >();
     expectTypeOf<ReturnType<AnnotationProcessor["clone"]>>().toEqualTypeOf<AnnotationProcessor>();
   });
