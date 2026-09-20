@@ -206,7 +206,13 @@ export function createPropertyLikeAnnotation<T extends object, Data>(
       //   decorators stacked on one member.
       const scope = context.private ? (context.metadata ?? context.access.has) : undefined;
       context.addInitializer(function () {
-        const processor = createStored(this as T, false);
+        // The initializer runs once per instance, so the registration has to land on a processor that instance
+        // owns: an inherited one is cloned rather than mutated. Without the clone, a class whose base carries
+        // stage2 annotations has one processor on that base's prototype for every instance and every sibling
+        // subclass to register into, and its members are then nobody's in particular -- an annotation shows up on
+        // instances that do not carry the member, gains a copy of its data per instantiation, and keeps its `get`
+        // bound to whichever instance was constructed first.
+        const processor = createStored(this as T, true);
         processor.registerPropertyLike(annotationKey, {
           propertyKey: context.name,
           scope,

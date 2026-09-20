@@ -18,6 +18,7 @@ Marks properties as containing nested observable objects that should be tracked 
 - Keys with no key path form are ignored: symbol keys, and map keys such as objects and booleans
 - Boxed observables are automatically unwrapped
 - Each nested object gets its own Watcher/Validator instance
+- Two annotated members that land on the same key path are rejected, since a key path is the address a nested object is looked up by
 
 ```typescript
 class Model {

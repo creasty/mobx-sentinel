@@ -2,6 +2,7 @@
 import { observable, computed, runInAction } from "mobx";
 import { Watcher, unwatch, watch } from "../src/watcher";
 import { nested } from "../src/nested";
+import { Stage2Base } from "../src/stage2Fixtures";
 import { KeyPath } from "../src/keyPath";
 
 class Leaf {
@@ -540,7 +541,7 @@ describe("Annotations", () => {
       expect(baseWatcher.changedKeys).toEqual(new Set(["shallowInBase"]));
     });
 
-    test("a same-named private @nested member of a subclass is watched on its own", () => {
+    test("a same-named private @nested member of a subclass is rejected, unlike a @watch one", () => {
       class Parent {
         @nested accessor #child = new Leaf();
 
@@ -556,16 +557,62 @@ describe("Annotations", () => {
         }
       }
 
-      // Neither member overrides the other, so each one is watched, although they share the key path "#child"
-      const changingParent = new Child();
-      const parentWatcher = Watcher.get(changingParent);
-      runInAction(() => changingParent.changeParentChild());
-      expect(parentWatcher.changed).toBe(true);
+      // This assertion REVERSES a pinned Expected, and is not a regression: the PINNED(bug) behind the member
+      // separation read "Expected: two entries (one per private field), each reading its own field", and this test
+      // used to watch each of the two. The maintainer has since decided that @nested rejects the collision, since a
+      // key path is the address a nested object is reached by and both members spell "#child". The watcher builds
+      // its nested fetcher before its reactions, so the refusal surfaces from Watcher.get().
+      const child = new Child();
+      const error = new Error("Multiple @nested annotations are not allowed on members that share a key path: #child");
+      expect(() => Watcher.get(child)).toThrow(error);
+      // Nothing of the failed attempt is left cached, so a second call fails the same way instead of handing out a
+      // watcher with no reactions
+      expect(() => Watcher.get(child)).toThrow(error);
+      expect(() => Watcher.getSafe(child)).toThrow(error);
+      // Only @nested refuses: @watch twins keep their own reactions (see "@watch on same-named ECMAScript private
+      // members" above)
+    });
+  });
 
-      const changingChild = new Child();
-      const childWatcher = Watcher.get(changingChild);
-      runInAction(() => changingChild.changeChildChild());
-      expect(childWatcher.changed).toBe(true);
+  describe("subclasses of a class annotated with stage-2 decorators", () => {
+    // A stage-3 initializer clones the processor it finds up the prototype chain, and a stage-2 annotated class
+    // holds one on its prototype, so each instance below owns a clone of the base's holding its own "#box" alone.
+    class Watched extends Stage2Base {
+      @watch readonly #box = observable.box(0);
+
+      setBox(value: number) {
+        this.#box.set(value);
+      }
+    }
+    class Unwatched extends Stage2Base {
+      @unwatch readonly #box = observable.box(0);
+
+      setBox(value: number) {
+        this.#box.set(value);
+      }
+    }
+
+    test("neither watches nor unwatches a key on the strength of a sibling class's member", () => {
+      // The sibling registers first, so its member would be the one a processor shared by the two classes kept
+      const unwatched = new Unwatched();
+      const unwatchedWatcher = Watcher.get(unwatched);
+      const watched = new Watched();
+      const watchedWatcher = Watcher.get(watched);
+
+      runInAction(() => {
+        unwatched.setBox(1);
+      });
+      // The sibling's member is not in this object's processor, so no reaction here reads it
+      expect(watchedWatcher.changed).toBe(false);
+      // And its own member is the unwatched one
+      expect(unwatchedWatcher.changed).toBe(false);
+
+      runInAction(() => {
+        watched.setBox(1);
+      });
+      // The @unwatch of the sibling class does not reach this key: the member carrying it is not this object's
+      expect(watchedWatcher.changedKeys).toEqual(new Set(["#box"]));
+      expect(unwatchedWatcher.changed).toBe(false);
     });
   });
 
