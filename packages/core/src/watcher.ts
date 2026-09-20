@@ -345,7 +345,7 @@ export class Watcher {
     const processor = getAnnotationProcessor(target);
     if (!processor) return;
 
-    const members = processor.getPropertyLikeMembers(watchKey);
+    const members = processor.getPropertyLike(watchKey);
     if (!members) return;
 
     // Snapshot: a key this pass claims still has to block the later passes, but not its own next member
@@ -376,7 +376,7 @@ export class Watcher {
     const processor = getAnnotationProcessor(target);
     if (!processor) return;
 
-    const members = processor.getPropertyLikeMembers(unwatchKey);
+    const members = processor.getPropertyLike(unwatchKey);
     if (!members) return;
 
     for (const { propertyKey } of members.values()) {

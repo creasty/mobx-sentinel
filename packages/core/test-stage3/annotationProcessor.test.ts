@@ -12,7 +12,7 @@ const sampleKey = Symbol("sample");
 /** Group the annotated members under the property key each spells; only same-named private members share one */
 function groupByPropertyKey<R>(processor: AnnotationProcessor, fn: (member: PropertyLikeMember) => R) {
   const result = new Map<string | symbol, R[]>();
-  for (const member of processor.getPropertyLikeMembers(sampleKey)!.values()) {
+  for (const member of processor.getPropertyLike(sampleKey)!.values()) {
     const group = result.get(member.propertyKey);
     if (group) {
       group.push(fn(member));
@@ -36,7 +36,7 @@ function extractValues(processor: AnnotationProcessor) {
 }
 /** The property key of every annotated member, in registration order */
 function annotatedKeys(target: object) {
-  const members = getAnnotationProcessor(target)?.getPropertyLikeMembers(sampleKey);
+  const members = getAnnotationProcessor(target)?.getPropertyLike(sampleKey);
   return Array.from(members?.values() ?? [], (member) => member.propertyKey);
 }
 
@@ -854,7 +854,7 @@ describe("createPropertyLikeAnnotation", () => {
         [symbolKey] = "value of symbolKey";
       }
 
-      const annotations = getAnnotationProcessor(new Sample())!.getPropertyLikeMembers(sampleKey)!;
+      const annotations = getAnnotationProcessor(new Sample())!.getPropertyLike(sampleKey)!;
       expect(fn).toBeCalledTimes(1);
       expect(fn).toBeCalledWith(symbolKey);
       expect([...annotations.keys()]).toEqual([symbolKey]);
@@ -884,7 +884,7 @@ describe("createPropertyLikeAnnotation", () => {
         property2 = "value of property2";
       }
 
-      const annotations = getAnnotationProcessor(new Sample())!.getPropertyLikeMembers(sampleKey)!;
+      const annotations = getAnnotationProcessor(new Sample())!.getPropertyLike(sampleKey)!;
       expect(calls).toEqual(["inner of property1", "outer of property1", "outer of property2", "outer of property2"]);
       expect(annotations.get("property1")!.data).toEqual(["inner of property1", "outer of property1"]);
       expect(annotations.get("property2")!.data).toEqual(["outer of property2", "outer of property2"]);
@@ -969,7 +969,7 @@ describe("createPropertyLikeAnnotation", () => {
         set setter1(_value: string) {}
       }
 
-      const annotations = getAnnotationProcessor(new Sample())?.getPropertyLikeMembers(sampleKey);
+      const annotations = getAnnotationProcessor(new Sample())?.getPropertyLike(sampleKey);
       expect(fn).toBeCalledTimes(2);
       // PINNED(quirk): methods and setters are registered even though the JSDoc only lists properties, getters and class fields, and the declared decorator type has no method or setter overload (tsc reports TS1241; see "the stage-3 signature does not accept methods or setters" in src/annotationProcessor.test.ts). Decide: should non-property-like members be rejected or ignored?
       expect(annotations?.has("method1")).toBe(true);
@@ -1026,7 +1026,7 @@ describe("createPropertyLikeAnnotation", () => {
       }
 
       const obj = new Sample();
-      const members = getAnnotationProcessor(obj)!.getPropertyLikeMembers(sampleKey)!;
+      const members = getAnnotationProcessor(obj)!.getPropertyLike(sampleKey)!;
       expect(obj.readPrivate()).toBe("private value");
       expect(Array.from(members.values(), (member) => [member.data, member.get!()])).toEqual([
         [["data of #field"], "public value"],
@@ -1056,7 +1056,7 @@ describe("createPropertyLikeAnnotation", () => {
       }
 
       const obj = new Sample();
-      const members = getAnnotationProcessor(obj)!.getPropertyLikeMembers(sampleKey)!;
+      const members = getAnnotationProcessor(obj)!.getPropertyLike(sampleKey)!;
       expect(obj.readPrivate()).toBe("private value");
       expect(Array.from(members.values(), (member) => [member.propertyKey, member.data, member.get!()])).toEqual([
         ["#field", ["inner", "outer"], "private value"],
@@ -1085,7 +1085,7 @@ describe("createPropertyLikeAnnotation", () => {
       }
 
       const obj = new Child();
-      const members = getAnnotationProcessor(obj)!.getPropertyLikeMembers(sampleKey)!;
+      const members = getAnnotationProcessor(obj)!.getPropertyLike(sampleKey)!;
       expect(obj.readParentField()).toBe("parent value");
       expect(obj.readChildField()).toBe("child value");
       // One entry per member, each with its own data and its own accessor, both spelling the one name
@@ -1117,7 +1117,7 @@ describe("createPropertyLikeAnnotation", () => {
       }
 
       const obj = new Sample();
-      const members = [...getAnnotationProcessor(obj)!.getPropertyLikeMembers(sampleKey)!.values()];
+      const members = [...getAnnotationProcessor(obj)!.getPropertyLike(sampleKey)!.values()];
       expect(members).toHaveLength(1);
       const entry = members[0];
       expect(entry.propertyKey).toBe("#privateMethod1");

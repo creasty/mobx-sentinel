@@ -63,7 +63,7 @@ export function* getNestedAnnotations(target: object): Generator<{
   const processor = getAnnotationProcessor(target);
   if (!processor) return;
 
-  const members = processor.getPropertyLikeMembers(nestedKey);
+  const members = processor.getPropertyLike(nestedKey);
   if (!members) return;
 
   let hoistedKey: string | symbol | null = null;

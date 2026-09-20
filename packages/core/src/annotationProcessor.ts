@@ -113,7 +113,7 @@ export class AnnotationProcessor {
    *   processor's own, so read the values rather than looking a member up. Two entries share a `propertyKey` only
    *   for same-named private members.
    */
-  getPropertyLikeMembers(annotationKey: symbol) {
+  getPropertyLike(annotationKey: symbol) {
     return this.#propertyLike.get(annotationKey);
   }
 
