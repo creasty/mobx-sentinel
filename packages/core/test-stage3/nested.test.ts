@@ -285,7 +285,7 @@ describe("StandardNestedFetcher", () => {
     ]);
   });
 
-  test("getValue reads a public property named like an annotated private member instead of the private member", () => {
+  test("getValue reads the annotated private member, not the public property spelled like it", () => {
     const objects = [new Other(), new Other()];
     class Sample {
       @nested #items = [objects[0]];
@@ -299,14 +299,13 @@ describe("StandardNestedFetcher", () => {
     expect(sample.readItems()).toEqual([objects[0]]);
     const [annotation] = Array.from(getNestedAnnotations(sample));
     expect(annotation.key).toBe("#items");
-    // PINNED(bug): getValue checks `key in target` before using the decorator's private accessor, so the public property "#items" shadows the annotated private field. Expected: the annotated private field (objects[0]) is read. Flip these assertions when fixing.
-    expect(annotation.getValue()).toEqual([objects[1]]);
+    expect(annotation.getValue()).toEqual([objects[0]]);
     expect(Array.from(new StandardNestedFetcher(sample, (entry) => entry.data), (entry) => entry.data)).toEqual([
-      objects[1],
+      objects[0],
     ]);
   });
 
-  test("private members with the same name in a parent and a child class share one annotation entry", () => {
+  test("private members with the same name in a parent and a child class get an annotation each", () => {
     const objects = [new Other(), new Other()];
     class Parent {
       @nested #items = [objects[0]];
@@ -325,16 +324,20 @@ describe("StandardNestedFetcher", () => {
     const child = new Child();
     expect(child.readParentItems()).toEqual([objects[0]]);
     expect(child.readChildItems()).toEqual([objects[1]]);
-    // PINNED(bug): Annotations are keyed by the private name "#items", so the two distinct private fields collapse into one entry whose getValue reads the parent's field; the child's field is never fetched. Expected: two entries (one per private field), each reading its own field. Flip these assertions when fixing.
     expect(Array.from(getNestedAnnotations(child), ({ key, getValue }) => [key, getValue()])).toEqual([
       ["#items", [objects[0]]],
+      ["#items", [objects[1]]],
     ]);
-    expect(Array.from(new StandardNestedFetcher(child, (entry) => entry.data), (entry) => entry.keyPath)).toEqual([
-      "#items.0",
+    // Both members spell the same name, so both key paths do too, and dataMap keeps only the last
+    const fetcher = new StandardNestedFetcher(child, (entry) => entry.data);
+    expect(Array.from(fetcher, (entry) => [entry.keyPath, entry.data])).toEqual([
+      ["#items.0", objects[0]],
+      ["#items.0", objects[1]],
     ]);
+    expect(fetcher.dataMap.get("#items.0" as KeyPath)).toBe(objects[1]);
   });
 
-  test("private members with the same name in a parent and a child class are validated as the same key", () => {
+  test("private members with the same name in a parent and a child class are validated on their own", () => {
     const objects = [new Other(), new Other()];
     class HoistParent {
       @nested.hoist #items = [objects[0]];
@@ -350,10 +353,16 @@ describe("StandardNestedFetcher", () => {
         return this.#items;
       }
     }
-    // PINNED(bug): The parent's hoisted #items and the child's unrelated #items are treated as one key, so a "Mixed" error is thrown although each member has a single annotation. Expected: no error; the entries are independent. Flip this assertion when fixing.
-    expect(() => new StandardNestedFetcher(new MixedChild(), (entry) => entry.data)).toThrow(
-      new Error("Mixed @nested annotations are not allowed for the same key: #items")
-    );
+    // Each member carries a single annotation, so the modes are not mixed
+    expect(
+      Array.from(new StandardNestedFetcher(new MixedChild(), (entry) => entry.data), (entry) => [
+        entry.keyPath,
+        entry.data,
+      ])
+    ).toEqual([
+      ["0", objects[0]],
+      ["#items.0", objects[1]],
+    ]);
 
     class HoistChild extends HoistParent {
       @nested.hoist accessor #items = [objects[1]];
@@ -363,10 +372,9 @@ describe("StandardNestedFetcher", () => {
       }
     }
     const hoistChild = new HoistChild();
-    // PINNED(bug): Two distinct hoisted private members pass the single-hoist restriction because they share the name "#items", and only the parent's is fetched. Expected: throw "Multiple @nested.hoist annotations are not allowed in the same class: #items and #items". Flip this assertion when fixing.
-    expect(
-      Array.from(new StandardNestedFetcher(hoistChild, (entry) => entry.data), (entry) => [entry.keyPath, entry.data])
-    ).toEqual([["0", objects[0]]]);
+    expect(() => new StandardNestedFetcher(hoistChild, (entry) => entry.data)).toThrow(
+      new Error("Multiple @nested.hoist annotations are not allowed in the same class: #items and #items")
+    );
     expect(hoistChild.readChildItems()).toEqual([objects[1]]);
   });
 

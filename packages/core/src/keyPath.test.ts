@@ -117,7 +117,7 @@ describe("KeyPath.getAncestors", () => {
     expect(Array.from(KeyPath.getAncestors("a.b.c" as KeyPath, false))).toEqual(["a.b", "a"]);
   });
 
-  it("returns a self path if the key path is a single-level key path", () => {
+  it("yields only the key path itself for a single-level key path", () => {
     expect(Array.from(KeyPath.getAncestors("a" as KeyPath))).toEqual(["a"]);
     expect(Array.from(KeyPath.getAncestors("a" as KeyPath, false))).toEqual([]);
   });
@@ -512,7 +512,6 @@ describe("KeyPath.getAncestors (edge cases)", () => {
   });
 
   it("yields nothing for a single-level key path when includeSelf is false", () => {
-    // PINNED(bug): yields nothing. Expected: the JSDoc promises "KeyPath.Self for single-level paths when includeSelf is false"; either yield it (flip to toEqual([KeyPath.Self]), together with the same assertion in the older "returns a self path if the key path is a single-level key path" test) or correct the JSDoc and drop this pin. Note KeyPathMultiMap#set feeds these ancestors into its prefix index, so yielding Self would also change has(KeyPath.Self, true).
     expect(Array.from(KeyPath.getAncestors("a" as KeyPath, false))).toEqual([]);
   });
 
@@ -596,20 +595,19 @@ describe("KeyPathMultiMap (edge cases)", () => {
       expect(map.has("items.1" as KeyPath, true)).toBe(false);
     });
 
-    it("returns false with prefixMatch for a self path even though findPrefix yields every value", () => {
+    it("returns true with prefixMatch for a self path, agreeing with findPrefix", () => {
       const map = new KeyPathMultiMap<string>();
       map.set("a.b" as KeyPath, "value");
       expect(Array.from(map.findPrefix(KeyPath.Self))).toEqual(["value"]);
-      // PINNED(bug): has(Self, true) is false because the prefix index never stores KeyPath.Self, while findPrefix(Self)/get(Self, true) return every value. Expected: true whenever findPrefix would yield something. Flip these assertions when fixing.
-      expect(map.has(KeyPath.Self, true)).toBe(false);
-      expect(map.has("" as KeyPath, true)).toBe(false);
+      expect(map.has(KeyPath.Self, true)).toBe(true);
+      expect(map.has("" as KeyPath, true)).toBe(true);
     });
 
-    it("returns true for a self path with prefixMatch when a key path has a leading dot", () => {
+    it("returns false with prefixMatch for a self path when the map is empty", () => {
       const map = new KeyPathMultiMap<string>();
-      map.set(".a" as KeyPath, "value");
-      // PINNED(quirk): ".a" registers KeyPath.Self in the prefix index (see getAncestors), so has(Self, true) becomes true only for such paths. Decide: should this follow the fix for has(Self, true)?
-      expect(map.has(KeyPath.Self, true)).toBe(true);
+      expect(Array.from(map.findPrefix(KeyPath.Self))).toEqual([]);
+      expect(map.has(KeyPath.Self, true)).toBe(false);
+      expect(map.has("" as KeyPath, true)).toBe(false);
     });
 
     it("returns true with prefixMatch for an intermediate path deleted while descendants remain", () => {
