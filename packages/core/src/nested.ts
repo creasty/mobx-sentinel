@@ -23,6 +23,8 @@ const createNestedHoist = createPropertyLikeAnnotation(nestedKey, () => NestedMo
  *
  * @remarks
  * - Mixed nested modes for the same key are not allowed
+ * - Two annotated members that resolve to the same key path are not allowed, since the key path is the address
+ *   the nested object is reached by
  *
  * @function
  */
@@ -53,7 +55,8 @@ export const nested = Object.assign(createNested, {
  *
  * @remarks
  * Same-named private members of a parent and a child class are separate annotations, since neither overrides the
- * other, and they are yielded under the one key they spell.
+ * other, and they are yielded under the one key they spell, which is why {@link StandardNestedFetcher} refuses to
+ * build a fetcher for them.
  */
 export function* getNestedAnnotations(target: object): Generator<{
   key: string | symbol;
@@ -99,13 +102,14 @@ export function* getNestedAnnotations(target: object): Generator<{
  *
  * @remarks
  * Symbol keys are not supported, nor are map keys with no key path form, such as objects and booleans.\
- * Several annotations can land on one key path — same-named private members of a parent and a child class always
- * do — and every one of them is fetched. Key paths are a best-effort aid for debugging: colliding entries are
- * indistinguishable by key path, and {@link dataMap} keeps only the last of them.
+ * A key path is the address a nested object is reached by, so two annotated members that resolve to one — as
+ * same-named private members of a parent and a child class do — are rejected at construction.\
+ * The contents of a single member can still produce entries that share a key path, such as a map holding both `0`
+ * and `"0"`: every one of them is fetched, while {@link dataMap} keeps only the last.
  */
 export class StandardNestedFetcher<T extends object> implements Iterable<StandardNestedFetcher.Entry<T>> {
   readonly #transform: (entry: StandardNestedFetcher.Entry<any>) => T | null;
-  readonly #fetchers = new Map<KeyPath, (() => Generator<StandardNestedFetcher.Entry<T>>)[]>();
+  readonly #fetchers = new Map<KeyPath, () => Generator<StandardNestedFetcher.Entry<T>>>();
 
   /**
    * @param target - The target object
@@ -122,13 +126,13 @@ export class StandardNestedFetcher<T extends object> implements Iterable<Standar
     for (const { key, getValue, hoist } of getNestedAnnotations(target)) {
       if (typeof key !== "string") continue; // symbol keys are not supported
       const keyPath = hoist ? KeyPath.Self : KeyPath.build(key);
-      const fetcher = this.#createFetcher(keyPath, getValue);
-      const fetchers = this.#fetchers.get(keyPath);
-      if (fetchers) {
-        fetchers.push(fetcher);
-      } else {
-        this.#fetchers.set(keyPath, [fetcher]);
+      if (this.#fetchers.has(keyPath)) {
+        // Two members under one key path are two nested objects at one address, and only one could be reached by it
+        throw new Error(
+          `Multiple @nested annotations are not allowed on members that share a key path: ${KeyPath.isSelf(keyPath) ? "KeyPath.Self" : keyPath}`
+        );
       }
+      this.#fetchers.set(keyPath, this.#createFetcher(keyPath, getValue));
     }
   }
 
@@ -147,23 +151,19 @@ export class StandardNestedFetcher<T extends object> implements Iterable<Standar
 
   /** Iterate over all entries */
   *[Symbol.iterator]() {
-    for (const fetchers of this.#fetchers.values()) {
-      for (const fn of fetchers) {
-        for (const entry of fn()) {
-          yield entry;
-        }
+    for (const fn of this.#fetchers.values()) {
+      for (const entry of fn()) {
+        yield entry;
       }
     }
   }
 
   /** Iterate over all entries for the given key path */
   *getForKey(keyPath: KeyPath) {
-    const fetchers = this.#fetchers.get(keyPath);
-    if (!fetchers) return;
-    for (const fn of fetchers) {
-      for (const entry of fn()) {
-        yield entry;
-      }
+    const fetcher = this.#fetchers.get(keyPath);
+    if (!fetcher) return;
+    for (const entry of fetcher()) {
+      yield entry;
     }
   }
 
