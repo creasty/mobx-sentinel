@@ -1,4 +1,3 @@
-import { comparer, computed, makeObservable } from "mobx";
 import { createPropertyLikeAnnotation, getAnnotationProcessor } from "./annotationProcessor";
 import { KeyPath } from "./keyPath";
 import { isKeyPathKey, unwrapShallowContents } from "./mobx-utils";
@@ -96,16 +95,19 @@ export function* getNestedAnnotations(target: object): Generator<{
  *
  * Key features:
  * - Tracks nested objects in properties, arrays, sets, and maps
- * - Provides access to nested objects by key path
- * - Supports iteration over all nested objects
+ * - Iterates every nested object as an {@link StandardNestedFetcher.Entry}, carrying its key, its key path and its
+ *   data
+ * - Narrows iteration to one annotated member with {@link getForKey}
  * - Maintains parent-child relationships
  *
  * @remarks
+ * Nothing is cached: every iteration reads the annotated members again and calls `transform` again, so a derivation
+ * that iterates is re-evaluated whenever any observable read along the way changes.\
  * Symbol keys are not supported, nor are map keys with no key path form, such as objects and booleans.\
  * A key path is the address a nested object is reached by, so two annotated members that resolve to one — as
  * same-named private members of a parent and a child class do — are rejected at construction.\
  * The contents of a single member can still produce entries that share a key path, such as a map holding both `0`
- * and `"0"`: every one of them is fetched, while {@link dataMap} keeps only the last.
+ * and `"0"`: every one of them is fetched, and iteration yields each one.
  */
 export class StandardNestedFetcher<T extends object> implements Iterable<StandardNestedFetcher.Entry<T>> {
   readonly #transform: (entry: StandardNestedFetcher.Entry<any>) => T | null;
@@ -115,12 +117,10 @@ export class StandardNestedFetcher<T extends object> implements Iterable<Standar
    * @param target - The target object
    * @param transform - A function that transforms the entry to the desired type.\
    *   If the function returns `null`, the entry is ignored.\
-   *   It runs inside the {@link dataMap} computation, so the observables it reads are tracked as well —
-   *   which is what lets it filter entries reactively, and what makes a wide-reading transform re-compute often.
+   *   It runs during iteration, so the observables it reads are tracked by whatever derivation iterates —
+   *   which is what lets it filter entries reactively, and what makes a wide-reading transform re-run often.
    */
   constructor(target: object, transform: (entry: StandardNestedFetcher.Entry<any>) => T | null) {
-    makeObservable(this);
-
     this.#transform = transform;
 
     for (const { key, getValue, hoist } of getNestedAnnotations(target)) {
@@ -165,21 +165,6 @@ export class StandardNestedFetcher<T extends object> implements Iterable<Standar
     for (const entry of fetcher()) {
       yield entry;
     }
-  }
-
-  /**
-   * Map of key paths to data
-   *
-   * @remarks
-   * Entries that share a key path collapse into the last of them
-   */
-  @computed({ equals: comparer.shallow })
-  get dataMap(): ReadonlyMap<KeyPath, T> {
-    const result = new Map<KeyPath, T>();
-    for (const entry of this) {
-      result.set(entry.keyPath, entry.data);
-    }
-    return result;
   }
 }
 

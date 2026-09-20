@@ -187,9 +187,6 @@ export class Validator<T> {
         result.add(keyPath);
       }
     }
-    // The fetcher, not `nested`: its map collapses entries that share a key path -- the contents of one member can,
-    // such as a map keyed by both 0 and "0" -- and a dropped one would be missing here while a key path search
-    // still finds it
     for (const entry of this.#nestedFetcher) {
       for (const relativeKeyPath of entry.data.invalidKeyPaths) {
         result.add(KeyPath.build(entry.keyPath, relativeKeyPath));
@@ -257,8 +254,6 @@ export class Validator<T> {
         }
       }
       if (prefixMatch) {
-        // The fetcher, not `nested`: its map collapses entries that share a key path, and this is the branch a
-        // search from the self path takes, so a dropped member's errors would be unreachable from firstErrorMessage
         for (const entry of this.#nestedFetcher) {
           for (const [relativeKeyPath, error] of entry.data.#findErrors(KeyPath.Self, true, exact)) {
             yield [KeyPath.build(entry.keyPath, relativeKeyPath), error];
@@ -335,7 +330,6 @@ export class Validator<T> {
     if (this.reactionState > 0 || this.asyncState > 0) {
       return true;
     }
-    // The fetcher, not `nested`: an entry dropped from its map for sharing a key path is validating all the same
     for (const entry of this.#nestedFetcher) {
       if (entry.data.isValidating) {
         return true;
@@ -382,9 +376,22 @@ export class Validator<T> {
     }
   }
 
-  /** Nested validators */
-  get nested(): ReadonlyMap<KeyPath, Validator<any>> {
-    return this.#nestedFetcher.dataMap;
+  /**
+   * Nested validators
+   *
+   * @remarks
+   * A fresh iterator over the `@nested` entries, in annotation order and then in collection order. Each entry
+   * carries the name of the annotated member in `key` (`"items"`), the address of the nested object in `keyPath`
+   * (`"items.0"`) and its validator in `data`.\
+   * Each read starts a new iteration, and an iterator is consumed once, so a second pass needs a second read.\
+   * There is no lookup by name: entries are not unique by key path. To reach the validator of one nested object, go
+   * through the property — `Validator.get(target.child)` is cached per subject, so it is the very instance yielded
+   * here — or iterate and match `entry.key`, which is {@link KeyPath.Self} for a `@nested.hoist` member
+   * rather than the name it is declared with. Errors are looked up by key path with {@link findErrors}, which
+   * searches nested validators itself.
+   */
+  get nested(): Generator<StandardNestedFetcher.Entry<Validator<any>>, void, unknown> {
+    return this.#nestedFetcher[Symbol.iterator]();
   }
 
   /**

@@ -270,9 +270,19 @@ export class Form<T> {
    * Sub-forms within the form.
    *
    * Forms are collected via `@nested` annotation.
+   *
+   * @remarks
+   * A fresh iterator over the `@nested` entries, in annotation order and then in collection order. Each entry
+   * carries the name of the annotated member in `key` (`"items"`), the address of the nested object in `keyPath`
+   * (`"items.0"`) and its form in `data`.\
+   * Each read starts a new iteration, and an iterator is consumed once, so a second pass needs a second read.\
+   * There is no lookup by name: entries are not unique by key path. To reach one sub-form, go through the property
+   * — `Form.get(subject.child)` is the instance yielded here, as long as the same form key is passed, since a form
+   * is cached per subject and key — or iterate and match `entry.key`, which is {@link KeyPath.Self} for a
+   * `@nested.hoist` member rather than the name it is declared with.
    */
-  get subForms() {
-    return this.#nestedFetcher.dataMap;
+  get subForms(): Generator<StandardNestedFetcher.Entry<Form<any>>, void, unknown> {
+    return this.#nestedFetcher[Symbol.iterator]();
   }
 
   /** Report error states on all fields and sub-forms */

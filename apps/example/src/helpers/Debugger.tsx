@@ -19,7 +19,7 @@ export const Debugger: React.FC<{ model: object }> = observer(({ model }) => {
             isValidating: String(form.isValidating),
             isSubmitting: String(form.isSubmitting),
             canSubmit: String(form.canSubmit),
-            subForms: String(form.subForms.size),
+            subForms: String(Array.from(form.subForms).length),
           }}
         />
       </details>

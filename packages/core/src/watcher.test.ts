@@ -8,8 +8,21 @@ import {
   runInAction,
 } from "mobx";
 import { Watcher, debugWatcher, unwatch, watch } from "./watcher";
-import { nested } from "./nested";
+import { nested, StandardNestedFetcher } from "./nested";
 import { KeyPath } from "./keyPath";
+
+/**
+ * The nested watcher at `keyPath`, found by iterating
+ *
+ * `Watcher#nested` is an iterator with no lookup: real code reaches one nested watcher with
+ * `Watcher.get(target.child)`, and iterates when all it has is a name.
+ */
+function nestedAt(watcher: Watcher, keyPath: string | KeyPath.Self) {
+  for (const entry of watcher.nested) {
+    if (entry.keyPath === keyPath) return entry.data;
+  }
+  return undefined;
+}
 
 /** MobX's "Cycle detected in computation" error, which its production build only gives the number of */
 const mobxCycleError = /Cycle detected in computation|minified error nr: 32 /;
@@ -537,8 +550,8 @@ describe("Watcher", () => {
     it("ignores values that are not objects", () => {
       const sample = new Sample();
       const watcher = Watcher.get(sample);
-      expect([...watcher.nested.keys()]).toEqual(["items.0", "mixed.4", "map.1"]);
-      expect(watcher.nested.get("mixed.4" as KeyPath)).toBe(Watcher.get(sample.mixed[4] as Leaf));
+      expect(Array.from(watcher.nested, (entry) => entry.keyPath)).toEqual(["items.0", "mixed.4", "map.1"]);
+      expect(nestedAt(watcher, "mixed.4")).toBe(Watcher.get(sample.mixed[4] as Leaf));
     });
 
     it("stringifies non-string map keys in key paths", () => {
@@ -559,21 +572,21 @@ describe("Watcher", () => {
       runInAction(() => {
         sample.items.push(second);
       });
-      expect(watcher.nested.get("items.0" as KeyPath)).toBe(Watcher.get(first));
-      expect(watcher.nested.get("items.1" as KeyPath)).toBe(Watcher.get(second));
+      expect(nestedAt(watcher, "items.0")).toBe(Watcher.get(first));
+      expect(nestedAt(watcher, "items.1")).toBe(Watcher.get(second));
 
       runInAction(() => {
         sample.items.splice(0, 1);
       });
-      expect(watcher.nested.get("items.0" as KeyPath)).toBe(Watcher.get(second));
-      expect(watcher.nested.has("items.1" as KeyPath)).toBe(false);
+      expect(nestedAt(watcher, "items.0")).toBe(Watcher.get(second));
+      expect(nestedAt(watcher, "items.1")).toBeUndefined();
     });
 
-    it("notifies observers on structural changes only", () => {
+    it("re-runs an observer that iterates it only on structural changes", () => {
       const sample = new Sample();
       const watcher = Watcher.get(sample);
       const onNested = vi.fn();
-      const dispose = reaction(() => watcher.nested, onNested);
+      const dispose = reaction(() => Array.from(watcher.nested, (entry) => entry.keyPath), onNested);
       try {
         runInAction(() => {
           sample.items[0].value = 1;
@@ -584,6 +597,22 @@ describe("Watcher", () => {
           sample.items.push(new Leaf());
         });
         expect(onNested).toHaveBeenCalledTimes(1);
+      } finally {
+        dispose();
+      }
+    });
+
+    it("tracks nothing until the iterator it returns is consumed", () => {
+      const sample = new Sample();
+      const watcher = Watcher.get(sample);
+      const onNested = vi.fn();
+      // `nested` is a generator: making one reads no observable, so this data function never re-evaluates
+      const dispose = reaction(() => watcher.nested, onNested);
+      try {
+        runInAction(() => {
+          sample.items.push(new Leaf());
+        });
+        expect(onNested).toHaveBeenCalledTimes(0);
       } finally {
         dispose();
       }
@@ -1541,7 +1570,7 @@ describe("Annotations", () => {
       test("nested watchers are not created", () => {
         const sample = new Sample();
         const watcher = Watcher.get(sample);
-        expect(watcher.nested.size).toBe(0);
+        expect(Array.from(watcher.nested)).toHaveLength(0);
       });
     });
 
@@ -1558,9 +1587,9 @@ describe("Annotations", () => {
       test("nested watchers are created", () => {
         const sample = new Sample();
         const watcher = Watcher.get(sample);
-        expect(watcher.nested.get("field1" as KeyPath)).toBe(Watcher.get(sample.field1));
-        expect(watcher.nested.get("field2" as KeyPath)).toBe(Watcher.get(sample.field2));
-        expect(watcher.nested.size).toBe(2);
+        expect(nestedAt(watcher, "field1")).toBe(Watcher.get(sample.field1));
+        expect(nestedAt(watcher, "field2")).toBe(Watcher.get(sample.field2));
+        expect(Array.from(watcher.nested)).toHaveLength(2);
       });
 
       test("changes to an object are tracked", () => {
@@ -1574,10 +1603,10 @@ describe("Annotations", () => {
         expect(watcher.changedKeys).toEqual(new Set([]));
         expect(watcher.changedKeyPaths).toEqual(new Set(["field1.value", "field2.value"]));
         expect(watcher.changed).toBe(true);
-        expect(watcher.nested.get("field1" as KeyPath)?.changedKeys).toEqual(new Set(["value"]));
-        expect(watcher.nested.get("field1" as KeyPath)?.changed).toBe(true);
-        expect(watcher.nested.get("field2" as KeyPath)?.changedKeys).toEqual(new Set(["value"]));
-        expect(watcher.nested.get("field2" as KeyPath)?.changed).toBe(true);
+        expect(nestedAt(watcher, "field1")?.changedKeys).toEqual(new Set(["value"]));
+        expect(nestedAt(watcher, "field1")?.changed).toBe(true);
+        expect(nestedAt(watcher, "field2")?.changedKeys).toEqual(new Set(["value"]));
+        expect(nestedAt(watcher, "field2")?.changed).toBe(true);
       });
     });
 
@@ -1589,8 +1618,8 @@ describe("Annotations", () => {
       test("nested watchers are created", () => {
         const sample = new Sample();
         const watcher = Watcher.get(sample);
-        expect(watcher.nested.get("field1" as KeyPath)).toBe(Watcher.get(sample.field1.get()));
-        expect(watcher.nested.size).toBe(1);
+        expect(nestedAt(watcher, "field1")).toBe(Watcher.get(sample.field1.get()));
+        expect(Array.from(watcher.nested)).toHaveLength(1);
       });
 
       test("assignments to a boxed observable field are tracked", () => {
@@ -1615,8 +1644,8 @@ describe("Annotations", () => {
         expect(watcher.changedKeys).toEqual(new Set([]));
         expect(watcher.changedKeyPaths).toEqual(new Set(["field1.value"]));
         expect(watcher.changed).toBe(true);
-        expect(watcher.nested.get("field1" as KeyPath)?.changedKeys).toEqual(new Set(["value"]));
-        expect(watcher.nested.get("field1" as KeyPath)?.changed).toBe(true);
+        expect(nestedAt(watcher, "field1")?.changedKeys).toEqual(new Set(["value"]));
+        expect(nestedAt(watcher, "field1")?.changed).toBe(true);
       });
     });
 
@@ -1633,9 +1662,9 @@ describe("Annotations", () => {
       test("nested watchers are created", () => {
         const sample = new Sample();
         const watcher = Watcher.get(sample);
-        expect(watcher.nested.get("field1.0" as KeyPath)).toBe(Watcher.get(sample.field1[0]));
-        expect(watcher.nested.get("field2.0" as KeyPath)).toBe(Watcher.get(sample.field2[0]));
-        expect(watcher.nested.size).toBe(2);
+        expect(nestedAt(watcher, "field1.0")).toBe(Watcher.get(sample.field1[0]));
+        expect(nestedAt(watcher, "field2.0")).toBe(Watcher.get(sample.field2[0]));
+        expect(Array.from(watcher.nested)).toHaveLength(2);
       });
 
       test("changes to array elements are tracked", () => {
@@ -1649,10 +1678,10 @@ describe("Annotations", () => {
         expect(watcher.changedKeys).toEqual(new Set([]));
         expect(watcher.changedKeyPaths).toEqual(new Set(["field1.0.value", "field2.0.value"]));
         expect(watcher.changed).toBe(true);
-        expect(watcher.nested.get("field1.0" as KeyPath)?.changedKeys).toEqual(new Set(["value"]));
-        expect(watcher.nested.get("field1.0" as KeyPath)?.changed).toBe(true);
-        expect(watcher.nested.get("field2.0" as KeyPath)?.changedKeys).toEqual(new Set(["value"]));
-        expect(watcher.nested.get("field2.0" as KeyPath)?.changed).toBe(true);
+        expect(nestedAt(watcher, "field1.0")?.changedKeys).toEqual(new Set(["value"]));
+        expect(nestedAt(watcher, "field1.0")?.changed).toBe(true);
+        expect(nestedAt(watcher, "field2.0")?.changedKeys).toEqual(new Set(["value"]));
+        expect(nestedAt(watcher, "field2.0")?.changed).toBe(true);
       });
     });
 
@@ -1669,9 +1698,9 @@ describe("Annotations", () => {
       test("nested watchers are created", () => {
         const sample = new Sample();
         const watcher = Watcher.get(sample);
-        expect(watcher.nested.get("field1.0" as KeyPath)).toBe(Watcher.get(Array.from(sample.field1)[0]));
-        expect(watcher.nested.get("field2.0" as KeyPath)).toBe(Watcher.get(Array.from(sample.field2)[0]));
-        expect(watcher.nested.size).toBe(2);
+        expect(nestedAt(watcher, "field1.0")).toBe(Watcher.get(Array.from(sample.field1)[0]));
+        expect(nestedAt(watcher, "field2.0")).toBe(Watcher.get(Array.from(sample.field2)[0]));
+        expect(Array.from(watcher.nested)).toHaveLength(2);
       });
 
       test("changes to set elements are tracked", () => {
@@ -1689,10 +1718,10 @@ describe("Annotations", () => {
         expect(watcher.changedKeys).toEqual(new Set([]));
         expect(watcher.changedKeyPaths).toEqual(new Set(["field1.0.value", "field2.0.value"]));
         expect(watcher.changed).toBe(true);
-        expect(watcher.nested.get("field1.0" as KeyPath)?.changedKeys).toEqual(new Set(["value"]));
-        expect(watcher.nested.get("field1.0" as KeyPath)?.changed).toBe(true);
-        expect(watcher.nested.get("field2.0" as KeyPath)?.changedKeys).toEqual(new Set(["value"]));
-        expect(watcher.nested.get("field2.0" as KeyPath)?.changed).toBe(true);
+        expect(nestedAt(watcher, "field1.0")?.changedKeys).toEqual(new Set(["value"]));
+        expect(nestedAt(watcher, "field1.0")?.changed).toBe(true);
+        expect(nestedAt(watcher, "field2.0")?.changedKeys).toEqual(new Set(["value"]));
+        expect(nestedAt(watcher, "field2.0")?.changed).toBe(true);
       });
     });
 
@@ -1709,9 +1738,9 @@ describe("Annotations", () => {
       test("nested watchers are created", () => {
         const sample = new Sample();
         const watcher = Watcher.get(sample);
-        expect(watcher.nested.get("field1.key1" as KeyPath)).toBe(Watcher.get(sample.field1.get("key1")!));
-        expect(watcher.nested.get("field2.key1" as KeyPath)).toBe(Watcher.get(sample.field2.get("key1")!));
-        expect(watcher.nested.size).toBe(2);
+        expect(nestedAt(watcher, "field1.key1")).toBe(Watcher.get(sample.field1.get("key1")!));
+        expect(nestedAt(watcher, "field2.key1")).toBe(Watcher.get(sample.field2.get("key1")!));
+        expect(Array.from(watcher.nested)).toHaveLength(2);
       });
 
       test("changes to map elements are tracked", () => {
@@ -1725,10 +1754,10 @@ describe("Annotations", () => {
         expect(watcher.changedKeys).toEqual(new Set([]));
         expect(watcher.changedKeyPaths).toEqual(new Set(["field1.key1.value", "field2.key1.value"]));
         expect(watcher.changed).toBe(true);
-        expect(watcher.nested.get("field1.key1" as KeyPath)?.changedKeys).toEqual(new Set(["value"]));
-        expect(watcher.nested.get("field1.key1" as KeyPath)?.changed).toBe(true);
-        expect(watcher.nested.get("field2.key1" as KeyPath)?.changedKeys).toEqual(new Set(["value"]));
-        expect(watcher.nested.get("field2.key1" as KeyPath)?.changed).toBe(true);
+        expect(nestedAt(watcher, "field1.key1")?.changedKeys).toEqual(new Set(["value"]));
+        expect(nestedAt(watcher, "field1.key1")?.changed).toBe(true);
+        expect(nestedAt(watcher, "field2.key1")?.changedKeys).toEqual(new Set(["value"]));
+        expect(nestedAt(watcher, "field2.key1")?.changed).toBe(true);
       });
     });
 
@@ -1753,9 +1782,9 @@ describe("Annotations", () => {
       test("nested watchers are created", () => {
         const sample = new Sample();
         const watcher = Watcher.get(sample);
-        expect(watcher.nested.size).toBe(2);
-        expect(watcher.nested.get("field1" as KeyPath)).toBe(Watcher.get(sample.field1));
-        expect(watcher.nested.get("field2" as KeyPath)).toBe(Watcher.get(sample.field2));
+        expect(Array.from(watcher.nested)).toHaveLength(2);
+        expect(nestedAt(watcher, "field1")).toBe(Watcher.get(sample.field1));
+        expect(nestedAt(watcher, "field2")).toBe(Watcher.get(sample.field2));
       });
 
       test("changes to a nested class are tracked", () => {
@@ -1769,10 +1798,10 @@ describe("Annotations", () => {
         expect(watcher.changedKeys).toEqual(new Set([]));
         expect(watcher.changedKeyPaths).toEqual(new Set(["field1.value", "field2.value"]));
         expect(watcher.changed).toBe(true);
-        expect(watcher.nested.get("field1" as KeyPath)?.changedKeys).toEqual(new Set(["value"]));
-        expect(watcher.nested.get("field1" as KeyPath)?.changed).toBe(true);
-        expect(watcher.nested.get("field2" as KeyPath)?.changedKeys).toEqual(new Set(["value"]));
-        expect(watcher.nested.get("field2" as KeyPath)?.changed).toBe(true);
+        expect(nestedAt(watcher, "field1")?.changedKeys).toEqual(new Set(["value"]));
+        expect(nestedAt(watcher, "field1")?.changed).toBe(true);
+        expect(nestedAt(watcher, "field2")?.changedKeys).toEqual(new Set(["value"]));
+        expect(nestedAt(watcher, "field2")?.changed).toBe(true);
       });
 
       test("resetting a nested object does not reset the parent", () => {
@@ -1830,9 +1859,9 @@ describe("Annotations", () => {
       test("nested watchers are created with KeyPath.Self", () => {
         const sample = new Sample();
         const watcher = Watcher.get(sample);
-        expect(watcher.nested.size).toBe(1);
-        expect(watcher.nested.get("other" as KeyPath)).toBeFalsy();
-        expect(watcher.nested.get(KeyPath.Self)).toBe(Watcher.get(sample.other));
+        expect(Array.from(watcher.nested)).toHaveLength(1);
+        expect(nestedAt(watcher, "other")).toBeFalsy();
+        expect(nestedAt(watcher, KeyPath.Self)).toBe(Watcher.get(sample.other));
       });
 
       test("changes to a nested class are tracked and hoisted", () => {
@@ -1845,8 +1874,8 @@ describe("Annotations", () => {
         expect(watcher.changedKeys).toEqual(new Set([]));
         expect(watcher.changedKeyPaths).toEqual(new Set(["value"]));
         expect(watcher.changed).toBe(true);
-        expect(watcher.nested.get(KeyPath.Self)?.changedKeys).toEqual(new Set(["value"]));
-        expect(watcher.nested.get(KeyPath.Self)?.changed).toBe(true);
+        expect(nestedAt(watcher, KeyPath.Self)?.changedKeys).toEqual(new Set(["value"]));
+        expect(nestedAt(watcher, KeyPath.Self)?.changed).toBe(true);
       });
     });
 
@@ -1870,9 +1899,9 @@ describe("Annotations", () => {
       test("nested watchers are created with KeyPath.Self", () => {
         const sample = new Sample();
         const watcher = Watcher.get(sample);
-        expect(watcher.nested.size).toBe(1);
-        expect(watcher.nested.get("list" as KeyPath)).toBeFalsy();
-        expect(watcher.nested.get("0" as KeyPath)).toBe(Watcher.get(sample.list[0]));
+        expect(Array.from(watcher.nested)).toHaveLength(1);
+        expect(nestedAt(watcher, "list")).toBeFalsy();
+        expect(nestedAt(watcher, "0")).toBe(Watcher.get(sample.list[0]));
       });
 
       test("changes to a nested class are tracked and hoisted", () => {
@@ -1885,8 +1914,8 @@ describe("Annotations", () => {
         expect(watcher.changedKeys).toEqual(new Set([]));
         expect(watcher.changedKeyPaths).toEqual(new Set(["0.value"]));
         expect(watcher.changed).toBe(true);
-        expect(watcher.nested.get("0" as KeyPath)?.changedKeys).toEqual(new Set(["value"]));
-        expect(watcher.nested.get("0" as KeyPath)?.changed).toBe(true);
+        expect(nestedAt(watcher, "0")?.changedKeys).toEqual(new Set(["value"]));
+        expect(nestedAt(watcher, "0")?.changed).toBe(true);
       });
     });
 
@@ -1910,7 +1939,7 @@ describe("Annotations", () => {
         expect(watcher.changedTick).toBe(1n);
         expect(watcher.changedKeys).toEqual(new Set());
         expect(watcher.changedKeyPaths).toEqual(new Set());
-        expect([...watcher.nested.keys()]).toEqual(["0", "1"]);
+        expect(Array.from(watcher.nested, (entry) => entry.keyPath)).toEqual(["0", "1"]);
       });
 
       test("reassignments to the hoisted property increment changedTick without adding a key", () => {
@@ -1922,7 +1951,7 @@ describe("Annotations", () => {
         });
         expect(watcher.changedTick).toBe(1n);
         expect(watcher.changedKeys).toEqual(new Set());
-        expect(watcher.nested.size).toBe(0);
+        expect(Array.from(watcher.nested)).toHaveLength(0);
       });
 
       test("mutations to the hoisted collection inside unwatch() are NOT tracked", () => {
@@ -2556,7 +2585,7 @@ describe("Annotations", () => {
       expect(childWatcher.changed).toBe(true);
       expect(watcher.changed).toBe(false);
       expect(watcher.changedTick).toBe(0n);
-      expect(watcher.nested.get("child" as KeyPath)).toBe(childWatcher);
+      expect(nestedAt(watcher, "child")).toBe(childWatcher);
       expect(watcher.changedKeyPaths).toEqual(new Set());
     });
 
@@ -2626,7 +2655,7 @@ describe("Annotations", () => {
     test("changes are ignored", () => {
       const sample = new Sample();
       const watcher = Watcher.get(sample);
-      expect(watcher.nested.size).toBe(0);
+      expect(Array.from(watcher.nested)).toHaveLength(0);
 
       runInAction(() => {
         sample[observableKey] = 1;
@@ -2790,7 +2819,7 @@ describe("Annotations", () => {
       });
       expect(watcher.changedKeys).toEqual(new Set(["child"]));
       expect(watcher.changedKeyPaths).toEqual(new Set(["child"]));
-      expect(watcher.nested.get("child" as KeyPath)).toBe(Watcher.get(sample.child));
+      expect(nestedAt(watcher, "child")).toBe(Watcher.get(sample.child));
       expect(Watcher.get(previous).changed).toBe(true);
     });
 
@@ -2829,7 +2858,7 @@ describe("Annotations", () => {
       const watcher = Watcher.get(sample);
       const leaf = sample.map.get(key)!;
       const leafWatcher = Watcher.get(leaf); // Nothing else creates it, as the entry is out of reach of the parent
-      expect(watcher.nested.size).toBe(0);
+      expect(Array.from(watcher.nested)).toHaveLength(0);
 
       runInAction(() => {
         leaf.value = 1;
@@ -3061,7 +3090,7 @@ describe("Annotations", () => {
         // The change propagation reaction takes its first reading without failing
         expect(consoleError).not.toHaveBeenCalled();
 
-        expect(watcher.nested.get("child" as KeyPath)).toBeInstanceOf(Watcher);
+        expect(nestedAt(watcher, "child")).toBeInstanceOf(Watcher);
         expect(watcher.changedKeyPaths).toEqual(new Set());
         expect(() => watcher.reset()).not.toThrow();
       } finally {
@@ -3093,9 +3122,9 @@ describe("Annotations", () => {
       const aWatcher = Watcher.get(a);
       const bWatcher = Watcher.get(b);
       const selfWatcher = Watcher.get(self);
-      expect(aWatcher.nested.get("other" as KeyPath)).toBe(bWatcher);
-      expect(bWatcher.nested.get("other" as KeyPath)).toBe(aWatcher);
-      expect(selfWatcher.nested.get("other" as KeyPath)).toBe(selfWatcher);
+      expect(nestedAt(aWatcher, "other")).toBe(bWatcher);
+      expect(nestedAt(bWatcher, "other")).toBe(aWatcher);
+      expect(nestedAt(selfWatcher, "other")).toBe(selfWatcher);
 
       runInAction(() => {
         b.value = 1;
@@ -3138,7 +3167,7 @@ describe("Annotations", () => {
         b.other = a;
         watcher = Watcher.get(a);
       });
-      expect(Watcher.get(b).nested.get("other" as KeyPath)).toBe(watcher);
+      expect(nestedAt(Watcher.get(b), "other")).toBe(watcher);
 
       runInAction(() => {
         b.value = 1;
@@ -3161,7 +3190,7 @@ describe("Types", () => {
     expectTypeOf(watcher.changedTick).toEqualTypeOf<bigint>();
     expectTypeOf(watcher.changedKeys).toEqualTypeOf<ReadonlySet<KeyPath>>();
     expectTypeOf(watcher.changedKeyPaths).toEqualTypeOf<ReadonlySet<KeyPath>>();
-    expectTypeOf(watcher.nested).toEqualTypeOf<ReadonlyMap<KeyPath, Watcher>>();
+    expectTypeOf(watcher.nested).toEqualTypeOf<Generator<StandardNestedFetcher.Entry<Watcher>, void, unknown>>();
     expectTypeOf(watcher.reset).returns.toBeVoid();
     expectTypeOf(watcher.assumeChanged).returns.toBeVoid();
   });
@@ -3180,8 +3209,8 @@ describe("Types", () => {
       watcher.changedKeys.add("key" as KeyPath);
       // @ts-expect-error: changedTick has no setter
       watcher.changedTick = 1n;
-      // @ts-expect-error: nested is read-only
-      watcher.nested.delete("key" as KeyPath);
+      // @ts-expect-error: nested is an iterator, with no lookup by key path
+      watcher.nested.get("key" as KeyPath);
       // @ts-expect-error: unwatch() takes a function
       unwatch(1);
     };

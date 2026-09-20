@@ -62,14 +62,28 @@ class User {
 const user = new User();
 const userForm = Form.get(user);
 
-// Access sub-forms
+// Reach a sub-form through the property it lives on.
+// A form is cached per subject and form key, so with the same key this is the
+// instance the parent tracks.
 const addressForm = Form.get(user.address);
 const prevAddressForm = Form.get(user.previousAddresses[0]);
 
-// Sub-forms are tracked in the parent
-userForm.subForms.get('address'); // addressForm
-userForm.subForms.get('previousAddresses.0'); // prevAddressForm
+// Or walk what the parent tracks. `subForms` is an iterator, not a map:
+// each entry carries the annotated member's name, its key path and the form.
+// (a hoisted member's `key` is `KeyPath.Self` rather than the name it is declared with)
+for (const { key, keyPath } of userForm.subForms) {
+  console.log(key, keyPath);
+  // "address"           "address"
+  // "previousAddresses" "previousAddresses.0"
+}
+
+Array.from(userForm.subForms, (entry) => entry.data);
+// [addressForm, prevAddressForm]
 ```
+
+:::caution
+Each read of `subForms` starts a new iteration, and an iterator is consumed once - iterate it again by reading the getter again. Reading it without iterating tracks no observable, so a MobX derivation that only holds on to the iterator never re-runs.
+:::
 
 When sub-forms become dirty, parent forms automatically become dirty too. This allows validation and dirty checking to bubble up through the form hierarchy.
 
