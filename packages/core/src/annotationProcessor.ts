@@ -44,7 +44,7 @@ export class AnnotationProcessor {
    *   that declares it, so a child's `#name` is a member of its own rather than an override of the parent's.
    * - `propertyKey` and `get` are taken from the first registration for a member; later ones only add data
    */
-  registerPropertyLikeMember(
+  registerPropertyLike(
     annotationKey: symbol,
     args: {
       /** Key the member is spelled with */
@@ -204,7 +204,7 @@ export function createPropertyLikeAnnotation<T extends object, Data>(
         : undefined;
       context.addInitializer(function () {
         const processor = createStored(this as T, false);
-        processor.registerPropertyLikeMember(annotationKey, {
+        processor.registerPropertyLike(annotationKey, {
           propertyKey: context.name,
           memberKey,
           data: getData(context.name),
@@ -215,7 +215,7 @@ export function createPropertyLikeAnnotation<T extends object, Data>(
       });
     } else if (target && isDecorator202112(context)) {
       const processor = createStored(target, true);
-      processor.registerPropertyLikeMember(annotationKey, {
+      processor.registerPropertyLike(annotationKey, {
         propertyKey: context,
         data: getData(context),
       });
