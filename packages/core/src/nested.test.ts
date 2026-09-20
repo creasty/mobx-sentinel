@@ -1332,21 +1332,41 @@ describe("StandardNestedFetcher (edge cases)", () => {
     expect(Array.from(fetcher.getForKey(KeyPath.Self))).toHaveLength(1);
   });
 
-  it("fetches a hoisted key alongside a property named with an empty string, in the position of the latter", () => {
+  it("rejects a hoisted key alongside a property named with an empty string", () => {
     const objects = [new Other(), new Other(), new Other()];
     class Sample {
       @nested "" = [objects[0]];
       @nested other = objects[1];
       @nested.hoist list = [objects[2]];
     }
+    // Both "" and the hoisted "list" resolve to KeyPath.Self, so the two members share a key path and construction
+    // refuses them. This answers the PINNED(quirk) that stood here -- "should key collisions on KeyPath.Self throw at
+    // construction?" -- with the maintainer's decision that @nested rejects a collision rather than half-supporting
+    // it; until then both were fetched under KeyPath.Self and dataMap kept only the last. The empty name resolving to
+    // a self path is still an open quirk of its own (see the test above).
+    expect(() => new StandardNestedFetcher(new Sample(), (entry) => entry.data)).toThrow(
+      new Error("Multiple @nested annotations are not allowed on members that share a key path: KeyPath.Self")
+    );
+  });
+
+  it("fetches every entry when the contents of one member land on the same key path", () => {
+    const objects = [new Other(), new Other()];
+    class Sample {
+      @nested map = new Map<number | string, Other>([
+        [0, objects[0]],
+        ["0", objects[1]],
+      ]);
+    }
     const fetcher = new StandardNestedFetcher(new Sample(), (entry) => entry.data);
-    // PINNED(quirk): Both "" and the hoisted "list" resolve to KeyPath.Self, so both are fetched under it and are yielded together, before "other"; their elements share the key path "0" and dataMap keeps only the last. Decide: should key collisions on KeyPath.Self throw at construction?
+    // Unlike two members sharing a key path, this collision is dynamic -- it comes from the contents of the map, which
+    // construction cannot see -- so it is fetched rather than refused, and dataMap keeps only the last of the two
     expect(summarize(fetcher, objects)).toEqual([
-      [KeyPath.Self, "0", 0],
-      [KeyPath.Self, "0", 2],
-      ["other", "other", 1],
+      ["map", "map.0", 0],
+      ["map", "map.0", 1],
     ]);
-    expect(fetcher.dataMap.get("0" as KeyPath)).toBe(objects[2]);
+    expect(summarize(fetcher.getForKey("map" as KeyPath), objects)).toHaveLength(2);
+    expect(fetcher.dataMap.get("map.0" as KeyPath)).toBe(objects[1]);
+    expect(fetcher.dataMap.size).toBe(1);
   });
 
   it("stops reading values and calling transform when iteration is abandoned early", () => {

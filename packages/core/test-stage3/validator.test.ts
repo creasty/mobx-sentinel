@@ -41,7 +41,7 @@ describe("Validator with stage-3 decorators", () => {
     }
   }
 
-  test("counts an invalid nested object of a member that shares its key path with another", () => {
+  test("rejects a member that shares its key path with another", () => {
     class Base {
       @nested accessor #child = new Item();
 
@@ -57,21 +57,19 @@ describe("Validator with stage-3 decorators", () => {
       }
     }
 
+    // This assertion REVERSES a pinned Expected, and is not a regression: the PINNED(bug) behind the member
+    // separation read "Expected: two entries (one per private field), each reading its own field", and the tests that
+    // stood here pinned invalidKeyPaths, the prefix search and isValidating over the member that `nested` drops. The
+    // maintainer has since decided that @nested rejects the collision, since a key path is the address every error
+    // lookup uses and both members spell "#child". Those three properties are still real for a collision that
+    // construction cannot see, and are pinned on one in src/validator.test.ts ("entries that share a key path").
     const sub = new Sub();
-    const validator = Validator.get(sub);
-    runInAction(() => {
-      sub.subChild().name = "filled";
-    });
-    vi.advanceTimersByTime(100);
-
-    // Both members are fetched, but `nested` keeps one of the two: they share the key path "#child". Counting the
-    // invalid key paths from the fetcher instead keeps the dropped one visible, so the base's invalid child is not
-    // reported as valid while a search by key path still finds its error.
-    expect(Validator.get(sub.baseChild()).isValid).toBe(false);
-    expect(Validator.get(sub.subChild()).isValid).toBe(true);
-    expect(validator.invalidKeyPaths).toEqual(new Set(["#child.name"]));
-    expect(validator.isValid).toBe(false);
-    expect(validator.getErrorMessages("#child" as KeyPath, true)).toEqual(new Set(["required"]));
+    const error = new Error("Multiple @nested annotations are not allowed on members that share a key path: #child");
+    expect(() => Validator.get(sub)).toThrow(error);
+    // Nothing of the failed attempt is cached, so a second call throws as well instead of handing out a validator
+    // that never reached its nested objects
+    expect(() => Validator.get(sub)).toThrow(error);
+    expect(() => Validator.getSafe(sub)).toThrow(error);
   });
 
   test("sync handlers run on registration and react to @observable accessor fields", () => {

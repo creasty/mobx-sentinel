@@ -187,8 +187,9 @@ export class Validator<T> {
         result.add(keyPath);
       }
     }
-    // The fetcher, not `nested`: its map collapses entries that share a key path -- same-named private members of a
-    // parent and a child class do -- and a dropped one would be missing here while a key path search still finds it
+    // The fetcher, not `nested`: its map collapses entries that share a key path -- the contents of one member can,
+    // such as a map keyed by both 0 and "0" -- and a dropped one would be missing here while a key path search
+    // still finds it
     for (const entry of this.#nestedFetcher) {
       for (const relativeKeyPath of entry.data.invalidKeyPaths) {
         result.add(KeyPath.build(entry.keyPath, relativeKeyPath));
@@ -256,9 +257,11 @@ export class Validator<T> {
         }
       }
       if (prefixMatch) {
-        for (const [keyPath, validator] of this.nested) {
-          for (const [relativeKeyPath, error] of validator.#findErrors(KeyPath.Self, true, exact)) {
-            yield [KeyPath.build(keyPath, relativeKeyPath), error];
+        // The fetcher, not `nested`: its map collapses entries that share a key path, and this is the branch a
+        // search from the self path takes, so a dropped member's errors would be unreachable from firstErrorMessage
+        for (const entry of this.#nestedFetcher) {
+          for (const [relativeKeyPath, error] of entry.data.#findErrors(KeyPath.Self, true, exact)) {
+            yield [KeyPath.build(entry.keyPath, relativeKeyPath), error];
           }
         }
       } else if (!exact) {
@@ -332,8 +335,9 @@ export class Validator<T> {
     if (this.reactionState > 0 || this.asyncState > 0) {
       return true;
     }
-    for (const [, validator] of this.nested) {
-      if (validator.isValidating) {
+    // The fetcher, not `nested`: an entry dropped from its map for sharing a key path is validating all the same
+    for (const entry of this.#nestedFetcher) {
+      if (entry.data.isValidating) {
         return true;
       }
     }

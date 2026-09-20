@@ -823,7 +823,7 @@ describe("createPropertyLikeAnnotation", () => {
   });
 
   describe("stage3 context on an instance of a stage2-annotated class", () => {
-    test("registers into the prototype's processor shared by every instance", () => {
+    test("clones the prototype's processor, so each instance owns its annotations", () => {
       const sample = createPropertyLikeAnnotation(sampleKey, (propertyKey) => `data of ${String(propertyKey)}`);
 
       class Sample {
@@ -856,13 +856,94 @@ describe("createPropertyLikeAnnotation", () => {
       initializers[0].call(obj1);
       initializers[0].call(obj2);
 
-      const processor = getAnnotationProcessor(Sample.prototype)!;
-      const extra = processor.getPropertyLike(sampleKey)!.get("extra")!;
-      // PINNED(quirk): a stage-3 initializer registers without cloning an inherited processor, so on an instance whose prototype holds a stage-2 processor it mutates that shared processor: the annotation appears for every instance, accumulates per initialization, and `get` stays bound to the first instance. Decide: should stage-3 registration clone an inherited processor so each instance owns its annotations?
-      expect(getAnnotationProcessor(obj1)).toBe(processor);
-      expect(getAnnotationProcessor(obj2)).toBe(processor);
-      expect(extra.data).toEqual(["data of extra", "data of extra"]);
-      expect(extra.get!()).toBe("value of property1");
+      // These assertions REVERSE a pinned quirk, and are not a regression: it read "a stage-3 initializer registers
+      // without cloning an inherited processor, so on an instance whose prototype holds a stage-2 processor it
+      // mutates that shared processor: the annotation appears for every instance, accumulates per initialization,
+      // and `get` stays bound to the first instance. Decide: should stage-3 registration clone an inherited
+      // processor so each instance owns its annotations?" -- and the maintainer has decided yes. An instance owns
+      // its annotations: the initializer clones the processor it finds up the prototype chain instead of
+      // registering into it, leaving the one the class's stage-2 annotations put on its prototype untouched.
+      const prototypeProcessor = getAnnotationProcessor(Sample.prototype)!;
+      const processor1 = getAnnotationProcessor(obj1)!;
+      const processor2 = getAnnotationProcessor(obj2)!;
+      expect(processor1).not.toBe(prototypeProcessor);
+      expect(processor2).not.toBe(prototypeProcessor);
+      expect(processor1).not.toBe(processor2);
+      expect(extractStoredData(prototypeProcessor)).toEqual(new Map([["property1", ["data of property1"]]]));
+
+      // The clone carries the inherited annotation along with the one the instance registered, whose data is that
+      // of this one initialization -- it no longer accumulates a copy per instantiation
+      for (const processor of [processor1, processor2]) {
+        expect(extractStoredData(processor)).toEqual(
+          new Map([
+            ["property1", ["data of property1"]],
+            ["extra", ["data of extra"]],
+          ])
+        );
+      }
+      // And `get`, bound to the instance its initializer ran on, reads that instance rather than the first one
+      expect(processor1.getPropertyLike(sampleKey)!.get("extra")!.get!()).toBe("value of property1");
+      expect(processor2.getPropertyLike(sampleKey)!.get("extra")!.get!()).toBe("value of obj2");
+
+      // A second member of the same instance finds the clone already stored against it, so an instance pays for
+      // one processor however many of its members are annotated
+      (sample as unknown as (target: unknown, context: unknown) => void)(undefined, { ...context, name: "extra2" });
+      expect(initializers).toHaveLength(2);
+      initializers[1].call(obj1);
+      expect(getAnnotationProcessor(obj1)).toBe(processor1);
+      expect(extractStoredData(processor1)).toEqual(
+        new Map([
+          ["property1", ["data of property1"]],
+          ["extra", ["data of extra"]],
+          ["extra2", ["data of extra2"]],
+        ])
+      );
+    });
+
+    test("leaves an instance the initializer never ran on with the prototype's annotations alone", () => {
+      const sample = createPropertyLikeAnnotation(sampleKey, (propertyKey) => `data of ${String(propertyKey)}`);
+
+      class Sample {
+        @sample
+        property1 = "value of property1";
+      }
+
+      const initializers: ((this: Sample) => void)[] = [];
+      (sample as unknown as (target: unknown, context: unknown) => void)(undefined, {
+        kind: "field",
+        name: "extra",
+        static: false,
+        private: false,
+        metadata: {},
+        addInitializer: (initializer: (this: Sample) => void) => {
+          initializers.push(initializer);
+        },
+        access: {
+          has: (obj: Sample) => "extra" in obj,
+          get: (obj: Sample & { extra?: string }) => obj.extra,
+          set: () => {},
+        },
+      });
+
+      const annotated = Object.assign(new Sample(), { extra: "value of extra" });
+      const plain = new Sample();
+      initializers[0].call(annotated);
+
+      // The registration landed on a clone of its own, so the member belongs to the object that carries it, and
+      // `plain` still reads the prototype's processor, which knows nothing of it
+      expect(extractStoredData(getAnnotationProcessor(annotated)!)).toEqual(
+        new Map([
+          ["property1", ["data of property1"]],
+          ["extra", ["data of extra"]],
+        ])
+      );
+      expect(getAnnotationProcessor(annotated)!.getPropertyLike(sampleKey)!.get("extra")!.get!()).toBe(
+        "value of extra"
+      );
+      expect(getAnnotationProcessor(plain)).toBe(getAnnotationProcessor(Sample.prototype));
+      expect(extractStoredData(getAnnotationProcessor(plain)!)).toEqual(
+        new Map([["property1", ["data of property1"]]])
+      );
     });
   });
 
