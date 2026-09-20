@@ -1032,7 +1032,12 @@ describe("createPropertyLikeAnnotation", () => {
         [["data of #field"], "public value"],
         [["data of #field"], "private value"],
       ]);
-      // PINNED(quirk): the two are separate members now, but a private member keeps its spelling ("#field") as its property key, so they stay indistinguishable wherever the property key is what counts: they share a key path, and in Watcher an `@unwatch` or a `@nested` on either of them covers both. Decide: should private members spell a property key of their own?
+      // The two are separate members, each reading its own value, but a private member keeps its spelling ("#field")
+      // as its property key, so they stay indistinguishable wherever the property key is what counts: they share a
+      // key path, and in Watcher an `@unwatch` or a `@nested` on either of them covers both. Decided to keep it that
+      // way: a key path is a debugging aid, and giving a private member a key path of its own would put a name
+      // nobody wrote into the addressing users read, to tell apart a collision that takes deliberately tricky code
+      // to create.
       expect(annotatedKeys(obj)).toEqual(["#field", "#field"]);
     });
 
