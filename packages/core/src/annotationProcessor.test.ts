@@ -1010,17 +1010,31 @@ describe("AnnotationProcessor", () => {
     expect(stored[1]).toBeUndefined();
   });
 
-  test("registerPropertyLike keeps the property key and the get function of the first registration", () => {
+  test("registerPropertyLike keeps the get function of the first registration", () => {
     const processor = new AnnotationProcessor();
     const get1 = () => "first";
     const get2 = () => "second";
 
-    const memberKey = Symbol("a");
-    processor.registerPropertyLike(sampleKey, { memberKey, propertyKey: "a", data: 1, get: get1 });
-    processor.registerPropertyLike(sampleKey, { memberKey, propertyKey: "later", data: 2, get: get2 });
+    processor.registerPropertyLike(sampleKey, { propertyKey: "a", data: 1, get: get1 });
+    processor.registerPropertyLike(sampleKey, { propertyKey: "a", data: 2, get: get2 });
 
-    expect(processor.getPropertyLikeMembers(sampleKey)!.get(memberKey)!.propertyKey).toBe("a");
-    expect(processor.getPropertyLikeMembers(sampleKey)!.get(memberKey)!.get).toBe(get1);
+    const member = processor.getPropertyLikeMembers(sampleKey)!.get("a")!;
+    expect(member.data).toEqual([1, 2]);
+    expect(member.get).toBe(get1);
+  });
+
+  test("registerPropertyLike merges registrations that share a scope and a property key", () => {
+    const processor = new AnnotationProcessor();
+    const scope = {};
+    const get1 = () => "first";
+    const get2 = () => "second";
+
+    processor.registerPropertyLike(sampleKey, { propertyKey: "#a", scope, data: 1, get: get1 });
+    processor.registerPropertyLike(sampleKey, { propertyKey: "#a", scope, data: 2, get: get2 });
+
+    // One entry, as for any other member: the data accumulates and `get` stays the first one
+    const members = [...processor.getPropertyLikeMembers(sampleKey)!.values()];
+    expect(members).toEqual([{ propertyKey: "#a", data: [1, 2], get: get1 }]);
   });
 
   test("registerPropertyLike keeps a missing get function when the first registration had none", () => {
@@ -1033,22 +1047,25 @@ describe("AnnotationProcessor", () => {
     expect(processor.getPropertyLikeMembers(sampleKey)!.get("a")!.get).toBeUndefined();
   });
 
-  test("registerPropertyLike keeps registrations with different memberKeys apart under one property key", () => {
+  test("registerPropertyLike keeps registrations with different scopes apart under one property key", () => {
     const processor = new AnnotationProcessor();
-    const memberKey = Symbol("#a");
     const get1 = () => "first";
     const get2 = () => "second";
+    const get3 = () => "third";
 
     processor.registerPropertyLike(sampleKey, { propertyKey: "#a", data: 1, get: get1 });
-    processor.registerPropertyLike(sampleKey, { propertyKey: "#a", memberKey, data: 2, get: get2 });
+    processor.registerPropertyLike(sampleKey, { propertyKey: "#a", scope: {}, data: 2, get: get2 });
+    processor.registerPropertyLike(sampleKey, { propertyKey: "#a", scope: {}, data: 3, get: get3 });
 
     const annotations = processor.getPropertyLikeMembers(sampleKey)!;
-    // Two entries, each with its own data and `get`, both spelling the one property key
-    expect([...annotations.keys()]).toEqual(["#a", memberKey]);
+    // Three entries, each with its own data and `get`, all spelling the one property key
     expect(Array.from(annotations.values(), (member) => [member.propertyKey, member.data, member.get])).toEqual([
       ["#a", [1], get1],
       ["#a", [2], get2],
+      ["#a", [3], get3],
     ]);
+    // Only the scopeless one is keyed by the property key; the scoped ones get an identity of the processor's own
+    expect(annotations.get("#a")!.data).toEqual([1]);
   });
 
   test("getPropertyLikeMembers returns the live internal map", () => {
@@ -1097,16 +1114,20 @@ describe("AnnotationProcessor", () => {
 
     test("keeps the members of a property key apart", () => {
       const processor = new AnnotationProcessor();
-      const memberKey = Symbol("#a");
+      const scope = {};
       processor.registerPropertyLike(sampleKey, { propertyKey: "#a", data: 1 });
-      processor.registerPropertyLike(sampleKey, { propertyKey: "#a", memberKey, data: 2 });
+      processor.registerPropertyLike(sampleKey, { propertyKey: "#a", scope, data: 2 });
 
-      const annotations = processor.clone().getPropertyLikeMembers(sampleKey)!;
-      expect([...annotations.keys()]).toEqual(["#a", memberKey]);
+      const clone = processor.clone();
+      const annotations = clone.getPropertyLikeMembers(sampleKey)!;
       expect(Array.from(annotations.values(), (member) => [member.propertyKey, member.data])).toEqual([
         ["#a", [1]],
         ["#a", [2]],
       ]);
+
+      // Each member keeps its identity through the copy, so the same scope and key still land on the same entry
+      clone.registerPropertyLike(sampleKey, { propertyKey: "#a", scope, data: 3 });
+      expect(Array.from(annotations.values(), (member) => member.data)).toEqual([[1], [2, 3]]);
     });
 
     test("is independent of the original in both directions", () => {
@@ -1165,7 +1186,7 @@ describe("AnnotationProcessor", () => {
       Map<string | symbol, { propertyKey: string | symbol; data: any[]; get?: () => any }> | undefined
     >();
     expectTypeOf<Parameters<AnnotationProcessor["registerPropertyLike"]>>().toEqualTypeOf<
-      [annotationKey: symbol, args: { propertyKey: string | symbol; memberKey?: symbol; data: any; get?: () => any }]
+      [annotationKey: symbol, args: { propertyKey: string | symbol; scope?: object; data: any; get?: () => any }]
     >();
     expectTypeOf<ReturnType<AnnotationProcessor["clone"]>>().toEqualTypeOf<AnnotationProcessor>();
   });

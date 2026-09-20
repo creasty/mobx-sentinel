@@ -8,7 +8,7 @@ import { Decorator202112, Decorator202203, isDecorator202112, isDecorator202203 
  * class are members of their own that spell one key, so several records can share a `propertyKey`.
  */
 export type PropertyLikeMember = {
-  /** Key the member is spelled with, such as `"items"` or `"#items"`, taken from the first registration */
+  /** Key the member is spelled with, such as `"items"` or `"#items"` */
   propertyKey: string | symbol;
   /** Data of every annotation registered for this member, in registration order */
   data: any[];
@@ -19,6 +19,33 @@ export type PropertyLikeMember = {
    */
   get?: () => any;
 };
+
+const memberKeys = new WeakMap<object, Map<string | symbol, symbol>>();
+
+/**
+ * Mint the identity of one member of a scope
+ *
+ * @remarks
+ * One symbol per pair, kept for as long as the scope lives, so every registration naming that member of that scope
+ * lands on one entry while the same name under another scope lands on another. Nothing outside can mint or
+ * reconstruct one, so a caller holding the map reads its values rather than looking a scoped member up.
+ *
+ * @param scope - Object whose identity stands for the declaring class
+ * @param name - Key the member is spelled with, such as `"#items"`
+ */
+function memberKeyFor(scope: object, name: string | symbol) {
+  let keys = memberKeys.get(scope);
+  if (!keys) {
+    keys = new Map();
+    memberKeys.set(scope, keys);
+  }
+  let key = keys.get(name);
+  if (!key) {
+    key = Symbol(String(name));
+    keys.set(name, key);
+  }
+  return key;
+}
 
 /**
  * Processor for handling property-like annotations
@@ -36,13 +63,11 @@ export class AnnotationProcessor {
    * Register a property-like annotation on one class member
    *
    * @remarks
-   * - Multiple annotations can be registered for the same member; their data accumulates in registration order
-   * - A property overridden in a child class is the same member, so both parent and child annotations are
-   *   preserved under one entry
-   * - `memberKey` is the identity of the annotated member and defaults to `propertyKey`, which is what makes an
-   *   override merge. Only ECMAScript private members need a key of their own: a `#name` belongs to the class
-   *   that declares it, so a child's `#name` is a member of its own rather than an override of the parent's.
-   * - `propertyKey` and `get` are taken from the first registration for a member; later ones only add data
+   * - The processor identifies the member by `propertyKey`, and by `scope` when one is given; registrations that
+   *   agree on both are one member, and their data accumulates in registration order
+   * - A property overridden in a child class spells the same key with no scope, so it is the same member, and
+   *   parent and child annotations are preserved under one entry
+   * - `get` is taken from the first registration for a member; later ones only add data
    */
   registerPropertyLike(
     annotationKey: symbol,
@@ -50,11 +75,14 @@ export class AnnotationProcessor {
       /** Key the member is spelled with */
       propertyKey: string | symbol;
       /**
-       * Identity of the annotated member, minted per declaring class; defaults to `propertyKey`
+       * Object whose identity stands for the class declaring the member
        *
-       * Only an ECMAScript private member needs one: every other member is identified by the key it spells.
+       * Pass one only for an ECMAScript private member, and one that is the same for every registration on that
+       * class: a `#name` belongs to the class that declares it, so a parent's `#items` and a child's `#items` are
+       * members of their own that must not merge, even though they spell one key. Leave it out otherwise, so that
+       * a child's override merges with the property it overrides.
        */
-      memberKey?: symbol;
+      scope?: object;
       /** Annotation data to record */
       data: any;
       /** Reads the member's value; see {@link PropertyLikeMember.get} */
@@ -67,7 +95,7 @@ export class AnnotationProcessor {
       this.#propertyLike.set(annotationKey, members);
     }
 
-    const memberKey = args.memberKey ?? args.propertyKey;
+    const memberKey = args.scope ? memberKeyFor(args.scope, args.propertyKey) : args.propertyKey;
     let member = members.get(memberKey);
     if (!member) {
       member = { propertyKey: args.propertyKey, data: [], get: args.get };
@@ -80,8 +108,10 @@ export class AnnotationProcessor {
   /**
    * Get every member registered with the given annotation
    *
-   * @returns Map of member keys to their annotations in registration order, or undefined if no annotations exist.\
-   *   Two entries share a `propertyKey` only for same-named private members.
+   * @returns Map of every member to its annotations in registration order, or undefined if no annotations exist.\
+   *   A member registered without a scope is keyed by its `propertyKey`, a scoped one by an identity of the
+   *   processor's own, so read the values rather than looking a member up. Two entries share a `propertyKey` only
+   *   for same-named private members.
    */
   getPropertyLikeMembers(annotationKey: symbol) {
     return this.#propertyLike.get(annotationKey);
@@ -143,36 +173,6 @@ export function getAnnotationProcessor(target: object) {
   return getStored(target).processor;
 }
 
-const memberKeys = new WeakMap<object, Map<string | symbol, symbol>>();
-
-/**
- * Mint a key that identifies one ECMAScript private member
- *
- * @remarks
- * A `#name` belongs to the class that declares it, so a parent's `#items` and a child's `#items` are distinct
- * members that cannot override each other, even though they register under the same property key. The `scope`
- * that tells them apart is what the stage3 decorator context offers per class:
- * - `context.metadata`, one object per class, which esbuild (so Vite and tsup) and Babel always emit.
- * - Failing that -- plain `tsc` on a runtime that has no `Symbol.metadata`, as Node does not -- `context.access.has`,
- *   which tsc creates once per member of a class, and therefore shares between decorators stacked on one member.
- *
- * @param scope - Object whose identity stands for the declaring class
- * @param name - Spelling of the private member, such as `"#items"`
- */
-function memberKeyFor(scope: object, name: string | symbol) {
-  let keys = memberKeys.get(scope);
-  if (!keys) {
-    keys = new Map();
-    memberKeys.set(scope, keys);
-  }
-  let key = keys.get(name);
-  if (!key) {
-    key = Symbol(String(name));
-    keys.set(name, key);
-  }
-  return key;
-}
-
 /**
  * Create a property-like annotation
  *
@@ -182,8 +182,8 @@ function memberKeyFor(scope: object, name: string | symbol) {
  * - Supports both public and private class members
  * - Works with properties, getters, and class fields
  * - Auto accessors are not supported in stage2 decorators
- * - Stage3 private members of a parent and a child class register as separate members of one property key,
- *   as {@link memberKeyFor} describes; stage2 decorators cannot see private members at all
+ * - Stage3 private members of a parent and a child class register as separate members of one property key, each
+ *   under a scope of its own; stage2 decorators cannot see private members at all
  *
  * @param annotationKey - Unique symbol to identify this annotation type
  * @param getData - Function to generate annotation data for a property
@@ -197,16 +197,19 @@ export function createPropertyLikeAnnotation<T extends object, Data>(
   Decorator202203.ClassFieldDecorator<T> {
   return (target, context) => {
     if (isDecorator202203(context)) {
-      // The context describes the annotated member, so the key is minted once here rather than per instance.
-      // `metadata` is typed as always present, but the compilers that emit no decorator metadata pass undefined.
-      const memberKey = context.private
-        ? memberKeyFor(context.metadata ?? context.access.has, context.name)
-        : undefined;
+      // The context describes the annotated member, so the scope is picked once here rather than per instance.
+      // It has to be one object per declaring class, which the context offers in two ways:
+      // - `context.metadata`, which esbuild (so Vite and tsup) and Babel always emit. It is typed as always
+      //   present, but the compilers that emit no decorator metadata pass undefined.
+      // - Failing that -- plain `tsc` on a runtime that has no `Symbol.metadata`, as Node does not --
+      //   `context.access.has`, which tsc creates once per member of a class, and therefore shares between
+      //   decorators stacked on one member.
+      const scope = context.private ? (context.metadata ?? context.access.has) : undefined;
       context.addInitializer(function () {
         const processor = createStored(this as T, false);
         processor.registerPropertyLike(annotationKey, {
           propertyKey: context.name,
-          memberKey,
+          scope,
           data: getData(context.name),
           // A setter has no `access.get`. Leaving the member without one lets the consumers fall back to reading the
           // property, which yields undefined for a set-only accessor rather than throwing.
