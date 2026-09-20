@@ -11,6 +11,8 @@
 
 Before contributing, please familiarize yourself with the [Design Principles](https://mobx-sentinel.creasty.com/#design-principles) and the [Architecture](https://mobx-sentinel.creasty.com/docs/architecture/) to understand the project's core philosophy and structure.
 
+Before touching change detection, read [Change Detection and Transactions](./packages/core/docs/change-detection-and-transactions.md), which explains how `packages/core/src/watcher.ts` works around MobX running reactions at the end of a batch, and what breaks if you move a piece of it.
+
 ### Coding Standards
 
 - Most styles are enforced by Biome.
