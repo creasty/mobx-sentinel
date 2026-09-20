@@ -41,6 +41,39 @@ describe("Validator with stage-3 decorators", () => {
     }
   }
 
+  test("counts an invalid nested object of a member that shares its key path with another", () => {
+    class Base {
+      @nested accessor #child = new Item();
+
+      baseChild() {
+        return this.#child;
+      }
+    }
+    class Sub extends Base {
+      @nested accessor #child = new Item();
+
+      subChild() {
+        return this.#child;
+      }
+    }
+
+    const sub = new Sub();
+    const validator = Validator.get(sub);
+    runInAction(() => {
+      sub.subChild().name = "filled";
+    });
+    vi.advanceTimersByTime(100);
+
+    // Both members are fetched, but `nested` keeps one of the two: they share the key path "#child". Counting the
+    // invalid key paths from the fetcher instead keeps the dropped one visible, so the base's invalid child is not
+    // reported as valid while a search by key path still finds its error.
+    expect(Validator.get(sub.baseChild()).isValid).toBe(false);
+    expect(Validator.get(sub.subChild()).isValid).toBe(true);
+    expect(validator.invalidKeyPaths).toEqual(new Set(["#child.name"]));
+    expect(validator.isValid).toBe(false);
+    expect(validator.getErrorMessages("#child" as KeyPath, true)).toEqual(new Set(["required"]));
+  });
+
   test("sync handlers run on registration and react to @observable accessor fields", () => {
     const item = new Item();
     const validator = Validator.get(item);

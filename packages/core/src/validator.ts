@@ -185,9 +185,11 @@ export class Validator<T> {
         result.add(keyPath);
       }
     }
-    for (const [keyPath, validator] of this.nested) {
-      for (const relativeKeyPath of validator.invalidKeyPaths) {
-        result.add(KeyPath.build(keyPath, relativeKeyPath));
+    // The fetcher, not `nested`: its map collapses entries that share a key path -- same-named private members of a
+    // parent and a child class do -- and a dropped one would be missing here while a key path search still finds it
+    for (const entry of this.#nestedFetcher) {
+      for (const relativeKeyPath of entry.data.invalidKeyPaths) {
+        result.add(KeyPath.build(entry.keyPath, relativeKeyPath));
       }
     }
     return Object.freeze(result);
