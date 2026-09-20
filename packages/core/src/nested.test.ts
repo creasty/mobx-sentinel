@@ -61,11 +61,11 @@ class Other {
   }
 }
 
-/** Observe `fetcher.dataMap` in an autorun that is disposed when the test finishes */
-function observeDataMap<T extends object>(fetcher: StandardNestedFetcher<T>) {
-  const observer = { runs: 0, last: undefined as ReadonlyMap<KeyPath, T> | undefined };
+/** Observe the entries of `fetcher` in an autorun that is disposed when the test finishes */
+function observeEntries<T extends object>(fetcher: StandardNestedFetcher<T>) {
+  const observer = { runs: 0, last: [] as StandardNestedFetcher.Entry<T>[] };
   const dispose = autorun(() => {
-    observer.last = fetcher.dataMap;
+    observer.last = Array.from(fetcher);
     observer.runs++;
   });
   onTestFinished(dispose);
@@ -394,7 +394,6 @@ describe("StandardNestedFetcher", () => {
       const fetcher = new StandardNestedFetcher({}, transform);
       expect(Array.from(fetcher)).toEqual([]);
       expect(Array.from(fetcher.getForKey(KeyPath.Self))).toEqual([]);
-      expect(fetcher.dataMap).toEqual(new Map());
       expect(transform).not.toHaveBeenCalled();
     });
 
@@ -410,7 +409,6 @@ describe("StandardNestedFetcher", () => {
       // Documented ("Symbol keys are not supported"); Watcher likewise skips symbol keys before considering hoist
       expect(Array.from(fetcher)).toEqual([]);
       expect(Array.from(fetcher.getForKey(KeyPath.Self))).toEqual([]);
-      expect(fetcher.dataMap.size).toBe(0);
     });
 
     it("infers the data type from the transform function", () => {
@@ -419,7 +417,9 @@ describe("StandardNestedFetcher", () => {
       );
       expectTypeOf(fetcher).toEqualTypeOf<StandardNestedFetcher<Other>>();
       expectTypeOf(fetcher).toExtend<Iterable<StandardNestedFetcher.Entry<Other>>>();
-      expectTypeOf(fetcher.dataMap).toEqualTypeOf<ReadonlyMap<KeyPath, Other>>();
+      expectTypeOf(fetcher[Symbol.iterator]()).toEqualTypeOf<
+        Generator<StandardNestedFetcher.Entry<Other>, void, unknown>
+      >();
       expectTypeOf(fetcher.getForKey).parameters.toEqualTypeOf<[keyPath: KeyPath]>();
       expectTypeOf(fetcher.getForKey("other1" as KeyPath)).toEqualTypeOf<
         Generator<StandardNestedFetcher.Entry<Other>, void, unknown>
@@ -577,6 +577,26 @@ describe("StandardNestedFetcher", () => {
       expect(transform).toHaveBeenCalledTimes(4);
     });
 
+    it("hands out a fresh iterator on each request, and each one is consumed once", () => {
+      // What Watcher#nested, Validator#nested and Form#subForms return: a generator, not a collection
+      class Sample {
+        @nested field = [new Other(), new Other()];
+      }
+      const fetcher = new StandardNestedFetcher(new Sample(), (entry) => entry.data);
+
+      const first = fetcher[Symbol.iterator]();
+      const second = fetcher[Symbol.iterator]();
+      // Not `expect(first).not.toBe(second)`: vitest reads a generator handed to expect() to build its message
+      expect(first === second).toBe(false);
+      expect(Array.from(first)).toHaveLength(2);
+      expect(Array.from(first)).toHaveLength(0); // the same generator, already exhausted
+      expect(Array.from(second)).toHaveLength(2);
+
+      // The fetcher itself iterates again and again: `for...of` asks it for a new generator each time
+      expect(Array.from(fetcher)).toHaveLength(2);
+      expect(Array.from(fetcher)).toHaveLength(2);
+    });
+
     it("skips entries for which transform returns null or undefined, but keeps other falsy values", () => {
       const results: Record<string, unknown> = { null: null, undefined: undefined, zero: 0, empty: "", false: false };
       class Sample {
@@ -716,15 +736,13 @@ describe("StandardNestedFetcher", () => {
         }
       }
       const fetcher = new StandardNestedFetcher(new Sample(), (entry) => entry.data);
-      // PINNED(quirk): The number key 1 and the string key "1" both become "map.1", the key "a.b" reads as a deeper path, and the empty key "" collapses onto the property's own key path "map"; dataMap keeps only the last of the colliding entries. Decide: should map keys that cannot round-trip through a key path be escaped or rejected?
+      // PINNED(quirk): The number key 1 and the string key "1" both become "map.1", the key "a.b" reads as a deeper path, and the empty key "" collapses onto the property's own key path "map". Every entry is yielded, but a key path search cannot tell the colliding ones apart. Decide: should map keys that cannot round-trip through a key path be escaped or rejected?
       expect(summarize(fetcher, objects)).toEqual([
         ["map", "map.1", 0],
         ["map", "map.1", 1],
         ["map", "map.a.b", 2],
         ["map", "map", 3],
       ]);
-      expect(fetcher.dataMap.size).toBe(3);
-      expect(fetcher.dataMap.get("map.1" as KeyPath)).toBe(objects[1]);
     });
 
     it("skips map keys that have no key path form, while a null key takes the property key path", () => {
@@ -749,8 +767,6 @@ describe("StandardNestedFetcher", () => {
         ["map", "map", 2],
         ["map", "map.key", 4],
       ]);
-      expect(fetcher.dataMap.size).toBe(2);
-      expect(fetcher.dataMap.get("map" as KeyPath)).toBe(objects[2]);
     });
 
     it("yields cyclic references as they are without recursing", () => {
@@ -859,20 +875,26 @@ describe("StandardNestedFetcher", () => {
         ]);
       });
 
-      it("lets a hoisted entry share a key path with a sibling key, and dataMap keeps the one declared later", () => {
+      it("lets a hoisted entry share a key path with a sibling key, and yields both", () => {
         const objects = [new Other(), new Other()];
         class Sample {
           @nested child = objects[0];
           @nested.hoist map = new Map([["child", objects[1]]]);
         }
         const fetcher = new StandardNestedFetcher(new Sample(), (entry) => entry.data);
+        // This RESOLVES a PINNED(quirk) -- "Both entries have the key path 'child', so the hoisted entry silently
+        // shadows the sibling property in dataMap. Decide: should collisions between hoisted and regular key paths
+        // be detected and reported?" -- by removing dataMap: nothing keyed by key path stands between the members
+        // and their consumers, so both entries are yielded and neither nested object is unreachable. What is left
+        // is the collision the contents of one member can produce anyway (see "fetches every entry when the contents
+        // of one member land on the same key path"): it depends on the map's keys, which construction cannot see,
+        // so it is fetched rather than refused, exactly like that one.
         expect(summarize(fetcher, objects)).toEqual([
           ["child", "child", 0],
           [KeyPath.Self, "child", 1],
         ]);
-        // PINNED(quirk): Both entries have the key path "child", so the hoisted entry silently shadows the sibling property in dataMap. Decide: should collisions between hoisted and regular key paths be detected and reported?
-        expect(fetcher.dataMap.size).toBe(1);
-        expect(fetcher.dataMap.get("child" as KeyPath)).toBe(objects[1]);
+        expect(summarize(fetcher.getForKey("child" as KeyPath), objects)).toEqual([["child", "child", 0]]);
+        expect(summarize(fetcher.getForKey(KeyPath.Self), objects)).toEqual([[KeyPath.Self, "child", 1]]);
       });
     });
 
@@ -886,7 +908,6 @@ describe("StandardNestedFetcher", () => {
       });
       expect(() => Array.from(fetcher)).toThrow(error);
       expect(() => Array.from(fetcher.getForKey("field" as KeyPath))).toThrow(error);
-      expect(() => fetcher.dataMap).toThrow(error);
     });
   });
 
@@ -959,280 +980,198 @@ describe("StandardNestedFetcher", () => {
     });
   });
 
-  describe("#dataMap", () => {
-    let idCounter = 0;
-    const cache = new WeakMap<object, { id: number }>();
-    const createData = (object: object) => {
-      let data = cache.get(object);
-      if (!data) {
-        const id = ++idCounter;
-        data = {} as { id: number };
-        Object.defineProperty(data, "id", {
-          get() {
-            return id;
-          },
-        });
-        cache.set(object, data);
+  describe("reactivity", () => {
+    class Model {
+      @nested @observable.shallow list = [new Other(), new Other()];
+      @nested @observable.shallow map = new Map([
+        ["a", new Other()],
+        ["b", new Other()],
+      ]);
+      @nested @observable.shallow set = new Set([new Other(), new Other()]);
+      @nested @observable.ref child = new Other();
+      @nested boxed = observable.box([new Other()]);
+      @observable unrelated = 0;
+
+      constructor() {
+        makeObservable(this);
       }
-      return data;
+    }
+
+    const setUp = () => {
+      const model = new Model();
+      const transform = vi.fn((entry: StandardNestedFetcher.Entry<any>) =>
+        entry.data instanceof Other ? entry.data : null
+      );
+      const fetcher = new StandardNestedFetcher(model, transform);
+      const observer = observeEntries(fetcher);
+      expect(observer.runs).toBe(1);
+      expect(observer.last).toHaveLength(8);
+      return { model, transform, fetcher, observer };
     };
 
-    it("is a computed property with an identity equality of its entries", async () => {
-      const sample = new Sample();
-      const fetcher = new StandardNestedFetcher(sample, (entry) => {
-        if (entry.key === "otherArray1" && typeof entry.data === "object") {
-          return createData(entry.data);
-        }
-        return null;
-      });
+    /** What the observer last saw is what a fresh iteration yields */
+    const expectInSync = (
+      fetcher: StandardNestedFetcher<Other>,
+      entries: readonly StandardNestedFetcher.Entry<Other>[]
+    ) => {
+      const fresh = Array.from(fetcher);
+      expect(entries.map((entry) => entry.keyPath)).toEqual(fresh.map((entry) => entry.keyPath));
+      for (const [index, entry] of fresh.entries()) {
+        expect(entries[index].data).toBe(entry.data);
+      }
+    };
 
-      let observeCount = 0;
-      const dispose = autorun(() => {
-        void fetcher.dataMap;
-        observeCount++;
-      });
-      onTestFinished(dispose);
+    const notifying: [name: string, mutate: (model: Model) => void][] = [
+      ["pushing to an array", (model) => model.list.push(new Other())],
+      ["removing from an array", (model) => model.list.pop()],
+      ["reordering an array", (model) => model.list.reverse()],
+      [
+        "replacing an array element",
+        (model) => {
+          model.list[0] = new Other();
+        },
+      ],
+      ["adding a map entry", (model) => model.map.set("c", new Other())],
+      ["deleting a map entry", (model) => model.map.delete("a")],
+      [
+        "re-inserting a map entry, which moves it to the end",
+        (model) => {
+          const value = model.map.get("a")!;
+          model.map.delete("a");
+          model.map.set("a", value);
+        },
+      ],
+      ["adding a set element", (model) => model.set.add(new Other())],
+      ["deleting a set element", (model) => model.set.delete(firstOf(model.set))],
+      [
+        "reassigning an observable property",
+        (model) => {
+          model.child = new Other();
+        },
+      ],
+      ["pushing to a boxed observable array", (model) => model.boxed.get().push(new Other())],
+      ["setting a boxed observable", (model) => model.boxed.set([])],
+      // The two below are what removing `dataMap` cost. That computed map compared itself with `comparer.shallow`,
+      // so a recomputation producing an equal map notified nobody and neither of these reached an observer.
+      // Iteration has no such gate -- it reads the collection, and the collection notifies.
+      [
+        "replacing an array with one holding the same elements",
+        (model) => {
+          model.list = model.list.slice();
+        },
+      ],
+      ["removing and re-adding the last array element", (model) => model.list.push(model.list.pop()!)],
+    ];
 
-      const data1 = fetcher.dataMap.get("otherArray1.0" as KeyPath)!;
-      expect(Object.keys(data1)).toEqual([]);
-      expect(data1.id).toEqual(1);
-      expect(observeCount).toBe(1);
+    it.each(notifying)("re-runs observers after %s", (_, mutate) => {
+      const { model, fetcher, observer } = setUp();
+      const previous = observer.last;
+      runInAction(() => mutate(model));
+      expect(observer.runs).toBe(2);
+      expect(observer.last).not.toBe(previous);
+      expectInSync(fetcher, observer.last);
+    });
+
+    const silent: [name: string, mutate: (model: Model) => void][] = [
+      // MobX itself drops these two: neither the map nor the set records a change when the value is already there
+      ["setting a map entry to its current value", (model) => model.map.set("a", model.map.get("a")!)],
+      ["adding an existing set element", (model) => model.set.add(firstOf(model.set))],
+      // Iteration reads the structure of the collections and the transform, never the fields of the nested objects
+      [
+        "changing properties of nested objects",
+        (model) => {
+          model.list[0].number1++;
+          model.child.number1++;
+        },
+      ],
+      [
+        "changing an unrelated observable",
+        (model) => {
+          model.unrelated++;
+        },
+      ],
+    ];
+
+    it.each(silent)("does not re-run observers after %s", (_, mutate) => {
+      const { model, fetcher, observer } = setUp();
+      const previous = observer.last;
+      runInAction(() => mutate(model));
+      expect(observer.runs).toBe(1);
+      expect(observer.last).toBe(previous);
+      expectInSync(fetcher, observer.last);
+    });
+
+    it("re-runs observers when an observable read by transform changes", () => {
+      const model = new Model();
+      const enabled = observable.box(true);
+      const fetcher = new StandardNestedFetcher(model, (entry) =>
+        enabled.get() && entry.data instanceof Other ? entry.data : null
+      );
+      const observer = observeEntries(fetcher);
+      expect(observer.last).toHaveLength(8);
+
+      runInAction(() => enabled.set(false));
+      expect(observer.runs).toBe(2);
+      expect(observer.last).toHaveLength(0);
+    });
+
+    it("re-runs observers on structural changes even when transform filters out every entry", () => {
+      // `dataMap` compared the maps it produced, so a structural change that yielded no entry notified nobody.
+      // Iteration reads the collections themselves, so the observer re-runs and finds the same empty result.
+      const model = new Model();
+      const fetcher = new StandardNestedFetcher(model, () => null);
+      const observer = observeEntries(fetcher);
 
       runInAction(() => {
-        const last = sample.otherArray1.pop();
-        sample.otherArray1.push(last!);
+        model.list.push(new Other());
+        model.map.set("c", new Other());
       });
-      expect(observeCount).toBe(1);
-
-      runInAction(() => {
-        sample.otherArray1[0] = new Other();
-      });
-      const data2 = fetcher.dataMap.get("otherArray1.0" as KeyPath)!;
-      expect(Object.keys(data2)).toEqual([]);
-      expect(data2.id).toEqual(2);
-      expect(observeCount).toBe(2);
+      expect(observer.runs).toBe(2);
+      expect(observer.last).toHaveLength(0);
     });
 
-    it("maps key paths to transformed data in iteration order", () => {
-      const objects = [new Other(), new Other(), new Other()];
+    it("does not re-run observers after in-place mutations of non-observable collections, which a fresh read sees", () => {
       class Sample {
-        @nested list = [objects[0], objects[1]];
-        @nested.hoist single = objects[2];
-      }
-      const fetcher = new StandardNestedFetcher(new Sample(), (entry) => entry.data);
-      expect(Array.from(fetcher.dataMap, ([keyPath, data]) => [keyPath, objects.indexOf(data)])).toEqual([
-        ["list.0", 0],
-        ["list.1", 1],
-        [KeyPath.Self, 2],
-      ]);
-    });
-
-    it("returns a new map on each read while unobserved, and the cached map while observed", () => {
-      class Sample {
-        @nested list = [new Other()];
-      }
-      const fetcher = new StandardNestedFetcher(new Sample(), (entry) => entry.data);
-      // Standard MobX semantics: a computed read outside of a reactive context is not cached
-      expect(fetcher.dataMap).not.toBe(fetcher.dataMap);
-      expect(fetcher.dataMap).toEqual(fetcher.dataMap);
-
-      const observer = observeDataMap(fetcher);
-      expect(fetcher.dataMap).toBe(observer.last);
-      expect(fetcher.dataMap).toBe(fetcher.dataMap);
-    });
-
-    describe("reactivity", () => {
-      class Model {
-        @nested @observable.shallow list = [new Other(), new Other()];
-        @nested @observable.shallow map = new Map([
-          ["a", new Other()],
-          ["b", new Other()],
-        ]);
-        @nested @observable.shallow set = new Set([new Other(), new Other()]);
-        @nested @observable.ref child = new Other();
-        @nested boxed = observable.box([new Other()]);
-        @observable unrelated = 0;
+        @nested @observable.ref refList = [new Other()];
+        @nested readonly plainList = [new Other()];
 
         constructor() {
           makeObservable(this);
         }
       }
+      const sample = new Sample();
+      const fetcher = new StandardNestedFetcher(sample, (entry) => entry.data);
+      const observer = observeEntries(fetcher);
+      expect(observer.last).toHaveLength(2);
 
-      const setUp = () => {
-        const model = new Model();
-        const transform = vi.fn((entry: StandardNestedFetcher.Entry<any>) =>
-          entry.data instanceof Other ? entry.data : null
-        );
-        const fetcher = new StandardNestedFetcher(model, transform);
-        const observer = observeDataMap(fetcher);
-        expect(observer.runs).toBe(1);
-        expect(observer.last!.size).toBe(8);
-        return { model, transform, fetcher, observer };
-      };
-
-      const expectInSync = (fetcher: StandardNestedFetcher<Other>, dataMap: ReadonlyMap<KeyPath, Other>) => {
-        const entries = Array.from(fetcher);
-        expect(Array.from(dataMap.keys())).toEqual(entries.map((entry) => entry.keyPath));
-        for (const entry of entries) {
-          expect(dataMap.get(entry.keyPath)).toBe(entry.data);
-        }
-      };
-
-      const notifying: [name: string, mutate: (model: Model) => void][] = [
-        ["pushing to an array", (model) => model.list.push(new Other())],
-        ["removing from an array", (model) => model.list.pop()],
-        ["reordering an array", (model) => model.list.reverse()],
-        [
-          "replacing an array element",
-          (model) => {
-            model.list[0] = new Other();
-          },
-        ],
-        ["adding a map entry", (model) => model.map.set("c", new Other())],
-        ["deleting a map entry", (model) => model.map.delete("a")],
-        [
-          "re-inserting a map entry, which moves it to the end",
-          (model) => {
-            const value = model.map.get("a")!;
-            model.map.delete("a");
-            model.map.set("a", value);
-          },
-        ],
-        ["adding a set element", (model) => model.set.add(new Other())],
-        ["deleting a set element", (model) => model.set.delete(firstOf(model.set))],
-        [
-          "reassigning an observable property",
-          (model) => {
-            model.child = new Other();
-          },
-        ],
-        ["pushing to a boxed observable array", (model) => model.boxed.get().push(new Other())],
-        ["setting a boxed observable", (model) => model.boxed.set([])],
-      ];
-
-      it.each(notifying)("notifies observers after %s", (_, mutate) => {
-        const { model, fetcher, observer } = setUp();
-        const previous = observer.last;
-        runInAction(() => mutate(model));
-        expect(observer.runs).toBe(2);
-        expect(observer.last).not.toBe(previous);
-        expectInSync(fetcher, observer.last!);
+      runInAction(() => {
+        sample.refList.push(new Other());
+        sample.plainList.push(new Other());
       });
+      // Standard MobX semantics: plain arrays held by @observable.ref or unannotated properties are not observable,
+      // so nothing notifies the observer (the docs pair @nested collections with @observable). Nothing is cached
+      // either, so any read outside of that observer is up to date.
+      expect(observer.runs).toBe(1);
+      expect(observer.last).toHaveLength(2);
+      expect(Array.from(fetcher)).toHaveLength(4);
+    });
 
-      const silent: [name: string, mutate: (model: Model) => void][] = [
-        [
-          "replacing an array with one holding the same elements",
-          (model) => {
-            model.list = model.list.slice();
-          },
-        ],
-        ["removing and re-adding the last array element", (model) => model.list.push(model.list.pop()!)],
-        ["setting a map entry to its current value", (model) => model.map.set("a", model.map.get("a")!)],
-        ["adding an existing set element", (model) => model.set.add(firstOf(model.set))],
-        [
-          "changing properties of nested objects",
-          (model) => {
-            model.list[0].number1++;
-            model.child.number1++;
-          },
-        ],
-        [
-          "changing an unrelated observable",
-          (model) => {
-            model.unrelated++;
-          },
-        ],
-      ];
+    it("does not re-run observers after a property without @observable is reassigned, which a fresh read sees", () => {
+      // Documented: "For mutable properties, combine with @observable"
+      class Sample {
+        @nested child = new Other();
+      }
+      const sample = new Sample();
+      const fetcher = new StandardNestedFetcher(sample, (entry) => entry.data);
+      const observer = observeEntries(fetcher);
+      const initial = sample.child;
+      expect(observer.last).toHaveLength(1);
+      expect(observer.last[0].data).toBe(initial);
 
-      it.each(silent)("does not notify observers after %s", (_, mutate) => {
-        const { model, fetcher, observer } = setUp();
-        const previous = observer.last;
-        runInAction(() => mutate(model));
-        expect(observer.runs).toBe(1);
-        expect(observer.last).toBe(previous);
-        expectInSync(fetcher, observer.last!);
-      });
-
-      it("keeps the previous map when a re-computation produces a shallowly equal map", () => {
-        const { model, transform, fetcher, observer } = setUp();
-        const previous = fetcher.dataMap;
-        const callsBefore = transform.mock.calls.length;
-
-        runInAction(() => {
-          model.list = model.list.slice();
-        });
-        expect(transform.mock.calls.length).toBe(callsBefore + 8); // re-computed over all 8 entries
-        expect(observer.runs).toBe(1);
-        expect(fetcher.dataMap).toBe(previous);
-      });
-
-      it("re-computes when an observable read by transform changes", () => {
-        const model = new Model();
-        const enabled = observable.box(true);
-        const fetcher = new StandardNestedFetcher(model, (entry) =>
-          enabled.get() && entry.data instanceof Other ? entry.data : null
-        );
-        const observer = observeDataMap(fetcher);
-        expect(observer.last!.size).toBe(8);
-
-        runInAction(() => enabled.set(false));
-        expect(observer.runs).toBe(2);
-        expect(observer.last!.size).toBe(0);
-      });
-
-      it("does not notify observers of structural changes when transform filters out every entry", () => {
-        const model = new Model();
-        const fetcher = new StandardNestedFetcher(model, () => null);
-        const observer = observeDataMap(fetcher);
-
-        runInAction(() => {
-          model.list.push(new Other());
-          model.map.set("c", new Other());
-        });
-        expect(observer.runs).toBe(1);
-        expect(observer.last!.size).toBe(0);
-      });
-
-      it("does not see in-place mutations of non-observable collections while observed", () => {
-        class Sample {
-          @nested @observable.ref refList = [new Other()];
-          @nested readonly plainList = [new Other()];
-
-          constructor() {
-            makeObservable(this);
-          }
-        }
-        const sample = new Sample();
-        const fetcher = new StandardNestedFetcher(sample, (entry) => entry.data);
-        const observer = observeDataMap(fetcher);
-        expect(observer.last!.size).toBe(2);
-
-        runInAction(() => {
-          sample.refList.push(new Other());
-          sample.plainList.push(new Other());
-        });
-        expect(Array.from(fetcher)).toHaveLength(4);
-        // Standard MobX semantics: plain arrays held by @observable.ref or unannotated properties are not observable,
-        // so the cached dataMap stays stale (the docs pair @nested collections with @observable)
-        expect(observer.runs).toBe(1);
-        expect(fetcher.dataMap.size).toBe(2);
-      });
-
-      it("does not see reassignment of a property without @observable while observed", () => {
-        // Documented: "For mutable properties, combine with @observable"
-        class Sample {
-          @nested child = new Other();
-        }
-        const sample = new Sample();
-        const initial = sample.child;
-        const fetcher = new StandardNestedFetcher(sample, (entry) => entry.data);
-        const observer = observeDataMap(fetcher);
-
-        sample.child = new Other();
-        expect(Array.from(fetcher, (entry) => entry.data)).toEqual([sample.child]);
-        expect(observer.runs).toBe(1);
-        expect(fetcher.dataMap.get("child" as KeyPath)).toBe(initial);
-      });
+      sample.child = new Other();
+      expect(observer.runs).toBe(1);
+      expect(observer.last[0].data).toBe(initial);
+      expect(Array.from(fetcher)[0].data).toBe(sample.child);
     });
   });
 });
@@ -1292,7 +1231,6 @@ describe("StandardNestedFetcher (edge cases)", () => {
     const fetcher = new StandardNestedFetcher(sample, (entry) => entry.data);
     expect(Array.from(fetcher, (entry) => entry.keyPath)).toEqual(["field"]);
     expect(Array.from(fetcher.getForKey(KeyPath.Self))).toEqual([]);
-    expect(Array.from(fetcher.dataMap.keys())).toEqual(["field"]);
   });
 
   it("resolves annotations once, at construction", () => {
@@ -1304,7 +1242,6 @@ describe("StandardNestedFetcher (edge cases)", () => {
     expect(Array.from(getNestedAnnotations(target), ({ key }) => key)).toEqual(["field"]);
     // Annotations registered after construction are not picked up by an existing fetcher...
     expect(Array.from(fetcher)).toEqual([]);
-    expect(fetcher.dataMap.size).toBe(0);
     // ...but a fetcher constructed afterwards sees them
     expect(Array.from(new StandardNestedFetcher(target, (entry) => entry.data), (entry) => entry.keyPath)).toEqual([
       "field.0",
@@ -1342,7 +1279,7 @@ describe("StandardNestedFetcher (edge cases)", () => {
     // Both "" and the hoisted "list" resolve to KeyPath.Self, so the two members share a key path and construction
     // refuses them. This answers the PINNED(quirk) that stood here -- "should key collisions on KeyPath.Self throw at
     // construction?" -- with the maintainer's decision that @nested rejects a collision rather than half-supporting
-    // it; until then both were fetched under KeyPath.Self and dataMap kept only the last. The empty name resolving to
+    // it; until then both were fetched under KeyPath.Self and only one of them was reachable by it. The empty name resolving to
     // a self path is still an open quirk of its own (see the test above).
     expect(() => new StandardNestedFetcher(new Sample(), (entry) => entry.data)).toThrow(
       new Error("Multiple @nested annotations are not allowed on members that share a key path: KeyPath.Self")
@@ -1359,14 +1296,12 @@ describe("StandardNestedFetcher (edge cases)", () => {
     }
     const fetcher = new StandardNestedFetcher(new Sample(), (entry) => entry.data);
     // Unlike two members sharing a key path, this collision is dynamic -- it comes from the contents of the map, which
-    // construction cannot see -- so it is fetched rather than refused, and dataMap keeps only the last of the two
+    // construction cannot see -- so it is fetched rather than refused, and both entries are yielded under one key path
     expect(summarize(fetcher, objects)).toEqual([
       ["map", "map.0", 0],
       ["map", "map.0", 1],
     ]);
     expect(summarize(fetcher.getForKey("map" as KeyPath), objects)).toHaveLength(2);
-    expect(fetcher.dataMap.get("map.0" as KeyPath)).toBe(objects[1]);
-    expect(fetcher.dataMap.size).toBe(1);
   });
 
   it("stops reading values and calling transform when iteration is abandoned early", () => {
@@ -1454,50 +1389,35 @@ describe("StandardNestedFetcher (edge cases)", () => {
     const sample = new Sample();
     const all = new StandardNestedFetcher(sample, (entry) => ({ value: entry.data }));
     const others = new StandardNestedFetcher(sample, (entry) => (entry.data instanceof Other ? entry.data : null));
-    const observer = observeDataMap(others);
-    expect(Array.from(all.dataMap.keys())).toEqual(["list.0", "list.1"]);
-    expect(Array.from(observer.last!.keys())).toEqual(["list.0"]);
+    const observer = observeEntries(others);
+    expect(Array.from(all, (entry) => entry.keyPath)).toEqual(["list.0", "list.1"]);
+    expect(observer.last.map((entry) => entry.keyPath)).toEqual(["list.0"]);
 
     runInAction(() => sample.list.push(new Other()));
     expect(observer.runs).toBe(2);
-    expect(Array.from(observer.last!.keys())).toEqual(["list.0", "list.2"]);
-    expect(Array.from(all.dataMap.keys())).toEqual(["list.0", "list.1", "list.2"]);
+    expect(observer.last.map((entry) => entry.keyPath)).toEqual(["list.0", "list.2"]);
+    expect(Array.from(all, (entry) => entry.keyPath)).toEqual(["list.0", "list.1", "list.2"]);
   });
 
-  it("catches up with in-place mutations of a non-observable collection once dataMap is no longer observed", () => {
+  it("reads in-place mutations of a non-observable collection on every iteration, observed or not", () => {
     class Sample {
       @nested readonly list = [new Other()];
     }
     const sample = new Sample();
     const fetcher = new StandardNestedFetcher(sample, (entry) => entry.data);
 
-    // create → observe → mutate: stale while observed
-    let runs = 0;
-    let dispose = autorun(() => {
-      void fetcher.dataMap;
-      runs++;
-    });
-    const disposeFirst = dispose;
-    onTestFinished(() => disposeFirst()); // disposing twice is a no-op
+    // While an observer holds it, a mutation nothing notifies about leaves that observer behind...
+    const observer = observeEntries(fetcher);
     sample.list.push(new Other());
-    expect(runs).toBe(1);
-    expect(fetcher.dataMap.size).toBe(1);
+    expect(observer.runs).toBe(1);
+    expect(observer.last).toHaveLength(1);
+    // ...but every read iterates afresh, so it is the observer that is stale, not the fetcher.
+    // A cached dataMap used to hand out its stale value here as well.
+    expect(Array.from(fetcher)).toHaveLength(2);
 
-    // dispose: the next read re-computes
-    dispose();
-    expect(fetcher.dataMap.size).toBe(2);
-
-    // re-observe: starts from the fresh value, then goes stale again
-    dispose = autorun(() => {
-      void fetcher.dataMap;
-      runs++;
-    });
-    onTestFinished(() => dispose());
-    expect(runs).toBe(2);
-    expect(fetcher.dataMap.size).toBe(2);
     sample.list.push(new Other());
-    expect(runs).toBe(2);
-    expect(fetcher.dataMap.size).toBe(2);
+    expect(observer.runs).toBe(1);
+    expect(Array.from(fetcher)).toHaveLength(3);
   });
 
   it("notifies observers when a hoisted observable collection changes", () => {
@@ -1510,18 +1430,18 @@ describe("StandardNestedFetcher (edge cases)", () => {
     }
     const sample = new Sample();
     const fetcher = new StandardNestedFetcher(sample, (entry) => entry.data);
-    const observer = observeDataMap(fetcher);
-    expect(Array.from(observer.last!.keys())).toEqual(["0"]);
+    const observer = observeEntries(fetcher);
+    expect(observer.last.map((entry) => entry.keyPath)).toEqual(["0"]);
 
     runInAction(() => sample.list.push(new Other()));
     expect(observer.runs).toBe(2);
-    expect(Array.from(observer.last!.keys())).toEqual(["0", "1"]);
+    expect(observer.last.map((entry) => entry.keyPath)).toEqual(["0", "1"]);
 
     runInAction(() => {
       sample.list = [];
     });
     expect(observer.runs).toBe(3);
-    expect(observer.last!.size).toBe(0);
+    expect(observer.last).toHaveLength(0);
   });
 
   it("sees annotations of subclasses from a fetcher created in a base-class constructor", () => {
@@ -1542,7 +1462,7 @@ describe("StandardNestedFetcher (edge cases)", () => {
     expect(Array.from(derived.fetcher, (entry) => entry.keyPath)).toEqual(["base.0", "derived.0"]);
   });
 
-  it("re-runs a dataMap observer when an observable read by transform changes, as in the documented example", () => {
+  it("re-runs an observer when an observable read by transform changes, as in the documented example", () => {
     // Mirrors the "StandardNestedFetcher (low-level API)" example in the docs
     class Item {
       @observable id: number;
@@ -1570,8 +1490,8 @@ describe("StandardNestedFetcher (edge cases)", () => {
     const fetcher = new StandardNestedFetcher<any>(parent, (entry) =>
       entry.data instanceof Item ? entry.data.toString() : null
     );
-    const observer = observeDataMap(fetcher);
-    expect(Array.from(observer.last!)).toEqual([
+    const observer = observeEntries(fetcher);
+    expect(observer.last.map((entry) => [entry.keyPath, entry.data])).toEqual([
       ["items.0", "Item(id = 1, name = First)"],
       ["items.1", "Item(id = 2, name = Second)"],
     ]);
@@ -1579,14 +1499,14 @@ describe("StandardNestedFetcher (edge cases)", () => {
     // The docs: "autorun triggers because the array structure changed"
     runInAction(() => parent.items.push(new Item(3, "Third")));
     expect(observer.runs).toBe(2);
-    expect(observer.last!.size).toBe(3);
+    expect(observer.last).toHaveLength(3);
 
     runInAction(() => {
       parent.items[0].name = "Updated";
     });
-    // transform runs inside the dataMap computed, so the observables it reads (id and name, via toString) are tracked,
-    // and the item change produces a different value at "items.0"
+    // transform runs while the autorun iterates, so the observables it reads (id and name, via toString) are tracked
+    // by that autorun, and the item change re-runs it
     expect(observer.runs).toBe(3);
-    expect(observer.last!.get("items.0" as KeyPath)).toBe("Item(id = 1, name = Updated)");
+    expect(observer.last[0].data).toBe("Item(id = 1, name = Updated)");
   });
 });

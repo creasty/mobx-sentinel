@@ -1,4 +1,4 @@
-import { addValidation, KeyPath, nested, Validator, Watcher } from "@mobx-sentinel/core";
+import { addValidation, KeyPath, nested, StandardNestedFetcher, Validator, Watcher } from "@mobx-sentinel/core";
 import { autorun, configure as configureMobx, makeObservable, observable, runInAction } from "mobx";
 import { Form, debugForm } from "./form";
 import { FormField } from "./field";
@@ -11,6 +11,19 @@ import {
   SampleMultiFieldBinding,
 } from "./binding.test";
 import { defaultConfig, FormConfig } from "./config";
+
+/**
+ * The sub-form at `keyPath`, found by iterating
+ *
+ * `Form#subForms` is an iterator with no lookup: real code reaches one sub-form with `Form.get(subject.child)`, and
+ * iterates when all it has is a name.
+ */
+function subFormAt(form: Form<any>, keyPath: string | KeyPath.Self) {
+  for (const entry of form.subForms) {
+    if (entry.keyPath === keyPath) return entry.data;
+  }
+  return undefined;
+}
 
 /**
  * Turn off MobX's safe descriptors until the test finishes
@@ -112,9 +125,9 @@ describe("Form", () => {
       const sampleForm = Form.get(model.sample);
       const arrayForm = Form.get(model.array[0]);
 
-      expect(form.subForms.get("sample" as KeyPath)).toBe(sampleForm);
-      expect(form.subForms.get("array.0" as KeyPath)).toBe(arrayForm);
-      expect(form.subForms.size).toBe(2);
+      expect(subFormAt(form, "sample")).toBe(sampleForm);
+      expect(subFormAt(form, "array.0")).toBe(arrayForm);
+      expect(Array.from(form.subForms)).toHaveLength(2);
     });
 
     it("retrieves instances of sub-forms with a specified key", () => {
@@ -125,9 +138,9 @@ describe("Form", () => {
       const sampleForm = Form.get(model.sample, key);
       const arrayForm = Form.get(model.array[0], key);
 
-      expect(form.subForms.get("sample" as KeyPath)).toBe(sampleForm);
-      expect(form.subForms.get("array.0" as KeyPath)).toBe(arrayForm);
-      expect(form.subForms.size).toBe(2);
+      expect(subFormAt(form, "sample")).toBe(sampleForm);
+      expect(subFormAt(form, "array.0")).toBe(arrayForm);
+      expect(Array.from(form.subForms)).toHaveLength(2);
     });
   });
 
@@ -225,7 +238,7 @@ describe("Form", () => {
 
     it("applies to a sub-form only when that sub-form is assigned its own", () => {
       const form = Form.get(new NestedModel());
-      const subForm = form.subForms.get(KeyPath.build("sample"));
+      const subForm = subFormAt(form, KeyPath.build("sample"));
       expect(subForm).toBeDefined();
 
       form.stableId = "_R_0_";
@@ -254,35 +267,33 @@ describe("Form", () => {
     it("does not collect sub-forms from objects without @nested", () => {
       const model = new SampleModel();
       const form = Form.get(model);
-      expect(form.subForms.size).toBe(0);
+      expect(Array.from(form.subForms)).toHaveLength(0);
     });
 
     it("collects sub-forms via @nested", () => {
       const model = new NestedModel();
       const form = Form.get(model);
 
-      expect(form.subForms.get("sample" as KeyPath)).toBe(Form.get(model.sample));
-      expect(form.subForms.get("array.0" as KeyPath)).toBe(Form.get(model.array[0]));
+      expect(subFormAt(form, "sample")).toBe(Form.get(model.sample));
+      expect(subFormAt(form, "array.0")).toBe(Form.get(model.array[0]));
     });
 
     it("updates sub-forms reactively", () => {
       const model = new NestedModel();
       const form = Form.get(model);
 
-      let observed: typeof form.subForms | null = null;
+      // The iterator has to be consumed inside the autorun: making one reads no observable
+      let observed: StandardNestedFetcher.Entry<Form<any>>[] = [];
       autorun(() => {
-        observed = form.subForms;
+        observed = Array.from(form.subForms);
       });
-      expect(observed).toBeDefined();
-      expect(observed!.size).toBe(2);
-      expect(observed).toEqual(form.subForms);
+      expect(observed.map((entry) => entry.keyPath)).toEqual(["sample", "array.0"]);
 
       runInAction(() => {
         model.array.push(new SampleModel());
       });
-      expect(observed).toBeDefined();
-      expect(observed!.size).toBe(3);
-      expect(observed).toEqual(form.subForms);
+      expect(observed.map((entry) => entry.keyPath)).toEqual(["sample", "array.0", "array.1"]);
+      expect(observed).toEqual(Array.from(form.subForms));
     });
   });
 
@@ -1178,7 +1189,7 @@ describe("Form (details)", () => {
       const oldSampleForm = Form.get(model.sample);
 
       Form.dispose(model.sample);
-      const newSampleForm = form.subForms.get("sample" as KeyPath)!;
+      const newSampleForm = subFormAt(form, "sample")!;
       expect(newSampleForm).not.toBe(oldSampleForm);
       expect(newSampleForm).toBe(Form.get(model.sample));
 
@@ -1210,7 +1221,7 @@ describe("Form (details)", () => {
 
       // Form.dispose only removes the forms registered for the given subject. Sub-forms are the independent forms of
       // other subjects (looked up with Form.getSafe), so the re-created parent picks them up with their field states.
-      expect(recreated.subForms.get("sample" as KeyPath)).toBe(sampleForm);
+      expect(subFormAt(recreated, "sample")).toBe(sampleForm);
       expect(Form.get(model.sample).getField("field").isTouched).toBe(true);
     });
 
@@ -1257,9 +1268,9 @@ describe("Form (details)", () => {
       const model = new CollectionModel();
       const form = Form.get(model);
 
-      expect([...form.subForms.keys()]).toEqual(["sample", "array.0", "map.a", "set.0"]);
-      expect(form.subForms.get("map.a" as KeyPath)).toBe(Form.get(model.map.get("a")!));
-      expect(form.subForms.get("set.0" as KeyPath)).toBe(Form.get([...model.set][0]));
+      expect(Array.from(form.subForms, (entry) => entry.keyPath)).toEqual(["sample", "array.0", "map.a", "set.0"]);
+      expect(subFormAt(form, "map.a")).toBe(Form.get(model.map.get("a")!));
+      expect(subFormAt(form, "set.0")).toBe(Form.get([...model.set][0]));
     });
 
     it("skips null values and symbol keys of Maps", () => {
@@ -1277,21 +1288,21 @@ describe("Form (details)", () => {
 
       const model = new Model();
       const form = Form.get(model);
-      expect([...form.subForms.keys()]).toEqual(["map.string"]);
+      expect(Array.from(form.subForms, (entry) => entry.keyPath)).toEqual(["map.string"]);
 
       runInAction(() => {
         model.nullable = new SampleModel();
       });
-      expect([...form.subForms.keys()]).toEqual(["nullable", "map.string"]);
-      expect(form.subForms.get("nullable" as KeyPath)).toBe(Form.get(model.nullable!));
+      expect(Array.from(form.subForms, (entry) => entry.keyPath)).toEqual(["nullable", "map.string"]);
+      expect(subFormAt(form, "nullable")).toBe(Form.get(model.nullable!));
     });
 
     it("collects hoisted sub-forms at the root key path", () => {
       const model = new HoistModel();
       const form = Form.get(model);
 
-      expect([...form.subForms.keys()]).toEqual(["0"]);
-      expect(form.subForms.get("0" as KeyPath)).toBe(Form.get(model.list[0]));
+      expect(Array.from(form.subForms, (entry) => entry.keyPath)).toEqual(["0"]);
+      expect(subFormAt(form, "0")).toBe(Form.get(model.list[0]));
     });
 
     it("propagates the formKey to sub-forms of sub-forms", () => {
@@ -1299,11 +1310,11 @@ describe("Form (details)", () => {
       const key = Symbol("key");
       const form = Form.get(model, key);
 
-      const childForm = form.subForms.get("child" as KeyPath)!;
+      const childForm = subFormAt(form, "child")!;
       expect(childForm).toBe(Form.get(model.child, key));
       expect(childForm).not.toBe(Form.get(model.child));
-      expect(childForm.subForms.get("sample" as KeyPath)).toBe(Form.get(model.child.sample, key));
-      expect(childForm.subForms.get("map.a" as KeyPath)).toBe(Form.get(model.child.map.get("a")!, key));
+      expect(subFormAt(childForm, "sample")).toBe(Form.get(model.child.sample, key));
+      expect(subFormAt(childForm, "map.a")).toBe(Form.get(model.child.map.get("a")!, key));
     });
 
     it("follows a nested object replaced after the form was created", () => {
@@ -1315,8 +1326,8 @@ describe("Form (details)", () => {
       runInAction(() => {
         model.sample = new SampleModel();
       });
-      expect(form.subForms.get("sample" as KeyPath)).toBe(Form.get(model.sample));
-      expect(form.subForms.get("sample" as KeyPath)).not.toBe(oldSampleForm);
+      expect(subFormAt(form, "sample")).toBe(Form.get(model.sample));
+      expect(subFormAt(form, "sample")).not.toBe(oldSampleForm);
       expect(Form.get(oldSample)).toBe(oldSampleForm); // The old form is not disposed
     });
 
@@ -1326,7 +1337,8 @@ describe("Form (details)", () => {
 
       let count = 0;
       const dispose = autorun(() => {
-        void form.subForms;
+        // Consumed, not just read: a generator nobody iterates reads no observable
+        void Array.from(form.subForms);
         count++;
       });
       expect(count).toBe(1);
@@ -1340,7 +1352,13 @@ describe("Form (details)", () => {
         model.map.set("b", new SampleModel());
       });
       expect(count).toBe(2);
-      expect([...form.subForms.keys()]).toEqual(["sample", "array.0", "map.a", "map.b", "set.0"]);
+      expect(Array.from(form.subForms, (entry) => entry.keyPath)).toEqual([
+        "sample",
+        "array.0",
+        "map.a",
+        "map.b",
+        "set.0",
+      ]);
       dispose();
     });
 
@@ -1356,7 +1374,7 @@ describe("Form (details)", () => {
       }
 
       const form = Form.get(new Model());
-      expect([...form.subForms.keys()]).toEqual(["sample"]);
+      expect(Array.from(form.subForms, (entry) => entry.keyPath)).toEqual(["sample"]);
       expect(() => form.reset()).not.toThrow();
       expect(() => form.reportError()).not.toThrow();
     });
@@ -1412,7 +1430,7 @@ describe("Form (details)", () => {
         runInAction(() => {
           node.other = node;
         });
-        expect(form.subForms.get("other" as KeyPath)).toBe(form);
+        expect(subFormAt(form, "other")).toBe(form);
 
         // Watcher#reset (core) also recurses into nested watchers without bound and overflows the stack first, so it is stubbed to isolate Form#reset
         vi.spyOn(form.watcher, "reset").mockImplementation(() => {});
@@ -1433,7 +1451,7 @@ describe("Form (details)", () => {
         });
 
         const form = Form.get(node);
-        expect(form.subForms.get("other" as KeyPath)).toBe(form);
+        expect(subFormAt(form, "other")).toBe(form);
       });
     });
   });
@@ -2649,7 +2667,7 @@ describe("Form (details)", () => {
       expectTypeOf(form.canSubmit).toEqualTypeOf<boolean>();
       expectTypeOf(form.invalidFieldCount).toEqualTypeOf<number>();
       expectTypeOf(form.invalidFieldPathCount).toEqualTypeOf<number>();
-      expectTypeOf(form.subForms).toEqualTypeOf<ReadonlyMap<KeyPath, Form<any>>>();
+      expectTypeOf(form.subForms).toEqualTypeOf<Generator<StandardNestedFetcher.Entry<Form<any>>, void, unknown>>();
       expectTypeOf(form.firstErrorMessage).toEqualTypeOf<string | null>();
       // Bind methods exist only once added by extendFormBinding() and typed with FormBindingMethods
       expectTypeOf(form).not.toHaveProperty("bindInput");

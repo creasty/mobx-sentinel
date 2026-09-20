@@ -3,7 +3,6 @@ import { observable, computed, runInAction } from "mobx";
 import { Watcher, unwatch, watch } from "../src/watcher";
 import { nested } from "../src/nested";
 import { Stage2Base } from "../src/stage2Fixtures";
-import { KeyPath } from "../src/keyPath";
 
 class Leaf {
   @observable accessor value = 0;
@@ -274,12 +273,10 @@ describe("Annotations", () => {
     test("nested watchers are created, including for private fields", () => {
       const sample = new Sample();
       const watcher = Watcher.get(sample);
-      expect(watcher.nested).toEqual(
-        new Map([
-          ["child", Watcher.get(sample.child)],
-          ["#privateChild", Watcher.get(sample.privateChild)],
-        ])
-      );
+      expect(Array.from(watcher.nested, (entry) => [entry.keyPath, entry.data])).toEqual([
+        ["child", Watcher.get(sample.child)],
+        ["#privateChild", Watcher.get(sample.privateChild)],
+      ]);
     });
 
     test("changes to nested objects are tracked with their key paths", () => {
@@ -303,7 +300,7 @@ describe("Annotations", () => {
         sample.child = new Leaf();
       });
       expect(watcher.changedKeys).toEqual(new Set(["child"]));
-      expect(watcher.nested.get("child" as KeyPath)).toBe(Watcher.get(sample.child));
+      expect(Array.from(watcher.nested, (entry) => entry.data)).toContain(Watcher.get(sample.child));
     });
 
     test("reset() resets nested watchers of private fields", () => {
@@ -333,7 +330,9 @@ describe("Annotations", () => {
     test("changes to a private hoisted collection are tracked without the key", () => {
       const sample = new Sample();
       const watcher = Watcher.get(sample);
-      expect(watcher.nested).toEqual(new Map([["0", Watcher.get(sample.list[0])]]));
+      expect(Array.from(watcher.nested, (entry) => [entry.keyPath, entry.data])).toEqual([
+        ["0", Watcher.get(sample.list[0])],
+      ]);
 
       runInAction(() => {
         sample.list[0].value = 1;
@@ -387,7 +386,7 @@ describe("Annotations", () => {
         sample.child = new Leaf();
       });
       expect(watcher.changed).toBe(false);
-      expect(watcher.nested.get("child" as KeyPath)).toBe(Watcher.get(sample.child));
+      expect(Array.from(watcher.nested, (entry) => entry.data)).toContain(Watcher.get(sample.child));
     });
   });
 

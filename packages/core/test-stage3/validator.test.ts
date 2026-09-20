@@ -108,7 +108,7 @@ describe("Validator with stage-3 decorators", () => {
     expect(validator.invalidKeys).toEqual(new Set(["title"]));
     expect(validator.invalidKeyPaths).toEqual(new Set(["title", "item.name", "items.0.name"]));
     expect(validator.getErrorMessages("items.0.name" as KeyPath)).toEqual(new Set(["required"]));
-    expect(validator.nested.get("item" as KeyPath)).toBe(Validator.get(order.item));
+    expect(Array.from(validator.nested, (entry) => entry.data)).toContain(Validator.get(order.item));
 
     runInAction(() => {
       order.items.push(new Item());
