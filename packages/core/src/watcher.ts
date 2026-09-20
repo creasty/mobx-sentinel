@@ -325,9 +325,21 @@ export class Watcher {
     return result;
   }
 
-  /** Nested watchers */
-  get nested() {
-    return this.#nestedFetcher.dataMap;
+  /**
+   * Nested watchers
+   *
+   * @remarks
+   * A fresh iterator over the `@nested` entries, in annotation order and then in collection order. Each entry
+   * carries the name of the annotated member in `key` (`"items"`), the address of the nested object in `keyPath`
+   * (`"items.0"`) and its watcher in `data`.\
+   * Each read starts a new iteration, and an iterator is consumed once, so a second pass needs a second read.\
+   * There is no lookup by name: entries are not unique by key path. To reach the watcher of one nested object, go
+   * through the property — `Watcher.get(target.child)` is cached per subject, so it is the very instance yielded
+   * here — or iterate and match `entry.key`, which is {@link KeyPath.Self} for a `@nested.hoist` member rather
+   * than the name it is declared with.
+   */
+  get nested(): Generator<StandardNestedFetcher.Entry<Watcher>, void, unknown> {
+    return this.#nestedFetcher[Symbol.iterator]();
   }
 
   /**
