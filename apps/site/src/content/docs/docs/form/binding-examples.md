@@ -68,6 +68,7 @@ class InputBinding implements FormBinding {
       onBlur: this.onBlur,
       'aria-invalid': this.field.isErrorReported,
       'aria-errormessage': this.errorMessages ?? undefined,
+      'aria-describedby': this.field.isErrorReported ? this.field.errorTextId : undefined,
     };
   }
 }
@@ -124,6 +125,7 @@ class CheckBoxBinding implements FormBinding {
       onFocus: this.onFocus,
       'aria-invalid': this.field.isErrorReported,
       'aria-errormessage': this.errorMessages ?? undefined,
+      'aria-describedby': this.field.isErrorReported ? this.field.errorTextId : undefined,
     };
   }
 }
@@ -244,4 +246,5 @@ Follow these patterns when creating bindings:
     - Generate and manage unique element IDs for connecting labels and inputs (using `id` on inputs and `htmlFor` on labels)
     - Include `aria-invalid` based on `field.isErrorReported`
     - Include `aria-errormessage` with error text, or `undefined` if no errors
+    - Include `aria-describedby` with `field.errorTextId` while `field.isErrorReported` is `true`, so that the control is described by the error text showing its errors
     - For form-level bindings (submit buttons), use `aria-busy` to indicate loading states

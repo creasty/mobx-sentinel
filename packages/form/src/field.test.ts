@@ -385,6 +385,58 @@ describe("FormField", () => {
     });
   });
 
+  describe("#errorTextId, #registerErrorText", () => {
+    it("has no error text id until one is registered", () => {
+      const { field } = setupEnv();
+      expect(field.errorTextId).toBeUndefined();
+
+      const unregister = field.registerErrorText("error-text");
+      expect(field.errorTextId).toBe("error-text");
+
+      unregister();
+      expect(field.errorTextId).toBeUndefined();
+    });
+
+    it("gives the first registered id, and the next one once the first is unregistered", () => {
+      const { field } = setupEnv();
+      const unregisterFirst = field.registerErrorText("first");
+      field.registerErrorText("second");
+      expect(field.errorTextId).toBe("first");
+
+      unregisterFirst();
+      expect(field.errorTextId).toBe("second");
+    });
+
+    it("notifies observers when the registrations change", () => {
+      const { field } = setupEnv();
+      const seen: (string | undefined)[] = [];
+      const dispose = autorun(() => {
+        seen.push(field.errorTextId);
+      });
+
+      const unregister = field.registerErrorText("error-text");
+      unregister();
+      expect(seen).toEqual([undefined, "error-text", undefined]);
+      dispose();
+    });
+
+    it("keeps the registrations when the field is reset", () => {
+      const { field } = setupEnv();
+      field.registerErrorText("error-text");
+      field.reset();
+      expect(field.errorTextId).toBe("error-text");
+    });
+
+    it("ignores an unregister call for an id that is already gone", () => {
+      const { field } = setupEnv();
+      const unregister = field.registerErrorText("error-text");
+      unregister();
+      field.registerErrorText("other");
+      unregister();
+      expect(field.errorTextId).toBe("other");
+    });
+  });
+
   describe("Field names", () => {
     it("covers the errors of a @nested object itself for a field named after the property, not those of its fields", () => {
       const model = new NestedParentModel();

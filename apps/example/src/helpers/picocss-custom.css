@@ -43,13 +43,13 @@
     }
   }
 
-  /* One <span> per message inside ErrorText's own <span>, sized as a <small> */
+  /* ErrorText's own <span>, holding a <span> per field, which holds a <span> per message; sized as a <small> */
   [data-error-text] {
     display: block;
     color: var(--pico-del-color);
     font-size: smaller;
 
-    > span {
+    span {
       display: block;
     }
   }

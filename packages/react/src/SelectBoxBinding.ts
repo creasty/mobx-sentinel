@@ -1,4 +1,5 @@
 import { FormBinding, FormField } from "@mobx-sentinel/form";
+import { describedBy } from "./describedBy";
 import { makeObservable, computed, action } from "mobx";
 
 export namespace SelectBoxBinding {
@@ -14,6 +15,8 @@ export namespace SelectBoxBinding {
     onChange?: Attrs["onChange"];
     /** [Extend] Focus handler */
     onFocus?: Attrs["onFocus"];
+    /** [Extend] IDs of the elements describing the select element; the ID of the error text is added while errors are reported */
+    "aria-describedby"?: Attrs["aria-describedby"];
   } & (
     | {
         /** Whether multiple options can be selected in the list */
@@ -85,6 +88,7 @@ export class SelectBoxBinding implements FormBinding {
       onFocus: this.onFocus,
       "aria-invalid": this.field.isErrorReported,
       "aria-errormessage": this.errorMessages ?? undefined,
+      "aria-describedby": describedBy(this.field, this.config["aria-describedby"]),
     } satisfies SelectBoxBinding.Attrs;
   }
 }

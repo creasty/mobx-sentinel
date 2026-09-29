@@ -117,6 +117,16 @@ describe("CheckBoxBinding", () => {
   });
 
   describe("props", () => {
+    it("points the checkbox at the error text of its field while the errors are reported, after the configured ids", () => {
+      const env = setupModelEnv({ "aria-describedby": "hint" });
+      env.field.registerErrorText("error-text");
+      expect(env.binding.props["aria-describedby"]).toBe("hint");
+
+      env.form.validator.updateErrors(Symbol(), (builder) => builder.invalidate("boolean", "invalid"));
+      env.field.reportError();
+      expect(env.binding.props["aria-describedby"]).toBe("hint error-text");
+    });
+
     it("returns the full set of attributes", () => {
       const env = setupModelEnv();
       expect(env.binding.props).toStrictEqual({
@@ -127,6 +137,7 @@ describe("CheckBoxBinding", () => {
         onFocus: env.binding.onFocus,
         "aria-invalid": undefined,
         "aria-errormessage": undefined,
+        "aria-describedby": undefined,
       });
     });
 

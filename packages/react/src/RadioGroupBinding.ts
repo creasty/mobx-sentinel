@@ -1,4 +1,5 @@
 import { FormBinding, FormField } from "@mobx-sentinel/form";
+import { describedBy } from "./describedBy";
 import { makeObservable, computed, action } from "mobx";
 import { createElement, Fragment } from "react";
 
@@ -25,6 +26,8 @@ export namespace RadioGroupBinding {
     onChange?: Attrs["onChange"];
     /** [Extend] Focus handler */
     onFocus?: Attrs["onFocus"];
+    /** [Extend] IDs of the elements describing the radio buttons; the ID of the error text is added while errors are reported */
+    "aria-describedby"?: Attrs["aria-describedby"];
   };
 
   /** Overrides for one radio button of the group */
@@ -91,6 +94,7 @@ export class RadioGroupBinding<V extends RadioGroupBinding.Option = RadioGroupBi
       onFocus: this.onFocus,
       "aria-invalid": this.field.isErrorReported,
       "aria-errormessage": this.errorMessages ?? undefined,
+      "aria-describedby": describedBy(this.field, this.config["aria-describedby"]),
     } satisfies RadioGroupBinding.Attrs;
   };
 

@@ -48,6 +48,8 @@ export class CustomDropdownBinding implements FormBinding {
       onClose: this.field.finalizeChangeIfNeeded,
       "aria-invalid": this.field.isErrorReported,
       "aria-errormessage": this.errorMessages ?? undefined,
+      // The ErrorText showing the field's errors, while they are reported, as the standard bindings do
+      "aria-describedby": this.field.isErrorReported ? this.field.errorTextId : undefined,
     } satisfies Partial<CustomDropdown.Props>;
   }
 }

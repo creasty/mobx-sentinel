@@ -31,6 +31,7 @@ export class FormField {
   readonly #changeType = observable.box<FormField.ChangeType | null>(null);
   readonly #isReported = observable.box(false);
   readonly #isReportedDelayed = observable.box(false);
+  readonly #errorTextIds = observable.set<string>();
   #isReportPending = false;
   #timerId: number | null = null;
 
@@ -140,6 +141,37 @@ export class FormField {
   @computed
   get hasErrors() {
     return this.validator.hasErrors(this.fieldName);
+  }
+
+  /**
+   * Id of the element that shows the errors of the field
+   *
+   * Bindings point their form control at it, with `aria-describedby`, while the errors are reported.
+   *
+   * @remarks
+   * The element registers itself with {@link registerErrorText}, as `ErrorText` of `@mobx-sentinel/react` does. With
+   * several registered, the first one is used, so that assistive technologies read the errors once.
+   */
+  get errorTextId(): string | undefined {
+    for (const id of this.#errorTextIds) {
+      return id;
+    }
+    return undefined;
+  }
+
+  /**
+   * Register the id of an element that shows the errors of the field
+   *
+   * @returns A function that unregisters it
+   *
+   * @see {@link errorTextId}
+   */
+  @action
+  registerErrorText(id: string): () => void {
+    this.#errorTextIds.add(id);
+    return action(() => {
+      this.#errorTextIds.delete(id);
+    });
   }
 
   /**

@@ -1,4 +1,5 @@
 import { FormBinding, FormField } from "@mobx-sentinel/form";
+import { describedBy } from "./describedBy";
 import { makeObservable, computed, action } from "mobx";
 
 export namespace TextAreaBinding {
@@ -21,6 +22,8 @@ export namespace TextAreaBinding {
     onFocus?: Attrs["onFocus"];
     /** [Extend] Blur handler */
     onBlur?: Attrs["onBlur"];
+    /** [Extend] IDs of the elements describing the textarea; the ID of the error text is added while errors are reported */
+    "aria-describedby"?: Attrs["aria-describedby"];
   };
 }
 
@@ -76,6 +79,7 @@ export class TextAreaBinding implements FormBinding {
       onBlur: this.onBlur,
       "aria-invalid": this.field.isErrorReported,
       "aria-errormessage": this.errorMessages ?? undefined,
+      "aria-describedby": describedBy(this.field, this.config["aria-describedby"]),
     } satisfies TextAreaBinding.Attrs;
   }
 }
