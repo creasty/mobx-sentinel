@@ -1,4 +1,4 @@
-import { addValidation, KeyPath, nested, unwatch } from "@mobx-sentinel/core";
+import { addValidation, nested, unwatch } from "@mobx-sentinel/core";
 import { makeObservable, observable, runInAction } from "mobx";
 import type { FormBinding } from "./binding";
 import type { FormField } from "./field";
@@ -105,7 +105,7 @@ describe("Form", () => {
         keyedForm: new WeakRef(Form.get(model, Symbol("keyed"))),
         field: new WeakRef(form.getField("field")),
         binding: new WeakRef(debugForm(form).bindings.values().next().value!),
-        subForm: new WeakRef(form.subForms.get(KeyPath.build("child"))!),
+        subForm: new WeakRef(Array.from(form.subForms).find((entry) => entry.keyPath === "child")!.data),
       };
     })();
     expect(await isCollected(refs.model)).toBe(true);

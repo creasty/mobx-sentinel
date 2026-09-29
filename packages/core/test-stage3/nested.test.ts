@@ -9,11 +9,11 @@ class Other {
   @observable accessor value = 0;
 }
 
-/** Observe `fetcher.dataMap` in an autorun that is disposed when the test finishes */
-function observeDataMap<T extends object>(fetcher: StandardNestedFetcher<T>) {
-  const observer = { runs: 0, last: undefined as ReadonlyMap<KeyPath, T> | undefined };
+/** Observe the entries of `fetcher` in an autorun that is disposed when the test finishes */
+function observeEntries<T extends object>(fetcher: StandardNestedFetcher<T>) {
+  const observer = { runs: 0, last: [] as StandardNestedFetcher.Entry<T>[] };
   const dispose = autorun(() => {
-    observer.last = fetcher.dataMap;
+    observer.last = Array.from(fetcher);
     observer.runs++;
   });
   onTestFinished(dispose);
@@ -146,16 +146,17 @@ describe("StandardNestedFetcher", () => {
     const sample = new Sample();
     const privates = sample.readPrivate();
     const fetcher = new StandardNestedFetcher(sample, (entry) => entry.data);
-    expect(Array.from(fetcher, (entry) => [entry.key, entry.keyPath])).toEqual([
+    const entries = Array.from(fetcher);
+    expect(entries.map((entry) => [entry.key, entry.keyPath])).toEqual([
       ["#privateGetter1", "#privateGetter1.0"],
       ["field1", "field1.0"],
       ["#privateField1", "#privateField1"],
       ["#privateAccessor1", "#privateAccessor1.0"],
       ["#privateAccessor1", "#privateAccessor1.1"],
     ]);
-    expect(fetcher.dataMap.get("#privateField1" as KeyPath)).toBe(privates.field);
-    expect(fetcher.dataMap.get("#privateAccessor1.1" as KeyPath)).toBe(privates.accessor[1]);
-    expect(fetcher.dataMap.get("#privateGetter1.0" as KeyPath)).toBe(privates.field);
+    expect(entries[0].data).toBe(privates.field);
+    expect(entries[2].data).toBe(privates.field);
+    expect(entries[4].data).toBe(privates.accessor[1]);
   });
 
   test("hoists a private accessor to KeyPath.Self", () => {
@@ -197,20 +198,25 @@ describe("StandardNestedFetcher", () => {
     }
     const sample = new Sample();
     const fetcher = new StandardNestedFetcher(sample, (entry) => entry.data);
-    const observer = observeDataMap(fetcher);
-    expect(Array.from(observer.last!.keys())).toEqual(["list.0", "#privateList.0"]);
+    const observer = observeEntries(fetcher);
+    expect(observer.last.map((entry) => entry.keyPath)).toEqual(["list.0", "#privateList.0"]);
 
     runInAction(() => sample.list.push(new Other()));
     expect(observer.runs).toBe(2);
-    expect(Array.from(observer.last!.keys())).toEqual(["list.0", "list.1", "#privateList.0"]);
+    expect(observer.last.map((entry) => entry.keyPath)).toEqual(["list.0", "list.1", "#privateList.0"]);
 
     runInAction(() => sample.pushPrivate());
     expect(observer.runs).toBe(3);
-    expect(Array.from(observer.last!.keys())).toEqual(["list.0", "list.1", "#privateList.0", "#privateList.1"]);
+    expect(observer.last.map((entry) => entry.keyPath)).toEqual([
+      "list.0",
+      "list.1",
+      "#privateList.0",
+      "#privateList.1",
+    ]);
 
     runInAction(() => sample.replacePrivate());
     expect(observer.runs).toBe(4);
-    expect(Array.from(observer.last!.keys())).toEqual(["list.0", "list.1"]);
+    expect(observer.last.map((entry) => entry.keyPath)).toEqual(["list.0", "list.1"]);
 
     runInAction(() => {
       sample.list[0].value++;
@@ -234,12 +240,14 @@ describe("StandardNestedFetcher", () => {
     const sample = new Sample();
     const initial = sample.readChild();
     const fetcher = new StandardNestedFetcher(sample, (entry) => entry.data);
-    const observer = observeDataMap(fetcher);
+    const observer = observeEntries(fetcher);
 
     sample.replaceChild();
-    expect(Array.from(fetcher, (entry) => entry.data)).toEqual([sample.readChild()]);
     expect(observer.runs).toBe(1);
-    expect(fetcher.dataMap.get("#child" as KeyPath)).toBe(initial);
+    expect(observer.last).toHaveLength(1);
+    expect(observer.last[0].data).toBe(initial);
+    // Nothing is cached, so a fresh iteration sees the new child although the observer was never notified
+    expect(Array.from(fetcher)[0].data).toBe(sample.readChild());
   });
 
   test("reads computed getters", () => {
@@ -254,15 +262,19 @@ describe("StandardNestedFetcher", () => {
     }
     const sample = new Sample();
     const fetcher = new StandardNestedFetcher(sample, (entry) => entry.data);
-    const observer = observeDataMap(fetcher);
-    expect(Array.from(observer.last!.keys())).toEqual(["view.0"]);
+    const observer = observeEntries(fetcher);
+    expect(observer.last.map((entry) => entry.keyPath)).toEqual(["view.0"]);
 
+    // `view` returns a new array on every evaluation, so any change to `source` makes the computed a different value
+    // and re-runs the observer, even when the entry it yields is the same one. A cached dataMap compared the entries
+    // and swallowed this.
     runInAction(() => sample.source.push(new Other()));
-    expect(observer.runs).toBe(1);
+    expect(observer.runs).toBe(2);
+    expect(observer.last[0].data).toBe(sample.source[0]);
 
     runInAction(() => sample.source.unshift(new Other()));
-    expect(observer.runs).toBe(2);
-    expect(observer.last!.get("view.0" as KeyPath)).toBe(sample.source[0]);
+    expect(observer.runs).toBe(3);
+    expect(observer.last[0].data).toBe(sample.source[0]);
   });
 
   test("a fetcher created in a base-class constructor does not see annotations of subclasses", () => {
@@ -332,8 +344,8 @@ describe("StandardNestedFetcher", () => {
     // This assertion REVERSES a pinned Expected, and is not a regression: the PINNED(bug) this test comes from read
     // "Expected: two entries (one per private field), each reading its own field", and once the members were told
     // apart the fetcher did yield two, both under the key path "#items.0". The maintainer has since decided to reject
-    // that shape instead: for @nested a key path is the address (dataMap, Watcher#nested, Validator#nested,
-    // Form#subForms and every error lookup are keyed by it), so one of two members spelling it would be unreachable.
+    // that shape instead: for @nested a key path is the address (getForKey and every error lookup are keyed by it),
+    // so one of two members spelling it would be unreachable.
     // The annotations above stay separate all the same: the member separation behind them is what lets @watch
     // reach each of two same-named private members.
     expect(() => new StandardNestedFetcher(child, (entry) => entry.data)).toThrow(

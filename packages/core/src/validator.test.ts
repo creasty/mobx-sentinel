@@ -1,7 +1,7 @@
 import { getEventListeners } from "node:events";
 import { autorun, getObserverTree, IEqualsComparer, makeObservable, observable, runInAction } from "mobx";
 import { Validator, addValidation } from "./validator";
-import { nested } from "./nested";
+import { nested, StandardNestedFetcher } from "./nested";
 import { KeyPath } from "./keyPath";
 import { ValidationError, ValidationErrorMapBuilder } from "./error";
 
@@ -1443,8 +1443,8 @@ describe("Nested validations: entries that share a key path", () => {
    *
    * The map keys `0` and `"0"` are different keys, so both items are fetched, but they build the same key path.
    * The collision depends on the contents of the map, which construction cannot see -- unlike two members spelling
-   * one key path, which `StandardNestedFetcher` refuses -- so `dataMap`, and with it `Validator#nested`, keeps only
-   * the last of the two.
+   * one key path, which `StandardNestedFetcher` refuses -- so both are fetched, and nothing keyed by key path
+   * stands between them and the derived values.
    */
   class Collection {
     readonly numberKeyed = new Item();
@@ -1463,22 +1463,23 @@ describe("Nested validations: entries that share a key path", () => {
     return { collection, validator };
   }
 
-  test("the fetcher yields both entries, while `nested` keeps the last of them", () => {
+  test("`nested` yields both entries under the key path they share", () => {
     const { collection, validator } = setupCollection();
-    expect(validator.nested.size).toBe(1);
-    expect(validator.nested.get("map.0" as KeyPath)).toBe(Validator.get(collection.stringKeyed));
+    const entries = Array.from(validator.nested);
+    expect(entries.map((entry) => entry.keyPath)).toEqual(["map.0", "map.0"]);
+    expect(entries[0].data).toBe(Validator.get(collection.numberKeyed));
+    expect(entries[1].data).toBe(Validator.get(collection.stringKeyed));
   });
 
-  test("counts the invalid key paths of an entry that `nested` drops", () => {
+  test("counts the invalid key paths of both entries that share a key path", () => {
     const { collection, validator } = setupCollection();
     runInAction(() => {
       collection.stringKeyed.name = "filled";
     });
     vi.advanceTimersByTime(100);
 
-    // Both entries are fetched, but `nested` keeps one of the two: they share the key path "map.0". Counting the
-    // invalid key paths from the fetcher instead keeps the dropped one visible, so the invalid number-keyed item is
-    // not reported as valid while a search by key path still finds its error.
+    // Both entries are fetched under the key path "map.0", and every derived value walks the fetcher, so the invalid
+    // number-keyed item is not reported as valid while a search by key path still finds its error.
     expect(Validator.get(collection.numberKeyed).isValid).toBe(false);
     expect(Validator.get(collection.stringKeyed).isValid).toBe(true);
     expect(validator.invalidKeyPaths).toEqual(new Set(["map.0.name"]));
@@ -1487,15 +1488,15 @@ describe("Nested validations: entries that share a key path", () => {
     expect(validator.getErrorMessages("map.0" as KeyPath, true)).toEqual(new Set(["required"]));
   });
 
-  test("finds the errors of an entry that `nested` drops when searching by prefix", () => {
+  test("finds the errors of both entries that share a key path when searching by prefix", () => {
     const { collection, validator } = setupCollection();
     runInAction(() => {
       collection.stringKeyed.name = "filled";
     });
     vi.advanceTimersByTime(100);
 
-    // A prefix search from the self path walked `nested`, which keeps only the string-keyed item, so the number-keyed
-    // one was unreachable through it: the model reported invalid while showing no error message.
+    // A prefix search from the self path once walked a map keyed by key path, which kept only the string-keyed item,
+    // so the number-keyed one was unreachable through it: the model reported invalid while showing no error message.
     expect(validator.isValid).toBe(false);
     expect(validator.firstErrorMessage).toBe("required");
     expect(validator.hasErrors(KeyPath.Self, true)).toBe(true);
@@ -1517,7 +1518,7 @@ describe("Nested validations: entries that share a key path", () => {
     expect(validator.getErrorMessages(KeyPath.Self, true)).toEqual(new Set(["required"]));
   });
 
-  test("is validating while an entry that `nested` drops is validating", () => {
+  test("is validating while either entry that shares a key path is validating", () => {
     const { collection, validator } = setupCollection();
     expect(validator.isValidating).toBe(false);
 
@@ -1525,7 +1526,7 @@ describe("Nested validations: entries that share a key path", () => {
       collection.numberKeyed.name = "filled";
     });
 
-    // The number-keyed item is the entry `nested` drops, so walking the map read the parent as idle while it validated
+    // The number-keyed item was the entry a map keyed by key path dropped, which read the parent as idle while it validated
     expect(Validator.get(collection.numberKeyed).isValidating).toBe(true);
     expect(validator.isValidating).toBe(true);
 
@@ -2868,12 +2869,13 @@ describe("Validator: nested key paths", () => {
   const invalidateLeaf = (leaf: Leaf, message: string) =>
     Validator.get(leaf).updateErrors(Symbol(), (b) => b.invalidate("field", message));
 
-  it("exposes nested validators by key path and skips non-object values", () => {
+  it("yields nested validators with their key paths and skips non-object values", () => {
     const container = new Container();
     const validator = Validator.get(container);
-    expect([...validator.nested.keys()]).toEqual(["items.0", "items.1", "map.key", "set.0"]);
-    expect(validator.nested.get("items.1" as KeyPath)).toBe(Validator.get(container.items[1]));
-    expect(validator.nested.get("set.0" as KeyPath)).toBe(Validator.get([...container.set][0]));
+    const entries = Array.from(validator.nested);
+    expect(entries.map((entry) => entry.keyPath)).toEqual(["items.0", "items.1", "map.key", "set.0"]);
+    expect(entries[1].data).toBe(Validator.get(container.items[1]));
+    expect(entries[3].data).toBe(Validator.get([...container.set][0]));
   });
 
   it("builds key paths of array, map and set elements", () => {
@@ -3182,7 +3184,9 @@ describe("Validator: types", () => {
     expectTypeOf(validator.invalidKeyPaths).toEqualTypeOf<ReadonlySet<KeyPath>>();
     expectTypeOf(validator.invalidKeyCount).toEqualTypeOf<number>();
     expectTypeOf(validator.invalidKeyPathCount).toEqualTypeOf<number>();
-    expectTypeOf(validator.nested).toEqualTypeOf<ReadonlyMap<KeyPath, Validator<any>>>();
+    expectTypeOf(validator.nested).toEqualTypeOf<
+      Generator<StandardNestedFetcher.Entry<Validator<any>>, void, unknown>
+    >();
     expectTypeOf(validator.getErrorMessages(KeyPath.Self)).toEqualTypeOf<Set<string>>();
     expectTypeOf(validator.hasErrors(KeyPath.Self)).toEqualTypeOf<boolean>();
     expectTypeOf(validator.findErrors(KeyPath.Self)).toMatchTypeOf<Iterable<[KeyPath, ValidationError]>>();
