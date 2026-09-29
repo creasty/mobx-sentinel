@@ -124,11 +124,12 @@ The validator tracks errors from the start, but `form.getErrors()` and the bindi
 ```ts
 // Field-specific errors
 form.getErrors('email'); // Set<string> - empty until reported
-form.getErrors('email', true); // include errors that have not been reported yet
+form.getErrors('city', 'postalCode'); // several fields, each once it is reported
 
-// All errors including nested forms, regardless of reporting
-form.getAllErrors(); // Set<string>
-form.getAllErrors('address'); // errors for address field and nested address form
+// Regardless of reporting
+form.getField('email').errors; // Set<string>
+form.validator.getErrorMessages('**'); // every error, those of nested forms included
+form.validator.getErrorMessages('address.**'); // the address field and the nested address form
 
 // First error message, regardless of reporting
 form.firstErrorMessage; // string | null

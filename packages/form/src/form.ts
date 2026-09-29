@@ -459,34 +459,26 @@ export class Form<T> {
   };
 
   /**
-   * Get error messages for a field
+   * Get the error messages of fields
    *
-   * @param fieldName Field to get errors for
-   * @param includePreReported Whether to include errors not yet reported
+   * Each field contributes its errors once they are reported, as {@link FormField.isErrorReported} tells. To read
+   * errors regardless of reporting, use {@link FormField.errors} or {@link Validator.getErrorMessages}.
+   *
+   * @param fieldNames Fields to get errors for
    *
    * @returns Set of error messages
    */
-  getErrors(fieldName: FormField.Name<T>, includePreReported = false): ReadonlySet<string> {
-    const field = this.getField(fieldName);
-
-    if (!includePreReported && !field.isErrorReported) {
-      return new Set();
+  getErrors(...fieldNames: FormField.Name<T>[]): ReadonlySet<string> {
+    const result = new Set<string>();
+    for (const fieldName of fieldNames) {
+      const field = this.getField(fieldName);
+      if (!field.isErrorReported) continue;
+      // FormField#errors is computed, so an observer is notified only when the errors of these fields change
+      for (const error of field.errors) {
+        result.add(error);
+      }
     }
-
-    // Reading errors from FormField#errors is computed,
-    // so notifications only trigger when the error of the specific field changes
-    return field.errors;
-  }
-
-  /**
-   * Get all error messages for the form
-   *
-   * @param fieldName Field to get errors for. If omitted, all errors are returned.
-   *
-   * @returns Set of error messages
-   */
-  getAllErrors(fieldName?: FormField.Name<T>) {
-    return this.validator.getErrorMessages(fieldName ? `${fieldName}.**` : "**");
+    return result;
   }
 
   /**

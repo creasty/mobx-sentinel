@@ -192,34 +192,34 @@ export class Validator<T> {
     return null;
   }
 
-  /** Get the error messages of the key paths matching the pattern */
-  getErrorMessages(pattern: KeyPathPattern) {
+  /** Get the error messages of the key paths matching any of the patterns */
+  getErrorMessages(...patterns: KeyPathPattern[]) {
     const result = new Set<string>();
-    for (const [, error] of this.findErrors(pattern)) {
+    for (const [, error] of this.findErrors(...patterns)) {
       result.add(error.message);
     }
     return result;
   }
 
-  /** Check if any key path matching the pattern has errors */
-  hasErrors(pattern: KeyPathPattern) {
-    for (const _ of this.findErrors(pattern)) {
+  /** Check if any key path matching any of the patterns has errors */
+  hasErrors(...patterns: KeyPathPattern[]) {
+    for (const _ of this.findErrors(...patterns)) {
       return true;
     }
     return false;
   }
 
   /**
-   * Find the errors of the key paths matching the pattern
+   * Find the errors of the key paths matching any of the patterns
    *
-   * - Yields each error with its key path, relative to this validator
-   * - Searches nested validators, including hoisted ones, for the rest of the pattern
-   * - Reads only the `@nested` members the pattern can reach, which is all of them when it starts with a wildcard
+   * - Yields each error once, with its key path relative to this validator, however many patterns match it
+   * - Searches nested validators, including hoisted ones, for the rest of the patterns
+   * - Reads only the `@nested` members the patterns can reach, which is all of them when one starts with a wildcard
    *
    * @see {@link KeyPathPattern} for the syntax
    */
-  *findErrors(pattern: KeyPathPattern) {
-    yield* this.#findErrors([KeyPathPatternMatch.start(pattern)]);
+  *findErrors(...patterns: KeyPathPattern[]) {
+    yield* this.#findErrors(patterns.map((pattern) => KeyPathPatternMatch.start(pattern)));
   }
 
   /** Find the errors of the key paths that complete any of the matches */

@@ -716,70 +716,27 @@ describe("Form", () => {
       expect(form.getErrors("field")).toEqual(new Set(["invalid"]));
     });
 
-    it("returns the error messages for a field when includePreReported is true", () => {
+    it("returns the error messages of several fields, each once the field reports them", () => {
       const model = new SampleModel();
       const form = Form.get(model);
-      const field = form.getField("field");
 
       form.validator.updateErrors(Symbol(), (b) => {
         b.invalidate("field", "invalid");
         b.invalidate("otherField", "otherInvalid");
       });
 
-      field.reportError();
-      expect(form.getErrors("field", true)).toEqual(new Set(["invalid"]));
-    });
-  });
-
-  describe("#getAllErrors", () => {
-    it("returns all error messages for the form", () => {
-      const model = new NestedModel();
-      const form = Form.get(model);
-      const sampleForm = Form.get(model.sample);
-      const arrayForm0 = Form.get(model.array[0]);
-
-      form.validator.updateErrors(Symbol(), (b) => {
-        b.invalidate("field", "invalid at field");
-        b.invalidate("sample", "invalid at sample");
-        b.invalidate("array", "invalid at array");
-      });
-      sampleForm.validator.updateErrors(Symbol(), (b) => {
-        b.invalidate("field", "invalid at sample.field");
-      });
-      arrayForm0.validator.updateErrors(Symbol(), (b) => {
-        b.invalidate("field", "invalid at array.0.field");
-      });
-
-      expect(form.getAllErrors()).toEqual(
-        new Set([
-          "invalid at array",
-          "invalid at field",
-          "invalid at sample",
-          "invalid at sample.field",
-          "invalid at array.0.field",
-        ])
-      );
+      expect(form.getErrors("field", "otherField")).toEqual(new Set());
+      form.getField("otherField").reportError();
+      expect(form.getErrors("field", "otherField")).toEqual(new Set(["otherInvalid"]));
+      form.getField("field").reportError();
+      expect(form.getErrors("field", "otherField")).toEqual(new Set(["invalid", "otherInvalid"]));
     });
 
-    it("returns all error messages for the specific field", () => {
-      const model = new NestedModel();
-      const form = Form.get(model);
-      const sampleForm = Form.get(model.sample);
-      const arrayForm0 = Form.get(model.array[0]);
-
-      form.validator.updateErrors(Symbol(), (b) => {
-        b.invalidate("field", "invalid at field");
-        b.invalidate("sample", "invalid at sample");
-        b.invalidate("array", "invalid at array");
-      });
-      sampleForm.validator.updateErrors(Symbol(), (b) => {
-        b.invalidate("field", "invalid at sample.field");
-      });
-      arrayForm0.validator.updateErrors(Symbol(), (b) => {
-        b.invalidate("field", "invalid at array.0.field");
-      });
-
-      expect(form.getAllErrors("array")).toEqual(new Set(["invalid at array", "invalid at array.0.field"]));
+    it("returns an empty set without field names", () => {
+      const form = Form.get(new SampleModel());
+      form.validator.updateErrors(Symbol(), (b) => b.invalidate("field", "invalid"));
+      form.reportError();
+      expect(form.getErrors()).toEqual(new Set());
     });
   });
 
@@ -1732,7 +1689,7 @@ describe("Form (details)", () => {
 
       form.reset();
       expect(form.getErrors("field")).toEqual(new Set());
-      expect(form.getErrors("field", true)).toEqual(new Set(["error"]));
+      expect(form.getField("field").errors).toEqual(new Set(["error"]));
       expect(form.isValid).toBe(false);
       expect(form.firstErrorMessage).toBe("error");
     });
@@ -1879,23 +1836,22 @@ describe("Form (details)", () => {
       // PINNED(quirk): An augmented name is used verbatim as the key path, so "field:suffix" matches no validation errors even when "field" is invalid, and reportError marks it as valid. Decide: should augmented field names resolve (and report) the errors of their base field?
       expect(augmented.isErrorReported).toBe(false);
       expect(form.getErrors("field:suffix")).toEqual(new Set());
-      expect(form.getErrors("field:suffix", true)).toEqual(new Set());
-      expect(form.getAllErrors("field:suffix")).toEqual(new Set());
+      expect(augmented.errors).toEqual(new Set());
 
-      expect(form.getErrors("field", true)).toEqual(new Set(["error"]));
+      expect(form.getField("field").errors).toEqual(new Set(["error"]));
     });
   });
 
   describe("#getErrors", () => {
-    it("returns unreported errors without reporting them when includePreReported is true", () => {
+    it("creates the fields it is asked for without reporting them", () => {
       const form = Form.get(new SampleModel());
       form.validator.updateErrors(Symbol(), (b) => b.invalidate("field", "error"));
       expect(debugForm(form).fields.has("field")).toBe(false);
 
-      expect(form.getErrors("field", true)).toEqual(new Set(["error"]));
+      expect(form.getErrors("field")).toEqual(new Set());
       expect(debugForm(form).fields.has("field")).toBe(true); // The field is created on demand
       expect(form.getField("field").isErrorReported).toBeUndefined();
-      expect(form.getErrors("field")).toEqual(new Set());
+      expect(form.getField("field").errors).toEqual(new Set(["error"]));
     });
 
     it("returns an empty set for a reported field without errors", () => {
@@ -1904,15 +1860,15 @@ describe("Form (details)", () => {
       field.reportError();
       expect(field.isErrorReported).toBe(false);
       expect(form.getErrors("field")).toEqual(new Set());
-      expect(form.getErrors("field", true)).toEqual(new Set());
     });
 
-    it("notifies observers only when the errors of the field change", () => {
+    it("notifies observers only when the errors of its fields change", () => {
       const form = Form.get(new SampleModel());
+      form.getField("field").reportError();
 
       let count = 0;
       const dispose = autorun(() => {
-        form.getErrors("field", true);
+        form.getErrors("field");
         count++;
       });
       expect(count).toBe(1);
@@ -1923,46 +1879,6 @@ describe("Form (details)", () => {
       form.validator.updateErrors(Symbol(), (b) => b.invalidate("field", "error"));
       expect(count).toBe(2);
       dispose();
-    });
-  });
-
-  describe("#getAllErrors", () => {
-    it("includes the errors of sub-forms in maps and sets", () => {
-      const model = new CollectionModel();
-      const form = Form.get(model);
-      Form.get(model.map.get("a")!).validator.updateErrors(Symbol(), (b) => b.invalidate("field", "map error"));
-      Form.get([...model.set][0]).validator.updateErrors(Symbol(), (b) => b.invalidate("field", "set error"));
-
-      expect(form.getAllErrors("map")).toEqual(new Set(["map error"]));
-      expect(form.getAllErrors("set")).toEqual(new Set(["set error"]));
-      expect(form.getAllErrors()).toEqual(new Set(["map error", "set error"]));
-    });
-
-    it("returns the errors of every sub-form held by a field", () => {
-      const model = new CollectionModel();
-      const form = Form.get(model);
-      runInAction(() => {
-        model.array.push(new SampleModel());
-      });
-      Form.get(model.array[0]).validator.updateErrors(Symbol(), (b) => b.invalidate("field", "error at 0"));
-      Form.get(model.array[1]).validator.updateErrors(Symbol(), (b) => b.invalidate("field", "error at 1"));
-
-      expect(form.getAllErrors()).toEqual(new Set(["error at 0", "error at 1"]));
-      expect(form.getAllErrors("array")).toEqual(new Set(["error at 0", "error at 1"]));
-    });
-
-    it("returns the errors of the element the key path points at", () => {
-      const model = new CollectionModel();
-      const form = Form.get(model);
-      runInAction(() => {
-        model.array.push(new SampleModel());
-      });
-      Form.get(model.array[0]).validator.updateErrors(Symbol(), (b) => b.invalidate("field", "error at 0"));
-      Form.get(model.array[1]).validator.updateErrors(Symbol(), (b) => b.invalidate("field", "error at 1"));
-
-      // The runtime accepts any key path string even though the type only allows field names
-      const getAllErrors = form.getAllErrors as (fieldName?: string) => Set<string>;
-      expect(getAllErrors.call(form, "array.1")).toEqual(new Set(["error at 1"]));
     });
   });
 
@@ -1983,7 +1899,7 @@ describe("Form (details)", () => {
 
       sampleForm.validator.updateErrors(Symbol(), (b) => b.invalidate("field", "nested"));
       form.validator.updateErrors(Symbol(), (b) => b.invalidate("field", "own"));
-      expect(form.getAllErrors()).toEqual(new Set(["own", "nested"]));
+      expect(form.validator.getErrorMessages("**")).toEqual(new Set(["own", "nested"]));
 
       form.validator.reset();
       sampleForm.validator.reset();
@@ -2609,13 +2525,12 @@ describe("Form (details)", () => {
 
     it("does not allow the methods with parameters to be called detached", async () => {
       const form = Form.get(new SampleModel());
-      const { submit, getField, getErrors, getAllErrors } = form;
+      const { submit, getField, getErrors } = form;
 
       // Not bound, as a callback's own arguments, such as an event, would land in their parameters
       await expect(submit()).rejects.toThrow(TypeError);
       expect(() => getField("field")).toThrow(TypeError);
       expect(() => getErrors("field")).toThrow(TypeError);
-      expect(() => getAllErrors()).toThrow(TypeError);
     });
   });
 
@@ -2678,16 +2593,12 @@ describe("Form (details)", () => {
       expectTypeOf(form.getField).parameter(0).toEqualTypeOf<"name" | "age" | `name:${string}` | `age:${string}`>();
       expectTypeOf(form.getField).returns.toEqualTypeOf<FormField>();
       expectTypeOf(form.getErrors).returns.toEqualTypeOf<ReadonlySet<string>>();
-      expectTypeOf(form.getAllErrors).returns.toEqualTypeOf<Set<string>>();
       expectTypeOf(form.submit).parameters.toEqualTypeOf<[args?: { force?: boolean }]>();
       expectTypeOf(form.submit).returns.toEqualTypeOf<Promise<boolean>>();
       expectTypeOf(form.reset).returns.toEqualTypeOf<void>();
       expectTypeOf(form.reportError).returns.toEqualTypeOf<void>();
       expectTypeOf(form.markAsDirty).returns.toEqualTypeOf<void>();
-      expectTypeOf(form.getErrors).parameters.toEqualTypeOf<
-        [fieldName: FormField.Name<TypedModel>, includePreReported?: boolean]
-      >();
-      expectTypeOf(form.getAllErrors).parameters.toEqualTypeOf<[fieldName?: FormField.Name<TypedModel>]>();
+      expectTypeOf(form.getErrors).parameters.toEqualTypeOf<FormField.Name<TypedModel>[]>();
 
       const assertReadonlyProperties = () => {
         // @ts-expect-error The id is read-only
@@ -2702,14 +2613,12 @@ describe("Form (details)", () => {
       void assertReadonlyProperties;
 
       const assertInvalidCalls = () => {
-        // @ts-expect-error includePreReported must be a boolean
+        // @ts-expect-error Every argument is a field name
         form.getErrors("name", "yes");
         // @ts-expect-error Unknown field
         form.getField("unknown");
         // @ts-expect-error Augmented names require a known field as the prefix
         form.getErrors("unknown:suffix");
-        // @ts-expect-error Unknown field
-        form.getAllErrors("unknown");
         // @ts-expect-error The force option must be a boolean
         form.submit({ force: 1 });
       };

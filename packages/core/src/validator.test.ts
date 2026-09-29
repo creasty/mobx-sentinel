@@ -303,6 +303,9 @@ describe("Validator", () => {
 
       validator.getErrorMessages(KeyPath.Self);
       expect(spy).nthCalledWith(4, KeyPath.Self);
+
+      validator.getErrorMessages("field1", "field2.**");
+      expect(spy).nthCalledWith(5, "field1", "field2.**");
     });
 
     it("returns an empty set when there are no errors", () => {
@@ -320,6 +323,8 @@ describe("Validator", () => {
       expect(validator.getErrorMessages("**")).toEqual(new Set(["invalid1", "invalid2", "invalid3"]));
       expect(validator.getErrorMessages("field1")).toEqual(new Set(["invalid1"]));
       expect(validator.getErrorMessages("field2")).toEqual(new Set(["invalid2", "invalid3"]));
+      expect(validator.getErrorMessages("field1", "field2")).toEqual(new Set(["invalid1", "invalid2", "invalid3"]));
+      expect(validator.getErrorMessages()).toEqual(new Set());
     });
   });
 
@@ -339,6 +344,9 @@ describe("Validator", () => {
 
       validator.hasErrors(KeyPath.Self);
       expect(spy).nthCalledWith(4, KeyPath.Self);
+
+      validator.hasErrors("field1", "field2.**");
+      expect(spy).nthCalledWith(5, "field1", "field2.**");
     });
 
     it("returns false when there are no errors", () => {
@@ -354,6 +362,8 @@ describe("Validator", () => {
       expect(validator.hasErrors("**")).toBe(true);
       expect(validator.hasErrors("field1")).toBe(true);
       expect(validator.hasErrors("field2")).toBe(false);
+      expect(validator.hasErrors("field2", "field1")).toBe(true);
+      expect(validator.hasErrors()).toBe(false);
     });
   });
 
@@ -616,6 +626,40 @@ describe("Validator", () => {
             ],
           }
         `);
+      });
+    });
+
+    describe("Search with several patterns", () => {
+      it("returns the errors matching any of them", () => {
+        const env = setupEnv();
+        expect(buildErrorMap(env["parent"].findErrors("a", "child.aa", "children.*"))).toMatchInlineSnapshot(`
+          Map {
+            "a" => [
+              "invalid at parent.a",
+            ],
+            "child.aa" => [
+              "invalid at parent.child.aa",
+            ],
+            "children.0" => [
+              "invalid self at parent.children.0",
+            ],
+          }
+        `);
+      });
+
+      it("returns an error that several patterns match once", () => {
+        const env = setupEnv();
+        expect(buildErrorMap(env["parent"].findErrors("child", "child.*", "child.**"))).toEqual(
+          buildErrorMap(env["parent"].findErrors("child.**"))
+        );
+        expect(buildErrorMap(env["parent"].findErrors("**", "."))).toEqual(
+          buildErrorMap(env["parent"].findErrors("**"))
+        );
+      });
+
+      it("returns nothing without patterns", () => {
+        const env = setupEnv();
+        expect(buildErrorMap(env["parent"].findErrors())).toEqual(new Map());
       });
     });
 
@@ -3297,9 +3341,9 @@ describe("Validator: types", () => {
     expectTypeOf(validator.hasErrors(KeyPath.Self)).toEqualTypeOf<boolean>();
     expectTypeOf(validator.findErrors(KeyPath.Self)).toMatchTypeOf<Iterable<[KeyPath, ValidationError]>>();
     // Patterns are plain strings, and key paths themselves pass too
-    expectTypeOf(validator.getErrorMessages).parameter(0).toEqualTypeOf<KeyPathPattern>();
-    expectTypeOf(validator.hasErrors).parameter(0).toEqualTypeOf<KeyPathPattern>();
-    expectTypeOf(validator.findErrors).parameter(0).toEqualTypeOf<KeyPathPattern>();
+    expectTypeOf(validator.getErrorMessages).parameters.toEqualTypeOf<KeyPathPattern[]>();
+    expectTypeOf(validator.hasErrors).parameters.toEqualTypeOf<KeyPathPattern[]>();
+    expectTypeOf(validator.findErrors).parameters.toEqualTypeOf<KeyPathPattern[]>();
     expectTypeOf<string>().toExtend<KeyPathPattern>();
     expectTypeOf<KeyPath>().toExtend<KeyPathPattern>();
     // `null` is intended (see "#firstErrorMessage returns null when there are no errors"); the "string | undefined" in the docs is outdated.
