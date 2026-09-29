@@ -150,9 +150,9 @@ validator.waitForValidation() // Promise<void> - resolves once isValidating is f
 
 // Error queries, by key path pattern (see below)
 validator.firstErrorMessage // string | null - first error found
-validator.getErrorMessages(pattern) // Set<string> - messages of the matching key paths
-validator.hasErrors(pattern) // boolean - whether a matching key path has errors
-validator.findErrors(pattern) // Iterator<[KeyPath, ValidationError]>
+validator.getErrorMessages(...patterns) // Set<string> - messages of the matching key paths
+validator.hasErrors(...patterns) // boolean - whether a matching key path has errors
+validator.findErrors(...patterns) // Iterator<[KeyPath, ValidationError]>
 ```
 
 **Understanding validation states**:
@@ -179,6 +179,13 @@ A pattern without wildcards matches only the key path it spells. For a key holdi
 ```typescript
 validator.getErrorMessages("address") // errors of the address as a whole
 validator.getErrorMessages("address.**") // those, and the errors of its fields
+```
+
+Pass several patterns to look up the key paths that match any of them. An error that several of them match is found once:
+
+```typescript
+validator.getErrorMessages("city", "postalCode")
+validator.hasErrors("address.**", "lineItems.**")
 ```
 
 ## Waiting for Validation

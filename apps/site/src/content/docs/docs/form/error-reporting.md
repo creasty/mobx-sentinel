@@ -81,7 +81,7 @@ The behavior is split between the bindings and a few methods of `FormField`, so 
 - **The pause before intermediate input is reported:** `configureForm({ autoFinalizationDelayMs })` for all forms, or `form.configure({ autoFinalizationDelayMs })` for one form.
 - **Reporting on every keystroke:** in a [custom binding](/docs/form/custom-bindings/), call `field.markAsChanged()` (a final change) in `onChange` instead of `field.markAsChanged('intermediate')`.
 - **Reporting from your own code:** `field.reportError()` for one field, `form.reportError()` for the whole form.
-- **Showing errors regardless of reporting:** `form.getErrors(fieldName, true)` or `field.errors`.
+- **Showing errors regardless of reporting:** `field.errors`, or `form.validator.getErrorMessages()` with [key path patterns](/docs/core/validator/#looking-up-errors).
 - **Starting over:** `form.reset()` clears the reporting state of every field and sub-form, and runs automatically after a successful submission. The validator keeps its errors; they stay hidden until they are reported again.
 - **Letting keyboard users find out what is wrong:** revealing errors on hover needs a pointer, and a disabled button can't be focused with the keyboard. To keep the button enabled, allow invalid submissions and report the errors from a `willSubmit` handler that cancels the submission:
 
