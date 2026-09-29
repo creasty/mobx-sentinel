@@ -48,12 +48,15 @@ By default, bindings use auto-generated field IDs. You can override them:
 
 All bindings automatically set ARIA attributes for accessibility. Like `form.getErrors()`, they expose a field's errors only once the errors have been reported; see [Smart Error Reporting](/docs/form/error-reporting/) for when that happens.
 
+`ErrorText` shows the same errors on the page. It renders a `<span data-error-text>` holding one `<span>` per message, and nothing while there are none; style it through the attribute, or pass a `className`.
+
 ```tsx
+import { ErrorText } from "@mobx-sentinel/react";
+
 // Binding sets aria-invalid and aria-errormessage automatically
 <input {...form.bindInput("email", { /* ... */ })} />
+<ErrorText form={form} fields={["email"]} />
 
-// Optionally display errors manually (empty until reported)
-{Array.from(form.getErrors("email"), (error, i) => (
-  <p className="error" key={i}>{error}</p>
-))}
+// One text for a row of fields
+<ErrorText form={form} fields={["city", "region", "postalCode"]} />
 ```

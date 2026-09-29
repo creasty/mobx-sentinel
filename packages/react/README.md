@@ -12,3 +12,4 @@ Documentation: [guide](https://mobx-sentinel.creasty.com/docs/react/) · [API re
 
 - React hooks that automatically handle component lifecycle under the hood.
 - Standard bindings for most common form elements.
+- `ErrorText`, a component that shows the errors of fields once they are reported.

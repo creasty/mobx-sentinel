@@ -9,6 +9,7 @@ import { Form, FormBindingFunc, FormBindingMethod, FormField } from "@mobx-senti
 import * as extensionModule from "./extension";
 import * as indexModule from "./index";
 import { CheckBoxBinding } from "./CheckBoxBinding";
+import { ErrorText } from "./ErrorText";
 import { InputBinding } from "./InputBinding";
 import { LabelBinding } from "./LabelBinding";
 import { RadioGroupBinding, renderRadioGroup } from "./RadioGroupBinding";
@@ -127,9 +128,10 @@ describe("extension module", () => {
 });
 
 describe("package entry point", () => {
-  test("exports the standard bindings and hooks", () => {
+  test("exports the standard bindings, hooks and ErrorText", () => {
     expect(Object.keys(indexModule).sort()).toEqual([
       "CheckBoxBinding",
+      "ErrorText",
       "InputBinding",
       "LabelBinding",
       "RadioGroupBinding",
@@ -142,6 +144,7 @@ describe("package entry point", () => {
       "useFormSSR",
     ]);
     expect(indexModule.CheckBoxBinding).toBe(CheckBoxBinding);
+    expect(indexModule.ErrorText).toBe(ErrorText);
     expect(indexModule.InputBinding).toBe(InputBinding);
     expect(indexModule.LabelBinding).toBe(LabelBinding);
     expect(indexModule.RadioGroupBinding).toBe(RadioGroupBinding);

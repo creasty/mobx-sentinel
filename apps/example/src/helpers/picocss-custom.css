@@ -1,9 +1,10 @@
 /*
  * Everything needed to make the *standard* bindings look right on top of Pico CSS.
  *
- * The bindings emit `id` / `htmlFor`, `aria-invalid` and `aria-errormessage`;
- * these few rules hang off those attributes and nothing else. Layout for this
- * particular example lives in example-layout.css.
+ * The bindings emit `id` / `htmlFor`, `aria-invalid` and `aria-errormessage`,
+ * and `ErrorText` marks itself with `data-error-text`; these few rules hang off
+ * those attributes and nothing else. Layout for this particular example lives in
+ * example-layout.css.
  */
 .picocss-scope {
   padding: 32px;
@@ -40,8 +41,21 @@
     small {
       display: block;
     }
-    small.error {
-      color: var(--pico-del-color);
+  }
+
+  /* One <span> per message inside ErrorText's own <span>, sized as a <small> */
+  [data-error-text] {
+    display: block;
+    color: var(--pico-del-color);
+    font-size: smaller;
+
+    > span {
+      display: block;
     }
+  }
+  /* Right below a form element, where Pico places its helper text */
+  :where(input, select, textarea, fieldset, .grid) + [data-error-text] {
+    margin-top: calc(var(--pico-spacing) * -0.75);
+    margin-bottom: var(--pico-spacing);
   }
 }

@@ -1,6 +1,6 @@
 import "@mobx-sentinel/react/extension";
 import { Form } from "@mobx-sentinel/form";
-import { renderRadioGroup, useFormHandler } from "@mobx-sentinel/react";
+import { ErrorText, renderRadioGroup, useFormHandler } from "@mobx-sentinel/react";
 import { reaction } from "mobx";
 import { observer } from "mobx-react-lite";
 import { useEffect, useState } from "react";
@@ -67,7 +67,7 @@ export const InvoiceForm: React.FC<{ model: Invoice }> = observer(({ model }) =>
       <AddressForm model={model.billTo} />
 
       <h4 {...form.bindLabel(["lineItems"])}>Line items</h4>
-      <ErrorText errors={form.getErrors("lineItems")} />
+      <ErrorText form={form} fields={["lineItems"]} />
       {model.lineItems.map((item) => (
         <LineItemForm
           key={item.id}
@@ -97,7 +97,7 @@ export const InvoiceForm: React.FC<{ model: Invoice }> = observer(({ model }) =>
           />
           I have reviewed the amounts above
         </label>
-        <ErrorText errors={form.getErrors("amountsConfirmed")} />
+        <ErrorText form={form} fields={["amountsConfirmed"]} />
       </div>
 
       <FormActions model={model} issued={issued} />
@@ -159,7 +159,7 @@ const CustomerFields: React.FC<{ model: Invoice }> = observer(({ model }) => {
             Look up
           </button>
         </div>
-        <ErrorText errors={form.getErrors("customerEmail")} />
+        <ErrorText form={form} fields={["customerEmail"]} />
         <small>
           {/* `asyncState` counts this model's in-flight async validations — here, the CRM lookup. */}
           {form.validator.asyncState > 0
@@ -177,7 +177,7 @@ const CustomerFields: React.FC<{ model: Invoice }> = observer(({ model }) => {
               setter: (v) => (model.customerName = v),
             })}
           />
-          <ErrorText errors={form.getErrors("customerName")} />
+          <ErrorText form={form} fields={["customerName"]} />
         </div>
 
         <div className="field">
@@ -189,7 +189,7 @@ const CustomerFields: React.FC<{ model: Invoice }> = observer(({ model }) => {
               setter: (v) => (model.purchaseOrderNumber = v),
             })}
           />
-          <ErrorText errors={form.getErrors("purchaseOrderNumber")} />
+          <ErrorText form={form} fields={["purchaseOrderNumber"]} />
         </div>
       </div>
     </>
@@ -227,7 +227,7 @@ const TermsFields: React.FC<{ model: Invoice }> = observer(({ model }) => {
               setter: (v) => (model.issuedOn = v ?? today()),
             })}
           />
-          <ErrorText errors={form.getErrors("issuedOn")} />
+          <ErrorText form={form} fields={["issuedOn"]} />
         </div>
       </div>
 
@@ -261,7 +261,7 @@ const TermsFields: React.FC<{ model: Invoice }> = observer(({ model }) => {
               setter: (v) => (model.customDueOn = v),
             })}
           />
-          <ErrorText errors={form.getErrors("customDueOn")} />
+          <ErrorText form={form} fields={["customDueOn"]} />
         </div>
       )}
 
@@ -280,7 +280,7 @@ const TermsFields: React.FC<{ model: Invoice }> = observer(({ model }) => {
             setter: (v) => (model.ccRecipients = v),
           })}
         />
-        <ErrorText errors={form.getErrors("ccRecipients")} />
+        <ErrorText form={form} fields={["ccRecipients"]} />
       </fieldset>
     </>
   );
@@ -306,7 +306,7 @@ const AddressForm: React.FC<{ model: PostalAddress }> = observer(({ model }) => 
             setter: (v) => (model.line1 = v),
           })}
         />
-        <ErrorText errors={form.getErrors("line1")} />
+        <ErrorText form={form} fields={["line1"]} />
         <input
           placeholder="Apartment, suite, floor (optional)"
           {...form.bindInput("line2", {
@@ -341,7 +341,7 @@ const AddressForm: React.FC<{ model: PostalAddress }> = observer(({ model }) => 
               setter: (v) => (model.city = v),
             })}
           />
-          <ErrorText errors={form.getErrors("city")} />
+          <ErrorText form={form} fields={["city"]} />
         </div>
       </div>
 
@@ -355,7 +355,7 @@ const AddressForm: React.FC<{ model: PostalAddress }> = observer(({ model }) => 
               setter: (v) => (model.region = v),
             })}
           />
-          <ErrorText errors={form.getErrors("region")} />
+          <ErrorText form={form} fields={["region"]} />
         </div>
 
         <div className="field">
@@ -367,7 +367,7 @@ const AddressForm: React.FC<{ model: PostalAddress }> = observer(({ model }) => 
               setter: (v) => (model.postalCode = v),
             })}
           />
-          <ErrorText errors={form.getErrors("postalCode")} />
+          <ErrorText form={form} fields={["postalCode"]} />
         </div>
       </div>
     </div>
@@ -428,14 +428,17 @@ const LineItemForm: React.FC<{
             </select>
           </fieldset>
         </div>
-        <ErrorText errors={form.getErrors("description")} />
-        <ErrorText errors={form.getErrors("quantity")} />
-        <ErrorText errors={form.getErrors("unitPrice")} />
+        {/* One error text for the row of inputs above it */}
+        <ErrorText form={form} fields={["description", "quantity", "unitPrice"]} />
       </div>
 
       <div className="line-item-footer">
         {/* The line's own rule, reported with `invalidateSelf()`: "." is the line itself rather than one of its fields */}
-        <ErrorText errors={form.validator.getErrorMessages(".")} />
+        {Array.from(form.validator.getErrorMessages("."), (error) => (
+          <small className="error" key={error}>
+            {error}
+          </small>
+        ))}
         <span>{formatMoney(model.amount, currency)}</span>
         <button className="outline secondary" onClick={onDuplicate}>
           Duplicate
@@ -482,7 +485,7 @@ const MemoField: React.FC<{ model: Invoice }> = observer(({ model }) => {
           setter: (v) => (model.memo = v),
         })}
       />
-      <ErrorText errors={form.getErrors("memo")} />
+      <ErrorText form={form} fields={["memo"]} />
       <small>{MAX_MEMO_LENGTH - model.memo.length} characters left</small>
     </div>
   );
@@ -534,13 +537,3 @@ const FormActions: React.FC<{ model: Invoice; issued: string | null }> = observe
     </>
   );
 });
-
-const ErrorText: React.FC<{ errors: ReadonlySet<string> }> = observer(({ errors }) => (
-  <>
-    {Array.from(errors, (error, i) => (
-      <small className="error" key={i}>
-        {error}
-      </small>
-    ))}
-  </>
-));
