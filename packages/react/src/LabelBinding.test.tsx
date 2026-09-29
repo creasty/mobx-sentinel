@@ -216,7 +216,7 @@ describe("LabelBinding", () => {
       expect(env.binding.props["aria-errormessage"]).toBe("invalid1");
     });
 
-    it("derives aria-invalid from the truthiness of the first error message", () => {
+    it("is invalid when a reported error has an empty message", () => {
       const env = setupEnv();
       env.form.validator.updateErrors(Symbol(), (builder) => {
         builder.invalidate("field1", "");
@@ -225,8 +225,7 @@ describe("LabelBinding", () => {
       expect(env.field.isErrorReported).toBe(true);
       expect(env.binding.firstErrorMessage).toBe("");
 
-      // PINNED(bug): a reported error with an empty message makes aria-invalid false, because it's computed as `!!firstErrorMessage`. Expected: true, since the field is reported as invalid (field.isErrorReported === true) and the class JSDoc says it "Shows error states from associated fields". Flip this assertion when fixing.
-      expect(env.binding.props["aria-invalid"]).toBe(false);
+      expect(env.binding.props["aria-invalid"]).toBe(true);
       // PINNED(quirk): aria-errormessage becomes an empty string (not undefined) for an empty message, so the attribute is rendered without a value. Decide: should an empty message be normalized to undefined like the absence of errors?
       expect(env.binding.props["aria-errormessage"]).toBe("");
     });
@@ -242,8 +241,7 @@ describe("LabelBinding", () => {
       expect(env.field2.isErrorReported).toBe(true);
       expect(env.binding.firstErrorMessage).toBe("");
 
-      // PINNED(bug): both associated fields are reported invalid, but the empty first message makes aria-invalid false. Expected: true, as the docs say aria-invalid is set "once a field's errors are reported". Flip this assertion when fixing.
-      expect(env.binding.props["aria-invalid"]).toBe(false);
+      expect(env.binding.props["aria-invalid"]).toBe(true);
     });
   });
 

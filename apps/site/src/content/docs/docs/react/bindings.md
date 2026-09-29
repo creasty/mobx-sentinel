@@ -110,6 +110,8 @@ const MyForm = observer(({ model }) => {
 />
 ```
 
+The `Date` the setter receives is the element's wall clock read as UTC, not the instant in the browser's timezone: `date` gives midnight UTC, `time` a time on 1970-01-01 UTC, and `datetime-local` the entered date-time as UTC. That is why the getters above format with `toISOString()` — the value round-trips unchanged. Each type slices it differently, though: `month` takes the first 7 characters, and `week` needs a format `toISOString()` cannot produce at all.
+
 ## Text Area: `form.bindTextArea(fieldName, config)`
 
 Binds multi-line text fields. It reports errors the same way as a text input: typing makes intermediate changes, which are finalized when the text area loses focus or after a pause.
@@ -238,7 +240,7 @@ import { renderRadioGroup } from "@mobx-sentinel/react";
 
 Binds select elements for single or multiple selection.
 
-**Additional accessibility:** For multiple selection, `aria-multiselectable` is automatically set. Ensure `<option>` elements have meaningful labels.
+**Additional accessibility:** A native `<select multiple>` already exposes multi-selectability to assistive technology, so no `aria-multiselectable` attribute is added. Ensure `<option>` elements have meaningful labels.
 
 **Single selection:**
 ```tsx

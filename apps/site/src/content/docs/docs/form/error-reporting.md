@@ -72,7 +72,7 @@ So when a field becomes reported, `field.isErrorReported` stays `undefined` unti
 
 ## Accessibility
 
-`field.isErrorReported` is `undefined` until the field is reported, and `true` or `false` afterwards, which maps directly onto `aria-invalid`: the attribute is omitted until the field is reported. The standard bindings pass it through as is, so assistive technologies learn about an error at the same moment sighted users see it.
+`field.isErrorReported` is `undefined` until the field is reported, and `true` or `false` afterwards, which maps directly onto `aria-invalid`: the attribute is omitted until the field is reported. The standard field bindings pass it through as is, so assistive technologies learn about an error at the same moment sighted users see it. A label binding covers several fields at once, so it answers for all of them: it carries `aria-invalid="false"` from the start and turns it to `true` once any of its fields is reported invalid.
 
 ## Adjusting the Behavior
 

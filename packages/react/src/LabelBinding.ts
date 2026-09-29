@@ -49,7 +49,7 @@ export class LabelBinding implements FormBinding {
   get props() {
     return {
       htmlFor: this.config.htmlFor ?? this.firstFieldStableId,
-      "aria-invalid": !!this.firstErrorMessage,
+      "aria-invalid": this.fields.some((field) => field.isErrorReported),
       "aria-errormessage": this.firstErrorMessage ?? undefined,
     } satisfies LabelBinding.Attrs;
   }

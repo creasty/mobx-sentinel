@@ -632,7 +632,7 @@ describe("FormField", () => {
         expect(field.isErrorReported).toBe(true);
       });
 
-      it("keeps the report visible after reset until the in-flight validation settles", () => {
+      it("clears the report on reset without waiting for the in-flight validation", () => {
         const { field, validator, setValue, settleValidation } = setupValidationEnv();
 
         setValue("invalid");
@@ -644,8 +644,7 @@ describe("FormField", () => {
         expect(validator.isValidating).toBe(true);
         field.reset();
         expect(debugFormField(field).isReported.get()).toBe(false);
-        // PINNED(bug): reset() while a validation is in progress leaves isErrorReported at true, because clearing the report is deferred like reporting is. Expected: undefined right away (JSDoc of reset: "Clears error reporting"). Flip this assertion when fixing.
-        expect(field.isErrorReported).toBe(true);
+        expect(field.isErrorReported).toBe(undefined);
 
         settleValidation();
         expect(field.isErrorReported).toBe(undefined);

@@ -13,18 +13,6 @@ import { Form } from "./form";
 /** Wraps type-level assertions that must (or must not) compile; the callback is never executed */
 function typeOnly(_fn: () => void) {}
 
-/** Reset the global configuration, including keys that `configureForm(true)` leaves behind */
-function resetGlobalConfig() {
-  configureForm(true);
-  runInAction(() => {
-    for (const key of Object.keys(globalConfig)) {
-      if (!(key in defaultConfig)) {
-        delete (globalConfig as any)[key];
-      }
-    }
-  });
-}
-
 const configKeys = ["autoFinalizationDelayMs", "allowSubmitInvalid"] as const;
 
 describe("defaultConfig", () => {
@@ -62,7 +50,7 @@ describe("defaultConfig", () => {
 
 describe("globalConfig", () => {
   afterEach(() => {
-    resetGlobalConfig();
+    configureForm(true);
   });
 
   it("is an observable object", () => {
@@ -157,10 +145,10 @@ describe("configureForm", () => {
 
 describe("configureForm (details)", () => {
   beforeEach(() => {
-    resetGlobalConfig();
+    configureForm(true);
   });
   afterEach(() => {
-    resetGlobalConfig();
+    configureForm(true);
     expect(Object.keys(globalConfig)).toEqual(configKeys);
   });
 
@@ -237,7 +225,7 @@ describe("configureForm (details)", () => {
   });
 
   describe("Invalid input", () => {
-    it("keeps unknown keys after a reset", () => {
+    it("removes unknown keys on reset", () => {
       // No cast needed: excess property checks do not apply to a non-literal argument
       const extended = { allowSubmitInvalid: false, unknownKey: 1 };
       configureForm(extended);
@@ -245,16 +233,21 @@ describe("configureForm (details)", () => {
       expect(Form.get({}).config).toHaveProperty("unknownKey", 1);
 
       configureForm(true);
-      // PINNED(bug): Reset only re-assigns the default keys, so an unknown key stays on globalConfig (and in every Form#config). Expected: `configureForm(true)` resets globalConfig to exactly the defaults, as its JSDoc says. Flip this assertion when fixing.
-      expect(globalConfig).toHaveProperty("unknownKey", 1);
+      expect(globalConfig).not.toHaveProperty("unknownKey");
+      expect(Form.get({}).config).not.toHaveProperty("unknownKey");
     });
 
-    it("stores explicit undefined values, overriding the defaults", () => {
+    it("ignores explicit undefined values", () => {
       // Accepted by the type since `Partial` allows `undefined` without exactOptionalPropertyTypes
       configureForm({ autoFinalizationDelayMs: undefined });
-      // PINNED(bug): An explicit `undefined` is assigned as-is, so the number-typed autoFinalizationDelayMs becomes undefined for globalConfig and every form. Expected: undefined entries are ignored and the value stays 3000. Flip these assertions when fixing.
-      expect(globalConfig.autoFinalizationDelayMs).toBeUndefined();
-      expect(Form.get({}).config.autoFinalizationDelayMs).toBeUndefined();
+      expect(globalConfig.autoFinalizationDelayMs).toBe(3000);
+      expect(Form.get({}).config.autoFinalizationDelayMs).toBe(3000);
+    });
+
+    it("keeps the configured value when a later call passes undefined for it", () => {
+      configureForm({ autoFinalizationDelayMs: 1 });
+      configureForm({ autoFinalizationDelayMs: undefined });
+      expect(globalConfig.autoFinalizationDelayMs).toBe(1);
     });
 
     it("stores out-of-range numbers without validation", () => {
@@ -276,7 +269,7 @@ describe("configureForm (details)", () => {
 
     it("spreads a string argument into index keys", () => {
       configureForm("ab" as any);
-      // PINNED(quirk): A string is passed to Object.assign, which copies its characters as "0", "1", ... keys. Decide: should non-object arguments throw or be ignored?
+      // PINNED(quirk): A string is spread by the merge, which copies its characters as "0", "1", ... keys. Decide: should non-object arguments throw or be ignored?
       expect(globalConfig).toHaveProperty("0", "a");
       expect(globalConfig).toHaveProperty("1", "b");
     });
@@ -301,10 +294,10 @@ describe("configureForm (details)", () => {
 
 describe("Form#config with globalConfig", () => {
   beforeEach(() => {
-    resetGlobalConfig();
+    configureForm(true);
   });
   afterEach(() => {
-    resetGlobalConfig();
+    configureForm(true);
   });
 
   it("reflects globalConfig changes made after the form was created", () => {
@@ -395,11 +388,17 @@ describe("Form#config with globalConfig", () => {
     }
   });
 
-  it("lets a local undefined value shadow globalConfig", () => {
+  it("ignores a local undefined value", () => {
     const form = Form.get({});
     form.configure({ autoFinalizationDelayMs: undefined });
-    // PINNED(bug): The local override is spread over globalConfig as-is, so an explicit `undefined` replaces the number-typed value. Expected: undefined entries fall back to globalConfig (3000). Flip this assertion when fixing.
-    expect(form.config.autoFinalizationDelayMs).toBeUndefined();
+    expect(form.config.autoFinalizationDelayMs).toBe(3000);
+  });
+
+  it("keeps a local override when a later call passes undefined for it", () => {
+    const form = Form.get({});
+    form.configure({ autoFinalizationDelayMs: 1 });
+    form.configure({ autoFinalizationDelayMs: undefined });
+    expect(form.config.autoFinalizationDelayMs).toBe(1);
   });
 
   it("resets local overrides when Form#configure receives a non-object at runtime", () => {
@@ -427,10 +426,10 @@ describe("Form#config with globalConfig", () => {
 
 describe("configureForm (argument handling)", () => {
   beforeEach(() => {
-    resetGlobalConfig();
+    configureForm(true);
   });
   afterEach(() => {
-    resetGlobalConfig();
+    configureForm(true);
     expect(Object.keys(globalConfig)).toEqual(configKeys);
   });
 
@@ -460,7 +459,7 @@ describe("configureForm (argument handling)", () => {
     const config = new ConfigWithGetter();
     // Accepted by the type since the getter structurally matches `Partial<FormConfig>`
     configureForm(config);
-    // PINNED(quirk): Object.assign copies own enumerable properties only, so values from getters or prototypes are silently dropped. Decide: should configureForm read the known keys explicitly (so this becomes 1)?
+    // PINNED(quirk): The merge copies own enumerable properties only, so values from getters or prototypes are silently dropped. Decide: should configureForm read the known keys explicitly (so this becomes 1)?
     expect(globalConfig.autoFinalizationDelayMs).toBe(3000);
   });
 });
@@ -471,10 +470,10 @@ describe("Form#configure (details)", () => {
   }
 
   beforeEach(() => {
-    resetGlobalConfig();
+    configureForm(true);
   });
   afterEach(() => {
-    resetGlobalConfig();
+    configureForm(true);
   });
 
   it("applies multiple keys in a single batch", () => {
@@ -605,15 +604,16 @@ describe("Form#configure (details)", () => {
       expect(field.isIntermediate).toBe(false);
     });
 
-    it("finalizes almost immediately when the delay is undefined", () => {
+    it("uses the global delay when the local delay is undefined", () => {
       const form = Form.get(new Model());
       const field = form.getField("a");
       form.configure({ autoFinalizationDelayMs: undefined });
 
       field.markAsChanged("intermediate");
       expect(field.isIntermediate).toBe(true);
+      vi.advanceTimersByTime(2999);
+      expect(field.isIntermediate).toBe(true);
       vi.advanceTimersByTime(1);
-      // PINNED(bug): The number-typed delay becomes undefined (see "lets a local undefined value shadow globalConfig"), and setTimeout treats it as 0, so intermediate input finalizes immediately. Expected: the global delay (3000) applies and the field is still intermediate here. Flip this assertion when fixing.
       expect(field.isIntermediate).toBe(false);
     });
   });

@@ -164,14 +164,14 @@ class LabelBinding implements FormBinding {
   get props() {
     return {
       htmlFor: this.config.htmlFor ?? this.firstFieldStableId,
-      'aria-invalid': !!this.firstErrorMessage,
+      'aria-invalid': this.fields.some((field) => field.isErrorReported),
       'aria-errormessage': this.firstErrorMessage ?? undefined,
     };
   }
 }
 ```
 
-This binding aggregates error states from multiple fields, showing the first error message if any field has errors.
+This binding aggregates error states from multiple fields, showing the first error message of the fields whose errors are reported.
 
 ## Form Binding Example
 

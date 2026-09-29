@@ -2,13 +2,27 @@ import { action, computed, makeObservable, observable } from "mobx";
 import { Validator, Watcher, StandardNestedFetcher, KeyPath } from "@mobx-sentinel/core";
 import { FormField } from "./field";
 import { bindingExtensions, FormBinding, FormBindingConstructor, FormBindingFunc, getSafeBindingName } from "./binding";
-import { FormConfig, globalConfig } from "./config";
+import { FormConfig, globalConfig, mergeConfig } from "./config";
 import { Submission } from "./submission";
 import { randomId } from "./randomId";
 
 const registry = new WeakMap<object, Map<symbol, Form<any>>>();
 const defaultFormKey = Symbol("form.defaultFormKey");
 const internalToken = Symbol("form.internalToken");
+
+/**
+ * Compose the key that identifies a binding in the cache
+ *
+ * @remarks
+ * Encodes the three components of a binding without letting one impersonate another:
+ * the subject (`form`, `field:<name>`, or `fields:<names>`, with the names as JSON),
+ * the binding class, and the optional cache key of {@link FormBindingFunc.Config},
+ * which is left out entirely when it is absent.
+ */
+function bindingKey(subject: string, binding: FormBindingConstructor, config?: FormBindingFunc.Config) {
+  const cacheKey = config?.cacheKey;
+  return `${subject}@${getSafeBindingName(binding)}${cacheKey === undefined ? "" : `:${JSON.stringify(cacheKey)}`}`;
+}
 
 /**
  * Form manages submission, fields, and bindings.
@@ -167,13 +181,17 @@ export class Form<T> {
   /** Configure the form locally */
   @action.bound
   configure: {
-    /** Override the global configuration locally */
+    /**
+     * Override the global configuration locally
+     *
+     * @remarks Entries whose value is `undefined` are ignored, leaving the override as it is.
+     */
     (config: Partial<Readonly<FormConfig>>): void;
     /** Reset to the global configuration */
     (reset: true): void;
   } = (arg0) => {
     if (typeof arg0 === "object") {
-      Object.assign(this.#localConfig.get(), arg0);
+      mergeConfig(this.#localConfig.get(), arg0);
     } else {
       this.#localConfig.set({});
     }
@@ -360,11 +378,11 @@ export class Form<T> {
   }
 
   /** Define a binding by key */
-  #defineBinding(bindingKey: string, create: () => FormBinding) {
-    let binding = this.#bindings.get(bindingKey);
+  #defineBinding(key: string, create: () => FormBinding) {
+    let binding = this.#bindings.get(key);
     if (!binding) {
       binding = create();
-      this.#bindings.set(bindingKey, binding);
+      this.#bindings.set(key, binding);
     }
     return binding;
   }
@@ -374,7 +392,7 @@ export class Form<T> {
     binding: FormBindingConstructor.ForForm,
     config?: FormBindingFunc.Config
   ) => {
-    const key = `${getSafeBindingName(binding)}:${config?.cacheKey}`;
+    const key = bindingKey("form", binding, config);
     const instance = this.#defineBinding(key, () => new binding(this, config));
     instance.config = config; // Update on every call
     return instance.props;
@@ -386,7 +404,7 @@ export class Form<T> {
     binding: FormBindingConstructor.ForField,
     config?: FormBindingFunc.Config
   ) => {
-    const key = `${fieldName}@${getSafeBindingName(binding)}:${config?.cacheKey}`;
+    const key = bindingKey(`field:${JSON.stringify(fieldName)}`, binding, config);
     const instance = this.#defineBinding(key, () => {
       const field = this.getField(fieldName);
       return new binding(field, config);
@@ -401,7 +419,7 @@ export class Form<T> {
     binding: FormBindingConstructor.ForMultiField,
     config?: FormBindingFunc.Config
   ) => {
-    const key = `${fieldNames.join(",")}@${getSafeBindingName(binding)}:${config?.cacheKey}`;
+    const key = bindingKey(`fields:${JSON.stringify(fieldNames)}`, binding, config);
     const instance = this.#defineBinding(key, () => {
       const fields = fieldNames.map((name) => this.getField(name));
       return new binding(fields, config);

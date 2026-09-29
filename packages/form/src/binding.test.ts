@@ -741,34 +741,37 @@ describe("Form#bind (binding key and cache)", () => {
   const bindingKeys = (form: Form<any>) => [...debugForm(form).bindings.keys()];
 
   describe("Binding key", () => {
-    it("consists of the binding name and the cacheKey for form bindings", () => {
+    it("consists of the `form` subject, the binding name, and the cacheKey for form bindings", () => {
       const form = createForm();
       const name = getSafeBindingName(SampleFormBinding);
 
       form.bind(SampleFormBinding);
       form.bind(SampleFormBinding, { cacheKey: "key" });
-      // The `undefined` suffix for a missing cacheKey causes the collision pinned in "Binding key collisions"
-      expect(bindingKeys(form)).toEqual([`${name}:undefined`, `${name}:key`]);
+      expect(bindingKeys(form)).toEqual([`form@${name}`, `form@${name}:"key"`]);
     });
 
-    it("consists of the field name, the binding name, and the cacheKey for field bindings", () => {
+    it("consists of the JSON field name, the binding name, and the cacheKey for field bindings", () => {
       const form = createForm();
       const name = getSafeBindingName(SampleFieldBinding);
 
       form.bind("a", SampleFieldBinding);
       form.bind("a", SampleFieldBinding, { cacheKey: "key" });
       form.bind("a:suffix", SampleFieldBinding);
-      expect(bindingKeys(form)).toEqual([`a@${name}:undefined`, `a@${name}:key`, `a:suffix@${name}:undefined`]);
+      expect(bindingKeys(form)).toEqual([`field:"a"@${name}`, `field:"a"@${name}:"key"`, `field:"a:suffix"@${name}`]);
     });
 
-    it("consists of the comma-joined field names, the binding name, and the cacheKey for multi-field bindings", () => {
+    it("consists of the JSON field names, the binding name, and the cacheKey for multi-field bindings", () => {
       const form = createForm();
       const name = getSafeBindingName(SampleMultiFieldBinding);
 
       form.bind(["a", "b"], SampleMultiFieldBinding);
       form.bind(["a", "b"], SampleMultiFieldBinding, { cacheKey: "key" });
       form.bind([], SampleMultiFieldBinding);
-      expect(bindingKeys(form)).toEqual([`a,b@${name}:undefined`, `a,b@${name}:key`, `@${name}:undefined`]);
+      expect(bindingKeys(form)).toEqual([
+        `fields:["a","b"]@${name}`,
+        `fields:["a","b"]@${name}:"key"`,
+        `fields:[]@${name}`,
+      ]);
     });
   });
 
@@ -787,6 +790,13 @@ describe("Form#bind (binding key and cache)", () => {
       const none = form.bind(SampleFormBinding);
       const empty = form.bind(SampleFormBinding, { cacheKey: "" });
       expect(empty.bindingId).not.toBe(none.bindingId);
+    });
+
+    it('treats a literal "undefined" cacheKey as distinct from no cacheKey', () => {
+      const form = createForm();
+      const none = form.bind(SampleFormBinding);
+      const literal = form.bind(SampleFormBinding, { cacheKey: "undefined" });
+      expect(literal.bindingId).not.toBe(none.bindingId);
     });
 
     it("creates separate instances for different fields", () => {
@@ -827,6 +837,23 @@ describe("Form#bind (binding key and cache)", () => {
       expect(ba.fieldNames).toEqual(["b", "a"]);
     });
 
+    it("creates separate instances for a single field and a one-element field list of the same class", () => {
+      const form = createForm();
+      const single = form.bind("a", EitherFieldBinding);
+      const multi = form.bind(["a"], EitherFieldBinding);
+      expect(multi.bindingId).not.toBe(single.bindingId);
+      expect(multi.isMulti).toBe(true);
+    });
+
+    it("creates separate instances for field lists whose comma-joined names coincide", () => {
+      const form = createForm();
+      const twoFields = form.bind(["a:x", "b"], FieldsCaptureBinding);
+      // "a:x,b" is a valid augmented name of the field "a"
+      const oneField = form.bind(["a:x,b"], FieldsCaptureBinding);
+      expect(oneField.fields).not.toBe(twoFields.fields);
+      expect(oneField.fields.map((field) => field.fieldName)).toEqual(["a:x,b"]);
+    });
+
     it("keeps separate caches per form instance, including forms with a formKey", () => {
       const model = new BindModel();
       const form = Form.get(model);
@@ -834,35 +861,6 @@ describe("Form#bind (binding key and cache)", () => {
       expect(keyedForm.bind(SampleFormBinding).bindingId).not.toBe(form.bind(SampleFormBinding).bindingId);
       expect(debugForm(form).bindings.size).toBe(1);
       expect(debugForm(keyedForm).bindings.size).toBe(1);
-    });
-  });
-
-  describe("Binding key collisions", () => {
-    it('shares an instance between `cacheKey: "undefined"` and no cacheKey', () => {
-      const form = createForm();
-      const none = form.bind(SampleFormBinding);
-      const literal = form.bind(SampleFormBinding, { cacheKey: "undefined" });
-      // PINNED(bug): The absent cacheKey is stringified as "undefined", so it collides with the literal cacheKey "undefined". Expected: distinct instances, as the docs define the user-specified key as a component of the binding key. Flip this assertion when fixing.
-      expect(literal.bindingId).toBe(none.bindingId);
-    });
-
-    it("shares an instance between a single-field binding and a one-element multi-field binding of the same class", () => {
-      const form = createForm();
-      const single = form.bind("a", EitherFieldBinding);
-      const multi = form.bind(["a"], EitherFieldBinding);
-      // PINNED(bug): Both produce the key `a@<name>:undefined`, so the multi-field call returns the instance constructed with a single FormField. Expected: distinct instances, as the docs list the subject (a single field vs multiple fields) as a component of the binding key. Flip these assertions when fixing.
-      expect(multi.bindingId).toBe(single.bindingId);
-      expect(multi.isMulti).toBe(false);
-    });
-
-    it("shares an instance between multi-field bindings whose comma-joined names coincide", () => {
-      const form = createForm();
-      const twoFields = form.bind(["a:x", "b"], FieldsCaptureBinding);
-      // "a:x,b" is a valid augmented name of the field "a"
-      const oneField = form.bind(["a:x,b"], FieldsCaptureBinding);
-      // PINNED(bug): Field names are joined with "," without escaping, so ["a:x,b"] and ["a:x", "b"] produce the same key and the second call receives the fields of the first. Expected: a separate instance bound to the single field "a:x,b". Flip these assertions when fixing.
-      expect(oneField.fields).toBe(twoFields.fields);
-      expect(oneField.fields.map((field) => field.fieldName)).toEqual(["a:x", "b"]);
     });
   });
 
