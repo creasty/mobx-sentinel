@@ -1,14 +1,4 @@
-import {
-  action,
-  comparer,
-  computed,
-  IEqualsComparer,
-  makeObservable,
-  observable,
-  reaction,
-  runInAction,
-  when,
-} from "mobx";
+import { action, computed, IEqualsComparer, makeObservable, observable, reaction, runInAction, when } from "mobx";
 import { randomId } from "./randomId";
 import { ValidationError, type ValidationErrorMapBuilder, ValidationErrorMapBuilderImpl } from "./error";
 import { StandardNestedFetcher } from "./nested";
@@ -87,9 +77,7 @@ export class Validator<T> {
   static defaultDelayMs = 100;
 
   readonly id = randomId();
-  readonly #errors = observable.map<symbol, ReadonlyKeyPathMultiMap<ValidationError>>([], {
-    equals: comparer.structural,
-  });
+  readonly #errors = observable.map<symbol, ReadonlyKeyPathMultiMap<ValidationError>>();
   readonly #nestedFetcher: StandardNestedFetcher<Validator<any>>;
   readonly #reactionTimerIds = observable.map<symbol, number>();
   readonly #reactionResets = new Map<symbol, () => void>();
