@@ -1094,6 +1094,37 @@ describe("createPropertyLikeAnnotation", () => {
         ["#field", ["child"], "child value"],
       ]);
     });
+
+    test("same-named private fields of two sibling classes are members of their own, on a processor each", () => {
+      const sample = createPropertyLikeAnnotation(sampleKey, () => "data");
+
+      class Sibling1 {
+        @sample #field = "sibling1 value";
+
+        readField() {
+          return this.#field;
+        }
+      }
+      class Sibling2 {
+        @sample #field = "sibling2 value";
+
+        readField() {
+          return this.#field;
+        }
+      }
+
+      const obj1 = new Sibling1();
+      const obj2 = new Sibling2();
+      // Each instance owns its processor, holding the single member of the class it was built from: the two are
+      // told apart by the key minted per declaring class, and nothing brings them together -- not even a stage-2
+      // annotated base class, whose processor a stage-3 initializer clones onto the instance rather than
+      // registering into (see "Subclasses of a class annotated with stage-2 decorators" in test-stage3/nested.test.ts)
+      expect(getAnnotationProcessor(obj1)).not.toBe(getAnnotationProcessor(obj2));
+      const members1 = [...getAnnotationProcessor(obj1)!.getPropertyLike(sampleKey)!.values()];
+      const members2 = [...getAnnotationProcessor(obj2)!.getPropertyLike(sampleKey)!.values()];
+      expect(members1.map((member) => [member.propertyKey, member.get!()])).toEqual([["#field", "sibling1 value"]]);
+      expect(members2.map((member) => [member.propertyKey, member.get!()])).toEqual([["#field", "sibling2 value"]]);
+    });
   });
 
   describe("private methods", () => {

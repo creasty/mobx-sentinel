@@ -1416,6 +1416,124 @@ describe("Nested validations", () => {
   });
 });
 
+describe("Nested validations: entries that share a key path", () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  class Item {
+    @observable name = "";
+
+    constructor() {
+      makeObservable(this);
+
+      addValidation(this, (b) => {
+        if (!this.name) {
+          b.invalidate("name", "required");
+        }
+      });
+    }
+  }
+
+  /**
+   * A model whose single `@nested` member yields two entries at the key path "map.0"
+   *
+   * The map keys `0` and `"0"` are different keys, so both items are fetched, but they build the same key path.
+   * The collision depends on the contents of the map, which construction cannot see -- unlike two members spelling
+   * one key path, which `StandardNestedFetcher` refuses -- so `dataMap`, and with it `Validator#nested`, keeps only
+   * the last of the two.
+   */
+  class Collection {
+    readonly numberKeyed = new Item();
+    readonly stringKeyed = new Item();
+    @nested readonly map = new Map<number | string, Item>([
+      [0, this.numberKeyed],
+      ["0", this.stringKeyed],
+    ]);
+  }
+
+  /** Build the model and let the initial validation of both items settle */
+  function setupCollection() {
+    const collection = new Collection();
+    const validator = Validator.get(collection);
+    vi.advanceTimersByTime(100);
+    return { collection, validator };
+  }
+
+  test("the fetcher yields both entries, while `nested` keeps the last of them", () => {
+    const { collection, validator } = setupCollection();
+    expect(validator.nested.size).toBe(1);
+    expect(validator.nested.get("map.0" as KeyPath)).toBe(Validator.get(collection.stringKeyed));
+  });
+
+  test("counts the invalid key paths of an entry that `nested` drops", () => {
+    const { collection, validator } = setupCollection();
+    runInAction(() => {
+      collection.stringKeyed.name = "filled";
+    });
+    vi.advanceTimersByTime(100);
+
+    // Both entries are fetched, but `nested` keeps one of the two: they share the key path "map.0". Counting the
+    // invalid key paths from the fetcher instead keeps the dropped one visible, so the invalid number-keyed item is
+    // not reported as valid while a search by key path still finds its error.
+    expect(Validator.get(collection.numberKeyed).isValid).toBe(false);
+    expect(Validator.get(collection.stringKeyed).isValid).toBe(true);
+    expect(validator.invalidKeyPaths).toEqual(new Set(["map.0.name"]));
+    expect(validator.invalidKeyPathCount).toBe(1);
+    expect(validator.isValid).toBe(false);
+    expect(validator.getErrorMessages("map.0" as KeyPath, true)).toEqual(new Set(["required"]));
+  });
+
+  test("finds the errors of an entry that `nested` drops when searching by prefix", () => {
+    const { collection, validator } = setupCollection();
+    runInAction(() => {
+      collection.stringKeyed.name = "filled";
+    });
+    vi.advanceTimersByTime(100);
+
+    // A prefix search from the self path walked `nested`, which keeps only the string-keyed item, so the number-keyed
+    // one was unreachable through it: the model reported invalid while showing no error message.
+    expect(validator.isValid).toBe(false);
+    expect(validator.firstErrorMessage).toBe("required");
+    expect(validator.hasErrors(KeyPath.Self, true)).toBe(true);
+    // The same search as Form#getAllErrors()
+    expect(validator.getErrorMessages(KeyPath.Self, true)).toEqual(new Set(["required"]));
+    expect(listErrors(validator.findErrors(KeyPath.Self, true))).toEqual([["map.0.name", "required"]]);
+
+    runInAction(() => {
+      collection.stringKeyed.name = "";
+    });
+    vi.advanceTimersByTime(100);
+
+    // With both items invalid the search yields both errors, since they are two entries rather than one, and the set
+    // of messages it is collected into holds the message they share once
+    expect(listErrors(validator.findErrors(KeyPath.Self, true))).toEqual([
+      ["map.0.name", "required"],
+      ["map.0.name", "required"],
+    ]);
+    expect(validator.getErrorMessages(KeyPath.Self, true)).toEqual(new Set(["required"]));
+  });
+
+  test("is validating while an entry that `nested` drops is validating", () => {
+    const { collection, validator } = setupCollection();
+    expect(validator.isValidating).toBe(false);
+
+    runInAction(() => {
+      collection.numberKeyed.name = "filled";
+    });
+
+    // The number-keyed item is the entry `nested` drops, so walking the map read the parent as idle while it validated
+    expect(Validator.get(collection.numberKeyed).isValidating).toBe(true);
+    expect(validator.isValidating).toBe(true);
+
+    vi.advanceTimersByTime(100);
+    expect(validator.isValidating).toBe(false);
+  });
+});
+
 /** Collect `[keyPath, message]` pairs in iteration order */
 function listErrors(iter: Iterable<[KeyPath, ValidationError]>) {
   return Array.from(iter, ([keyPath, error]) => [keyPath, error.message]);
