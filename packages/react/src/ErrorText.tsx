@@ -1,6 +1,6 @@
 import type { Form, FormField } from "@mobx-sentinel/form";
 import { Observer } from "mobx-react-lite";
-import { createElement } from "react";
+import React from "react";
 
 export namespace ErrorText {
   export type Props<T> = Omit<React.HTMLAttributes<HTMLSpanElement>, "children"> & {
@@ -31,15 +31,19 @@ export namespace ErrorText {
  */
 export function ErrorText<T>(props: ErrorText.Props<T>): React.ReactElement {
   const { form, fields, ...attributes } = props;
-  return createElement(Observer, {
-    render: () => {
-      const errors = form.getErrors(...fields);
-      if (!errors.size) return null;
-      return createElement(
-        "span",
-        { ...attributes, "data-error-text": "" },
-        Array.from(errors, (error) => createElement("span", { key: error }, error))
-      );
-    },
-  });
+  return (
+    <Observer>
+      {() => {
+        const errors = form.getErrors(...fields);
+        if (!errors.size) return null;
+        return (
+          <span {...attributes} data-error-text="">
+            {Array.from(errors, (error) => (
+              <span key={error}>{error}</span>
+            ))}
+          </span>
+        );
+      }}
+    </Observer>
+  );
 }
