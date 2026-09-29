@@ -932,6 +932,20 @@ describe("Validator", () => {
       expect(buildErrorMap(env.validator.findErrors(KeyPath.Self))).toEqual(new Map([["field1", ["invalid"]]]));
     });
 
+    it("replaces the errors when the handler reports different ones", async () => {
+      const env = setupEnv();
+      env.validator.addSyncHandler((b) => {
+        b.invalidate("field1", `invalid ${env.model.field1}`);
+      });
+      expect(buildErrorMap(env.validator.findErrors(KeyPath.Self))).toEqual(new Map([["field1", ["invalid 0"]]]));
+
+      runInAction(() => {
+        env.model.field1 = 1;
+      });
+      await env.waitForReactionState(0);
+      expect(buildErrorMap(env.validator.findErrors(KeyPath.Self))).toEqual(new Map([["field1", ["invalid 1"]]]));
+    });
+
     it("removes the errors when the condition is no longer met", async () => {
       const env = setupEnv({ syncHandler: true });
 
@@ -1100,6 +1114,25 @@ describe("Validator", () => {
       await env.waitForReactionState(0);
       await env.waitForAsyncState(0);
       expect(buildErrorMap(env.validator.findErrors(KeyPath.Self))).toEqual(new Map([["field1", ["invalid"]]]));
+    });
+
+    it("replaces the errors when the handler reports different ones", async () => {
+      const env = setupEnv();
+      env.validator.addAsyncHandler(
+        () => env.model.field1,
+        async (field1, b) => {
+          b.invalidate("field1", `invalid ${field1}`);
+        }
+      );
+      await env.waitForAsyncState(0);
+      expect(buildErrorMap(env.validator.findErrors(KeyPath.Self))).toEqual(new Map([["field1", ["invalid 0"]]]));
+
+      runInAction(() => {
+        env.model.field1 = 1;
+      });
+      await env.waitForReactionState(0);
+      await env.waitForAsyncState(0);
+      expect(buildErrorMap(env.validator.findErrors(KeyPath.Self))).toEqual(new Map([["field1", ["invalid 1"]]]));
     });
 
     it("removes the errors when the condition is no longer met", async () => {
