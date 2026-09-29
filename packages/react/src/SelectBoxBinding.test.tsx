@@ -175,12 +175,11 @@ describe("SelectBoxBinding", () => {
         setter: () => {},
         "aria-describedby": "hint",
       });
-      field.registerErrorText("error-text");
       expect(binding.props["aria-describedby"]).toBe("hint");
 
       form.validator.updateErrors(Symbol(), (builder) => builder.invalidate("single", "invalid"));
       field.reportError();
-      expect(binding.props["aria-describedby"]).toBe("hint error-text");
+      expect(binding.props["aria-describedby"]).toBe(`hint ${field.errorTextId}`);
     });
 
     it("returns the full set of attributes for a single select", () => {

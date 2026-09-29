@@ -65,12 +65,11 @@ describe("TextAreaBinding", () => {
         setter: (v) => (model.text = v),
         "aria-describedby": "hint",
       }));
-      env.field.registerErrorText("error-text");
       expect(env.binding.props["aria-describedby"]).toBe("hint");
 
       env.form.validator.updateErrors(Symbol(), (builder) => builder.invalidate("text", "invalid"));
       env.field.reportError();
-      expect(env.binding.props["aria-describedby"]).toBe("hint error-text");
+      expect(env.binding.props["aria-describedby"]).toBe(`hint ${env.field.errorTextId}`);
     });
 
     test("exposes exactly the textarea attributes, without a type", () => {

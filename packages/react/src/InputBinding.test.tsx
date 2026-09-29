@@ -708,12 +708,11 @@ describe("InputBinding", () => {
         setter: (v) => (model.string = v),
         "aria-describedby": "hint",
       }));
-      env.field.registerErrorText("error-text");
       expect(env.binding.props["aria-describedby"]).toBe("hint");
 
       env.form.validator.updateErrors(Symbol(), (builder) => builder.invalidate("string", "invalid"));
       env.field.reportError();
-      expect(env.binding.props["aria-describedby"]).toBe("hint error-text");
+      expect(env.binding.props["aria-describedby"]).toBe(`hint ${env.field.errorTextId}`);
     });
 
     test("exposes exactly the input attributes", () => {

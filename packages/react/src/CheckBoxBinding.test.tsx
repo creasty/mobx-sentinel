@@ -119,12 +119,11 @@ describe("CheckBoxBinding", () => {
   describe("props", () => {
     it("points the checkbox at the error text of its field while the errors are reported, after the configured ids", () => {
       const env = setupModelEnv({ "aria-describedby": "hint" });
-      env.field.registerErrorText("error-text");
       expect(env.binding.props["aria-describedby"]).toBe("hint");
 
       env.form.validator.updateErrors(Symbol(), (builder) => builder.invalidate("boolean", "invalid"));
       env.field.reportError();
-      expect(env.binding.props["aria-describedby"]).toBe("hint error-text");
+      expect(env.binding.props["aria-describedby"]).toBe(`hint ${env.field.errorTextId}`);
     });
 
     it("returns the full set of attributes", () => {

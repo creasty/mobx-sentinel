@@ -52,7 +52,7 @@ const AddressForm = observer(({ model }) => {
 
 It covers that one form. A sub-form is a separate instance, and the component that renders it calls the hook for itself -- so no component has to know whether an ancestor already did.
 
-For ids of your own, such as an error message's, build on the field's: `` `${form.getField("city").stableId}:error` ``.
+For ids of your own, such as a hint's, build on the field's: `` `${form.getField("city").stableId}:hint` ``.
 
 ## `useFormHandler(form, event, handler)`
 

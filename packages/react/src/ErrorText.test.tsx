@@ -1,7 +1,7 @@
 import React from "react";
 import "@testing-library/jest-dom/vitest";
 import { act, render, screen } from "@testing-library/react";
-import { autorun, makeObservable, observable } from "mobx";
+import { makeObservable, observable } from "mobx";
 import { observer } from "mobx-react-lite";
 import { Form, type FormField } from "@mobx-sentinel/form";
 import "./extension";
@@ -81,7 +81,7 @@ describe("ErrorText", () => {
     expect(messagesIn(container)).toEqual(["City is required"]);
   });
 
-  it("renders a span marked with data-error-text, holding a span with an id for each field with errors, which holds a span for each message", () => {
+  it("renders a span marked with data-error-text, holding a span with the errorTextId of each field with errors, which holds a span for each message", () => {
     const { form, setErrors, report } = setUp();
     setErrors({ city: ["City is required", "Use letters only"], region: ["Region is required"] });
     report("city", "region");
@@ -96,7 +96,10 @@ describe("ErrorText", () => {
       ["City is required", "Use letters only"],
       ["Region is required"],
     ]);
-    expect(new Set(groups.map((group) => group.id)).size).toBe(2);
+    expect(groups.map((group) => group.id)).toEqual([
+      form.getField("city").errorTextId,
+      form.getField("region").errorTextId,
+    ]);
   });
 
   it("renders the errors of several fields, each once the field reports them", () => {
@@ -149,38 +152,6 @@ describe("ErrorText", () => {
     expect(outer).toHaveAttribute("data-error-text", "");
   });
 
-  it("registers the span of each field while it is mounted", () => {
-    const { form, setErrors, report } = setUp();
-    const { container, unmount } = render(<ErrorText form={form} fields={["city", "region"]} />);
-    const cityId = form.getField("city").errorTextId;
-    expect(cityId).toEqual(expect.any(String));
-    expect(form.getField("region").errorTextId).toEqual(expect.any(String));
-    expect(form.getField("region").errorTextId).not.toBe(cityId);
-
-    setErrors({ city: ["City is required"] });
-    report("city");
-    expect(container.querySelector("[data-error-text] > span")).toHaveAttribute("id", cityId);
-
-    unmount();
-    expect(form.getField("city").errorTextId).toBeUndefined();
-    expect(form.getField("region").errorTextId).toBeUndefined();
-  });
-
-  it("keeps its registrations when rendered again with an equal array of fields", () => {
-    const { form } = setUp();
-    const Parent = () => <ErrorText form={form} fields={["city"]} />;
-    const { rerender } = render(<Parent />);
-    const seen: (string | undefined)[] = [];
-    const dispose = autorun(() => {
-      seen.push(form.getField("city").errorTextId);
-    });
-
-    rerender(<Parent />);
-    rerender(<Parent />);
-    expect(seen).toHaveLength(1);
-    dispose();
-  });
-
   it("points each bound control at the span of its own field while the field's errors are reported", () => {
     const env = setUp();
     render(<Fields env={env} />);
@@ -202,19 +173,17 @@ describe("ErrorText", () => {
     expect(city).not.toHaveAttribute("aria-describedby");
   });
 
-  it("points a control at an ErrorText that appears after its errors are reported, and lets go once it is gone", () => {
+  it("points a control at the span of its field before an ErrorText renders it, so that one appearing later describes the control", () => {
     const env = setUp();
     const { rerender } = render(<Fields env={env} showErrorText={false} />);
     const city = screen.getByLabelText("City");
     env.setErrors({ city: ["City is required"] });
     env.report("city");
-    expect(city).not.toHaveAttribute("aria-describedby");
+    expect(city).toHaveAttribute("aria-describedby", env.form.getField("city").errorTextId);
+    expect(city).toHaveAccessibleDescription("");
 
     rerender(<Fields env={env} showErrorText />);
     expect(city).toHaveAccessibleDescription("City is required");
-
-    rerender(<Fields env={env} showErrorText={false} />);
-    expect(city).not.toHaveAttribute("aria-describedby");
   });
 
   it("keeps the ids given to the binding, and adds the error text after them", () => {
@@ -231,22 +200,6 @@ describe("ErrorText", () => {
     env.setErrors({ city: ["City is required"] });
     env.report("city");
     expect(city).toHaveAccessibleDescription("Letters only. City is required");
-  });
-
-  it("points a control at one error text when several show its field", () => {
-    const env = setUp();
-    render(
-      <>
-        <Fields env={env} />
-        <ErrorText form={env.form} fields={["city"]} />
-      </>
-    );
-    const city = screen.getByLabelText("City");
-    env.setErrors({ city: ["City is required"] });
-    env.report("city");
-    expect(screen.getAllByText("City is required")).toHaveLength(2);
-    expect(city.getAttribute("aria-describedby")?.split(" ")).toHaveLength(1);
-    expect(city).toHaveAccessibleDescription("City is required");
   });
 
   test("props are typed after the form", () => {

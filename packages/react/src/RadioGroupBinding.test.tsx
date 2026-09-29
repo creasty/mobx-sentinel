@@ -197,13 +197,12 @@ describe("RadioGroupBinding", () => {
   describe("props", () => {
     it("points every button at the error text of its field while the errors are reported, after the configured ids", () => {
       const env = setupModelEnv({ "aria-describedby": "hint" });
-      env.field.registerErrorText("error-text");
       expect(env.binding.props(SampleEnum.ALPHA)["aria-describedby"]).toBe("hint");
 
       env.form.validator.updateErrors(Symbol(), (builder) => builder.invalidate("enumOpt", "invalid"));
       env.field.reportError();
-      expect(env.binding.props(SampleEnum.ALPHA)["aria-describedby"]).toBe("hint error-text");
-      expect(env.binding.props(null)["aria-describedby"]).toBe("hint error-text");
+      expect(env.binding.props(SampleEnum.ALPHA)["aria-describedby"]).toBe(`hint ${env.field.errorTextId}`);
+      expect(env.binding.props(null)["aria-describedby"]).toBe(`hint ${env.field.errorTextId}`);
     });
 
     it("returns the full set of attributes", () => {

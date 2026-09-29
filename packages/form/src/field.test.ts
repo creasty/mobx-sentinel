@@ -277,6 +277,17 @@ describe("FormField", () => {
     });
   });
 
+  describe("#errorTextId", () => {
+    it("is the stable id followed by :error", () => {
+      const form = Form.get(new SampleModel());
+      const field = form.getField("test");
+      expect(field.errorTextId).toBe(`${field.id}:error`);
+
+      form.stableId = "_R_0_";
+      expect(field.errorTextId).toBe("_R_0_:test:error");
+    });
+  });
+
   describe("#errors", () => {
     it("returns an empty set if there are no errors at all", () => {
       const { field } = setupEnv();
@@ -382,58 +393,6 @@ describe("FormField", () => {
       expect(values).toEqual([true, false]);
 
       dispose();
-    });
-  });
-
-  describe("#errorTextId, #registerErrorText", () => {
-    it("has no error text id until one is registered", () => {
-      const { field } = setupEnv();
-      expect(field.errorTextId).toBeUndefined();
-
-      const unregister = field.registerErrorText("error-text");
-      expect(field.errorTextId).toBe("error-text");
-
-      unregister();
-      expect(field.errorTextId).toBeUndefined();
-    });
-
-    it("gives the first registered id, and the next one once the first is unregistered", () => {
-      const { field } = setupEnv();
-      const unregisterFirst = field.registerErrorText("first");
-      field.registerErrorText("second");
-      expect(field.errorTextId).toBe("first");
-
-      unregisterFirst();
-      expect(field.errorTextId).toBe("second");
-    });
-
-    it("notifies observers when the registrations change", () => {
-      const { field } = setupEnv();
-      const seen: (string | undefined)[] = [];
-      const dispose = autorun(() => {
-        seen.push(field.errorTextId);
-      });
-
-      const unregister = field.registerErrorText("error-text");
-      unregister();
-      expect(seen).toEqual([undefined, "error-text", undefined]);
-      dispose();
-    });
-
-    it("keeps the registrations when the field is reset", () => {
-      const { field } = setupEnv();
-      field.registerErrorText("error-text");
-      field.reset();
-      expect(field.errorTextId).toBe("error-text");
-    });
-
-    it("ignores an unregister call for an id that is already gone", () => {
-      const { field } = setupEnv();
-      const unregister = field.registerErrorText("error-text");
-      unregister();
-      field.registerErrorText("other");
-      unregister();
-      expect(field.errorTextId).toBe("other");
     });
   });
 
@@ -1615,6 +1574,7 @@ describe("FormField", () => {
       const { field } = setupEnv();
       expectTypeOf(field.id).toEqualTypeOf<string>();
       expectTypeOf(field.stableId).toEqualTypeOf<string>();
+      expectTypeOf(field.errorTextId).toEqualTypeOf<string>();
       expectTypeOf(field.fieldName).toEqualTypeOf<string>();
       expectTypeOf(field.validator).toEqualTypeOf<Validator<any>>();
       expectTypeOf(field.isTouched).toEqualTypeOf<boolean>();
@@ -1629,6 +1589,7 @@ describe("FormField", () => {
       type StateKeys =
         | "id"
         | "stableId"
+        | "errorTextId"
         | "fieldName"
         | "validator"
         | "isTouched"
@@ -1640,6 +1601,7 @@ describe("FormField", () => {
       expectTypeOf<Pick<FormField, StateKeys>>().toEqualTypeOf<{
         readonly id: string;
         readonly stableId: string;
+        readonly errorTextId: string;
         readonly fieldName: string;
         readonly validator: Validator<any>;
         readonly isTouched: boolean;

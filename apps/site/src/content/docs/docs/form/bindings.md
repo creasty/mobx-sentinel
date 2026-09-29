@@ -110,7 +110,7 @@ The method written by hand is checked against the one derived from the class. It
 
 ## Element IDs
 
-A label and its control find each other through an id, so every field carries one: `field.stableId`, which the standard bindings put in `id`, `htmlFor`, and a radio group's `name`. The form has one too, `form.stableId`.
+A label and its control find each other through an id, so every field carries one: `field.stableId`, which the standard bindings put in `id`, `htmlFor`, and a radio group's `name`. A control finds the text showing its errors through another, `field.errorTextId`. The form has one too, `form.stableId`.
 
 A form's stable id starts as its own identity, `form.id`, and until it is assigned another, each field's is its own identity too, `field.id`: unique on the page, but different in every process. That is all a client-rendered app needs.
 
@@ -125,6 +125,7 @@ form.getField('customerEmail').stableId; // "invoice-form-42:customerEmail"
 | --- | --- | --- |
 | `form.stableId` | `form.id` | `<id>` |
 | `field.stableId` | `field.id` | `<id>:<field name>` |
+| `field.errorTextId` | `<field.id>:error` | `<id>:<field name>:error` |
 
 For anything that reaches the DOM, use `stableId` rather than `id`, so it keeps matching once the form's stable id is assigned.
 

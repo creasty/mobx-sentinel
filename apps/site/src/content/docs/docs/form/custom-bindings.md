@@ -28,8 +28,7 @@ field.isIntermediate; // typing in progress (partial input)
 field.hasErrors; // boolean - has validation errors
 field.errors; // Set<string> of error messages
 field.isErrorReported; // undefined | false | true - for conditional display
-field.errorTextId; // string | undefined - id of the element showing the errors, such as an ErrorText
-field.registerErrorText(id); // register such an element; returns a function that unregisters it
+field.errorTextId; // string - id for the element showing the errors, which ErrorText uses
 
 // State management methods
 field.markAsTouched(); // typically on focus
