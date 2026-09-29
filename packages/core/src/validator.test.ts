@@ -1050,13 +1050,13 @@ describe("Validator", () => {
       env.validator.addSyncHandler((b) => {
         b.invalidate("field1", `invalid ${env.model.field1}`);
       });
-      expect(buildErrorMap(env.validator.findErrors(KeyPath.Self))).toEqual(new Map([["field1", ["invalid 0"]]]));
+      expect(buildErrorMap(env.validator.findErrors("**"))).toEqual(new Map([["field1", ["invalid 0"]]]));
 
       runInAction(() => {
         env.model.field1 = 1;
       });
       await env.waitForReactionState(0);
-      expect(buildErrorMap(env.validator.findErrors(KeyPath.Self))).toEqual(new Map([["field1", ["invalid 1"]]]));
+      expect(buildErrorMap(env.validator.findErrors("**"))).toEqual(new Map([["field1", ["invalid 1"]]]));
     });
 
     it("removes the errors when the condition is no longer met", async () => {
@@ -1238,14 +1238,14 @@ describe("Validator", () => {
         }
       );
       await env.waitForAsyncState(0);
-      expect(buildErrorMap(env.validator.findErrors(KeyPath.Self))).toEqual(new Map([["field1", ["invalid 0"]]]));
+      expect(buildErrorMap(env.validator.findErrors("**"))).toEqual(new Map([["field1", ["invalid 0"]]]));
 
       runInAction(() => {
         env.model.field1 = 1;
       });
       await env.waitForReactionState(0);
       await env.waitForAsyncState(0);
-      expect(buildErrorMap(env.validator.findErrors(KeyPath.Self))).toEqual(new Map([["field1", ["invalid 1"]]]));
+      expect(buildErrorMap(env.validator.findErrors("**"))).toEqual(new Map([["field1", ["invalid 1"]]]));
     });
 
     it("removes the errors when the condition is no longer met", async () => {
