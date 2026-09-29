@@ -1,5 +1,5 @@
 import { FormBinding, FormField } from "@mobx-sentinel/form";
-import { makeObservable, computed, action } from "mobx";
+import { makeObservable, action } from "mobx";
 
 export namespace SelectBoxBinding {
   /** @ignore */
@@ -70,12 +70,6 @@ export class SelectBoxBinding implements FormBinding {
     this.config.onFocus?.(e);
   };
 
-  @computed
-  get errorMessages() {
-    if (!this.field.isErrorReported) return null;
-    return Array.from(this.field.errors).join(", ") || null;
-  }
-
   get props() {
     return {
       id: this.config.id ?? this.field.stableId,
@@ -84,7 +78,6 @@ export class SelectBoxBinding implements FormBinding {
       onChange: this.onChange,
       onFocus: this.onFocus,
       "aria-invalid": this.field.isErrorReported,
-      "aria-errormessage": this.errorMessages ?? undefined,
     } satisfies SelectBoxBinding.Attrs;
   }
 }

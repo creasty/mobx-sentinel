@@ -46,14 +46,21 @@ By default, bindings use auto-generated field IDs. You can override them:
 
 ## Error Display
 
-All bindings automatically set ARIA attributes for accessibility. Like `form.getErrors()`, they expose a field's errors only once the errors have been reported; see [Smart Error Reporting](/docs/form/error-reporting/) for when that happens.
+`ErrorText` renders the errors of fields once they have been reported, as `form.getErrors()` returns them; see [Smart Error Reporting](/docs/form/error-reporting/) for when that happens. It renders a `<span data-error-text>` holding one `<span>` per message, and nothing while there are none. Style it through the attribute, or pass a `className`.
 
 ```tsx
-// Binding sets aria-invalid and aria-errormessage automatically
-<input {...form.bindInput("email", { /* ... */ })} />
+import { ErrorText } from "@mobx-sentinel/react";
 
-// Optionally display errors manually (empty until reported)
-{Array.from(form.getErrors("email"), (error, i) => (
-  <p className="error" key={i}>{error}</p>
-))}
+<input {...form.bindInput("email", { /* ... */ })} />
+<ErrorText form={form} fields={["email"]} />
+
+// One text for a row of fields
+<ErrorText form={form} fields={["city", "region", "postalCode"]} />
+```
+
+The bindings set `aria-invalid`, but they don't point an input at its messages. To have assistive technologies read the messages with the input, give the text an `id` and reference it:
+
+```tsx
+<input aria-describedby="email-error" {...form.bindInput("email", { /* ... */ })} />
+<ErrorText form={form} fields={["email"]} id="email-error" />
 ```

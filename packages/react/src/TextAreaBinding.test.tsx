@@ -68,17 +68,8 @@ describe("TextAreaBinding", () => {
         onFocus: env.binding.onFocus,
         onBlur: env.binding.onBlur,
         "aria-invalid": undefined,
-        "aria-errormessage": undefined,
       });
-      expect(Object.keys(env.binding.props)).toEqual([
-        "value",
-        "id",
-        "onChange",
-        "onFocus",
-        "onBlur",
-        "aria-invalid",
-        "aria-errormessage",
-      ]);
+      expect(Object.keys(env.binding.props)).toEqual(["value", "id", "onChange", "onFocus", "onBlur", "aria-invalid"]);
     });
 
     test("returns a fresh object with the same handler functions on every access", () => {
@@ -114,24 +105,22 @@ describe("TextAreaBinding", () => {
       expect(env.binding.props.id).toBe("");
     });
 
-    test("keeps aria attributes undefined until errors are reported, even if errors exist", () => {
+    test("keeps aria-invalid undefined until errors are reported, even if errors exist", () => {
       const env = setupBinding(() => ({ getter: () => null, setter: () => {} }));
       env.form.validator.updateErrors(Symbol(), (builder) => {
         builder.invalidate("text", "invalid");
       });
       expect(env.field.hasErrors).toBe(true);
       expect(env.binding.props["aria-invalid"]).toBeUndefined();
-      expect(env.binding.props["aria-errormessage"]).toBeUndefined();
     });
 
     test("sets aria-invalid to false when reported without errors", () => {
       const env = setupBinding(() => ({ getter: () => null, setter: () => {} }));
       env.field.reportError();
       expect(env.binding.props["aria-invalid"]).toBe(false);
-      expect(env.binding.props["aria-errormessage"]).toBeUndefined();
     });
 
-    test("sets aria-invalid and aria-errormessage when reported with errors, and clears them on reset", () => {
+    test("sets aria-invalid to true without aria-errormessage when reported with errors, and clears it on reset", () => {
       const env = setupBinding(() => ({ getter: () => null, setter: () => {} }));
       env.form.validator.updateErrors(Symbol(), (builder) => {
         builder.invalidate("text", "invalid1");
@@ -139,12 +128,19 @@ describe("TextAreaBinding", () => {
       });
       env.field.reportError();
       expect(env.binding.props["aria-invalid"]).toBe(true);
-      // Carries the message text, as the other standard bindings do (see the PINNED quirk in InputBinding.test.tsx)
-      expect(env.binding.props["aria-errormessage"]).toBe("invalid1, invalid2");
+      expect(env.binding.props).not.toHaveProperty("aria-errormessage");
 
       env.field.reset();
       expect(env.binding.props["aria-invalid"]).toBeUndefined();
-      expect(env.binding.props["aria-errormessage"]).toBeUndefined();
+    });
+
+    test("sets aria-invalid to false when reported with errors on other fields only", () => {
+      const env = setupBinding(() => ({ getter: () => null, setter: () => {} }));
+      env.form.validator.updateErrors(Symbol(), (builder) => {
+        builder.invalidate("textOpt", "invalid");
+      });
+      env.field.reportError();
+      expect(env.binding.props["aria-invalid"]).toBe(false);
     });
   });
 
@@ -161,10 +157,9 @@ describe("TextAreaBinding", () => {
       expect(env.binding.props.value).toBe("");
     });
 
-    test("is a plain getter, while errorMessages is a computed value", () => {
+    test("is a plain getter, not a computed value", () => {
       const env = setupBinding(() => ({ getter: () => null, setter: () => {} }));
       expect(isComputedProp(env.binding, "value")).toBe(false);
-      expect(isComputedProp(env.binding, "errorMessages")).toBe(true);
     });
 
     test("reads a replaced getter immediately, even while observed", () => {
@@ -309,7 +304,6 @@ describe("TextAreaBinding", () => {
       expect(env.field.isIntermediate).toBe(false);
       expect(env.field.isChanged).toBe(true);
       expect(env.binding.props["aria-invalid"]).toBe(true);
-      expect(env.binding.props["aria-errormessage"]).toBe("invalid");
     });
 
     test("propagates a setter error without marking the field or calling the callback", () => {
@@ -364,7 +358,6 @@ describe("TextAreaBinding", () => {
       expect(env.field.isIntermediate).toBe(false);
       expect(env.field.isChanged).toBe(true);
       expect(env.binding.props["aria-invalid"]).toBe(true);
-      expect(env.binding.props["aria-errormessage"]).toBe("invalid");
     });
 
     test("neither reports errors nor marks the field when nothing has been changed", () => {
@@ -415,31 +408,6 @@ describe("TextAreaBinding", () => {
     });
   });
 
-  describe("errorMessages", () => {
-    test("is null until the errors are reported, then joins the distinct messages", () => {
-      const env = setupBinding(() => ({ getter: () => null, setter: () => {} }));
-      expect(env.binding.errorMessages).toBeNull();
-      env.form.validator.updateErrors(Symbol(), (builder) => {
-        builder.invalidate("text", "b");
-        builder.invalidate("text", "a");
-        builder.invalidate("text", "b");
-      });
-      expect(env.binding.errorMessages).toBeNull();
-      env.field.reportError();
-      expect(env.binding.errorMessages).toBe("b, a");
-    });
-
-    test("ignores the errors of other fields", () => {
-      const env = setupBinding(() => ({ getter: () => null, setter: () => {} }));
-      env.form.validator.updateErrors(Symbol(), (builder) => {
-        builder.invalidate("textOpt", "invalid");
-      });
-      env.field.reportError();
-      expect(env.binding.errorMessages).toBeNull();
-      expect(env.binding.props["aria-invalid"]).toBe(false);
-    });
-  });
-
   describe("types", () => {
     test("handlers are typed for HTMLTextAreaElement", () => {
       const env = setupBinding(() => ({ getter: () => null, setter: () => {} }));
@@ -468,12 +436,10 @@ describe("TextAreaBinding", () => {
         onFocus: React.FocusEventHandler<HTMLTextAreaElement>;
         onBlur: React.FocusEventHandler<HTMLTextAreaElement>;
         "aria-invalid": boolean | undefined;
-        "aria-errormessage": string | undefined;
       }>();
       expectTypeOf(env.binding.props).toExtend<React.TextareaHTMLAttributes<HTMLTextAreaElement>>();
       expectTypeOf(env.binding.props).not.toExtend<React.InputHTMLAttributes<HTMLInputElement>>();
       expectTypeOf(env.binding.value).toEqualTypeOf<string>();
-      expectTypeOf(env.binding.errorMessages).toEqualTypeOf<string | null>();
     });
 
     test("config", () => {
@@ -595,7 +561,7 @@ describe("bindTextArea", () => {
     expect(env.textarea).toHaveDisplayValue("line 1\nline 2");
   });
 
-  test("renders the field id without a type or aria attributes, keeping the element's own attributes", () => {
+  test("renders the field id without a type or aria-invalid, keeping the element's own attributes", () => {
     const model = new SampleModel();
     const Component = observer(() => {
       const form = Form.get(model);
@@ -616,7 +582,6 @@ describe("bindTextArea", () => {
     expect(textarea).toHaveAttribute("placeholder", "Write something");
     expect(textarea).not.toHaveAttribute("type");
     expect(textarea).not.toHaveAttribute("aria-invalid");
-    expect(textarea).not.toHaveAttribute("aria-errormessage");
   });
 
   test("marks the field as touched on focus", () => {
@@ -654,7 +619,6 @@ describe("bindTextArea", () => {
 
       fireEvent.blur(env.textarea);
       expect(env.textarea).toHaveAttribute("aria-invalid", "true");
-      expect(env.textarea).toHaveAttribute("aria-errormessage", "invalid");
     });
 
     test("reports errors after the auto-finalization delay without blurring", () => {
@@ -678,7 +642,6 @@ describe("bindTextArea", () => {
       fireEvent.change(env.textarea, { target: { value: "world" } });
       fireEvent.blur(env.textarea);
       expect(env.textarea).toHaveAttribute("aria-invalid", "false");
-      expect(env.textarea).not.toHaveAttribute("aria-errormessage");
 
       act(() => {
         env.form.reset();

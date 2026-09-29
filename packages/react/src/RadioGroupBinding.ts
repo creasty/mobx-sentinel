@@ -1,5 +1,5 @@
 import { FormBinding, FormField } from "@mobx-sentinel/form";
-import { makeObservable, computed, action } from "mobx";
+import { action } from "mobx";
 import { createElement, Fragment } from "react";
 
 export namespace RadioGroupBinding {
@@ -57,9 +57,7 @@ export class RadioGroupBinding<V extends RadioGroupBinding.Option = RadioGroupBi
   constructor(
     private readonly field: FormField,
     public config: RadioGroupBinding.Config<V>
-  ) {
-    makeObservable(this);
-  }
+  ) {}
 
   get value(): V {
     return this.config.getter();
@@ -69,12 +67,6 @@ export class RadioGroupBinding<V extends RadioGroupBinding.Option = RadioGroupBi
     this.field.markAsTouched();
     this.config.onFocus?.(e);
   };
-
-  @computed
-  get errorMessages() {
-    if (!this.field.isErrorReported) return null;
-    return Array.from(this.field.errors).join(", ") || null;
-  }
 
   props = (
     /** Option that the radio button stands for */
@@ -90,7 +82,6 @@ export class RadioGroupBinding<V extends RadioGroupBinding.Option = RadioGroupBi
       onChange: this.#getChangeHandler(option),
       onFocus: this.onFocus,
       "aria-invalid": this.field.isErrorReported,
-      "aria-errormessage": this.errorMessages ?? undefined,
     } satisfies RadioGroupBinding.Attrs;
   };
 

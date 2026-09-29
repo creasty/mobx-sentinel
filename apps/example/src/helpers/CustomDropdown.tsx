@@ -24,7 +24,6 @@ export namespace CustomDropdown {
     /** ID of the summary */
     id?: string;
     "aria-invalid"?: boolean;
-    "aria-errormessage"?: string;
   };
 }
 
@@ -61,12 +60,7 @@ export function CustomDropdown(props: CustomDropdown.Props) {
         if (!e.currentTarget.open) props.onClose?.();
       }}
     >
-      <summary
-        ref={summaryRef}
-        id={props.id}
-        aria-invalid={props["aria-invalid"]}
-        aria-errormessage={props["aria-errormessage"]}
-      >
+      <summary ref={summaryRef} id={props.id} aria-invalid={props["aria-invalid"]}>
         {checked.length > 0 ? checked.map((option) => option.label).join(", ") : props.placeholder}
       </summary>
       <ul>

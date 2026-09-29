@@ -45,7 +45,7 @@
       color: var(--pico-form-element-color);
     }
     /* Keeps the errors as close as Pico keeps them below its form elements */
-    + small {
+    + [data-error-text] {
       margin-top: calc(var(--pico-spacing) * -0.75);
     }
   }

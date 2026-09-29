@@ -38,9 +38,8 @@ All bindings provide built-in accessibility features:
 
 - **Unique IDs** — Automatically generates unique `id` attributes for form elements, enabling proper label associations by `htmlFor` (see [Element IDs](/docs/form/bindings/#element-ids))
 - **Error states** — Sets `aria-invalid` once a field's errors are reported (see [Smart Error Reporting](/docs/form/error-reporting/))
-- **Error messages** — Provides `aria-errormessage` linking to error text for screen readers
 
-These features ensure forms are accessible to users of assistive technologies without additional configuration.
+The bindings don't point an element at its error messages; see [Error Display](/docs/react/advanced-bindings/#error-display) for rendering them and linking them to an input.
 
 ## Text Input: `form.bindInput(fieldName, config)`
 

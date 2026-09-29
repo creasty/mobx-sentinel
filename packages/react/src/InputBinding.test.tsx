@@ -210,70 +210,6 @@ describe("InputBinding", () => {
     });
   });
 
-  describe("errorMessages", () => {
-    it("returns null if no errors", () => {
-      const env = setupEnv();
-      expect(env.binding.errorMessages).toBeNull();
-      env.field.reportError();
-      expect(env.binding.errorMessages).toBeNull();
-    });
-
-    it("returns the error messages if errors are reported", () => {
-      const env = setupEnv();
-      env.form.validator.updateErrors(Symbol(), (builder) => {
-        builder.invalidate("string", "invalid1");
-        builder.invalidate("string", "invalid2");
-      });
-      expect(env.binding.errorMessages).toBeNull();
-      env.field.reportError();
-      expect(env.binding.errorMessages).toEqual("invalid1, invalid2");
-    });
-
-    test("deduplicates identical messages and joins the rest in insertion order", () => {
-      const env = setupBinding(() => ({ getter: () => "", setter: () => {} }));
-      env.form.validator.updateErrors(Symbol(), (builder) => {
-        builder.invalidate("string", "b");
-        builder.invalidate("string", "a");
-        builder.invalidate("string", "b");
-      });
-      env.field.reportError();
-      expect(env.binding.errorMessages).toBe("b, a");
-    });
-
-    test("treats an empty message as no message while the field is still invalid", () => {
-      const env = setupBinding(() => ({ getter: () => "", setter: () => {} }));
-      env.form.validator.updateErrors(Symbol(), (builder) => {
-        builder.invalidate("string", "");
-      });
-      env.field.reportError();
-      expect(env.field.isErrorReported).toBe(true);
-      expect(env.binding.props["aria-invalid"]).toBe(true);
-      // PINNED(quirk): an empty error message collapses to null, so the input is aria-invalid without any aria-errormessage. Decide: should empty messages be dropped by the validator, or should errorMessages return "" here?
-      expect(env.binding.errorMessages).toBeNull();
-      expect(env.binding.props["aria-errormessage"]).toBeUndefined();
-    });
-
-    test("recomputes when the errors change after reporting", () => {
-      const env = setupBinding(() => ({ getter: () => "", setter: () => {} }));
-      const key = Symbol();
-      env.field.reportError();
-
-      const seen: unknown[] = [];
-      const dispose = autorun(() => {
-        seen.push(env.binding.errorMessages);
-      });
-      try {
-        env.form.validator.updateErrors(key, (builder) => {
-          builder.invalidate("string", "invalid");
-        });
-        env.form.validator.updateErrors(key, () => {});
-      } finally {
-        dispose();
-      }
-      expect(seen).toEqual([null, "invalid", null]);
-    });
-  });
-
   describe("#value", () => {
     test("falls back to an empty string when the getter returns null", () => {
       const env = setupBinding(() => ({ getter: () => null, setter: () => {} }));
@@ -558,7 +494,6 @@ describe("InputBinding", () => {
       expect(env.field.isTouched).toBe(false);
       expect(env.field.isErrorReported).toBeUndefined();
       expect(env.binding.props["aria-invalid"]).toBeUndefined();
-      expect(env.binding.props["aria-errormessage"]).toBeUndefined();
     });
 
     test("finalizes after autoFinalizationDelayMs, restarting the delay on every change", () => {
@@ -581,7 +516,6 @@ describe("InputBinding", () => {
       expect(env.field.isIntermediate).toBe(false);
       expect(env.field.isChanged).toBe(true);
       expect(env.binding.props["aria-invalid"]).toBe(true);
-      expect(env.binding.props["aria-errormessage"]).toBe("invalid");
     });
 
     test("propagates a setter error without marking the field or calling the callback", () => {
@@ -650,7 +584,6 @@ describe("InputBinding", () => {
       expect(env.field.isIntermediate).toBe(false);
       expect(env.field.isChanged).toBe(true);
       expect(env.binding.props["aria-invalid"]).toBe(true);
-      expect(env.binding.props["aria-errormessage"]).toBe("invalid");
     });
 
     test("does not report errors or mark the field when nothing has been changed", () => {
@@ -712,7 +645,6 @@ describe("InputBinding", () => {
         onFocus: env.binding.onFocus,
         onBlur: env.binding.onBlur,
         "aria-invalid": undefined,
-        "aria-errormessage": undefined,
       });
       expect(Object.keys(env.binding.props)).toEqual([
         "type",
@@ -722,7 +654,6 @@ describe("InputBinding", () => {
         "onFocus",
         "onBlur",
         "aria-invalid",
-        "aria-errormessage",
       ]);
     });
 
@@ -736,24 +667,22 @@ describe("InputBinding", () => {
       expect(second.onBlur).toBe(first.onBlur);
     });
 
-    test("keeps aria attributes undefined until errors are reported, even if errors exist", () => {
+    test("keeps aria-invalid undefined until errors are reported, even if errors exist", () => {
       const env = setupBinding(() => ({ getter: () => null, setter: () => {} }));
       env.form.validator.updateErrors(Symbol(), (builder) => {
         builder.invalidate("string", "invalid");
       });
       expect(env.field.hasErrors).toBe(true);
       expect(env.binding.props["aria-invalid"]).toBeUndefined();
-      expect(env.binding.props["aria-errormessage"]).toBeUndefined();
     });
 
     test("sets aria-invalid to false when reported without errors", () => {
       const env = setupBinding(() => ({ getter: () => null, setter: () => {} }));
       env.field.reportError();
       expect(env.binding.props["aria-invalid"]).toBe(false);
-      expect(env.binding.props["aria-errormessage"]).toBeUndefined();
     });
 
-    test("sets aria-invalid to true and aria-errormessage to the message text when reported with errors", () => {
+    test("sets aria-invalid to true without aria-errormessage when reported with errors", () => {
       const env = setupBinding(() => ({ getter: () => null, setter: () => {} }));
       env.form.validator.updateErrors(Symbol(), (builder) => {
         builder.invalidate("string", "invalid1");
@@ -761,11 +690,10 @@ describe("InputBinding", () => {
       });
       env.field.reportError();
       expect(env.binding.props["aria-invalid"]).toBe(true);
-      // PINNED(quirk): aria-errormessage receives the message text, but WAI-ARIA defines it as an ID reference to the element containing the message (the form docs say "with error text"; the react docs say "linking to error text"). Decide: should the binding reference an error element id instead of embedding the text (flip to an element id, or no attribute when no such element is known)? The other assertions of the aria-errormessage text in this file (lifecycle and rendered error reporting tests) rely on the same behavior and must be updated along with it.
-      expect(env.binding.props["aria-errormessage"]).toBe("invalid1, invalid2");
+      expect(env.binding.props).not.toHaveProperty("aria-errormessage");
     });
 
-    test("switches aria attributes back once the errors are resolved", () => {
+    test("switches aria-invalid back once the errors are resolved", () => {
       const env = setupBinding(() => ({ getter: () => null, setter: () => {} }));
       const key = Symbol();
       env.form.validator.updateErrors(key, (builder) => {
@@ -776,7 +704,6 @@ describe("InputBinding", () => {
 
       env.form.validator.updateErrors(key, () => {});
       expect(env.binding.props["aria-invalid"]).toBe(false);
-      expect(env.binding.props["aria-errormessage"]).toBeUndefined();
     });
 
     test("clears the reported state when the field is reset", () => {
@@ -789,7 +716,6 @@ describe("InputBinding", () => {
 
       env.field.reset();
       expect(env.binding.props["aria-invalid"]).toBeUndefined();
-      expect(env.binding.props["aria-errormessage"]).toBeUndefined();
     });
   });
 
@@ -954,45 +880,6 @@ describe("InputBinding", () => {
     });
   });
 
-  describe("errorMessages memoization", () => {
-    test("does not notify observers when the reported state changes but the messages stay null", () => {
-      const env = setupBinding(() => ({ getter: () => null, setter: () => {} }));
-      const seen: unknown[] = [];
-      const dispose = autorun(() => {
-        seen.push(env.binding.errorMessages);
-      });
-      try {
-        env.field.reportError(); // isErrorReported: undefined -> false
-        expect(env.field.isErrorReported).toBe(false);
-        env.field.reset(); // isErrorReported: false -> undefined
-        expect(env.field.isErrorReported).toBeUndefined();
-      } finally {
-        dispose();
-      }
-      expect(seen).toEqual([null]);
-    });
-
-    test("does not notify observers when another error source adds an identical message", () => {
-      const env = setupBinding(() => ({ getter: () => null, setter: () => {} }));
-      env.form.validator.updateErrors(Symbol(), (builder) => {
-        builder.invalidate("string", "invalid");
-      });
-      env.field.reportError();
-      const seen: unknown[] = [];
-      const dispose = autorun(() => {
-        seen.push(env.binding.errorMessages);
-      });
-      try {
-        env.form.validator.updateErrors(Symbol(), (builder) => {
-          builder.invalidate("string", "invalid");
-        });
-      } finally {
-        dispose();
-      }
-      expect(seen).toEqual(["invalid"]);
-    });
-  });
-
   describe("props.id edge cases", () => {
     test("uses an empty id as-is instead of falling back to the field id", () => {
       const env = setupBinding(() => ({ id: "", getter: () => null, setter: () => {} }));
@@ -1043,7 +930,7 @@ describe("InputBinding", () => {
       vi.useRealTimers();
     });
 
-    test("shows aria attributes when the whole form reports errors without any interaction", () => {
+    test("sets aria-invalid when the whole form reports errors without any interaction", () => {
       const env = setupBinding(() => ({ getter: () => null, setter: () => {} }));
       env.form.validator.updateErrors(Symbol(), (builder) => {
         builder.invalidate("string", "invalid");
@@ -1052,7 +939,6 @@ describe("InputBinding", () => {
       expect(env.field.isTouched).toBe(false);
       expect(env.field.isChanged).toBe(false);
       expect(env.binding.props["aria-invalid"]).toBe(true);
-      expect(env.binding.props["aria-errormessage"]).toBe("invalid");
     });
 
     test("keeps errors visible and live while typing again after they have been reported", () => {
@@ -1063,7 +949,7 @@ describe("InputBinding", () => {
       });
       env.binding.onChange(inputEventOf("text", "a"));
       env.binding.onBlur(inputEventOf("text", "a"));
-      expect(env.binding.props["aria-errormessage"]).toBe("too short");
+      expect(env.binding.props["aria-invalid"]).toBe(true);
 
       env.binding.onFocus(inputEventOf("text", "a"));
       env.binding.onChange(inputEventOf("text", "ab"));
@@ -1074,12 +960,11 @@ describe("InputBinding", () => {
         builder.invalidate("string", "still too short");
       });
       expect(env.field.isIntermediate).toBe(true);
-      expect(env.binding.props["aria-errormessage"]).toBe("still too short");
+      expect(env.binding.props["aria-invalid"]).toBe(true);
 
       env.form.validator.updateErrors(key, () => {});
       expect(env.field.isIntermediate).toBe(true);
       expect(env.binding.props["aria-invalid"]).toBe(false);
-      expect(env.binding.props["aria-errormessage"]).toBeUndefined();
     });
 
     test("starts over after a form reset: the pending finalization is cancelled and errors stay hidden until the next finalized change", () => {
@@ -1106,10 +991,9 @@ describe("InputBinding", () => {
       expect(env.binding.props["aria-invalid"]).toBeUndefined();
       env.binding.onBlur(inputEventOf("text", "ab"));
       expect(env.binding.props["aria-invalid"]).toBe(true);
-      expect(env.binding.props["aria-errormessage"]).toBe("invalid");
     });
 
-    test("defers aria attributes until pending validation settles, then keeps showing stale errors while revalidating", () => {
+    test("defers aria-invalid until pending validation settles, then keeps showing stale errors while revalidating", () => {
       const env = setupBinding((model) => ({ getter: () => model.string, setter: (v) => (model.string = v) }));
       const delayMs = 100;
       const dispose = env.form.validator.addSyncHandler(
@@ -1130,20 +1014,16 @@ describe("InputBinding", () => {
         expect(env.field.isChanged).toBe(true);
         expect(env.field.isIntermediate).toBe(false);
         expect(env.binding.props["aria-invalid"]).toBeUndefined();
-        expect(env.binding.props["aria-errormessage"]).toBeUndefined();
 
         vi.advanceTimersByTime(delayMs);
         expect(env.binding.props["aria-invalid"]).toBe(true);
-        expect(env.binding.props["aria-errormessage"]).toBe("bad value");
 
         env.binding.onChange(inputEventOf("text", "good"));
         expect(env.form.validator.isValidating).toBe(true);
         expect(env.binding.props["aria-invalid"]).toBe(true);
-        expect(env.binding.props["aria-errormessage"]).toBe("bad value");
 
         vi.advanceTimersByTime(delayMs);
         expect(env.binding.props["aria-invalid"]).toBe(false);
-        expect(env.binding.props["aria-errormessage"]).toBeUndefined();
       } finally {
         dispose();
       }
@@ -1176,11 +1056,9 @@ describe("InputBinding", () => {
         onFocus: React.FocusEventHandler<HTMLInputElement>;
         onBlur: React.FocusEventHandler<HTMLInputElement>;
         "aria-invalid": boolean | undefined;
-        "aria-errormessage": string | undefined;
       }>();
       expectTypeOf(env.binding.value).toEqualTypeOf<string | number | readonly string[]>();
       expectTypeOf(env.binding.type).toEqualTypeOf<React.HTMLInputTypeAttribute>();
-      expectTypeOf(env.binding.errorMessages).toEqualTypeOf<string | null>();
     });
 
     test("config variants", () => {
@@ -1503,7 +1381,7 @@ describe("bindInput", () => {
   });
 
   describe("rendered attributes", () => {
-    test("renders the deduced type and the field id without aria attributes", () => {
+    test("renders the deduced type and the field id without aria-invalid", () => {
       const env = setupEnv("string");
       const form = Form.get(env.model);
       const expectations = [
@@ -1516,7 +1394,6 @@ describe("bindInput", () => {
         expect(input.type).toBe(type);
         expect(input.id).toBe(form.getField(label).id);
         expect(input).not.toHaveAttribute("aria-invalid");
-        expect(input).not.toHaveAttribute("aria-errormessage");
       }
     });
 
@@ -1560,11 +1437,9 @@ describe("bindInput", () => {
       fireEvent.change(env.input, { target: { value: "world" } });
       expect(env.model.string).toBe("world");
       expect(env.input).not.toHaveAttribute("aria-invalid");
-      expect(env.input).not.toHaveAttribute("aria-errormessage");
 
       fireEvent.blur(env.input);
       expect(env.input).toHaveAttribute("aria-invalid", "true");
-      expect(env.input).toHaveAttribute("aria-errormessage", "invalid");
     });
 
     test("reports errors after the auto-finalization delay without blurring", () => {
@@ -1586,7 +1461,6 @@ describe("bindInput", () => {
         vi.advanceTimersByTime(1);
       });
       expect(env.input).toHaveAttribute("aria-invalid", "true");
-      expect(env.input).toHaveAttribute("aria-errormessage", "invalid");
     });
 
     test("renders aria-invalid=false once a change without errors is finalized", () => {
@@ -1594,10 +1468,9 @@ describe("bindInput", () => {
       fireEvent.change(env.input, { target: { value: "world" } });
       fireEvent.blur(env.input);
       expect(env.input).toHaveAttribute("aria-invalid", "false");
-      expect(env.input).not.toHaveAttribute("aria-errormessage");
     });
 
-    test("removes the aria attributes when the form is reset", () => {
+    test("removes aria-invalid when the form is reset", () => {
       const env = setupEnv("string");
       const form = Form.get(env.model);
       act(() => {
@@ -1613,7 +1486,6 @@ describe("bindInput", () => {
         form.reset();
       });
       expect(env.input).not.toHaveAttribute("aria-invalid");
-      expect(env.input).not.toHaveAttribute("aria-errormessage");
     });
   });
 
@@ -1902,7 +1774,6 @@ describe("bindInput", () => {
       expect(vi.getTimerCount()).toBe(0);
       for (const input of [first, second]) {
         expect(input).toHaveAttribute("aria-invalid", "true");
-        expect(input).toHaveAttribute("aria-errormessage", "invalid");
       }
     });
   });

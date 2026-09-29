@@ -51,12 +51,6 @@ class InputBinding implements FormBinding {
     this.config.onFocus?.(e);
   };
 
-  @computed
-  get errorMessages() {
-    if (!this.field.isErrorReported) return null; // Check whether to report errors
-    return Array.from(this.field.errors).join(', ') || null;
-  }
-
   // The outport props: the returned value is passed to the view component
   get props() {
     return {
@@ -67,7 +61,6 @@ class InputBinding implements FormBinding {
       onFocus: this.onFocus,
       onBlur: this.onBlur,
       'aria-invalid': this.field.isErrorReported,
-      'aria-errormessage': this.errorMessages ?? undefined,
     };
   }
 }
@@ -109,12 +102,6 @@ class CheckBoxBinding implements FormBinding {
     this.config.onFocus?.(e);
   };
 
-  @computed
-  get errorMessages() {
-    if (!this.field.isErrorReported) return null;
-    return Array.from(this.field.errors).join(', ') || null;
-  }
-
   get props() {
     return {
       type: 'checkbox',
@@ -123,7 +110,6 @@ class CheckBoxBinding implements FormBinding {
       onChange: this.onChange,
       onFocus: this.onFocus,
       'aria-invalid': this.field.isErrorReported,
-      'aria-errormessage': this.errorMessages ?? undefined,
     };
   }
 }
@@ -140,9 +126,7 @@ class LabelBinding implements FormBinding {
     public config: {
       htmlFor?: string;
     }
-  ) {
-    makeObservable(this);
-  }
+  ) {}
 
   // Not @computed: `stableId` is composed from a plain field on the form,
   // so while observed, a computed would keep the first id it saw
@@ -150,28 +134,16 @@ class LabelBinding implements FormBinding {
     return this.fields.at(0)?.stableId;
   }
 
-  @computed
-  get firstErrorMessage() {
-    for (const field of this.fields) {
-      if (!field.isErrorReported) continue;
-      for (const error of field.errors) {
-        return error;
-      }
-    }
-    return null;
-  }
-
   get props() {
     return {
       htmlFor: this.config.htmlFor ?? this.firstFieldStableId,
       'aria-invalid': this.fields.some((field) => field.isErrorReported),
-      'aria-errormessage': this.firstErrorMessage ?? undefined,
     };
   }
 }
 ```
 
-This binding aggregates error states from multiple fields, showing the first error message of the fields whose errors are reported.
+This binding aggregates the error states of multiple fields: the label turns invalid once any of them is reported invalid.
 
 ## Form Binding Example
 
@@ -243,5 +215,4 @@ Follow these patterns when creating bindings:
 1. Accessibility
     - Generate and manage unique element IDs for connecting labels and inputs (using `id` on inputs and `htmlFor` on labels)
     - Include `aria-invalid` based on `field.isErrorReported`
-    - Include `aria-errormessage` with error text, or `undefined` if no errors
     - For form-level bindings (submit buttons), use `aria-busy` to indicate loading states

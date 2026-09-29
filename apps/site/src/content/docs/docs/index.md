@@ -127,7 +127,7 @@ import "@mobx-sentinel/react/extension";
 
 import { observer } from "mobx-react-lite";
 import { Form } from "@mobx-sentinel/form";
-import { useFormHandler } from "@mobx-sentinel/react";
+import { ErrorText, useFormHandler } from "@mobx-sentinel/react";
 
 const InvoiceForm: React.FC<{ model: Invoice }> = observer(({ model }) => {
   // One line to attach a form to a model.
@@ -159,7 +159,7 @@ const InvoiceForm: React.FC<{ model: Invoice }> = observer(({ model }) => {
           })}
         />
         {/* Errors appear when the user is ready for them, not on the first keystroke. */}
-        <ErrorText errors={form.getErrors("customerEmail")} />
+        <ErrorText form={form} fields={["customerEmail"]} />
       </div>
 
       {/* A nested model gets its own form. Nothing is threaded down from the parent. */}

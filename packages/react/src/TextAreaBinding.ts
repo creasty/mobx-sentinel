@@ -1,5 +1,5 @@
 import { FormBinding, FormField } from "@mobx-sentinel/form";
-import { makeObservable, computed, action } from "mobx";
+import { makeObservable, action } from "mobx";
 
 export namespace TextAreaBinding {
   /** @ignore */
@@ -61,12 +61,6 @@ export class TextAreaBinding implements FormBinding {
     this.config.onFocus?.(e);
   };
 
-  @computed
-  get errorMessages() {
-    if (!this.field.isErrorReported) return null;
-    return Array.from(this.field.errors).join(", ") || null;
-  }
-
   get props() {
     return {
       value: this.value,
@@ -75,7 +69,6 @@ export class TextAreaBinding implements FormBinding {
       onFocus: this.onFocus,
       onBlur: this.onBlur,
       "aria-invalid": this.field.isErrorReported,
-      "aria-errormessage": this.errorMessages ?? undefined,
     } satisfies TextAreaBinding.Attrs;
   }
 }
