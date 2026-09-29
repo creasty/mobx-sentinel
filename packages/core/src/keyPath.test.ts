@@ -1,4 +1,10 @@
-import { KeyPath, KeyPathMultiMap, type ReadonlyKeyPathMultiMap } from "./keyPath";
+import {
+  KeyPath,
+  KeyPathMultiMap,
+  type KeyPathPattern,
+  KeyPathPatternMatch,
+  type ReadonlyKeyPathMultiMap,
+} from "./keyPath";
 
 describe("KeyPath.Component", () => {
   test("being a branded type", () => {
@@ -133,118 +139,102 @@ describe("KeyPath.getAncestors", () => {
   });
 });
 
+describe("KeyPathPatternMatch", () => {
+  const matches = (pattern: KeyPathPattern, keyPath: string | KeyPath) =>
+    !!KeyPathPatternMatch.start(pattern).read(keyPath as KeyPath)?.isComplete;
+
+  it("matches a pattern without wildcards to the key path it spells and nothing else", () => {
+    expect(matches("a.b", "a.b")).toBe(true);
+    expect(matches("a.b", "a")).toBe(false);
+    expect(matches("a.b", "a.b.c")).toBe(false);
+    expect(matches("a.b", "a.bc")).toBe(false);
+    expect(matches("a.b", KeyPath.Self)).toBe(false);
+  });
+
+  it("matches the self path with '.', an empty string and KeyPath.Self", () => {
+    for (const pattern of [".", "", KeyPath.Self]) {
+      expect(matches(pattern, KeyPath.Self)).toBe(true);
+      expect(matches(pattern, "")).toBe(true);
+      expect(matches(pattern, "a")).toBe(false);
+    }
+  });
+
+  it("matches exactly one key with '*'", () => {
+    expect(matches("items.*", "items.0")).toBe(true);
+    expect(matches("items.*", "items")).toBe(false);
+    expect(matches("items.*", "items.0.name")).toBe(false);
+    expect(matches("items.*.name", "items.0.name")).toBe(true);
+    expect(matches("items.*.name", "items.0.other")).toBe(false);
+    expect(matches("*", "a")).toBe(true);
+    expect(matches("*", KeyPath.Self)).toBe(false);
+  });
+
+  it("matches any number of keys, including none, with '**'", () => {
+    expect(matches("items.**", "items")).toBe(true);
+    expect(matches("items.**", "items.0")).toBe(true);
+    expect(matches("items.**", "items.0.name")).toBe(true);
+    expect(matches("items.**", "other")).toBe(false);
+    expect(matches("**", KeyPath.Self)).toBe(true);
+    expect(matches("**", "a.b.c")).toBe(true);
+    expect(matches("**.name", "name")).toBe(true);
+    expect(matches("**.name", "items.0.name")).toBe(true);
+    expect(matches("**.name", "items.0")).toBe(false);
+    expect(matches("a.**.c", "a.c")).toBe(true);
+    expect(matches("a.**.c", "a.b.d.c")).toBe(true);
+    expect(matches("a.**.c", "a.b.d")).toBe(false);
+  });
+
+  it("treats '*' and '**' as wildcards only when they are whole keys", () => {
+    expect(matches("a*", "a*")).toBe(true);
+    expect(matches("a*", "ab")).toBe(false);
+    expect(matches("a.b**", "a.bc")).toBe(false);
+  });
+
+  it("matches a key path read in parts as it matches the whole", () => {
+    const match = KeyPathPatternMatch.start("items.*.name");
+    expect(
+      match
+        .read("items" as KeyPath)
+        ?.read("0" as KeyPath)
+        ?.read("name" as KeyPath)?.isComplete
+    ).toBe(true);
+    expect(match.read("items.0" as KeyPath)?.isComplete).toBe(false);
+    expect(match.read(KeyPath.Self)?.isComplete).toBe(false);
+    expect(match.read("other" as KeyPath)).toBeNull();
+  });
+
+  describe("#nextKeyPaths", () => {
+    it("spells out the rest of the pattern up to its next wildcard", () => {
+      expect(KeyPathPatternMatch.start("items.0.name").nextKeyPaths).toEqual(["items.0.name"]);
+      expect(KeyPathPatternMatch.start("items.*.name").nextKeyPaths).toEqual(["items"]);
+      expect(KeyPathPatternMatch.start("items.*.name").read("items.0" as KeyPath)?.nextKeyPaths).toEqual(["name"]);
+    });
+
+    it("gives the self path once the whole pattern is read", () => {
+      expect(KeyPathPatternMatch.start(".").nextKeyPaths).toEqual([KeyPath.Self]);
+      expect(KeyPathPatternMatch.start("items").read("items" as KeyPath)?.nextKeyPaths).toEqual([KeyPath.Self]);
+    });
+
+    it("returns null when a wildcard comes next", () => {
+      expect(KeyPathPatternMatch.start("*.name").nextKeyPaths).toBeNull();
+      expect(KeyPathPatternMatch.start("**").nextKeyPaths).toBeNull();
+      expect(KeyPathPatternMatch.start("items.*").read("items" as KeyPath)?.nextKeyPaths).toBeNull();
+      // After "a", the match stands both at "**" and past it, at "c"
+      expect(KeyPathPatternMatch.start("a.**.c").read("a" as KeyPath)?.nextKeyPaths).toBeNull();
+    });
+  });
+});
+
 describe("KeyPathMultiMap", () => {
-  describe("#findExact", () => {
-    it("yields no values when key path does not exist", () => {
-      const map = new KeyPathMultiMap<string>();
-      expect(Array.from(map.findExact("test" as KeyPath))).toEqual([]);
-    });
-
-    it("yields all values for exact key path match", () => {
-      const map = new KeyPathMultiMap<string>();
-      map.set("a.b.c" as KeyPath, "value1");
-      map.set("a.b.c" as KeyPath, "value2");
-      expect(Array.from(map.findExact("a.b.c" as KeyPath))).toEqual(["value1", "value2"]);
-    });
-
-    it("yields values for self key path", () => {
-      const map = new KeyPathMultiMap<string>();
-      map.set(KeyPath.Self, "value");
-      expect(Array.from(map.findExact(KeyPath.Self))).toEqual(["value"]);
-    });
-  });
-
-  describe("#findPrefix", () => {
-    it("yields no values when key path does not exist", () => {
-      const map = new KeyPathMultiMap<string>();
-      expect(Array.from(map.findPrefix("test" as KeyPath))).toEqual([]);
-    });
-
-    it("yields values for exact key path match", () => {
-      const map = new KeyPathMultiMap<string>();
-      map.set("a.b" as KeyPath, "value1");
-      map.set("a.b" as KeyPath, "value2");
-      expect(Array.from(map.findPrefix("a.b" as KeyPath))).toEqual(["value1", "value2"]);
-    });
-
-    it("yields values for child key paths", () => {
-      const map = new KeyPathMultiMap<string>();
-      map.set("a.b.c" as KeyPath, "child1");
-      map.set("a.b.d" as KeyPath, "child2");
-      expect(Array.from(map.findPrefix("a.b" as KeyPath))).toEqual(["child1", "child2"]);
-    });
-
-    it("yields both exact matches and child values", () => {
-      const map = new KeyPathMultiMap<string>();
-      map.set("a.b" as KeyPath, "parent");
-      map.set("a.b.c" as KeyPath, "child");
-      expect(Array.from(map.findPrefix("a.b" as KeyPath))).toEqual(["parent", "child"]);
-    });
-
-    it("yields all values with self key path", () => {
-      const map = new KeyPathMultiMap<string>();
-      map.set("a.b" as KeyPath, "parent");
-      map.set("a.b.c" as KeyPath, "child");
-      expect(Array.from(map.findPrefix(KeyPath.Self))).toEqual(["parent", "child"]);
-    });
-  });
-
-  describe("#get", () => {
-    it("calls findExact when prefixMatch is false", () => {
-      const map = new KeyPathMultiMap<string>();
-      const spy = vi.spyOn(map, "findExact");
-
-      map.get("a.b" as KeyPath, false);
-      expect(spy).toHaveBeenCalledWith("a.b" as KeyPath);
-    });
-
-    it("calls findPrefix when prefixMatch is true", () => {
-      const map = new KeyPathMultiMap<string>();
-      const spy = vi.spyOn(map, "findPrefix");
-
-      map.get("a.b" as KeyPath, true);
-      expect(spy).toHaveBeenCalledWith("a.b" as KeyPath);
-    });
-
-    it("defaults to findExact when prefixMatch is not specified", () => {
-      const map = new KeyPathMultiMap<string>();
-      const spy = vi.spyOn(map, "findExact");
-
-      map.get("a.b" as KeyPath);
-      expect(spy).toHaveBeenCalledWith("a.b" as KeyPath);
-    });
-  });
-
   describe("#set", () => {
     it("allows multiple values for the same key path", () => {
       const map = new KeyPathMultiMap<string>();
       map.set("test" as KeyPath, "value1");
       map.set("test" as KeyPath, "value2");
-      expect(map.get("test" as KeyPath)).toEqual(new Set(["value1", "value2"]));
-    });
-
-    it("updates prefix mappings", () => {
-      const map = new KeyPathMultiMap<string>();
-      map.set("a.b.c" as KeyPath, "value");
-      expect(map.get("a" as KeyPath, true)).toEqual(new Set(["value"]));
-      expect(map.get("a.b" as KeyPath, true)).toEqual(new Set(["value"]));
-    });
-  });
-
-  describe("#delete", () => {
-    it("removes values for the key path", () => {
-      const map = new KeyPathMultiMap<string>();
-      map.set("test" as KeyPath, "value");
-      map.delete("test" as KeyPath);
-      expect(map.get("test" as KeyPath)).toEqual(new Set());
-    });
-
-    it("updates prefix mappings", () => {
-      const map = new KeyPathMultiMap<string>();
-      map.set("a.b.c" as KeyPath, "value");
-      map.delete("a.b.c" as KeyPath);
-      expect(map.get("a" as KeyPath, true)).toEqual(new Set());
-      expect(map.get("a.b" as KeyPath, true)).toEqual(new Set());
+      expect(Array.from(map)).toEqual([
+        ["test", "value1"],
+        ["test", "value2"],
+      ]);
     });
   });
 
@@ -255,25 +245,6 @@ describe("KeyPathMultiMap", () => {
       map.set("x.y" as KeyPath, "value2");
       map.set("p.q" as KeyPath, "value1");
       expect(map.size).toBe(3);
-    });
-  });
-
-  describe("#has", () => {
-    it("returns true if the key path exists", () => {
-      const map = new KeyPathMultiMap<string>();
-      map.set("a.b" as KeyPath, "value1");
-      expect(map.has("a.b" as KeyPath)).toBe(true);
-    });
-
-    it("returns false if the key path does not exist", () => {
-      const map = new KeyPathMultiMap<string>();
-      expect(map.has("a.b" as KeyPath)).toBe(false);
-    });
-
-    it("returns true if the key path exists with prefixMatch", () => {
-      const map = new KeyPathMultiMap<string>();
-      map.set("a.b" as KeyPath, "value1");
-      expect(map.has("a" as KeyPath, true)).toBe(true);
     });
   });
 
@@ -302,11 +273,8 @@ describe("KeyPathMultiMap", () => {
       expect(immutable).toBe(map);
 
       expect(Object.isFrozen(map)).toBe(true);
-      expect(map.get("a.b" as KeyPath)).toEqual(new Set(["value1"]));
-
       expect(() => map.set("a.b" as KeyPath, "value2")).toThrow(/frozen/);
-      expect(() => map.delete("a.b" as KeyPath)).toThrow(/frozen/);
-      expect(map.get("a.b" as KeyPath)).toEqual(new Set(["value1"]));
+      expect(Array.from(map)).toEqual([["a.b", "value1"]]);
     });
   });
 });
@@ -539,7 +507,6 @@ describe("KeyPathMultiMap (edge cases)", () => {
 
     test("ReadonlyKeyPathMultiMap does not expose mutators", () => {
       expectTypeOf<ReadonlyKeyPathMultiMap<string>>().not.toHaveProperty("set");
-      expectTypeOf<ReadonlyKeyPathMultiMap<string>>().not.toHaveProperty("delete");
       expectTypeOf<ReadonlyKeyPathMultiMap<string>>().not.toHaveProperty("toImmutable");
     });
 
@@ -547,76 +514,11 @@ describe("KeyPathMultiMap (edge cases)", () => {
       expectTypeOf<KeyPathMultiMap<string>["toImmutable"]>().returns.toEqualTypeOf<ReadonlyKeyPathMultiMap<string>>();
     });
 
-    test("value accessors are typed by the value type", () => {
-      expectTypeOf<ReadonlyKeyPathMultiMap<number>["get"]>().returns.toEqualTypeOf<Set<number>>();
-      expectTypeOf<ReadonlyKeyPathMultiMap<number>["findExact"]>().returns.toEqualTypeOf<Generator<number>>();
-      expectTypeOf<ReadonlyKeyPathMultiMap<number>["findPrefix"]>().returns.toEqualTypeOf<Generator<number>>();
+    test("values are typed by the value type", () => {
       expectTypeOf<KeyPathMultiMap<number>["set"]>().parameters.toEqualTypeOf<[KeyPath, number]>();
-      expectTypeOf<KeyPathMultiMap<number>["has"]>().returns.toEqualTypeOf<boolean>();
-      expectTypeOf<KeyPathMultiMap<number>["delete"]>().parameters.toEqualTypeOf<[KeyPath]>();
       expectTypeOf<ReturnType<KeyPathMultiMap<number>[typeof Symbol.iterator]>>().toEqualTypeOf<
         IterableIterator<[KeyPath, number]>
       >();
-    });
-
-    test("ReadonlyKeyPathMultiMap#has omits the prefixMatch parameter", () => {
-      expectTypeOf<KeyPathMultiMap<string>["has"]>().parameters.toEqualTypeOf<[KeyPath, boolean?]>();
-      // PINNED(quirk): the read-only interface declares has(keyPath) without prefixMatch, so prefix lookups via has() are unavailable on frozen maps at the type level. Decide: should the interface expose prefixMatch (flip to toEqualTypeOf<[KeyPath, boolean?]>)?
-      expectTypeOf<ReadonlyKeyPathMultiMap<string>["has"]>().parameters.toEqualTypeOf<[KeyPath]>();
-    });
-  });
-
-  describe("#has", () => {
-    it("returns true with prefixMatch for an exact match without children", () => {
-      const map = new KeyPathMultiMap<string>();
-      map.set("a" as KeyPath, "value");
-      expect(map.has("a" as KeyPath, true)).toBe(true);
-    });
-
-    it("does not match ancestors without prefixMatch", () => {
-      const map = new KeyPathMultiMap<string>();
-      map.set("a.b" as KeyPath, "value");
-      expect(map.has("a" as KeyPath)).toBe(false);
-      expect(map.has("a" as KeyPath, false)).toBe(false);
-    });
-
-    it("does not match descendants or siblings", () => {
-      const map = new KeyPathMultiMap<string>();
-      map.set("a.b" as KeyPath, "value");
-      expect(map.has("a.b.c" as KeyPath, true)).toBe(false);
-      expect(map.has("a.c" as KeyPath, true)).toBe(false);
-    });
-
-    it("respects segment boundaries with prefixMatch", () => {
-      const map = new KeyPathMultiMap<string>();
-      map.set("a.bc" as KeyPath, "value");
-      map.set("items.10" as KeyPath, "value");
-      expect(map.has("a.b" as KeyPath, true)).toBe(false);
-      expect(map.has("items.1" as KeyPath, true)).toBe(false);
-    });
-
-    it("returns true with prefixMatch for a self path, agreeing with findPrefix", () => {
-      const map = new KeyPathMultiMap<string>();
-      map.set("a.b" as KeyPath, "value");
-      expect(Array.from(map.findPrefix(KeyPath.Self))).toEqual(["value"]);
-      expect(map.has(KeyPath.Self, true)).toBe(true);
-      expect(map.has("" as KeyPath, true)).toBe(true);
-    });
-
-    it("returns false with prefixMatch for a self path when the map is empty", () => {
-      const map = new KeyPathMultiMap<string>();
-      expect(Array.from(map.findPrefix(KeyPath.Self))).toEqual([]);
-      expect(map.has(KeyPath.Self, true)).toBe(false);
-      expect(map.has("" as KeyPath, true)).toBe(false);
-    });
-
-    it("returns true with prefixMatch for an intermediate path deleted while descendants remain", () => {
-      const map = new KeyPathMultiMap<string>();
-      map.set("a.b" as KeyPath, "mid");
-      map.set("a.b.c" as KeyPath, "deep");
-      map.delete("a.b" as KeyPath);
-      expect(map.has("a.b" as KeyPath)).toBe(false);
-      expect(map.has("a.b" as KeyPath, true)).toBe(true);
     });
   });
 
@@ -626,97 +528,10 @@ describe("KeyPathMultiMap (edge cases)", () => {
       map.set(KeyPath.Self, "self");
       map.set("a" as KeyPath, "a");
       expect(map.size).toBe(2);
-      expect(map.has(KeyPath.Self)).toBe(true);
       expect(Array.from(map)).toEqual([
         [KeyPath.Self, "self"],
         ["a", "a"],
       ]);
-      expect(Array.from(map.findPrefix(KeyPath.Self))).toEqual(["self", "a"]);
-    });
-
-    it("keeps an empty string key path separate from KeyPath.Self", () => {
-      const map = new KeyPathMultiMap<string>();
-      map.set("" as KeyPath, "empty");
-      expect(KeyPath.isSelf("" as KeyPath)).toBe(true);
-      // PINNED(quirk): "" is a self path per KeyPath.isSelf, but the map stores it as a distinct key, so exact lookups via KeyPath.Self miss it. Decide: should the map normalize "" to KeyPath.Self?
-      expect(Array.from(map.findExact(KeyPath.Self))).toEqual([]);
-      expect(map.has(KeyPath.Self)).toBe(false);
-      expect(Array.from(map.findExact("" as KeyPath))).toEqual(["empty"]);
-    });
-
-    it("treats an empty string like KeyPath.Self in findPrefix", () => {
-      const map = new KeyPathMultiMap<string>();
-      map.set("a.b" as KeyPath, "child");
-      map.set(KeyPath.Self, "self");
-      expect(Array.from(map.findPrefix("" as KeyPath))).toEqual(["child", "self"]);
-    });
-
-    it("deletes a self path without affecting other key paths", () => {
-      const map = new KeyPathMultiMap<string>();
-      map.set(KeyPath.Self, "self");
-      map.set("a.b" as KeyPath, "child");
-      map.delete(KeyPath.Self);
-      expect(map.size).toBe(1);
-      expect(Array.from(map.findPrefix(KeyPath.Self))).toEqual(["child"]);
-      expect(map.has("a" as KeyPath, true)).toBe(true);
-    });
-  });
-
-  describe("#findPrefix", () => {
-    it("yields exact matches first, then descendants in insertion order regardless of depth", () => {
-      const map = new KeyPathMultiMap<string>();
-      map.set("a.b.c" as KeyPath, "deep");
-      map.set("a.b" as KeyPath, "mid");
-      map.set("a" as KeyPath, "top");
-      expect(Array.from(map.findPrefix("a" as KeyPath))).toEqual(["top", "deep", "mid"]);
-    });
-
-    it("respects segment boundaries", () => {
-      const map = new KeyPathMultiMap<string>();
-      map.set("a.bc" as KeyPath, "a.bc");
-      map.set("items.10.name" as KeyPath, "items.10.name");
-      map.set("items.1.name" as KeyPath, "items.1.name");
-      expect(Array.from(map.findPrefix("a.b" as KeyPath))).toEqual([]);
-      expect(Array.from(map.findPrefix("items.1" as KeyPath))).toEqual(["items.1.name"]);
-    });
-
-    it("does not treat '*' as a wildcard", () => {
-      const map = new KeyPathMultiMap<string>();
-      map.set("a.*" as KeyPath, "star");
-      map.set("a.b" as KeyPath, "b");
-      expect(Array.from(map.findExact("a.b" as KeyPath))).toEqual(["b"]);
-      expect(Array.from(map.findPrefix("*" as KeyPath))).toEqual([]);
-      expect(Array.from(map.findPrefix("a" as KeyPath))).toEqual(["star", "b"]);
-    });
-
-    it("yields the same value once per key path it is stored under", () => {
-      const map = new KeyPathMultiMap<string>();
-      map.set("a.b" as KeyPath, "shared");
-      map.set("a.c" as KeyPath, "shared");
-      expect(Array.from(map.findPrefix("a" as KeyPath))).toEqual(["shared", "shared"]);
-      expect(map.get("a" as KeyPath, true)).toEqual(new Set(["shared"]));
-    });
-
-    it("drops descendants of a deleted intermediate path only when they are deleted", () => {
-      const map = new KeyPathMultiMap<string>();
-      map.set("a" as KeyPath, "top");
-      map.set("a.b" as KeyPath, "mid");
-      map.set("a.b.c" as KeyPath, "deep");
-      map.delete("a.b" as KeyPath);
-      expect(Array.from(map.findPrefix("a" as KeyPath))).toEqual(["top", "deep"]);
-      expect(Array.from(map.findPrefix("a.b" as KeyPath))).toEqual(["deep"]);
-      map.delete("a.b.c" as KeyPath);
-      expect(Array.from(map.findPrefix("a" as KeyPath))).toEqual(["top"]);
-      expect(map.has("a.b" as KeyPath, true)).toBe(false);
-    });
-
-    it("cleans up the prefix index for key paths with empty segments", () => {
-      const map = new KeyPathMultiMap<string>();
-      map.set("a..b" as KeyPath, "value");
-      expect(Array.from(map.findPrefix("a" as KeyPath))).toEqual(["value"]);
-      map.delete("a..b" as KeyPath);
-      expect(map.has("a" as KeyPath, true)).toBe(false);
-      expect(Array.from(map.findPrefix("a" as KeyPath))).toEqual([]);
     });
   });
 
@@ -725,7 +540,6 @@ describe("KeyPathMultiMap (edge cases)", () => {
       const map = new KeyPathMultiMap<string>();
       map.set("a" as KeyPath, "value");
       map.set("a" as KeyPath, "value");
-      expect(Array.from(map.findExact("a" as KeyPath))).toEqual(["value"]);
       expect(Array.from(map)).toEqual([["a", "value"]]);
     });
 
@@ -733,82 +547,12 @@ describe("KeyPathMultiMap (edge cases)", () => {
       const map = new KeyPathMultiMap<{ id: number }>();
       map.set("a" as KeyPath, { id: 1 });
       map.set("a" as KeyPath, { id: 1 });
-      expect(map.get("a" as KeyPath).size).toBe(2);
-    });
-  });
-
-  describe("#delete", () => {
-    it("removes every value stored under the key path", () => {
-      const map = new KeyPathMultiMap<string>();
-      map.set("a" as KeyPath, "value1");
-      map.set("a" as KeyPath, "value2");
-      map.delete("a" as KeyPath);
-      expect(map.size).toBe(0);
-      expect(Array.from(map)).toEqual([]);
-    });
-
-    it("is a no-op for a key path that does not exist", () => {
-      const map = new KeyPathMultiMap<string>();
-      map.set("a.b" as KeyPath, "value");
-      expect(() => map.delete("x.y" as KeyPath)).not.toThrow();
-      expect(() => map.delete("a" as KeyPath)).not.toThrow();
-      expect(map.size).toBe(1);
-      expect(map.has("a" as KeyPath, true)).toBe(true);
-    });
-
-    it("does not remove descendants", () => {
-      const map = new KeyPathMultiMap<string>();
-      map.set("a" as KeyPath, "top");
-      map.set("a.b" as KeyPath, "child");
-      map.delete("a" as KeyPath);
-      expect(map.size).toBe(1);
-      expect(Array.from(map.findExact("a.b" as KeyPath))).toEqual(["child"]);
-    });
-
-    it("keeps prefix entries shared with sibling key paths", () => {
-      const map = new KeyPathMultiMap<string>();
-      map.set("a.b" as KeyPath, "b");
-      map.set("a.c" as KeyPath, "c");
-      map.delete("a.b" as KeyPath);
-      expect(map.has("a" as KeyPath, true)).toBe(true);
-      expect(Array.from(map.findPrefix("a" as KeyPath))).toEqual(["c"]);
-    });
-
-    it("moves a re-added key path to the end of the iteration order", () => {
-      const map = new KeyPathMultiMap<string>();
-      map.set("a" as KeyPath, "a1");
-      map.set("b" as KeyPath, "b1");
-      map.delete("a" as KeyPath);
-      map.set("a" as KeyPath, "a2");
-      expect(Array.from(map)).toEqual([
-        ["b", "b1"],
-        ["a", "a2"],
-      ]);
-    });
-  });
-
-  describe("#get", () => {
-    it("returns a new Set detached from the map on every call", () => {
-      const map = new KeyPathMultiMap<string>();
-      map.set("a" as KeyPath, "value");
-      const first = map.get("a" as KeyPath);
-      expect(map.get("a" as KeyPath)).not.toBe(first);
-      first.add("injected");
-      first.delete("value");
-      expect(map.get("a" as KeyPath)).toEqual(new Set(["value"]));
-      expect(map.get("a" as KeyPath, true)).toEqual(new Set(["value"]));
-    });
-
-    it("returns an empty Set for a missing key path", () => {
-      const map = new KeyPathMultiMap<string>();
-      expect(map.get("missing" as KeyPath)).toEqual(new Set());
-      expect(map.get("missing" as KeyPath, true)).toEqual(new Set());
-      expect(map.get(KeyPath.Self, true)).toEqual(new Set());
+      expect(Array.from(map)).toHaveLength(2);
     });
   });
 
   describe("#size", () => {
-    it("counts key paths, not values, and updates on delete", () => {
+    it("counts key paths, not values", () => {
       const map = new KeyPathMultiMap<string>();
       expect(map.size).toBe(0);
       map.set("a" as KeyPath, "value1");
@@ -816,8 +560,6 @@ describe("KeyPathMultiMap (edge cases)", () => {
       expect(map.size).toBe(1);
       map.set("a.b" as KeyPath, "value3");
       expect(map.size).toBe(2);
-      map.delete("a" as KeyPath);
-      expect(map.size).toBe(1);
     });
   });
 
@@ -842,8 +584,6 @@ describe("KeyPathMultiMap (edge cases)", () => {
       const immutable = map.toImmutable();
       expect(map.toImmutable()).toBe(immutable);
       expect(immutable.size).toBe(1);
-      expect(immutable.has("a.b" as KeyPath)).toBe(true);
-      expect(Array.from(immutable.findPrefix("a" as KeyPath))).toEqual(["value"]);
       expect(Array.from(immutable)).toEqual([["a.b", "value"]]);
     });
 
@@ -851,7 +591,6 @@ describe("KeyPathMultiMap (edge cases)", () => {
       const map = new KeyPathMultiMap<string>();
       map.toImmutable();
       expect(() => map.set("a" as KeyPath, "value")).toThrow(new Error("Cannot modify frozen KeyPathMultiMap"));
-      expect(() => map.delete("a" as KeyPath)).toThrow(new Error("Cannot modify frozen KeyPathMultiMap"));
       expect(map.size).toBe(0);
     });
 
@@ -867,20 +606,14 @@ describe("KeyPathMultiMap (edge cases)", () => {
       Object.seal(sealed);
       const nonExtensible = new KeyPathMultiMap<string>();
       Object.preventExtensions(nonExtensible);
-      // PINNED(quirk): the map has no own properties (only #private fields), so Object.isFrozen is already true once it is sealed or non-extensible, and writes throw the "frozen" error. Decide: should immutability be tracked with an explicit private flag set by toImmutable() (flip both to not.toThrow(), and the size to 1)?
+      // PINNED(quirk): the map has no own properties (only #private fields), so Object.isFrozen is already true once it is sealed or non-extensible, and writes throw the "frozen" error. Decide: should immutability be tracked with an explicit private flag set by toImmutable() (flip both to not.toThrow(), and the sizes to 1)?
       expect(() => sealed.set("a" as KeyPath, "value")).toThrow(new Error("Cannot modify frozen KeyPathMultiMap"));
-      expect(() => nonExtensible.delete("a" as KeyPath)).toThrow(new Error("Cannot modify frozen KeyPathMultiMap"));
+      expect(() => nonExtensible.set("a" as KeyPath, "value")).toThrow(
+        new Error("Cannot modify frozen KeyPathMultiMap")
+      );
       expect(sealed.size).toBe(0);
+      expect(nonExtensible.size).toBe(0);
       expect(Object.isFrozen(sealed)).toBe(true);
-    });
-
-    it("still honors prefixMatch in has() at runtime although the read-only type hides it", () => {
-      const map = new KeyPathMultiMap<string>();
-      map.set("a.b" as KeyPath, "value");
-      const immutable = map.toImmutable();
-      expect(immutable.has("a" as KeyPath)).toBe(false);
-      expect((immutable as KeyPathMultiMap<string>).has("a" as KeyPath, true)).toBe(true);
-      expect(immutable.get("a" as KeyPath, true)).toEqual(new Set(["value"]));
     });
   });
 
@@ -896,79 +629,6 @@ describe("KeyPathMultiMap (edge cases)", () => {
       }).toThrow(TypeError);
       expect(map.size).toBe(0);
     });
-  });
-});
-
-describe("KeyPathMultiMap (lifecycle)", () => {
-  it("re-registers prefix entries when a deleted key path is set again", () => {
-    const map = new KeyPathMultiMap<string>();
-    map.set("a.b" as KeyPath, "v1");
-    map.delete("a.b" as KeyPath);
-    expect(map.has("a" as KeyPath, true)).toBe(false);
-
-    map.set("a.b" as KeyPath, "v2");
-    expect(map.has("a" as KeyPath, true)).toBe(true);
-    expect(Array.from(map.findPrefix("a" as KeyPath))).toEqual(["v2"]);
-    expect(map.size).toBe(1);
-  });
-
-  it("keeps the prefix index of descendants when deleting an intermediate path that was never set", () => {
-    const map = new KeyPathMultiMap<string>();
-    map.set("a.b.c" as KeyPath, "deep");
-    map.delete("a.b" as KeyPath);
-    expect(map.size).toBe(1);
-    expect(map.has("a" as KeyPath, true)).toBe(true);
-    expect(map.has("a.b" as KeyPath, true)).toBe(true);
-    expect(Array.from(map.findPrefix("a" as KeyPath))).toEqual(["deep"]);
-  });
-
-  it("keeps the prefix index until the last descendant under a shared ancestor is deleted", () => {
-    const map = new KeyPathMultiMap<string>();
-    map.set("a.b.c" as KeyPath, "c");
-    map.set("a.d" as KeyPath, "d");
-    map.delete("a.b.c" as KeyPath);
-    expect(map.has("a.b" as KeyPath, true)).toBe(false);
-    expect(map.has("a" as KeyPath, true)).toBe(true);
-    map.delete("a.d" as KeyPath);
-    expect(map.has("a" as KeyPath, true)).toBe(false);
-    expect(map.get(KeyPath.Self, true)).toEqual(new Set());
-  });
-
-  it("allows deleting every key path while iterating over the map", () => {
-    const map = new KeyPathMultiMap<string>();
-    map.set("a" as KeyPath, "a");
-    map.set("b.c" as KeyPath, "c");
-    const visited: KeyPath[] = [];
-    for (const [keyPath] of map) {
-      visited.push(keyPath);
-      map.delete(keyPath);
-    }
-    expect(visited).toEqual(["a", "b.c"]);
-    expect(map.size).toBe(0);
-    expect(map.has("b" as KeyPath, true)).toBe(false);
-  });
-
-  it("evaluates findExact and findPrefix lazily, so writes made before iteration are visible", () => {
-    const map = new KeyPathMultiMap<string>();
-    const exact = map.findExact("a" as KeyPath);
-    const prefix = map.findPrefix("a" as KeyPath);
-    const snapshot = map.get("a" as KeyPath, true);
-    map.set("a" as KeyPath, "top");
-    map.set("a.b" as KeyPath, "child");
-    expect(Array.from(exact)).toEqual(["top"]);
-    expect(Array.from(prefix)).toEqual(["top", "child"]);
-    expect(snapshot).toEqual(new Set());
-  });
-
-  it("yields values added to the same key path during findExact iteration", () => {
-    const map = new KeyPathMultiMap<string>();
-    map.set("a" as KeyPath, "v0");
-    const seen: string[] = [];
-    for (const value of map.findExact("a" as KeyPath)) {
-      seen.push(value);
-      if (seen.length < 3) map.set("a" as KeyPath, `v${seen.length}`);
-    }
-    expect(seen).toEqual(["v0", "v1", "v2"]);
   });
 });
 

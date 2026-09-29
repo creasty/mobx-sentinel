@@ -1,6 +1,6 @@
 import { ValidationError, type ValidationErrorMapBuilder } from "./error";
 import * as indexModule from "./index";
-import { KeyPath } from "./keyPath";
+import { KeyPath, type KeyPathPattern } from "./keyPath";
 import { nested, StandardNestedFetcher } from "./nested";
 import { addValidation, Validator } from "./validator";
 import { unwatch, Watcher, watch } from "./watcher";
@@ -36,5 +36,11 @@ describe("package entry point", () => {
     // Handlers receive a builder, but only the validator creates one
     // @ts-expect-error there is no runtime value to import
     expect(indexModule.ValidationErrorMapBuilder).toBeUndefined();
+  });
+
+  test("exports KeyPathPattern as a type only", () => {
+    expectTypeOf<indexModule.KeyPathPattern>().toEqualTypeOf<KeyPathPattern>();
+    // @ts-expect-error there is no runtime value to import
+    expect(indexModule.KeyPathPattern).toBeUndefined();
   });
 });

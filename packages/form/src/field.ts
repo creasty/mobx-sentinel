@@ -1,5 +1,5 @@
 import { action, comparer, computed, makeObservable, observable, reaction } from "mobx";
-import { KeyPath, type Validator } from "@mobx-sentinel/core";
+import type { Validator } from "@mobx-sentinel/core";
 import { randomId } from "./randomId";
 
 const internalToken = Symbol("formField.internal");
@@ -121,20 +121,25 @@ export class FormField {
    * Error messages for the field
    *
    * Regardless of {@link isErrorReported}, this value is always up-to-date.
+   *
+   * @remarks
+   * The errors at the key path of the field. For a field holding a `@nested` object, they include the object's own
+   * `invalidateSelf()` errors, but not the errors of its fields, which its own form has fields for.
    */
   @computed.struct
   get errors(): ReadonlySet<string> {
-    return this.validator.getErrorMessages(KeyPath.build(this.fieldName));
+    return this.validator.getErrorMessages(this.fieldName);
   }
 
   /**
    * Whether the field has errors
    *
    * Regardless of {@link isErrorReported}, this value is always up-to-date.
+   * It covers the same errors as {@link errors}.
    */
   @computed
   get hasErrors() {
-    return this.validator.hasErrors(KeyPath.build(this.fieldName));
+    return this.validator.hasErrors(this.fieldName);
   }
 
   /**

@@ -113,87 +113,123 @@ export namespace KeyPath {
 }
 
 /**
+ * A pattern that matches key paths
+ *
+ * Keys are separated by dots, as in a key path, and three spellings have a meaning of their own:
+ * - `.` matches the self path, as {@link KeyPath.Self} and an empty string do
+ * - `*` matches exactly one key
+ * - `**` matches any number of keys, including none, so `items.**` matches `items` itself as well
+ *
+ * Any other key matches only a key spelled the same way, so a pattern without wildcards matches just the key path it
+ * spells. There is no escaping: a key spelled `*` or `**` is always a wildcard.
+ *
+ * @example
+ * ```typescript
+ * validator.getErrorMessages("email"); // email
+ * validator.getErrorMessages("items.*"); // items.0 and items.1, but neither items nor items.0.name
+ * validator.getErrorMessages("items.*.name"); // items.0.name and items.1.name
+ * validator.getErrorMessages("items.**"); // items, items.0, items.0.name, ...
+ * validator.getErrorMessages("."); // the errors of the object itself
+ * validator.getErrorMessages("**"); // every error
+ * ```
+ */
+export type KeyPathPattern = string | KeyPath;
+
+/**
+ * How far a key path matches a {@link KeyPathPattern}, read key by key
+ *
+ * `**` can take any number of keys, so a match can stand at several positions of the pattern at once.
+ */
+export class KeyPathPatternMatch {
+  /** Keys of the pattern */
+  readonly #keys: readonly string[];
+  /** Positions in the pattern that the keys read so far reach */
+  readonly #positions: ReadonlySet<number>;
+
+  private constructor(keys: readonly string[], positions: ReadonlySet<number>) {
+    this.#keys = keys;
+    this.#positions = positions;
+  }
+
+  /** Start matching a pattern */
+  static start(pattern: KeyPathPattern) {
+    const keys = typeof pattern === "string" && pattern !== "" && pattern !== "." ? pattern.split(".") : [];
+    return new KeyPathPatternMatch(keys, reach(keys, [0]));
+  }
+
+  /** Whether the keys read so far match the whole pattern */
+  get isComplete() {
+    return this.#positions.has(this.#keys.length);
+  }
+
+  /**
+   * Key paths that the rest of the pattern starts with, spelled out up to its next wildcard
+   *
+   * @returns null when a wildcard comes next, so that any key can follow
+   */
+  get nextKeyPaths(): KeyPath[] | null {
+    const result: KeyPath[] = [];
+    for (const position of this.#positions) {
+      let end = position;
+      while (end < this.#keys.length && this.#keys[end] !== "*" && this.#keys[end] !== "**") end++;
+      if (end === position && end < this.#keys.length) return null;
+      result.push(KeyPath.build(...this.#keys.slice(position, end)));
+    }
+    return result;
+  }
+
+  /**
+   * Read the keys of a key path
+   *
+   * @returns The match after them, or null when no key path starting with them matches the pattern
+   */
+  read(keyPath: KeyPath): KeyPathPatternMatch | null {
+    let positions = this.#positions;
+    for (const key of KeyPath.isSelf(keyPath) ? [] : keyPath.split(".")) {
+      const next: number[] = [];
+      for (const position of positions) {
+        const patternKey = this.#keys[position];
+        if (patternKey === "**") {
+          next.push(position);
+        } else if (patternKey === "*" || patternKey === key) {
+          next.push(position + 1);
+        }
+      }
+      positions = reach(this.#keys, next);
+      if (!positions.size) return null;
+    }
+    return new KeyPathPatternMatch(this.#keys, positions);
+  }
+}
+
+/** Positions in a pattern reached from the given ones, where `**` can take no key at all */
+function reach(keys: readonly string[], positions: Iterable<number>): ReadonlySet<number> {
+  const result = new Set<number>();
+  for (let position of positions) {
+    result.add(position);
+    while (keys[position] === "**") result.add(++position);
+  }
+  return result;
+}
+
+/**
  * Read-only interface for {@link KeyPathMultiMap}.
  */
 export interface ReadonlyKeyPathMultiMap<T> extends Iterable<[KeyPath, T]> {
   /** The number of key paths */
   readonly size: number;
-  /** Whether the map contains a key path */
-  has(keyPath: KeyPath): boolean;
-  /** Find exact matches for a key path */
-  findExact(keyPath: KeyPath): Generator<T>;
-  /** Find prefix matches for a key path */
-  findPrefix(keyPath: KeyPath): Generator<T>;
-  /** Get values for a key path */
-  get(keyPath: KeyPath, prefixMatch?: boolean): Set<T>;
 }
 
 /**
  * Map to store multiple values with the same key path
- * with prefix matching support
  */
 export class KeyPathMultiMap<T> implements ReadonlyKeyPathMultiMap<T> {
   /** Map to store key path -> values mapping */
   readonly #map = new Map<KeyPath, Set<T>>();
-  /** Map to store key path -> child key paths mapping */
-  readonly #prefixMap = new Map<KeyPath, Set<KeyPath>>();
 
   /** The number of key paths */
   get size() {
     return this.#map.size;
-  }
-
-  /** Whether the map contains a key path */
-  has(keyPath: KeyPath, prefixMatch = false) {
-    if (this.#map.has(keyPath)) {
-      return true;
-    }
-    if (prefixMatch) {
-      // Self paths prefix-match every key path, as in findPrefix()
-      if (KeyPath.isSelf(keyPath)) {
-        return this.#map.size > 0;
-      }
-      return this.#prefixMap.has(keyPath);
-    }
-    return false;
-  }
-
-  /** Find exact matches for a key path */
-  *findExact(keyPath: KeyPath) {
-    const values = this.#map.get(keyPath);
-    if (values) {
-      yield* values;
-    }
-  }
-
-  /** Find prefix matches for a key path */
-  *findPrefix(keyPath: KeyPath) {
-    if (KeyPath.isSelf(keyPath)) {
-      for (const values of this.#map.values()) {
-        yield* values;
-      }
-      return;
-    }
-
-    const exactMatches = this.#map.get(keyPath);
-    if (exactMatches) {
-      yield* exactMatches;
-    }
-
-    const childPaths = this.#prefixMap.get(keyPath);
-    if (childPaths) {
-      for (const childPath of childPaths) {
-        yield* this.findExact(childPath);
-      }
-    }
-  }
-
-  /** Get values for a key path */
-  get(keyPath: KeyPath, prefixMatch = false): Set<T> {
-    if (prefixMatch) {
-      return new Set(this.findPrefix(keyPath));
-    }
-    return new Set(this.findExact(keyPath));
   }
 
   /** Add a value for a key path */
@@ -202,44 +238,12 @@ export class KeyPathMultiMap<T> implements ReadonlyKeyPathMultiMap<T> {
       throw new Error("Cannot modify frozen KeyPathMultiMap");
     }
 
-    // Add to main map
     let values = this.#map.get(keyPath);
     if (!values) {
       values = new Set();
       this.#map.set(keyPath, values);
     }
     values.add(value);
-
-    // Update prefix map
-    for (const ancestorKeyPath of KeyPath.getAncestors(keyPath, false)) {
-      let children = this.#prefixMap.get(ancestorKeyPath);
-      if (!children) {
-        children = new Set();
-        this.#prefixMap.set(ancestorKeyPath, children);
-      }
-      children.add(keyPath);
-    }
-  }
-
-  /** Remove a key path */
-  delete(keyPath: KeyPath): void {
-    if (Object.isFrozen(this)) {
-      throw new Error("Cannot modify frozen KeyPathMultiMap");
-    }
-
-    // Remove from main map
-    this.#map.delete(keyPath);
-
-    // Update prefix map
-    for (const ancestorKeyPath of KeyPath.getAncestors(keyPath, false)) {
-      const children = this.#prefixMap.get(ancestorKeyPath);
-      if (children) {
-        children.delete(keyPath);
-        if (children.size === 0) {
-          this.#prefixMap.delete(ancestorKeyPath);
-        }
-      }
-    }
   }
 
   /** Iterate over all values */
