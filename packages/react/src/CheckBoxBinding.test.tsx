@@ -126,6 +126,7 @@ describe("CheckBoxBinding", () => {
         onChange: env.binding.onChange,
         onFocus: env.binding.onFocus,
         "aria-invalid": undefined,
+        "aria-errormessage": undefined,
       });
     });
 
@@ -138,9 +139,10 @@ describe("CheckBoxBinding", () => {
       expect(props1.onFocus).toBe(props2.onFocus);
     });
 
-    it("exposes checked and props as plain getters", () => {
+    it("exposes errorMessages as a computed value while checked and props are plain getters", () => {
       const env = setupModelEnv();
       expect(isComputedProp(env.binding, "checked")).toBe(false);
+      expect(isComputedProp(env.binding, "errorMessages")).toBe(true);
       expect(isComputedProp(env.binding, "props")).toBe(false);
     });
 
@@ -162,26 +164,7 @@ describe("CheckBoxBinding", () => {
         builder.invalidate("boolean", "invalid");
       });
       expect(env.binding.props["aria-invalid"]).toBe(true);
-    });
-
-    it("sets aria-invalid to false once the reported errors are cleared", () => {
-      const env = setupModelEnv();
-      const key = Symbol();
-      env.form.validator.updateErrors(key, (builder) => {
-        builder.invalidate("boolean", "invalid");
-      });
-      env.field.reportError();
-      env.form.validator.updateErrors(key, () => {});
-      expect(env.binding.props["aria-invalid"]).toBe(false);
-    });
-
-    it("sets aria-invalid to false when reported with errors on other fields only", () => {
-      const env = setupModelEnv();
-      env.form.validator.updateErrors(Symbol(), (builder) => {
-        builder.invalidate("booleanOpt", "invalid");
-      });
-      env.field.reportError();
-      expect(env.binding.props["aria-invalid"]).toBe(false);
+      expect(env.binding.props["aria-errormessage"]).toBe("invalid");
     });
   });
 
@@ -283,6 +266,7 @@ describe("CheckBoxBinding", () => {
       env.binding.onChange(env.fakeEvent(true));
       expect(env.field.isErrorReported).toBe(true);
       expect(env.binding.props["aria-invalid"]).toBe(true);
+      expect(env.binding.props["aria-errormessage"]).toBe("invalid");
     });
 
     it("reports the field as valid when there are no errors", () => {
@@ -290,6 +274,7 @@ describe("CheckBoxBinding", () => {
       env.binding.onChange(env.fakeEvent(true));
       expect(env.field.isErrorReported).toBe(false);
       expect(env.binding.props["aria-invalid"]).toBe(false);
+      expect(env.binding.props["aria-errormessage"]).toBeUndefined();
     });
 
     it("calls the setter, marks the field as changed, then calls the callback", () => {
@@ -411,6 +396,70 @@ describe("CheckBoxBinding", () => {
     });
   });
 
+  describe("errorMessages", () => {
+    it("returns null if no errors", () => {
+      const env = setupEnv();
+      expect(env.binding.errorMessages).toBeNull();
+      env.field.reportError();
+      expect(env.binding.errorMessages).toBeNull();
+    });
+
+    it("returns the error messages if errors are reported", () => {
+      const env = setupEnv();
+      env.form.validator.updateErrors(Symbol(), (builder) => {
+        builder.invalidate("boolean", "invalid1");
+        builder.invalidate("boolean", "invalid2");
+      });
+      expect(env.binding.errorMessages).toBeNull();
+      env.field.reportError();
+      expect(env.binding.errorMessages).toEqual("invalid1, invalid2");
+    });
+
+    it("returns a single message without a separator", () => {
+      const env = setupModelEnv();
+      env.form.validator.updateErrors(Symbol(), (builder) => {
+        builder.invalidate("boolean", "invalid");
+      });
+      env.field.reportError();
+      expect(env.binding.errorMessages).toBe("invalid");
+    });
+
+    it("returns null again once the reported errors are cleared", () => {
+      const env = setupModelEnv();
+      const key = Symbol();
+      env.form.validator.updateErrors(key, (builder) => {
+        builder.invalidate("boolean", "invalid");
+      });
+      env.field.reportError();
+      expect(env.binding.errorMessages).toBe("invalid");
+      env.form.validator.updateErrors(key, () => {});
+      expect(env.binding.errorMessages).toBeNull();
+      expect(env.binding.props["aria-invalid"]).toBe(false);
+    });
+
+    it("ignores errors of other fields", () => {
+      const env = setupModelEnv();
+      env.form.validator.updateErrors(Symbol(), (builder) => {
+        builder.invalidate("booleanOpt", "invalid");
+      });
+      env.field.reportError();
+      expect(env.binding.errorMessages).toBeNull();
+      expect(env.binding.props["aria-invalid"]).toBe(false);
+    });
+
+    it("returns null when the only error message is empty", () => {
+      const env = setupModelEnv();
+      env.form.validator.updateErrors(Symbol(), (builder) => {
+        builder.invalidate("boolean", "");
+      });
+      env.field.reportError();
+      expect(env.binding.props["aria-invalid"]).toBe(true);
+      // PINNED(quirk): an empty message joins to "" and falls back to null, so the element is aria-invalid without any aria-errormessage. Decide: should an empty message be rejected by the validator, or rendered as-is?
+      expect(env.binding.errorMessages).toBeNull();
+      expect(env.binding.props["aria-errormessage"]).toBeUndefined();
+    });
+  });
+
   describe("types", () => {
     it("exposes typed props", () => {
       const env = setupModelEnv();
@@ -418,9 +467,11 @@ describe("CheckBoxBinding", () => {
       expectTypeOf(env.binding.props.id).toEqualTypeOf<string>();
       expectTypeOf(env.binding.props.checked).toEqualTypeOf<boolean>();
       expectTypeOf(env.binding.props["aria-invalid"]).toEqualTypeOf<boolean | undefined>();
+      expectTypeOf(env.binding.props["aria-errormessage"]).toEqualTypeOf<string | undefined>();
       expectTypeOf(env.binding.props.onChange).toEqualTypeOf<React.ChangeEventHandler<HTMLInputElement>>();
       expectTypeOf(env.binding.props.onFocus).toEqualTypeOf<React.FocusEventHandler<HTMLInputElement>>();
       expectTypeOf(env.binding.props).toExtend<CheckBoxBinding.Attrs>();
+      expectTypeOf(env.binding.errorMessages).toEqualTypeOf<string | null>();
     });
 
     it("types the config", () => {
@@ -559,11 +610,12 @@ describe("bindCheckBox", () => {
     expect(form.getField("booleanOpt").isChanged).toBe(false);
   });
 
-  test("sets aria-invalid to true without aria-errormessage once the change is reported", async () => {
+  test("sets the aria attributes once the change is reported", async () => {
     const env = setupEnv("boolean");
     const form = Form.get(env.model);
 
     expect(env.input).not.toHaveAttribute("aria-invalid");
+    expect(env.input).not.toHaveAttribute("aria-errormessage");
 
     act(() => {
       form.validator.updateErrors(Symbol(), (builder) => {
@@ -575,10 +627,12 @@ describe("bindCheckBox", () => {
 
     await env.clickInput();
     expect(env.input).toHaveAttribute("aria-invalid", "true");
-    expect(env.input).not.toHaveAttribute("aria-errormessage");
+    // PINNED(quirk): aria-errormessage carries the message text itself, while WAI-ARIA defines it as an ID reference to the element that contains the message (the form docs say "with error text"; the react docs say "linking to error text"). Decide: should the binding reference an error element id instead of embedding the text?
+    expect(env.input).toHaveAttribute("aria-errormessage", "invalid1, invalid2");
 
     act(() => form.reset());
     expect(env.input).not.toHaveAttribute("aria-invalid");
+    expect(env.input).not.toHaveAttribute("aria-errormessage");
   });
 
   test("sets aria-invalid=false after a valid change", async () => {
@@ -586,6 +640,7 @@ describe("bindCheckBox", () => {
 
     await env.clickInput();
     expect(env.input).toHaveAttribute("aria-invalid", "false");
+    expect(env.input).not.toHaveAttribute("aria-errormessage");
   });
 
   test("calls the extended handlers with the React events", async () => {
@@ -681,7 +736,7 @@ describe("bindCheckBox", () => {
     expect(input).toHaveAttribute("aria-invalid", "false");
   });
 
-  test("sets aria-invalid when the form reports errors without any interaction", () => {
+  test("sets the aria attributes when the form reports errors without any interaction", () => {
     const env = setupEnv("boolean");
     const form = Form.get(env.model);
 
@@ -692,6 +747,7 @@ describe("bindCheckBox", () => {
     });
     act(() => form.reportError());
     expect(env.input).toHaveAttribute("aria-invalid", "true");
+    expect(env.input).toHaveAttribute("aria-errormessage", "invalid");
     expect(screen.getByLabelText("booleanOpt")).toHaveAttribute("aria-invalid", "false");
     expect(form.getField("boolean").isChanged).toBe(false);
   });
@@ -785,7 +841,7 @@ describe("bindCheckBox", () => {
       return { model, form, input };
     };
 
-    test("waits for the pending validation before setting aria-invalid", () => {
+    test("waits for the pending validation before setting the aria attributes", () => {
       const env = setupValidatedEnv();
       expect(env.form.validator.isValidating).toBe(false);
 
@@ -805,6 +861,7 @@ describe("bindCheckBox", () => {
         vi.advanceTimersByTime(1);
       });
       expect(env.input).toHaveAttribute("aria-invalid", "true");
+      expect(env.input).toHaveAttribute("aria-errormessage", "must be unchecked");
     });
 
     test("reports the next change again after the form is reset", () => {
@@ -818,6 +875,7 @@ describe("bindCheckBox", () => {
       act(() => env.form.reset());
       expect(env.input).toBeChecked(); // The model is kept
       expect(env.input).not.toHaveAttribute("aria-invalid");
+      expect(env.input).not.toHaveAttribute("aria-errormessage");
 
       fireEvent.click(env.input);
       expect(env.input).not.toBeChecked();
@@ -827,6 +885,7 @@ describe("bindCheckBox", () => {
         vi.advanceTimersByTime(delayMs);
       });
       expect(env.input).toHaveAttribute("aria-invalid", "false");
+      expect(env.input).not.toHaveAttribute("aria-errormessage");
     });
   });
 

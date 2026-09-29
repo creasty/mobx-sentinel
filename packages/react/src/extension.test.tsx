@@ -304,6 +304,7 @@ describe("Form#bindInput", () => {
       onBlur: expect.any(Function),
       // FormField#isErrorReported is undefined until errors are reported
       "aria-invalid": undefined,
+      "aria-errormessage": undefined,
     });
   });
 
@@ -420,6 +421,7 @@ describe("Form#bindTextArea", () => {
       onFocus: expect.any(Function),
       onBlur: expect.any(Function),
       "aria-invalid": undefined,
+      "aria-errormessage": undefined,
     });
     expect(form.bindTextArea("text", config).onChange).toBe(props.onChange);
     expect(form.bind("text", TextAreaBinding, config).onChange).toBe(props.onChange);
@@ -467,6 +469,7 @@ describe("Form#bindSelectBox", () => {
       onChange: expect.any(Function),
       onFocus: expect.any(Function),
       "aria-invalid": undefined,
+      "aria-errormessage": undefined,
     });
     expect(form.bind("choice", SelectBoxBinding, config).onChange).toBe(props.onChange);
   });
@@ -498,6 +501,7 @@ describe("Form#bindCheckBox", () => {
       onChange: expect.any(Function),
       onFocus: expect.any(Function),
       "aria-invalid": undefined,
+      "aria-errormessage": undefined,
     });
     expect(form.bind("flag", CheckBoxBinding, config).onChange).toBe(props.onChange);
     expect(form.bindCheckBox("flag", { cacheKey: "k", ...config }).onChange).not.toBe(props.onChange);
@@ -520,6 +524,7 @@ describe("Form#bindRadioGroup", () => {
       onChange: expect.any(Function),
       onFocus: expect.any(Function),
       "aria-invalid": undefined,
+      "aria-errormessage": undefined,
     });
     expect(bindRadio("b").checked).toBe(false);
 
@@ -589,6 +594,7 @@ describe("Form#bindLabel", () => {
     expect(form.bindLabel(["text"])).toEqual({
       htmlFor: form.getField("text").id,
       "aria-invalid": false,
+      "aria-errormessage": undefined,
     });
     expect(form.bindLabel(["text", "number"]).htmlFor).toBe(form.getField("text").id);
     expect(form.bindLabel(["number", "text"]).htmlFor).toBe(form.getField("number").id);
@@ -600,6 +606,7 @@ describe("Form#bindLabel", () => {
     expect(form.bindLabel([])).toEqual({
       htmlFor: undefined,
       "aria-invalid": false,
+      "aria-errormessage": undefined,
     });
   });
 

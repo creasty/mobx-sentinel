@@ -2,7 +2,7 @@ import React from "react";
 import "@testing-library/jest-dom/vitest";
 import { act, render, screen } from "@testing-library/react";
 import { userEvent } from "@testing-library/user-event";
-import { autorun, makeObservable, observable } from "mobx";
+import { autorun, makeObservable, observable, reaction, runInAction } from "mobx";
 import { Form, FormField } from "@mobx-sentinel/form";
 import "./extension";
 import { observer } from "mobx-react-lite";
@@ -75,6 +75,14 @@ describe("LabelBinding", () => {
       field1,
       field2,
       binding,
+      /** Set error messages for the field. Returns a function to remove them. */
+      invalidate(fieldName: "field1" | "field2", ...messages: string[]) {
+        return form.validator.updateErrors(Symbol(), (builder) => {
+          for (const message of messages) {
+            builder.invalidate(fieldName, message);
+          }
+        });
+      },
     };
   };
 
@@ -163,6 +171,7 @@ describe("LabelBinding", () => {
       expect(env.binding.props).toStrictEqual({
         htmlFor: env.field.id,
         "aria-invalid": false,
+        "aria-errormessage": undefined,
       });
     });
 
@@ -179,6 +188,7 @@ describe("LabelBinding", () => {
       });
       expect(env.field.isErrorReported).toBeUndefined();
       expect(env.binding.props["aria-invalid"]).toBe(false);
+      expect(env.binding.props["aria-errormessage"]).toBeUndefined();
 
       env.field.reportError();
       expect(env.field.isErrorReported).toBe(true);
@@ -190,9 +200,10 @@ describe("LabelBinding", () => {
       env.field.reportError();
       expect(env.field.isErrorReported).toBe(false);
       expect(env.binding.props["aria-invalid"]).toBe(false);
+      expect(env.binding.props["aria-errormessage"]).toBeUndefined();
     });
 
-    it("is invalid without aria-errormessage when errors are reported", () => {
+    it("sets aria-errormessage to the text of the first error message", () => {
       const env = setupEnv();
       env.form.validator.updateErrors(Symbol(), (builder) => {
         builder.invalidate("field1", "invalid1");
@@ -201,7 +212,223 @@ describe("LabelBinding", () => {
       env.field.reportError();
 
       expect(env.binding.props["aria-invalid"]).toBe(true);
-      expect(env.binding.props).not.toHaveProperty("aria-errormessage");
+      // PINNED(quirk): aria-errormessage is set to the error message text itself, while it is an ID reference (@types/react: "Identifies the element that provides an error message for the object"); the form docs say "with error text" and the react docs say "linking to error text". Decide: should the binding reference the id of an element that renders the message instead of embedding the text?
+      expect(env.binding.props["aria-errormessage"]).toBe("invalid1");
+    });
+
+    it("is invalid when a reported error has an empty message", () => {
+      const env = setupEnv();
+      env.form.validator.updateErrors(Symbol(), (builder) => {
+        builder.invalidate("field1", "");
+      });
+      env.field.reportError();
+      expect(env.field.isErrorReported).toBe(true);
+      expect(env.binding.firstErrorMessage).toBe("");
+
+      expect(env.binding.props["aria-invalid"]).toBe(true);
+      // PINNED(quirk): aria-errormessage becomes an empty string (not undefined) for an empty message, so the attribute is rendered without a value. Decide: should an empty message be normalized to undefined like the absence of errors?
+      expect(env.binding.props["aria-errormessage"]).toBe("");
+    });
+
+    it("lets an empty message of an earlier field hide the error of a later field", () => {
+      const env = setupMultiEnv();
+      env.form.validator.updateErrors(Symbol(), (builder) => {
+        builder.invalidate("field1", new Error()); // An Error without a message yields an empty message
+        builder.invalidate("field2", "field2 is invalid");
+      });
+      env.form.reportError();
+      expect(env.field1.isErrorReported).toBe(true);
+      expect(env.field2.isErrorReported).toBe(true);
+      expect(env.binding.firstErrorMessage).toBe("");
+
+      expect(env.binding.props["aria-invalid"]).toBe(true);
+    });
+  });
+
+  describe("firstErrorMessage", () => {
+    it("returns null if no errors", () => {
+      const env = setupEnv();
+      expect(env.binding.firstErrorMessage).toBeNull();
+      env.field.reportError();
+      expect(env.binding.firstErrorMessage).toBeNull();
+    });
+
+    it("returns the error messages if errors are reported", () => {
+      const env = setupEnv();
+      env.form.validator.updateErrors(Symbol(), (builder) => {
+        builder.invalidate("field1", "invalid1");
+        builder.invalidate("field1", "invalid2");
+      });
+      expect(env.binding.firstErrorMessage).toBeNull();
+      env.field.reportError();
+      expect(env.binding.firstErrorMessage).toEqual("invalid1");
+    });
+
+    it("returns null when bound to no fields", () => {
+      const binding = new LabelBinding([], {});
+      expect(binding.firstErrorMessage).toBeNull();
+      expect(binding.props).toStrictEqual({
+        htmlFor: undefined,
+        "aria-invalid": false,
+        "aria-errormessage": undefined,
+      });
+    });
+
+    it("skips fields whose errors are not reported", () => {
+      const env = setupMultiEnv();
+      env.invalidate("field1", "field1 is invalid");
+      env.invalidate("field2", "field2 is invalid");
+      env.field2.reportError();
+
+      expect(env.field1.isErrorReported).toBeUndefined();
+      expect(env.binding.firstErrorMessage).toBe("field2 is invalid");
+      expect(env.binding.props["aria-errormessage"]).toBe("field2 is invalid");
+    });
+
+    it("skips reported fields without errors", () => {
+      const env = setupMultiEnv();
+      env.invalidate("field2", "field2 is invalid");
+      env.field1.reportError();
+      env.field2.reportError();
+
+      expect(env.field1.isErrorReported).toBe(false);
+      expect(env.binding.firstErrorMessage).toBe("field2 is invalid");
+    });
+
+    it("prefers the first field in the given order", () => {
+      const env = setupMultiEnv();
+      env.invalidate("field1", "field1 is invalid");
+      env.invalidate("field2", "field2 is invalid");
+      env.field1.reportError();
+      env.field2.reportError();
+
+      expect(env.binding.firstErrorMessage).toBe("field1 is invalid");
+      expect(new LabelBinding([env.field2, env.field1], {}).firstErrorMessage).toBe("field2 is invalid");
+    });
+
+    it("returns null again when the errors are removed", () => {
+      const env = setupMultiEnv();
+      const removeErrors = env.invalidate("field1", "field1 is invalid");
+      env.field1.reportError();
+      expect(env.binding.firstErrorMessage).toBe("field1 is invalid");
+
+      removeErrors();
+      expect(env.binding.firstErrorMessage).toBeNull();
+      expect(env.binding.props["aria-invalid"]).toBe(false);
+      expect(env.binding.props["aria-errormessage"]).toBeUndefined();
+    });
+
+    it("returns null again when the field is reset", () => {
+      const env = setupMultiEnv();
+      env.invalidate("field1", "field1 is invalid");
+      env.field1.reportError();
+      expect(env.binding.firstErrorMessage).toBe("field1 is invalid");
+
+      env.field1.reset();
+      expect(env.binding.firstErrorMessage).toBeNull();
+    });
+
+    it("waits for the validation to finish before showing errors reported during validation", () => {
+      vi.useFakeTimers();
+      try {
+        const env = setupMultiEnv();
+        env.form.validator.addSyncHandler((builder) => {
+          if (env.model.field1 !== "valid") {
+            builder.invalidate("field1", "field1 is invalid");
+          }
+        });
+        vi.runAllTimers();
+        expect(env.form.validator.isValidating).toBe(false);
+
+        runInAction(() => {
+          env.model.field1 = "still invalid";
+        });
+        expect(env.form.validator.isValidating).toBe(true);
+        env.field1.reportError();
+        expect(env.binding.firstErrorMessage).toBeNull();
+
+        vi.runAllTimers();
+        expect(env.form.validator.isValidating).toBe(false);
+        expect(env.binding.firstErrorMessage).toBe("field1 is invalid");
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it("keeps showing the previous message while the validator is revalidating", () => {
+      vi.useFakeTimers();
+      try {
+        const env = setupMultiEnv();
+        env.form.validator.addSyncHandler((builder) => {
+          if (env.model.field1 !== "valid") {
+            builder.invalidate("field1", "field1 is invalid");
+          }
+        });
+        vi.runAllTimers();
+        env.field1.reportError();
+        expect(env.binding.firstErrorMessage).toBe("field1 is invalid");
+
+        runInAction(() => {
+          env.model.field1 = "valid";
+        });
+        expect(env.form.validator.isValidating).toBe(true);
+        expect(env.binding.firstErrorMessage).toBe("field1 is invalid");
+
+        vi.runAllTimers();
+        expect(env.form.validator.isValidating).toBe(false);
+        expect(env.binding.firstErrorMessage).toBeNull();
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it("notifies observers only when the first message changes", () => {
+      const env = setupMultiEnv();
+      env.field1.reportError();
+      env.field2.reportError();
+
+      const values: (string | null)[] = [];
+      const dispose = reaction(
+        () => env.binding.firstErrorMessage,
+        (message) => values.push(message)
+      );
+
+      const removeField1Errors = env.invalidate("field1", "field1 is invalid");
+      expect(values).toEqual(["field1 is invalid"]);
+
+      // A change to a later field is hidden behind the first message
+      const removeField2Errors = env.invalidate("field2", "field2 is invalid");
+      expect(values).toEqual(["field1 is invalid"]);
+
+      removeField1Errors();
+      expect(values).toEqual(["field1 is invalid", "field2 is invalid"]);
+
+      removeField2Errors();
+      expect(values).toEqual(["field1 is invalid", "field2 is invalid", null]);
+
+      dispose();
+    });
+
+    it("does not re-run observers when the errors change but the first message stays the same", () => {
+      const env = setupMultiEnv();
+      env.invalidate("field1", "field1 is invalid");
+      env.field1.reportError();
+
+      let runs = 0;
+      const dispose = autorun(() => {
+        void env.binding.firstErrorMessage;
+        runs++;
+      });
+      expect(runs).toBe(1);
+
+      // field1.errors changes, while the first message doesn't
+      const removeSecondError = env.invalidate("field1", "field1 is still invalid");
+      expect([...env.field1.errors]).toEqual(["field1 is invalid", "field1 is still invalid"]);
+      removeSecondError();
+      expect([...env.field1.errors]).toEqual(["field1 is invalid"]);
+      expect(runs).toBe(1);
+
+      dispose();
     });
   });
 });
@@ -239,9 +466,10 @@ describe("bindLabel", () => {
     expect(env.label.control).toBe(env.field1);
   });
 
-  test("reflects a reported error of any of its fields in aria-invalid", () => {
+  test("reflects the first reported error in the aria attributes", () => {
     const env = setupEnv();
     expect(env.label).toHaveAttribute("aria-invalid", "false");
+    expect(env.label).not.toHaveAttribute("aria-errormessage");
 
     act(() => {
       env.form.validator.updateErrors(Symbol(), (builder) => {
@@ -249,11 +477,13 @@ describe("bindLabel", () => {
       });
     });
     expect(env.label).toHaveAttribute("aria-invalid", "false");
+    expect(env.label).not.toHaveAttribute("aria-errormessage");
 
     act(() => {
       env.form.reportError();
     });
     expect(env.label).toHaveAttribute("aria-invalid", "true");
+    expect(env.label).toHaveAttribute("aria-errormessage", "field2 is invalid");
   });
 
   test("uses the custom htmlFor", async () => {
@@ -285,7 +515,7 @@ describe("bindLabel", () => {
     expect(input).toHaveFocus();
   });
 
-  test("updates aria-invalid through the lifecycle of the errors", () => {
+  test("updates the aria attributes through the lifecycle of the errors", () => {
     const env = setupEnv();
     let removeErrors: () => void = () => void 0;
     act(() => {
@@ -295,6 +525,7 @@ describe("bindLabel", () => {
       env.form.reportError();
     });
     expect(env.label).toHaveAttribute("aria-invalid", "true");
+    expect(env.label).toHaveAttribute("aria-errormessage", "field1 is invalid");
 
     // Resetting the form clears the reported state, but not the errors
     act(() => {
@@ -302,6 +533,7 @@ describe("bindLabel", () => {
     });
     expect(env.form.isValid).toBe(false);
     expect(env.label).toHaveAttribute("aria-invalid", "false");
+    expect(env.label).not.toHaveAttribute("aria-errormessage");
 
     // Reporting only a field without errors keeps the label valid
     act(() => {
@@ -313,11 +545,13 @@ describe("bindLabel", () => {
       env.form.reportError();
     });
     expect(env.label).toHaveAttribute("aria-invalid", "true");
+    expect(env.label).toHaveAttribute("aria-errormessage", "field1 is invalid");
 
     act(() => {
       removeErrors();
     });
     expect(env.label).toHaveAttribute("aria-invalid", "false");
+    expect(env.label).not.toHaveAttribute("aria-errormessage");
     expect(env.label).toHaveAttribute("for", env.field1.id);
   });
 
@@ -376,9 +610,11 @@ describe("bindLabel", () => {
     expectTypeOf(form.bindLabel(["field1"])).toEqualTypeOf<{
       htmlFor: string | undefined;
       "aria-invalid": boolean;
+      "aria-errormessage": string | undefined;
     }>();
     expectTypeOf<LabelBinding.Config>().toEqualTypeOf<{ htmlFor?: string | undefined }>();
     expectTypeOf<LabelBinding["firstFieldStableId"]>().toEqualTypeOf<string | undefined>();
+    expectTypeOf<LabelBinding["firstErrorMessage"]>().toEqualTypeOf<string | null>();
     expectTypeOf<LabelBinding["props"]>().toEqualTypeOf<ReturnType<typeof form.bindLabel>>();
     expectTypeOf(LabelBinding).constructorParameters.toEqualTypeOf<[FormField[], LabelBinding.Config]>();
 

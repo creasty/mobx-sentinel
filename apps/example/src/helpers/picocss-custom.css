@@ -1,9 +1,10 @@
 /*
  * Everything needed to make the *standard* bindings look right on top of Pico CSS.
  *
- * The bindings emit `id` / `htmlFor` and `aria-invalid`, and `ErrorText` marks
- * itself with `data-error-text`; these few rules hang off those attributes and
- * nothing else. Layout for this particular example lives in example-layout.css.
+ * The bindings emit `id` / `htmlFor`, `aria-invalid` and `aria-errormessage`,
+ * and `ErrorText` marks itself with `data-error-text`; these few rules hang off
+ * those attributes and nothing else. Layout for this particular example lives in
+ * example-layout.css.
  */
 .picocss-scope {
   padding: 32px;

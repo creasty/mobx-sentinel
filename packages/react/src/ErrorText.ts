@@ -17,8 +17,7 @@ export namespace ErrorText {
  * @remarks
  * - Shows what `form.getErrors()` returns for the fields: the errors of each field once the field reports them
  * - Renders a `<span data-error-text>` holding one `<span>` per message, and nothing while there are none
- * - Other props, such as `className` and `id`, go to the outer `<span>`. Pointing an input at it, with
- *   `aria-describedby` for instance, is up to you.
+ * - Other props, such as `className` and `id`, go to the outer `<span>`
  * - Re-renders as the errors change, so the component that renders it need not be an observer
  *
  * @example

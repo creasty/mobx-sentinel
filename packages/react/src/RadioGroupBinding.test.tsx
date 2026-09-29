@@ -2,7 +2,7 @@ import React from "react";
 import "@testing-library/jest-dom/vitest";
 import { act, fireEvent, render, screen } from "@testing-library/react";
 import { userEvent } from "@testing-library/user-event";
-import { autorun, isAction, makeObservable, observable, runInAction } from "mobx";
+import { autorun, isAction, isComputedProp, makeObservable, observable, runInAction } from "mobx";
 import { Form, FormField } from "@mobx-sentinel/form";
 import "./extension";
 import { observer } from "mobx-react-lite";
@@ -207,6 +207,7 @@ describe("RadioGroupBinding", () => {
         onChange: expect.any(Function),
         onFocus: env.binding.onFocus,
         "aria-invalid": undefined,
+        "aria-errormessage": undefined,
       });
     });
 
@@ -237,6 +238,12 @@ describe("RadioGroupBinding", () => {
       const { onChange } = env.binding.props(SampleEnum.ALPHA);
       env.binding.config = { getter: () => SampleEnum.ALPHA, setter: () => {} };
       expect(env.binding.props(SampleEnum.ALPHA).onChange).toBe(onChange);
+    });
+
+    it("exposes errorMessages as a computed value while value is a plain getter", () => {
+      const env = setupModelEnv();
+      expect(isComputedProp(env.binding, "value")).toBe(false);
+      expect(isComputedProp(env.binding, "errorMessages")).toBe(true);
     });
 
     it("checks only the button whose option strictly equals the getter value", () => {
@@ -284,7 +291,7 @@ describe("RadioGroupBinding", () => {
       expect(mixed.binding.props("1").value).toBe(mixed.binding.props(1).value);
     });
 
-    it("applies the same aria-invalid to every button", () => {
+    it("applies the same aria attributes to every button", () => {
       const env = setupModelEnv();
       env.form.validator.updateErrors(Symbol(), (builder) => {
         builder.invalidate("enumOpt", "invalid");
@@ -292,16 +299,8 @@ describe("RadioGroupBinding", () => {
       env.field.reportError();
       for (const value of [...Object.values(SampleEnum), null]) {
         expect(env.binding.props(value)["aria-invalid"]).toBe(true);
+        expect(env.binding.props(value)["aria-errormessage"]).toBe("invalid");
       }
-    });
-
-    it("ignores errors of other fields", () => {
-      const env = setupModelEnv();
-      env.form.validator.updateErrors(Symbol(), (builder) => {
-        builder.invalidate("enum", "invalid");
-      });
-      env.field.reportError();
-      expect(env.binding.props(SampleEnum.ALPHA)["aria-invalid"]).toBe(false);
     });
   });
 
@@ -433,6 +432,7 @@ describe("RadioGroupBinding", () => {
       env.binding.props(SampleEnum.BRAVO).onChange(radioEventOf());
       expect(env.field.isErrorReported).toBe(true);
       expect(env.binding.props(SampleEnum.ALPHA)["aria-invalid"]).toBe(true);
+      expect(env.binding.props(SampleEnum.ALPHA)["aria-errormessage"]).toBe("invalid");
     });
 
     it("ignore events from unchecked buttons", () => {
@@ -564,6 +564,48 @@ describe("RadioGroupBinding", () => {
     });
   });
 
+  describe("errorMessages", () => {
+    it("returns null if no errors", () => {
+      const env = setupEnv();
+      expect(env.binding.errorMessages).toBeNull();
+      env.field.reportError();
+      expect(env.binding.errorMessages).toBeNull();
+    });
+
+    it("returns the error messages if errors are reported", () => {
+      const env = setupEnv();
+      env.form.validator.updateErrors(Symbol(), (builder) => {
+        builder.invalidate("enum", "invalid1");
+        builder.invalidate("enum", "invalid2");
+      });
+      expect(env.binding.errorMessages).toBeNull();
+      env.field.reportError();
+      expect(env.binding.errorMessages).toEqual("invalid1, invalid2");
+    });
+
+    it("ignores errors of other fields", () => {
+      const env = setupModelEnv();
+      env.form.validator.updateErrors(Symbol(), (builder) => {
+        builder.invalidate("enum", "invalid");
+      });
+      env.field.reportError();
+      expect(env.binding.errorMessages).toBeNull();
+      expect(env.binding.props(SampleEnum.ALPHA)["aria-invalid"]).toBe(false);
+    });
+
+    it("returns null when the only error message is empty", () => {
+      const env = setupModelEnv();
+      env.form.validator.updateErrors(Symbol(), (builder) => {
+        builder.invalidate("enumOpt", "");
+      });
+      env.field.reportError();
+      expect(env.binding.props(SampleEnum.ALPHA)["aria-invalid"]).toBe(true);
+      // PINNED(quirk): an empty message joins to "" and falls back to null, so the buttons are aria-invalid without any aria-errormessage. Decide: should an empty message be rejected by the validator, or rendered as-is?
+      expect(env.binding.errorMessages).toBeNull();
+      expect(env.binding.props(SampleEnum.ALPHA)["aria-errormessage"]).toBeUndefined();
+    });
+  });
+
   describe("types", () => {
     it("exposes a props function typed by the options", () => {
       const env = setupModelEnv();
@@ -578,10 +620,12 @@ describe("RadioGroupBinding", () => {
       expectTypeOf(props.name).toEqualTypeOf<string>();
       expectTypeOf(props.checked).toEqualTypeOf<boolean>();
       expectTypeOf(props["aria-invalid"]).toEqualTypeOf<boolean | undefined>();
+      expectTypeOf(props["aria-errormessage"]).toEqualTypeOf<string | undefined>();
       expectTypeOf(props.onChange).toEqualTypeOf<React.ChangeEventHandler<HTMLInputElement>>();
       expectTypeOf(props.onFocus).toEqualTypeOf<React.FocusEventHandler<HTMLInputElement>>();
       expectTypeOf(props).toExtend<RadioGroupBinding.Attrs>();
       expectTypeOf(env.binding.value).toEqualTypeOf<SampleEnum | null>();
+      expectTypeOf(env.binding.errorMessages).toEqualTypeOf<string | null>();
     });
 
     it("types the config by the options", () => {
@@ -862,7 +906,7 @@ describe("bindRadioGroup", () => {
     expect(env.alpha).not.toHaveAttribute("aria-invalid");
   });
 
-  test("sets aria-invalid without aria-errormessage on every button once the change is reported", async () => {
+  test("sets the aria attributes on every button once the change is reported", async () => {
     const env = setupEnv("enum");
     const form = Form.get(env.model);
 
@@ -873,17 +917,20 @@ describe("bindRadioGroup", () => {
     });
     for (const input of [env.alpha, env.bravo, env.zulu]) {
       expect(input).not.toHaveAttribute("aria-invalid");
+      expect(input).not.toHaveAttribute("aria-errormessage");
     }
 
     await env.clickBravo();
     for (const input of [env.alpha, env.bravo, env.zulu]) {
       expect(input).toHaveAttribute("aria-invalid", "true");
-      expect(input).not.toHaveAttribute("aria-errormessage");
+      // PINNED(quirk): aria-errormessage carries the message text itself, while WAI-ARIA defines it as an ID reference to the element that contains the message (the form docs say "with error text"; the react docs say "linking to error text"). Decide: should the binding reference an error element id instead of embedding the text?
+      expect(input).toHaveAttribute("aria-errormessage", "invalid");
     }
 
     act(() => form.reset());
     for (const input of [env.alpha, env.bravo, env.zulu]) {
       expect(input).not.toHaveAttribute("aria-invalid");
+      expect(input).not.toHaveAttribute("aria-errormessage");
     }
   });
 
@@ -1073,7 +1120,7 @@ describe("bindRadioGroup", () => {
       return { model, form, buttons };
     };
 
-    test("waits for the pending validation before setting aria-invalid on every button", () => {
+    test("waits for the pending validation before setting the aria attributes on every button", () => {
       const env = setupValidatedEnv();
       const [alpha, bravo] = env.buttons;
 
@@ -1089,6 +1136,7 @@ describe("bindRadioGroup", () => {
       });
       for (const button of env.buttons) {
         expect(button).toHaveAttribute("aria-invalid", "true");
+        expect(button).toHaveAttribute("aria-errormessage", "must be alpha");
       }
 
       act(() => env.form.reset());
@@ -1108,6 +1156,7 @@ describe("bindRadioGroup", () => {
       });
       for (const button of env.buttons) {
         expect(button).toHaveAttribute("aria-invalid", "false");
+        expect(button).not.toHaveAttribute("aria-errormessage");
       }
     });
   });

@@ -1,5 +1,5 @@
 import { FormBinding, FormField } from "@mobx-sentinel/form";
-import { action, makeObservable } from "mobx";
+import { action, computed, makeObservable } from "mobx";
 import type { CustomDropdown } from "./CustomDropdown";
 
 export namespace CustomDropdownBinding {
@@ -33,6 +33,12 @@ export class CustomDropdownBinding implements FormBinding {
     this.field.markAsChanged("intermediate");
   };
 
+  @computed
+  get errorMessages() {
+    if (!this.field.isErrorReported) return null;
+    return Array.from(this.field.errors).join(", ") || null;
+  }
+
   get props() {
     return {
       id: this.field.stableId,
@@ -41,6 +47,7 @@ export class CustomDropdownBinding implements FormBinding {
       onFocus: this.field.markAsTouched,
       onClose: this.field.finalizeChangeIfNeeded,
       "aria-invalid": this.field.isErrorReported,
+      "aria-errormessage": this.errorMessages ?? undefined,
     } satisfies Partial<CustomDropdown.Props>;
   }
 }

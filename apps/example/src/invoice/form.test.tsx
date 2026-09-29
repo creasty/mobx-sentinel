@@ -85,6 +85,7 @@ describe("error reporting", () => {
     await user.tab();
     expect(screen.getByText("Purchase orders look like PO-1234")).toBeInTheDocument();
     expect(purchaseOrder).toHaveAttribute("aria-invalid", "true");
+    expect(purchaseOrder).toHaveAttribute("aria-errormessage", "Purchase orders look like PO-1234");
     expect(screen.getByText("Purchase order (optional)")).toHaveAttribute("aria-invalid", "true");
 
     await user.clear(purchaseOrder);
@@ -360,6 +361,7 @@ describe("the notify list", () => {
     expect(notify).toHaveFocus();
     expect(screen.getByText("Notify at most 3 people")).toBeInTheDocument();
     expect(notify).toHaveAttribute("aria-invalid", "true");
+    expect(notify).toHaveAttribute("aria-errormessage", "Notify at most 3 people");
     expect(screen.getByText("Notify (up to 3)")).toHaveAttribute("aria-invalid", "true");
   });
 

@@ -175,6 +175,7 @@ describe("SelectBoxBinding", () => {
         onChange: env.binding.onChange,
         onFocus: env.binding.onFocus,
         "aria-invalid": undefined,
+        "aria-errormessage": undefined,
       });
     });
 
@@ -188,6 +189,7 @@ describe("SelectBoxBinding", () => {
         onChange: env.binding.onChange,
         onFocus: env.binding.onFocus,
         "aria-invalid": undefined,
+        "aria-errormessage": undefined,
       });
     });
 
@@ -210,9 +212,10 @@ describe("SelectBoxBinding", () => {
       expect(props1.onFocus).toBe(props2.onFocus);
     });
 
-    it("exposes value and props as plain getters", () => {
+    it("exposes errorMessages as a computed value while value and props are plain getters", () => {
       const env = setupModelEnv();
       expect(isComputedProp(env.binding, "value")).toBe(false);
+      expect(isComputedProp(env.binding, "errorMessages")).toBe(true);
       expect(isComputedProp(env.binding, "props")).toBe(false);
     });
 
@@ -222,15 +225,6 @@ describe("SelectBoxBinding", () => {
       env.binding.config = { multiple: true, getter: () => ["B"], setter: () => {} };
       expect(env.binding.props.multiple).toBe(true);
       expect(env.binding.props.value).toEqual(["B"]);
-    });
-
-    it("ignores errors of other fields", () => {
-      const env = setupModelEnv();
-      env.form.validator.updateErrors(Symbol(), (builder) => {
-        builder.invalidate("singleOpt", "invalid");
-      });
-      env.field.reportError();
-      expect(env.binding.props["aria-invalid"]).toBe(false);
     });
   });
 
@@ -386,6 +380,7 @@ describe("SelectBoxBinding", () => {
       env.binding.onChange(env.fakeEvent(["B"]));
       expect(env.field.isErrorReported).toBe(true);
       expect(env.binding.props["aria-invalid"]).toBe(true);
+      expect(env.binding.props["aria-errormessage"]).toBe("invalid");
     });
 
     it("calls the setter, marks the field as changed, then calls the callback", () => {
@@ -495,6 +490,48 @@ describe("SelectBoxBinding", () => {
     });
   });
 
+  describe("errorMessages", () => {
+    it("returns null if no errors", () => {
+      const env = setupEnv();
+      expect(env.binding.errorMessages).toBeNull();
+      env.field.reportError();
+      expect(env.binding.errorMessages).toBeNull();
+    });
+
+    it("returns the error messages if errors are reported", () => {
+      const env = setupEnv();
+      env.form.validator.updateErrors(Symbol(), (builder) => {
+        builder.invalidate("single", "invalid1");
+        builder.invalidate("single", "invalid2");
+      });
+      expect(env.binding.errorMessages).toBeNull();
+      env.field.reportError();
+      expect(env.binding.errorMessages).toEqual("invalid1, invalid2");
+    });
+
+    it("ignores errors of other fields", () => {
+      const env = setupModelEnv();
+      env.form.validator.updateErrors(Symbol(), (builder) => {
+        builder.invalidate("singleOpt", "invalid");
+      });
+      env.field.reportError();
+      expect(env.binding.errorMessages).toBeNull();
+      expect(env.binding.props["aria-invalid"]).toBe(false);
+    });
+
+    it("returns null when the only error message is empty", () => {
+      const env = setupModelEnv();
+      env.form.validator.updateErrors(Symbol(), (builder) => {
+        builder.invalidate("single", "");
+      });
+      env.field.reportError();
+      expect(env.binding.props["aria-invalid"]).toBe(true);
+      // PINNED(quirk): an empty message joins to "" and falls back to null, so the element is aria-invalid without any aria-errormessage. Decide: should an empty message be rejected by the validator, or rendered as-is?
+      expect(env.binding.errorMessages).toBeNull();
+      expect(env.binding.props["aria-errormessage"]).toBeUndefined();
+    });
+  });
+
   describe("types", () => {
     it("exposes typed props", () => {
       const env = setupModelEnv();
@@ -502,9 +539,11 @@ describe("SelectBoxBinding", () => {
       expectTypeOf(env.binding.props.multiple).toEqualTypeOf<boolean | undefined>();
       expectTypeOf(env.binding.props.value).toEqualTypeOf<string | number | readonly string[]>();
       expectTypeOf(env.binding.props["aria-invalid"]).toEqualTypeOf<boolean | undefined>();
+      expectTypeOf(env.binding.props["aria-errormessage"]).toEqualTypeOf<string | undefined>();
       expectTypeOf(env.binding.props.onChange).toEqualTypeOf<React.ChangeEventHandler<HTMLSelectElement>>();
       expectTypeOf(env.binding.props.onFocus).toEqualTypeOf<React.FocusEventHandler<HTMLSelectElement>>();
       expectTypeOf(env.binding.props).toExtend<SelectBoxBinding.Attrs>();
+      expectTypeOf(env.binding.errorMessages).toEqualTypeOf<string | null>();
     });
 
     it("types the config as a union discriminated by multiple", () => {
@@ -674,7 +713,7 @@ describe("bindSelectBox", () => {
       expect(form.getField("singleOpt").isChanged).toBe(false);
     });
 
-    test("sets aria-invalid without aria-errormessage once the change is reported", async () => {
+    test("sets the aria attributes once the change is reported", async () => {
       const env = setupEnv("single");
       const form = Form.get(env.model);
 
@@ -684,13 +723,16 @@ describe("bindSelectBox", () => {
         });
       });
       expect(env.select).not.toHaveAttribute("aria-invalid");
+      expect(env.select).not.toHaveAttribute("aria-errormessage");
 
       await env.selectOptions(SAMPLE_OPTIONS[1].code);
       expect(env.select).toHaveAttribute("aria-invalid", "true");
-      expect(env.select).not.toHaveAttribute("aria-errormessage");
+      // PINNED(quirk): aria-errormessage carries the message text itself, while WAI-ARIA defines it as an ID reference to the element that contains the message (the form docs say "with error text"; the react docs say "linking to error text"). Decide: should the binding reference an error element id instead of embedding the text?
+      expect(env.select).toHaveAttribute("aria-errormessage", "invalid");
 
       act(() => form.reset());
       expect(env.select).not.toHaveAttribute("aria-invalid");
+      expect(env.select).not.toHaveAttribute("aria-errormessage");
     });
 
     test("displays the first option when the value is not among the options", () => {
@@ -806,7 +848,7 @@ describe("bindSelectBox", () => {
         vi.useRealTimers();
       });
 
-      test("waits for the pending validation before setting aria-invalid", () => {
+      test("waits for the pending validation before setting the aria attributes", () => {
         const model = new SampleModel();
         const form = Form.get(model);
         form.validator.addSyncHandler(
@@ -830,6 +872,7 @@ describe("bindSelectBox", () => {
           vi.advanceTimersByTime(delayMs);
         });
         expect(select).toHaveAttribute("aria-invalid", "true");
+        expect(select).toHaveAttribute("aria-errormessage", "must be alpha");
 
         act(() => form.reset());
         expect(select).toHaveDisplayValue(SAMPLE_OPTIONS[1].name); // The model is kept
@@ -842,6 +885,7 @@ describe("bindSelectBox", () => {
           vi.advanceTimersByTime(delayMs);
         });
         expect(select).toHaveAttribute("aria-invalid", "false");
+        expect(select).not.toHaveAttribute("aria-errormessage");
       });
     });
   });
