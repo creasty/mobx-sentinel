@@ -123,7 +123,7 @@ validator.hasErrors("email") // true
 validator.hasErrors("age") // false
 
 // Get detailed errors
-for (const [keyPath, error] of validator.findErrors(KeyPath.Self)) {
+for (const [keyPath, error] of validator.findErrors("**")) {
   console.log(`${keyPath}: ${error.message}`);
 }
 ```
@@ -148,11 +148,11 @@ validator.reactionState // number - pending sync reactions (0 or more)
 validator.asyncState // number - pending async jobs (0 or more)
 validator.waitForValidation() // Promise<void> - resolves once isValidating is false
 
-// Error queries
-validator.firstErrorMessage // string | undefined - first error found
-validator.getErrorMessages(keyPath) // Set<string> - errors for a path
-validator.hasErrors(keyPath, deep?) // boolean - check for errors
-validator.findErrors(keyPath, deep?) // Iterator<[KeyPath, ValidationError]>
+// Error queries, by key path pattern (see below)
+validator.firstErrorMessage // string | null - first error found
+validator.getErrorMessages(pattern) // Set<string> - messages of the matching key paths
+validator.hasErrors(pattern) // boolean - whether a matching key path has errors
+validator.findErrors(pattern) // Iterator<[KeyPath, ValidationError]>
 ```
 
 **Understanding validation states**:
@@ -160,6 +160,26 @@ validator.findErrors(keyPath, deep?) // Iterator<[KeyPath, ValidationError]>
 - `asyncState`: Counts pending/running asynchronous validation jobs
 - `isValidating`: Convenience property that's `true` when either state is non-zero
 - Multiple handlers can add multiple errors to the same key - they accumulate in a Set
+
+## Looking Up Errors
+
+`getErrorMessages()`, `hasErrors()` and `findErrors()` take a key path pattern: keys separated by dots, as in a key path, where three spellings have a meaning of their own.
+
+| Pattern | Matches |
+| --- | --- |
+| `email` | `email`, and nothing else |
+| `.` | the object itself, where `invalidateSelf()` reports |
+| `items.*` | one key below `items`: `items.0`, `items.1`, and so on |
+| `items.*.name` | `items.0.name`, `items.1.name`, and so on |
+| `items.**` | `items` and every key path below it |
+| `**` | every key path, the object itself included |
+
+A pattern without wildcards matches only the key path it spells. For a key holding a [nested object](/docs/core/nested-validation/), that is what the model reports on the key and what the object reports on itself; its fields' errors take a wildcard:
+
+```typescript
+validator.getErrorMessages("address") // errors of the address as a whole
+validator.getErrorMessages("address.**") // those, and the errors of its fields
+```
 
 ## Waiting for Validation
 

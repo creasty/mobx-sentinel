@@ -2,7 +2,7 @@ import { getEventListeners } from "node:events";
 import { autorun, getObserverTree, IEqualsComparer, makeObservable, observable, runInAction } from "mobx";
 import { Validator, addValidation } from "./validator";
 import { nested, StandardNestedFetcher } from "./nested";
-import { KeyPath } from "./keyPath";
+import { KeyPath, type KeyPathPattern } from "./keyPath";
 import { ValidationError, ValidationErrorMapBuilder } from "./error";
 
 /** MobX's "Cycle detected in computation" error, which its production build only gives the number of */
@@ -200,7 +200,7 @@ describe("Validator", () => {
       const validator = Validator.get({ sample: false });
       const symbol = Symbol();
       validator.updateErrors(symbol, () => {});
-      expect(buildErrorMap(validator.findErrors(KeyPath.Self))).toEqual(new Map());
+      expect(buildErrorMap(validator.findErrors("**"))).toEqual(new Map());
     });
 
     it("updates the errors instantly", () => {
@@ -209,7 +209,7 @@ describe("Validator", () => {
       validator.updateErrors(symbol, (builder) => {
         builder.invalidate("sample", "invalid");
       });
-      expect(buildErrorMap(validator.findErrors(KeyPath.Self))).toEqual(new Map([["sample", ["invalid"]]]));
+      expect(buildErrorMap(validator.findErrors("**"))).toEqual(new Map([["sample", ["invalid"]]]));
     });
 
     it("removes the errors by calling the returned function", () => {
@@ -219,7 +219,7 @@ describe("Validator", () => {
         builder.invalidate("sample", "invalid");
       });
       dispose();
-      expect(buildErrorMap(validator.findErrors(KeyPath.Self))).toEqual(new Map());
+      expect(buildErrorMap(validator.findErrors("**"))).toEqual(new Map());
     });
 
     it("replaces the errors when called again with the same key", () => {
@@ -231,7 +231,7 @@ describe("Validator", () => {
       validator.updateErrors(symbol, (builder) => {
         builder.invalidate("sample", "invalid2");
       });
-      expect(buildErrorMap(validator.findErrors(KeyPath.Self))).toEqual(new Map([["sample", ["invalid2"]]]));
+      expect(buildErrorMap(validator.findErrors("**"))).toEqual(new Map([["sample", ["invalid2"]]]));
     });
 
     it("merges the errors of the different keys", () => {
@@ -244,9 +244,7 @@ describe("Validator", () => {
       validator.updateErrors(symbol2, (builder) => {
         builder.invalidate("sample", "invalid2");
       });
-      expect(buildErrorMap(validator.findErrors(KeyPath.Self))).toEqual(
-        new Map([["sample", ["invalid1", "invalid2"]]])
-      );
+      expect(buildErrorMap(validator.findErrors("**"))).toEqual(new Map([["sample", ["invalid1", "invalid2"]]]));
     });
 
     it("removes individual errors by calling the returned function", () => {
@@ -260,9 +258,9 @@ describe("Validator", () => {
         builder.invalidate("sample", "invalid2");
       });
       dispose1();
-      expect(buildErrorMap(validator.findErrors(KeyPath.Self))).toEqual(new Map([["sample", ["invalid2"]]]));
+      expect(buildErrorMap(validator.findErrors("**"))).toEqual(new Map([["sample", ["invalid2"]]]));
       dispose2();
-      expect(buildErrorMap(validator.findErrors(KeyPath.Self))).toEqual(new Map());
+      expect(buildErrorMap(validator.findErrors("**"))).toEqual(new Map());
     });
   });
 
@@ -271,7 +269,7 @@ describe("Validator", () => {
       const validator = Validator.get({});
       const spy = vi.spyOn(validator, "findErrors");
       void validator.firstErrorMessage;
-      expect(spy).toBeCalledWith(KeyPath.Self, true);
+      expect(spy).toBeCalledWith("**");
     });
 
     it("returns null when there are no errors", () => {
@@ -294,22 +292,22 @@ describe("Validator", () => {
       const validator = Validator.get({});
       const spy = vi.spyOn(validator, "findErrors");
 
+      validator.getErrorMessages(".");
+      expect(spy).nthCalledWith(1, ".");
+
+      validator.getErrorMessages("**");
+      expect(spy).nthCalledWith(2, "**");
+
+      validator.getErrorMessages("field1");
+      expect(spy).nthCalledWith(3, "field1");
+
       validator.getErrorMessages(KeyPath.Self);
-      expect(spy).nthCalledWith(1, KeyPath.Self, false);
-
-      validator.getErrorMessages(KeyPath.Self, true);
-      expect(spy).nthCalledWith(2, KeyPath.Self, true);
-
-      validator.getErrorMessages("field1" as KeyPath);
-      expect(spy).nthCalledWith(3, "field1" as KeyPath, false);
-
-      validator.getErrorMessages("field1" as KeyPath, true);
-      expect(spy).nthCalledWith(4, "field1" as KeyPath, true);
+      expect(spy).nthCalledWith(4, KeyPath.Self);
     });
 
     it("returns an empty set when there are no errors", () => {
       const validator = Validator.get({});
-      expect(validator.getErrorMessages(KeyPath.Self)).toEqual(new Set());
+      expect(validator.getErrorMessages("**")).toEqual(new Set());
     });
 
     it("returns a set of error messages", () => {
@@ -319,9 +317,9 @@ describe("Validator", () => {
         builder.invalidate("field2", "invalid2");
         builder.invalidate("field2", "invalid3");
       });
-      expect(validator.getErrorMessages(KeyPath.Self)).toEqual(new Set(["invalid1", "invalid2", "invalid3"]));
-      expect(validator.getErrorMessages("field1" as KeyPath)).toEqual(new Set(["invalid1"]));
-      expect(validator.getErrorMessages("field2" as KeyPath)).toEqual(new Set(["invalid2", "invalid3"]));
+      expect(validator.getErrorMessages("**")).toEqual(new Set(["invalid1", "invalid2", "invalid3"]));
+      expect(validator.getErrorMessages("field1")).toEqual(new Set(["invalid1"]));
+      expect(validator.getErrorMessages("field2")).toEqual(new Set(["invalid2", "invalid3"]));
     });
   });
 
@@ -330,22 +328,22 @@ describe("Validator", () => {
       const validator = Validator.get({});
       const spy = vi.spyOn(validator, "findErrors");
 
+      validator.hasErrors(".");
+      expect(spy).nthCalledWith(1, ".");
+
+      validator.hasErrors("**");
+      expect(spy).nthCalledWith(2, "**");
+
+      validator.hasErrors("field1");
+      expect(spy).nthCalledWith(3, "field1");
+
       validator.hasErrors(KeyPath.Self);
-      expect(spy).nthCalledWith(1, KeyPath.Self, false);
-
-      validator.hasErrors(KeyPath.Self, true);
-      expect(spy).nthCalledWith(2, KeyPath.Self, true);
-
-      validator.hasErrors("field1" as KeyPath);
-      expect(spy).nthCalledWith(3, "field1" as KeyPath, false);
-
-      validator.hasErrors("field1" as KeyPath, true);
-      expect(spy).nthCalledWith(4, "field1" as KeyPath, true);
+      expect(spy).nthCalledWith(4, KeyPath.Self);
     });
 
     it("returns false when there are no errors", () => {
       const validator = Validator.get({});
-      expect(validator.hasErrors(KeyPath.Self)).toBe(false);
+      expect(validator.hasErrors("**")).toBe(false);
     });
 
     it("returns true when there are errors", () => {
@@ -353,9 +351,9 @@ describe("Validator", () => {
       validator.updateErrors(Symbol(), (builder) => {
         builder.invalidate("field1", "invalid1");
       });
-      expect(validator.hasErrors(KeyPath.Self)).toBe(true);
-      expect(validator.hasErrors("field1" as KeyPath)).toBe(true);
-      expect(validator.hasErrors("field2" as KeyPath)).toBe(false);
+      expect(validator.hasErrors("**")).toBe(true);
+      expect(validator.hasErrors("field1")).toBe(true);
+      expect(validator.hasErrors("field2")).toBe(false);
     });
   });
 
@@ -444,20 +442,117 @@ describe("Validator", () => {
       return validators;
     };
 
-    describe("Search with a self path", () => {
-      it("returns an empty iterator when there are no errors", () => {
-        const env = setupEnv({ clean: true });
-        expect(buildErrorMap(env["parent"].findErrors(KeyPath.Self))).toEqual(new Map());
+    it("returns an empty iterator when there are no errors", () => {
+      const env = setupEnv({ clean: true });
+      for (const pattern of [".", "*", "**", "child", "child.**"]) {
+        expect(buildErrorMap(env["parent"].findErrors(pattern))).toEqual(new Map());
+      }
+    });
+
+    describe("Search for a key path", () => {
+      it("returns the errors at the key path, including the self errors of an object nested there", () => {
+        const env = setupEnv();
+        expect(buildErrorMap(env["parent"].findErrors("a"))).toMatchInlineSnapshot(`
+          Map {
+            "a" => [
+              "invalid at parent.a",
+            ],
+          }
+        `);
+        expect(buildErrorMap(env["parent"].findErrors("child"))).toMatchInlineSnapshot(`
+          Map {
+            "child" => [
+              "invalid at parent.child",
+              "invalid self at parent.child",
+            ],
+          }
+        `);
+        expect(buildErrorMap(env["parent"].findErrors("child.aa"))).toMatchInlineSnapshot(`
+          Map {
+            "child.aa" => [
+              "invalid at parent.child.aa",
+            ],
+          }
+        `);
+        expect(buildErrorMap(env["parent"].findErrors("child.grandchildren.0"))).toMatchInlineSnapshot(`
+          Map {
+            "child.grandchildren.0" => [
+              "invalid self at parent.child.grandchildren.0",
+            ],
+          }
+        `);
       });
 
-      it("returns own errors", () => {
+      it("returns neither the elements of a collection nor the keys of a nested object", () => {
         const env = setupEnv();
-        expect(buildErrorMap(env["parent"].findErrors(KeyPath.Self))).toMatchInlineSnapshot(`
+        expect(buildErrorMap(env["parent"].findErrors("child.grandchildren"))).toMatchInlineSnapshot(`
+          Map {
+            "child.grandchildren" => [
+              "invalid at parent.child.grandchildren",
+            ],
+          }
+        `);
+        expect(buildErrorMap(env["parent"].findErrors("children"))).toMatchInlineSnapshot(`
+          Map {
+            "children" => [
+              "invalid at parent.children",
+            ],
+          }
+        `);
+      });
+
+      it("returns the errors of a hoisted object's keys, which are keys of the parent", () => {
+        const env = setupEnv();
+        expect(buildErrorMap(env["parent"].findErrors("aa"))).toMatchInlineSnapshot(`
+          Map {
+            "aa" => [
+              "invalid at parent.(hoist).aa",
+            ],
+          }
+        `);
+        expect(buildErrorMap(env["parent"].findErrors("child.0"))).toMatchInlineSnapshot(`
+          Map {
+            "child.0" => [
+              "invalid self at parent.child.(arrayHoist).0",
+            ],
+          }
+        `);
+      });
+    });
+
+    describe("Search for the self path", () => {
+      it("returns the self errors, including those of a hoisted object", () => {
+        const env = setupEnv();
+        expect(buildErrorMap(env["parent"].findErrors("."))).toMatchInlineSnapshot(`
           Map {
             Symbol(self) => [
               "invalid self at parent",
               "invalid self at parent.(hoist)",
             ],
+          }
+        `);
+        expect(buildErrorMap(env["parent.child"].findErrors("."))).toMatchInlineSnapshot(`
+          Map {
+            Symbol(self) => [
+              "invalid self at parent.child",
+            ],
+          }
+        `);
+      });
+
+      it("takes KeyPath.Self and an empty string for the self path", () => {
+        const env = setupEnv();
+        const expected = buildErrorMap(env["parent"].findErrors("."));
+        expect(buildErrorMap(env["parent"].findErrors(KeyPath.Self))).toEqual(expected);
+        expect(buildErrorMap(env["parent"].findErrors(""))).toEqual(expected);
+      });
+    });
+
+    describe("Search with '*'", () => {
+      it("returns the errors one key below", () => {
+        const env = setupEnv();
+        expect(buildErrorMap(env["parent"].findErrors("*"))).toMatchInlineSnapshot(`
+          Map {
             "a" => [
               "invalid at parent.a",
             ],
@@ -479,34 +574,55 @@ describe("Validator", () => {
             ],
           }
         `);
-        expect(buildErrorMap(env["parent.child"].findErrors(KeyPath.Self))).toMatchInlineSnapshot(`
+        expect(buildErrorMap(env["parent"].findErrors("child.*"))).toMatchInlineSnapshot(`
           Map {
-            Symbol(self) => [
-              "invalid self at parent.child",
-            ],
-            "aa" => [
+            "child.aa" => [
               "invalid at parent.child.aa",
             ],
-            "bb" => [
+            "child.bb" => [
               "invalid at parent.child.bb",
             ],
-            "grandchild" => [
+            "child.grandchild" => [
               "invalid at parent.child.grandchild",
               "invalid self at parent.child.grandchild",
             ],
-            "grandchildren" => [
+            "child.grandchildren" => [
               "invalid at parent.child.grandchildren",
             ],
-            "0" => [
+            "child.0" => [
               "invalid self at parent.child.(arrayHoist).0",
             ],
           }
         `);
       });
 
-      it("returns all errors with prefix match", () => {
+      it("returns the self errors of the elements of a collection", () => {
         const env = setupEnv();
-        expect(buildErrorMap(env["parent"].findErrors(KeyPath.Self, true))).toMatchInlineSnapshot(`
+        expect(buildErrorMap(env["parent"].findErrors("children.*"))).toMatchInlineSnapshot(`
+          Map {
+            "children.0" => [
+              "invalid self at parent.children.0",
+            ],
+          }
+        `);
+      });
+
+      it("matches a key in the middle of a pattern", () => {
+        const env = setupEnv();
+        expect(buildErrorMap(env["parent"].findErrors("children.*.aa"))).toMatchInlineSnapshot(`
+          Map {
+            "children.0.aa" => [
+              "invalid at parent.children.0.aa",
+            ],
+          }
+        `);
+      });
+    });
+
+    describe("Search with '**'", () => {
+      it("returns every error", () => {
+        const env = setupEnv();
+        expect(buildErrorMap(env["parent"].findErrors("**"))).toMatchInlineSnapshot(`
           Map {
             Symbol(self) => [
               "invalid self at parent",
@@ -588,7 +704,7 @@ describe("Validator", () => {
             ],
           }
         `);
-        expect(buildErrorMap(env["parent.child"].findErrors(KeyPath.Self, true))).toMatchInlineSnapshot(`
+        expect(buildErrorMap(env["parent.child"].findErrors("**"))).toMatchInlineSnapshot(`
           Map {
             Symbol(self) => [
               "invalid self at parent.child",
@@ -633,75 +749,10 @@ describe("Validator", () => {
           }
         `);
       });
-    });
 
-    describe("Search for a specific path", () => {
-      it("returns an empty iterator when there are no errors", () => {
-        const env = setupEnv({ clean: true });
-        expect(buildErrorMap(env["parent"].findErrors(KeyPath.Self))).toEqual(new Map());
-      });
-
-      it("returns errors for the specific path", () => {
+      it("returns the errors at and below a key path", () => {
         const env = setupEnv();
-        expect(buildErrorMap(env["parent"].findErrors("child" as KeyPath))).toMatchInlineSnapshot(`
-          Map {
-            "child" => [
-              "invalid at parent.child",
-              "invalid self at parent.child",
-            ],
-            "child.aa" => [
-              "invalid at parent.child.aa",
-            ],
-            "child.bb" => [
-              "invalid at parent.child.bb",
-            ],
-            "child.grandchild" => [
-              "invalid at parent.child.grandchild",
-              "invalid self at parent.child.grandchild",
-            ],
-            "child.grandchildren" => [
-              "invalid at parent.child.grandchildren",
-            ],
-            "child.0" => [
-              "invalid self at parent.child.(arrayHoist).0",
-            ],
-          }
-        `);
-
-        expect(buildErrorMap(env["parent"].findErrors("child.aa" as KeyPath))).toMatchInlineSnapshot(`
-          Map {
-            "child.aa" => [
-              "invalid at parent.child.aa",
-            ],
-          }
-        `);
-
-        expect(buildErrorMap(env["parent"].findErrors("child.grandchildren" as KeyPath))).toMatchInlineSnapshot(`
-          Map {
-            "child.grandchildren" => [
-              "invalid at parent.child.grandchildren",
-            ],
-          }
-        `);
-
-        expect(buildErrorMap(env["parent"].findErrors("child.grandchildren.0" as KeyPath))).toMatchInlineSnapshot(`
-          Map {
-            "child.grandchildren.0" => [
-              "invalid self at parent.child.grandchildren.0",
-            ],
-            "child.grandchildren.0.aaa" => [
-              "invalid at parent.child.grandchildren.0.aaa",
-            ],
-            "child.grandchildren.0.bbb" => [
-              "invalid at parent.child.grandchildren.0.bbb",
-            ],
-          }
-        `);
-      });
-
-      it("returns all errors for the specific path with prefix match", () => {
-        const env = setupEnv();
-        expect(buildErrorMap(env["parent"].findErrors("child" as KeyPath, true))).toMatchInlineSnapshot(`
+        expect(buildErrorMap(env["parent"].findErrors("child.**"))).toMatchInlineSnapshot(`
           Map {
             "child" => [
               "invalid at parent.child",
@@ -746,16 +797,14 @@ describe("Validator", () => {
             ],
           }
         `);
-
-        expect(buildErrorMap(env["parent"].findErrors("child.aa" as KeyPath, true))).toMatchInlineSnapshot(`
+        expect(buildErrorMap(env["parent"].findErrors("child.aa.**"))).toMatchInlineSnapshot(`
           Map {
             "child.aa" => [
               "invalid at parent.child.aa",
             ],
           }
         `);
-
-        expect(buildErrorMap(env["parent"].findErrors("child.grandchildren" as KeyPath, true))).toMatchInlineSnapshot(`
+        expect(buildErrorMap(env["parent"].findErrors("child.grandchildren.**"))).toMatchInlineSnapshot(`
           Map {
             "child.grandchildren" => [
               "invalid at parent.child.grandchildren",
@@ -768,6 +817,26 @@ describe("Validator", () => {
             ],
             "child.grandchildren.0.bbb" => [
               "invalid at parent.child.grandchildren.0.bbb",
+            ],
+          }
+        `);
+      });
+
+      it("matches any number of keys in the middle of a pattern", () => {
+        const env = setupEnv();
+        expect(buildErrorMap(env["parent"].findErrors("**.aaa"))).toMatchInlineSnapshot(`
+          Map {
+            "child.0.aaa" => [
+              "invalid at parent.child.(arrayHoist).0.aaa",
+            ],
+            "child.grandchild.aaa" => [
+              "invalid at parent.child.grandchild.aaa",
+            ],
+            "child.grandchildren.0.aaa" => [
+              "invalid at parent.child.grandchildren.0.aaa",
+            ],
+            "children.0.grandchildren.0.aaa" => [
+              "invalid at parent.children.0.grandchildren.0.aaa",
             ],
           }
         `);
@@ -924,12 +993,12 @@ describe("Validator", () => {
     it("updates the errors", async () => {
       const env = setupEnv({ syncHandler: true });
 
-      expect(buildErrorMap(env.validator.findErrors(KeyPath.Self))).toEqual(new Map());
+      expect(buildErrorMap(env.validator.findErrors("**"))).toEqual(new Map());
       runInAction(() => {
         env.model.field1 = -1;
       });
       await env.waitForReactionState(0);
-      expect(buildErrorMap(env.validator.findErrors(KeyPath.Self))).toEqual(new Map([["field1", ["invalid"]]]));
+      expect(buildErrorMap(env.validator.findErrors("**"))).toEqual(new Map([["field1", ["invalid"]]]));
     });
 
     it("replaces the errors when the handler reports different ones", async () => {
@@ -949,7 +1018,7 @@ describe("Validator", () => {
     it("removes the errors when the condition is no longer met", async () => {
       const env = setupEnv({ syncHandler: true });
 
-      expect(buildErrorMap(env.validator.findErrors(KeyPath.Self))).toEqual(new Map());
+      expect(buildErrorMap(env.validator.findErrors("**"))).toEqual(new Map());
       runInAction(() => {
         env.model.field1 = -1;
       });
@@ -959,7 +1028,7 @@ describe("Validator", () => {
         env.model.field1 = 0;
       });
       await env.waitForReactionState(0);
-      expect(buildErrorMap(env.validator.findErrors(KeyPath.Self))).toEqual(new Map());
+      expect(buildErrorMap(env.validator.findErrors("**"))).toEqual(new Map());
     });
 
     it("removes the handler by calling the returned function", async () => {
@@ -1107,13 +1176,13 @@ describe("Validator", () => {
     it("updates the errors", async () => {
       const env = setupEnv({ asyncHandler: true });
 
-      expect(buildErrorMap(env.validator.findErrors(KeyPath.Self))).toEqual(new Map());
+      expect(buildErrorMap(env.validator.findErrors("**"))).toEqual(new Map());
       runInAction(() => {
         env.model.field1 = -1;
       });
       await env.waitForReactionState(0);
       await env.waitForAsyncState(0);
-      expect(buildErrorMap(env.validator.findErrors(KeyPath.Self))).toEqual(new Map([["field1", ["invalid"]]]));
+      expect(buildErrorMap(env.validator.findErrors("**"))).toEqual(new Map([["field1", ["invalid"]]]));
     });
 
     it("replaces the errors when the handler reports different ones", async () => {
@@ -1138,7 +1207,7 @@ describe("Validator", () => {
     it("removes the errors when the condition is no longer met", async () => {
       const env = setupEnv({ asyncHandler: true });
 
-      expect(buildErrorMap(env.validator.findErrors(KeyPath.Self))).toEqual(new Map());
+      expect(buildErrorMap(env.validator.findErrors("**"))).toEqual(new Map());
       runInAction(() => {
         env.model.field1 = -1;
       });
@@ -1150,7 +1219,7 @@ describe("Validator", () => {
       });
       await env.waitForReactionState(0);
       await env.waitForAsyncState(0);
-      expect(buildErrorMap(env.validator.findErrors(KeyPath.Self))).toEqual(new Map());
+      expect(buildErrorMap(env.validator.findErrors("**"))).toEqual(new Map());
     });
 
     it("removes the handler by calling the returned function", async () => {
@@ -1518,24 +1587,24 @@ describe("Nested validations: entries that share a key path", () => {
     expect(validator.invalidKeyPaths).toEqual(new Set(["map.0.name"]));
     expect(validator.invalidKeyPathCount).toBe(1);
     expect(validator.isValid).toBe(false);
-    expect(validator.getErrorMessages("map.0" as KeyPath, true)).toEqual(new Set(["required"]));
+    expect(validator.getErrorMessages("map.0.**")).toEqual(new Set(["required"]));
   });
 
-  test("finds the errors of both entries that share a key path when searching by prefix", () => {
+  test("finds the errors of both entries that share a key path when searching with '**'", () => {
     const { collection, validator } = setupCollection();
     runInAction(() => {
       collection.stringKeyed.name = "filled";
     });
     vi.advanceTimersByTime(100);
 
-    // A prefix search from the self path once walked a map keyed by key path, which kept only the string-keyed item,
-    // so the number-keyed one was unreachable through it: the model reported invalid while showing no error message.
+    // A search for every error once walked a map keyed by key path, which kept only the string-keyed item, so the
+    // number-keyed one was unreachable through it: the model reported invalid while showing no error message.
     expect(validator.isValid).toBe(false);
     expect(validator.firstErrorMessage).toBe("required");
-    expect(validator.hasErrors(KeyPath.Self, true)).toBe(true);
+    expect(validator.hasErrors("**")).toBe(true);
     // The same search as Form#getAllErrors()
-    expect(validator.getErrorMessages(KeyPath.Self, true)).toEqual(new Set(["required"]));
-    expect(listErrors(validator.findErrors(KeyPath.Self, true))).toEqual([["map.0.name", "required"]]);
+    expect(validator.getErrorMessages("**")).toEqual(new Set(["required"]));
+    expect(listErrors(validator.findErrors("**"))).toEqual([["map.0.name", "required"]]);
 
     runInAction(() => {
       collection.stringKeyed.name = "";
@@ -1544,11 +1613,11 @@ describe("Nested validations: entries that share a key path", () => {
 
     // With both items invalid the search yields both errors, since they are two entries rather than one, and the set
     // of messages it is collected into holds the message they share once
-    expect(listErrors(validator.findErrors(KeyPath.Self, true))).toEqual([
+    expect(listErrors(validator.findErrors("**"))).toEqual([
       ["map.0.name", "required"],
       ["map.0.name", "required"],
     ]);
-    expect(validator.getErrorMessages(KeyPath.Self, true)).toEqual(new Set(["required"]));
+    expect(validator.getErrorMessages("**")).toEqual(new Set(["required"]));
   });
 
   test("is validating while either entry that shares a key path is validating", () => {
@@ -1780,7 +1849,7 @@ describe("Validator: error bookkeeping", () => {
           throw new Error("handler failure");
         })
       ).toThrow("handler failure");
-      expect(validator.getErrorMessages("field" as KeyPath)).toEqual(new Set(["kept"]));
+      expect(validator.getErrorMessages("field")).toEqual(new Set(["kept"]));
     });
 
     it("removes the existing errors of the key when the handler reports none", () => {
@@ -1801,7 +1870,7 @@ describe("Validator: error bookkeeping", () => {
 
       staleDispose();
       // PINNED(quirk): A disposer deletes whatever is stored under its key, including errors from a later updateErrors() call with the same key. Decide: should a disposer only remove the errors of the call that returned it?
-      expect(validator.hasErrors("field2" as KeyPath)).toBe(false);
+      expect(validator.hasErrors("field2")).toBe(false);
     });
 
     it("keeps an Error reason as the cause of the validation error", () => {
@@ -1809,7 +1878,7 @@ describe("Validator: error bookkeeping", () => {
       const reason = new Error("from an Error");
       validator.updateErrors(Symbol(), (b) => b.invalidate("field", reason));
 
-      const [[keyPath, error]] = [...validator.findErrors("field" as KeyPath)];
+      const [[keyPath, error]] = [...validator.findErrors("field")];
       expect(keyPath).toBe("field");
       expect(error).toBeInstanceOf(ValidationError);
       expect(error.message).toBe("from an Error");
@@ -1854,14 +1923,14 @@ describe("Validator: error bookkeeping", () => {
         b.invalidateSelf("self");
       });
 
-      expect(listErrors(validator.findErrors(KeyPath.Self))).toEqual([
+      expect(listErrors(validator.findErrors("**"))).toEqual([
         ["a", "1"],
         ["a", "3"],
         ["a", "1"],
         ["b", "2"],
         [KeyPath.Self, "self"],
       ]);
-      expect(validator.getErrorMessages("a" as KeyPath)).toEqual(new Set(["1", "3"]));
+      expect(validator.getErrorMessages("a")).toEqual(new Set(["1", "3"]));
       expect(validator.invalidKeyPathCount).toBe(3);
     });
 
@@ -1901,7 +1970,7 @@ describe("Validator: error bookkeeping", () => {
           if (model.c < 0) b.invalidate("c", "C");
         });
         await flushMicrotasks();
-        expect(validator.getErrorMessages(KeyPath.Self)).toEqual(new Set(["A", "C", "B"]));
+        expect(validator.getErrorMessages("**")).toEqual(new Set(["A", "C", "B"]));
 
         // Still invalid, but reported again: the position is kept
         runInAction(() => {
@@ -1915,14 +1984,14 @@ describe("Validator: error bookkeeping", () => {
           model.b = 0;
         });
         await vi.advanceTimersByTimeAsync(100);
-        expect(validator.getErrorMessages(KeyPath.Self)).toEqual(new Set(["C"]));
+        expect(validator.getErrorMessages("**")).toEqual(new Set(["C"]));
         runInAction(() => {
           model.a = -1;
           model.b = -1;
         });
         await vi.advanceTimersByTimeAsync(100);
         // PINNED(quirk): Same as for updateErrors(): a handler whose errors were cleared (its entry is deleted, not emptied) is re-inserted after the other handlers, so the first error message changes from "A" to "C". Decide: should errors be ordered by the registration order of their source?
-        expect(listErrors(validator.findErrors(KeyPath.Self))).toEqual([
+        expect(listErrors(validator.findErrors("**"))).toEqual([
           ["c", "C"],
           ["a", "A"],
           ["b", "B"],
@@ -1964,14 +2033,14 @@ describe("Validator: error bookkeeping", () => {
   });
 
   describe("#getErrorMessages / #hasErrors", () => {
-    it("treats an empty string key path as KeyPath.Self", () => {
+    it("treats an empty string as the self path", () => {
       const validator = Validator.get({ field: 0 });
       validator.updateErrors(Symbol(), (b) => {
         b.invalidateSelf("self");
         b.invalidate("field", "field");
       });
-      expect(validator.getErrorMessages("" as KeyPath)).toEqual(new Set(["self", "field"]));
-      expect(validator.hasErrors("" as KeyPath)).toBe(true);
+      expect(validator.getErrorMessages("")).toEqual(new Set(["self"]));
+      expect(validator.hasErrors("")).toBe(true);
     });
 
     it("returns a new Set on every call", () => {
@@ -1982,9 +2051,9 @@ describe("Validator: error bookkeeping", () => {
     it("returns nothing for a key path without errors", () => {
       const validator = Validator.get({ field1: 0, field2: 0 });
       validator.updateErrors(Symbol(), (b) => b.invalidate("field1", "invalid"));
-      expect(validator.getErrorMessages("field2" as KeyPath, true)).toEqual(new Set());
-      expect(validator.hasErrors("field2" as KeyPath, true)).toBe(false);
-      expect(validator.hasErrors("field1.sub" as KeyPath, true)).toBe(false);
+      expect(validator.getErrorMessages("field2.**")).toEqual(new Set());
+      expect(validator.hasErrors("field2.**")).toBe(false);
+      expect(validator.hasErrors("field1.sub.**")).toBe(false);
     });
   });
 });
@@ -2028,7 +2097,7 @@ describe("Validator: sync handler scheduling", () => {
     vi.advanceTimersByTime(1);
     expect(env.seen).toEqual([0, -2]);
     expect(env.validator.reactionState).toBe(0);
-    expect(env.validator.getErrorMessages("field" as KeyPath)).toEqual(new Set(["negative: -2"]));
+    expect(env.validator.getErrorMessages("field")).toEqual(new Set(["negative: -2"]));
 
     runInAction(() => {
       env.model.field = -3;
@@ -2174,7 +2243,7 @@ describe("Validator: sync handler failures", () => {
 
     vi.advanceTimersByTime(1);
     expect(seen).toEqual([0, -1]);
-    expect(validator.getErrorMessages("field" as KeyPath)).toEqual(new Set(["negative"]));
+    expect(validator.getErrorMessages("field")).toEqual(new Set(["negative"]));
     expect(validator.reactionState).toBe(0);
   });
 
@@ -2201,7 +2270,7 @@ describe("Validator: sync handler failures", () => {
     vi.advanceTimersByTime(100);
     expect(consoleError.mock.calls.some((args) => args.includes(failure))).toBe(true);
     // PINNED(quirk): The errors of the last successful run are kept when the handler throws. Decide: should a failing handler clear its errors, keep them, or surface the exception as an error?
-    expect(validator.getErrorMessages("field" as KeyPath)).toEqual(new Set(["negative"]));
+    expect(validator.getErrorMessages("field")).toEqual(new Set(["negative"]));
     expect(validator.reactionState).toBe(0);
     expect(validator.isValidating).toBe(false);
     vi.advanceTimersByTime(1000);
@@ -2275,7 +2344,7 @@ describe("Validator: async handler scheduling", () => {
 
     env.runs[0].job.resolve();
     await flushMicrotasks();
-    expect(env.validator.getErrorMessages("field" as KeyPath)).toEqual(new Set(["negative: -1"]));
+    expect(env.validator.getErrorMessages("field")).toEqual(new Set(["negative: -1"]));
     expect(env.validator.asyncState).toBe(0);
   });
 
@@ -2303,7 +2372,7 @@ describe("Validator: async handler scheduling", () => {
     env.runs[0].job.resolve();
     await flushMicrotasks();
     // PINNED(quirk): The outdated job's result (for -1) is committed while the follow-up job for -3 is still pending, so an error for the old value shows until then. Decide: discard a completed run's result when a newer value is already queued?
-    expect(env.validator.getErrorMessages("field" as KeyPath)).toEqual(new Set(["negative: -1"]));
+    expect(env.validator.getErrorMessages("field")).toEqual(new Set(["negative: -1"]));
     expect(env.validator.asyncState).toBe(1); // scheduled
 
     await vi.advanceTimersByTimeAsync(99);
@@ -2313,7 +2382,7 @@ describe("Validator: async handler scheduling", () => {
 
     env.runs[1].job.resolve();
     await flushMicrotasks();
-    expect(env.validator.getErrorMessages("field" as KeyPath)).toEqual(new Set(["negative: -3"]));
+    expect(env.validator.getErrorMessages("field")).toEqual(new Set(["negative: -3"]));
     expect(env.validator.asyncState).toBe(0);
     expect(env.validator.isValidating).toBe(false);
   });
@@ -2390,7 +2459,7 @@ describe("Validator: async handler failures and cancellation", () => {
     expect(consoleError).toHaveBeenCalledWith(failure);
     expect(validator.asyncState).toBe(0);
     // PINNED(quirk): Errors added to the builder before the handler threw are committed (the commit runs in a finally block). Decide: should a failed async validation discard partial errors, keep them, or keep the previous result?
-    expect(validator.getErrorMessages("field" as KeyPath)).toEqual(new Set(["collected before the failure"]));
+    expect(validator.getErrorMessages("field")).toEqual(new Set(["collected before the failure"]));
   });
 
   it("does not call the handler when the expression throws on the initial run, and validates the first change", async () => {
@@ -2424,7 +2493,7 @@ describe("Validator: async handler failures and cancellation", () => {
 
     await vi.advanceTimersByTimeAsync(1);
     expect(payloads).toEqual([-1]);
-    expect(validator.getErrorMessages("field" as KeyPath)).toEqual(new Set(["negative"]));
+    expect(validator.getErrorMessages("field")).toEqual(new Set(["negative"]));
     expect(validator.isValidating).toBe(false);
   });
 
@@ -2656,10 +2725,10 @@ describe("Validator: handler disposal", () => {
       if (model.field < 0) b.invalidate("field", "B");
     });
     validator.updateErrors(Symbol(), (b) => b.invalidate("field", "manual"));
-    expect(validator.getErrorMessages("field" as KeyPath)).toEqual(new Set(["A", "B", "manual"]));
+    expect(validator.getErrorMessages("field")).toEqual(new Set(["A", "B", "manual"]));
 
     disposeA();
-    expect(validator.getErrorMessages("field" as KeyPath)).toEqual(new Set(["B", "manual"]));
+    expect(validator.getErrorMessages("field")).toEqual(new Set(["B", "manual"]));
     expect(validator.invalidKeyCount).toBe(1);
   });
 
@@ -2812,7 +2881,7 @@ describe("Validator: #reset edge cases", () => {
 
     env.runs[1].job.resolve();
     await flushMicrotasks();
-    expect(env.validator.getErrorMessages("field" as KeyPath)).toEqual(new Set(["negative: -3"]));
+    expect(env.validator.getErrorMessages("field")).toEqual(new Set(["negative: -3"]));
     expect(env.validator.asyncState).toBe(0);
     expect(env.validator.isValidating).toBe(false);
 
@@ -2923,8 +2992,8 @@ describe("Validator: nested key paths", () => {
     expect(validator.invalidKeyPathCount).toBe(3);
     expect(validator.invalidKeys).toEqual(new Set());
     expect(validator.invalidKeyCount).toBe(0);
-    expect(validator.getErrorMessages("map.key.field" as KeyPath)).toEqual(new Set(["map"]));
-    expect(validator.getErrorMessages("set.0.field" as KeyPath)).toEqual(new Set(["set"]));
+    expect(validator.getErrorMessages("map.key.field")).toEqual(new Set(["map"]));
+    expect(validator.getErrorMessages("set.0.field")).toEqual(new Set(["set"]));
   });
 
   it("counts a key path reported by both the parent and a nested validator once", () => {
@@ -2938,7 +3007,7 @@ describe("Validator: nested key paths", () => {
 
     expect(validator.invalidKeyPaths).toEqual(new Set(["child"]));
     expect(validator.invalidKeyPathCount).toBe(1);
-    expect(validator.getErrorMessages("child" as KeyPath)).toEqual(new Set(["from parent", "from child"]));
+    expect(validator.getErrorMessages("child")).toEqual(new Set(["from parent", "from child"]));
   });
 
   it("uses a nested error as the first error message when the parent has none", () => {
@@ -2974,48 +3043,52 @@ describe("Validator: nested key paths", () => {
     expect(observed).toEqual([0, 1, 2, 1, 0]);
   });
 
-  it("finds errors of a specific array element with an exact search", () => {
+  it("finds the errors of a specific array element", () => {
     const container = new Container();
     const validator = Validator.get(container);
     invalidateLeaf(container.items[0], "first item");
     invalidateLeaf(container.items[1], "second item");
 
-    expect(listErrors(validator.findErrors("items.1" as KeyPath))).toEqual([["items.1.field", "second item"]]);
-    expect(listErrors(validator.findErrors("items.1.field" as KeyPath))).toEqual([["items.1.field", "second item"]]);
+    expect(listErrors(validator.findErrors("items.1.*"))).toEqual([["items.1.field", "second item"]]);
+    expect(listErrors(validator.findErrors("items.1.field"))).toEqual([["items.1.field", "second item"]]);
+    // The key path of the element holds only its self errors
+    expect(listErrors(validator.findErrors("items.1"))).toEqual([]);
   });
 
-  it("finds the errors of every array element with a prefix search on the array", () => {
+  it("finds the errors of every array element with '**' or '*' below the array", () => {
     const container = new Container();
     const validator = Validator.get(container);
     invalidateLeaf(container.items[0], "first item");
     invalidateLeaf(container.items[1], "second item");
 
-    expect(listErrors(validator.findErrors("items" as KeyPath, true))).toEqual([
+    const expected = [
       ["items.0.field", "first item"],
       ["items.1.field", "second item"],
-    ]);
+    ];
+    expect(listErrors(validator.findErrors("items.**"))).toEqual(expected);
+    expect(listErrors(validator.findErrors("items.*.field"))).toEqual(expected);
   });
 
-  it("finds an invalid later array element with prefix-matched hasErrors/getErrorMessages", () => {
+  it("finds an invalid later array element with hasErrors/getErrorMessages and '**'", () => {
     const container = new Container();
     const validator = Validator.get(container);
     invalidateLeaf(container.items[1], "second item");
     expect(validator.invalidKeyPaths).toEqual(new Set(["items.1.field"]));
 
-    expect(validator.hasErrors("items" as KeyPath, true)).toBe(true);
-    expect(validator.getErrorMessages("items" as KeyPath, true)).toEqual(new Set(["second item"]));
+    expect(validator.hasErrors("items.**")).toBe(true);
+    expect(validator.getErrorMessages("items.**")).toEqual(new Set(["second item"]));
   });
 
-  it("returns the errors of the searched element when prefix-searching one element", () => {
+  it("returns the errors of the searched element when searching with '**' below one element", () => {
     const container = new Container();
     const validator = Validator.get(container);
     invalidateLeaf(container.items[0], "first item");
     invalidateLeaf(container.items[1], "second item");
 
-    expect(listErrors(validator.findErrors("items.1" as KeyPath, true))).toEqual([["items.1.field", "second item"]]);
+    expect(listErrors(validator.findErrors("items.1.**"))).toEqual([["items.1.field", "second item"]]);
   });
 
-  it("searches only below the key path when prefix-searching inside an array element", () => {
+  it("searches only below the key path when searching with '**' inside an array element", () => {
     class Row {
       @observable field = 0;
       @observable other = 0;
@@ -3035,26 +3108,26 @@ describe("Validator: nested key paths", () => {
     const validator = Validator.get(table);
     Validator.get(table.rows[0]).updateErrors(Symbol(), (b) => b.invalidate("other", "other"));
 
-    expect(validator.hasErrors("rows.0.field" as KeyPath)).toBe(false);
-    expect(listErrors(validator.findErrors("rows.0" as KeyPath, true))).toEqual([["rows.0.other", "other"]]);
-    expect(listErrors(validator.findErrors("rows.0.field" as KeyPath, true))).toEqual([]);
-    expect(validator.hasErrors("rows.0.field" as KeyPath, true)).toBe(false);
+    expect(validator.hasErrors("rows.0.field")).toBe(false);
+    expect(listErrors(validator.findErrors("rows.0.**"))).toEqual([["rows.0.other", "other"]]);
+    expect(listErrors(validator.findErrors("rows.0.field.**"))).toEqual([]);
+    expect(validator.hasErrors("rows.0.field.**")).toBe(false);
   });
 
-  it("includes errors of a hoisted object in findErrors(Self) and in lookups by key path", () => {
+  it("includes errors of a hoisted object in lookups by key path and by wildcard", () => {
     const hoisted = new HoistedObject();
     const validator = Validator.get(hoisted);
     invalidateLeaf(hoisted.inner, "hoisted");
 
-    expect(listErrors(validator.findErrors(KeyPath.Self))).toEqual([["field", "hoisted"]]);
+    expect(listErrors(validator.findErrors("*"))).toEqual([["field", "hoisted"]]);
     expect(validator.invalidKeyPaths).toEqual(new Set(["field"]));
     expect(validator.firstErrorMessage).toBe("hoisted");
     // PINNED(quirk): invalidKeys/invalidKeyCount ignore hoisted errors although hoisted objects are "treated as part of the parent object". Decide: should hoisted keys count as the parent's own keys?
     expect(validator.invalidKeys).toEqual(new Set());
     expect(validator.invalidKeyCount).toBe(0);
-    expect(validator.hasErrors("field" as KeyPath)).toBe(true);
-    expect(validator.hasErrors("field" as KeyPath, true)).toBe(true);
-    expect(validator.getErrorMessages("field" as KeyPath)).toEqual(new Set(["hoisted"]));
+    expect(validator.hasErrors("field")).toBe(true);
+    expect(validator.hasErrors("field.**")).toBe(true);
+    expect(validator.getErrorMessages("field")).toEqual(new Set(["hoisted"]));
   });
 
   it("includes errors of hoisted array elements in lookups by key path", () => {
@@ -3063,10 +3136,10 @@ describe("Validator: nested key paths", () => {
     invalidateLeaf(hoisted.list[1], "second");
 
     expect(validator.invalidKeyPaths).toEqual(new Set(["1.field"]));
-    expect(listErrors(validator.findErrors(KeyPath.Self, true))).toEqual([["1.field", "second"]]);
-    expect(listErrors(validator.findErrors(KeyPath.Self))).toEqual([]); // only self errors of hoisted elements
-    expect(listErrors(validator.findErrors("1.field" as KeyPath))).toEqual([["1.field", "second"]]);
-    expect(validator.hasErrors("1" as KeyPath, true)).toBe(true);
+    expect(listErrors(validator.findErrors("**"))).toEqual([["1.field", "second"]]);
+    expect(listErrors(validator.findErrors("*"))).toEqual([]); // one key below are only the elements' self errors
+    expect(listErrors(validator.findErrors("1.field"))).toEqual([["1.field", "second"]]);
+    expect(validator.hasErrors("1.**")).toBe(true);
   });
 
   it("reports isValidating while a reaction of a nested validator is pending", () => {
@@ -3223,6 +3296,12 @@ describe("Validator: types", () => {
     expectTypeOf(validator.getErrorMessages(KeyPath.Self)).toEqualTypeOf<Set<string>>();
     expectTypeOf(validator.hasErrors(KeyPath.Self)).toEqualTypeOf<boolean>();
     expectTypeOf(validator.findErrors(KeyPath.Self)).toMatchTypeOf<Iterable<[KeyPath, ValidationError]>>();
+    // Patterns are plain strings, and key paths themselves pass too
+    expectTypeOf(validator.getErrorMessages).parameter(0).toEqualTypeOf<KeyPathPattern>();
+    expectTypeOf(validator.hasErrors).parameter(0).toEqualTypeOf<KeyPathPattern>();
+    expectTypeOf(validator.findErrors).parameter(0).toEqualTypeOf<KeyPathPattern>();
+    expectTypeOf<string>().toExtend<KeyPathPattern>();
+    expectTypeOf<KeyPath>().toExtend<KeyPathPattern>();
     // `null` is intended (see "#firstErrorMessage returns null when there are no errors"); the "string | undefined" in the docs is outdated.
     expectTypeOf(validator.firstErrorMessage).toEqualTypeOf<string | null>();
     expect(validator.firstErrorMessage).toBeNull();
@@ -3286,11 +3365,11 @@ describe("Validator: key names containing dots", () => {
     });
 
     expect(validator.invalidKeyPaths).toEqual(new Set(["a.b"]));
-    // PINNED(quirk): invalidate() does not escape dots, so a property named "a.b" is recorded as the nested key path a.b: invalidKeys reports "a" (which has no error of its own) and an exact lookup of "a" finds nothing while a prefix lookup does. Decide: should dotted property names be escaped or rejected, so that invalidKeys reports "a.b"?
+    // PINNED(quirk): invalidate() does not escape dots, so a property named "a.b" is recorded as the nested key path a.b: invalidKeys reports "a" (which has no error of its own) and a lookup of "a" finds nothing while one of "a.**" does. Decide: should dotted property names be escaped or rejected, so that invalidKeys reports "a.b"?
     expect(validator.invalidKeys).toEqual(new Set(["a"]));
-    expect(validator.hasErrors("a" as KeyPath)).toBe(false);
-    expect(listErrors(validator.findErrors("a" as KeyPath, true))).toEqual([["a.b", "dotted"]]);
-    expect(listErrors(validator.findErrors("a.b" as KeyPath))).toEqual([["a.b", "dotted"]]);
+    expect(validator.hasErrors("a")).toBe(false);
+    expect(listErrors(validator.findErrors("a.**"))).toEqual([["a.b", "dotted"]]);
+    expect(listErrors(validator.findErrors("a.b"))).toEqual([["a.b", "dotted"]]);
 
     validator.updateErrors(Symbol(), (b) => {
       b.invalidate("a", "plain");
@@ -3311,9 +3390,11 @@ describe("Validator: key names containing dots", () => {
     const validator = Validator.get(parent);
 
     expect(validator.invalidKeyPaths).toEqual(new Set(["child.x.y"]));
-    expect(listErrors(validator.findErrors("child.x" as KeyPath, true))).toEqual([["child.x.y", "deep"]]);
-    expect(listErrors(validator.findErrors("child" as KeyPath))).toEqual([["child.x.y", "deep"]]);
-    expect(listErrors(validator.findErrors("child.x" as KeyPath))).toEqual([]);
+    expect(listErrors(validator.findErrors("child.x.**"))).toEqual([["child.x.y", "deep"]]);
+    expect(listErrors(validator.findErrors("child.**"))).toEqual([["child.x.y", "deep"]]);
+    expect(listErrors(validator.findErrors("child.x.y"))).toEqual([["child.x.y", "deep"]]);
+    expect(listErrors(validator.findErrors("child.x"))).toEqual([]);
+    expect(listErrors(validator.findErrors("child"))).toEqual([]);
   });
 });
 
@@ -3509,12 +3590,12 @@ describe("Validator: timers and pending reactions", () => {
       model.field = -1;
     });
     vi.advanceTimersByTime(100);
-    expect(validator.getErrorMessages("field" as KeyPath)).toEqual(new Set(["first run"]));
+    expect(validator.getErrorMessages("field")).toEqual(new Set(["first run"]));
     expect(vi.getTimerCount()).toBe(1);
     expect(validator.reactionState).toBe(1);
 
     vi.advanceTimersByTime(100);
-    expect(validator.getErrorMessages("field" as KeyPath)).toEqual(new Set(["second run"]));
+    expect(validator.getErrorMessages("field")).toEqual(new Set(["second run"]));
     expect(vi.getTimerCount()).toBe(0);
     expect(validator.reactionState).toBe(0);
   });
@@ -3597,7 +3678,7 @@ describe("Validator: async job lifecycle", () => {
 
     await vi.advanceTimersByTimeAsync(10); // t=21
     expect(validator.isValidating).toBe(false);
-    expect(validator.getErrorMessages("name" as KeyPath)).toEqual(new Set(["already taken"]));
+    expect(validator.getErrorMessages("name")).toEqual(new Set(["already taken"]));
     expect(consoleError).not.toHaveBeenCalled();
     expect(vi.getTimerCount()).toBe(0);
   });
@@ -3633,11 +3714,11 @@ describe("Validator: async job lifecycle", () => {
     });
 
     // create: the sync handler reports immediately, the async job is running
-    expect(env.validator.getErrorMessages("field" as KeyPath)).toEqual(new Set(["sync: -1"]));
+    expect(env.validator.getErrorMessages("field")).toEqual(new Set(["sync: -1"]));
     expect(env.validator.asyncState).toBe(1);
     env.runs[0].job.resolve();
     await flushMicrotasks();
-    expect(env.validator.getErrorMessages("field" as KeyPath)).toEqual(new Set(["sync: -1", "negative: -1"]));
+    expect(env.validator.getErrorMessages("field")).toEqual(new Set(["sync: -1", "negative: -1"]));
     expect(env.validator.isValidating).toBe(false);
 
     // change
@@ -3648,7 +3729,7 @@ describe("Validator: async job lifecycle", () => {
     await vi.advanceTimersByTimeAsync(100);
     expect(env.validator.reactionState).toBe(0);
     expect(env.validator.asyncState).toBe(1);
-    expect(env.validator.getErrorMessages("field" as KeyPath)).toEqual(new Set(["negative: -1", "sync: -2"]));
+    expect(env.validator.getErrorMessages("field")).toEqual(new Set(["negative: -1", "sync: -2"]));
 
     // reset: everything is cleared and the running job is aborted
     env.validator.reset();
@@ -3665,7 +3746,7 @@ describe("Validator: async job lifecycle", () => {
     expect(env.runs[2].signal.aborted).toBe(false);
     env.runs[2].job.resolve();
     await flushMicrotasks();
-    expect(env.validator.getErrorMessages("field" as KeyPath)).toEqual(new Set(["sync: -3", "negative: -3"]));
+    expect(env.validator.getErrorMessages("field")).toEqual(new Set(["sync: -3", "negative: -3"]));
     expect(env.validator.isValidating).toBe(false);
 
     // dispose: errors are removed and further changes are ignored
@@ -3728,7 +3809,7 @@ describe("Validator: #waitForValidation", () => {
     let errorsOnResolve: Set<string> | undefined;
     const wait = track(
       validator.waitForValidation().then(() => {
-        errorsOnResolve = validator.getErrorMessages("field" as KeyPath);
+        errorsOnResolve = validator.getErrorMessages("field");
       })
     );
     expect(isValidatingObserved(validator)).toBe(true);
@@ -3781,7 +3862,7 @@ describe("Validator: #waitForValidation", () => {
 
     env.runs[0].job.resolve();
     await flushMicrotasks();
-    expect(env.validator.getErrorMessages("field" as KeyPath)).toEqual(new Set(["negative: -1"]));
+    expect(env.validator.getErrorMessages("field")).toEqual(new Set(["negative: -1"]));
     expect(wait.status).toBe("pending");
 
     await vi.advanceTimersByTimeAsync(100);
@@ -3791,7 +3872,7 @@ describe("Validator: #waitForValidation", () => {
     env.runs[1].job.resolve();
     await flushMicrotasks();
     expect(wait.status).toBe("resolved");
-    expect(env.validator.getErrorMessages("field" as KeyPath)).toEqual(new Set(["negative: -2"]));
+    expect(env.validator.getErrorMessages("field")).toEqual(new Set(["negative: -2"]));
   });
 
   it.each([
@@ -3897,7 +3978,7 @@ describe("Validator: #waitForValidation", () => {
 
       // Only the wait is aborted, not the validation
       await vi.advanceTimersByTimeAsync(100);
-      expect(validator.getErrorMessages("field" as KeyPath)).toEqual(new Set(["negative: -1"]));
+      expect(validator.getErrorMessages("field")).toEqual(new Set(["negative: -1"]));
     });
 
     it("rejects with the reason of a signal aborted beforehand, even if nothing is being validated", async () => {

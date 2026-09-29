@@ -2,7 +2,7 @@ import { action, computed, IEqualsComparer, makeObservable, observable, reaction
 import { randomId } from "./randomId";
 import { ValidationError, type ValidationErrorMapBuilder, ValidationErrorMapBuilderImpl } from "./error";
 import { StandardNestedFetcher } from "./nested";
-import { KeyPath, ReadonlyKeyPathMultiMap } from "./keyPath";
+import { KeyPath, KeyPathPattern, KeyPathPatternMatch, ReadonlyKeyPathMultiMap } from "./keyPath";
 import { AsyncJob } from "./asyncJob";
 
 const registry = new WeakMap<object, Validator<any>>();
@@ -70,7 +70,7 @@ export function addValidation(target: object, ...args: any[]) {
  *
  * - Supports both sync and async validation handlers
  * - Tracks validation state (isValidating)
- * - Provides error access by key path
+ * - Looks up errors by key path pattern
  * - Supports nested validators
  */
 export class Validator<T> {
@@ -186,107 +186,85 @@ export class Validator<T> {
   /** Get the first error message (including nested objects) */
   @computed
   get firstErrorMessage() {
-    for (const [, error] of this.findErrors(KeyPath.Self, true)) {
+    for (const [, error] of this.findErrors("**")) {
       return error.message;
     }
     return null;
   }
 
-  /** Get error messages for the key path */
-  getErrorMessages(keyPath: KeyPath, prefixMatch = false) {
+  /** Get the error messages of the key paths matching the pattern */
+  getErrorMessages(pattern: KeyPathPattern) {
     const result = new Set<string>();
-    for (const [, error] of this.findErrors(keyPath, prefixMatch)) {
+    for (const [, error] of this.findErrors(pattern)) {
       result.add(error.message);
     }
     return result;
   }
 
-  /** Check if the validator has errors for the key path */
-  hasErrors(keyPath: KeyPath, prefixMatch = false) {
-    for (const _ of this.findErrors(keyPath, prefixMatch)) {
+  /** Check if any key path matching the pattern has errors */
+  hasErrors(pattern: KeyPathPattern) {
+    for (const _ of this.findErrors(pattern)) {
       return true;
     }
     return false;
   }
 
   /**
-   * Find errors for the key path
+   * Find the errors of the key paths matching the pattern
    *
-   * - Can do exact or prefix matching
-   * - Returns all errors that match the key path
-   * - Searches nested validators, including hoisted ones, for the rest of the key path
-   * - Includes errors of every nested validator below the key path when using prefix match
+   * - Yields each error with its key path, relative to this validator
+   * - Searches nested validators, including hoisted ones, for the rest of the pattern
+   * - Reads only the `@nested` members the pattern can reach, which is all of them when it starts with a wildcard
+   *
+   * @see {@link KeyPathPattern} for the syntax
    */
-  *findErrors(searchKeyPath: KeyPath, prefixMatch = false) {
-    yield* this.#findErrors(searchKeyPath, prefixMatch, false);
+  *findErrors(pattern: KeyPathPattern) {
+    yield* this.#findErrors([KeyPathPatternMatch.start(pattern)]);
   }
 
-  /** Find errors for the key path */
-  *#findErrors(
-    searchKeyPath: KeyPath,
-    prefixMatch: boolean,
-    exact: boolean
-  ): Generator<[keyPath: KeyPath, error: ValidationError]> {
-    if (KeyPath.isSelf(searchKeyPath)) {
-      if (exact) {
-        for (const errors of this.#errors.values()) {
-          for (const error of errors.findExact(KeyPath.Self)) {
-            yield [KeyPath.Self, error];
-          }
-        }
-      } else {
-        for (const errors of this.#errors.values()) {
-          for (const [keyPath, error] of errors) {
-            yield [keyPath, error];
-          }
+  /** Find the errors of the key paths that complete any of the matches */
+  *#findErrors(matches: readonly KeyPathPatternMatch[]): Generator<[keyPath: KeyPath, error: ValidationError]> {
+    for (const errors of this.#errors.values()) {
+      for (const [keyPath, error] of errors) {
+        if (matches.some((match) => match.read(keyPath)?.isComplete)) {
+          yield [keyPath, error];
         }
       }
-      if (prefixMatch) {
-        for (const entry of this.#nestedFetcher) {
-          for (const [relativeKeyPath, error] of entry.data.#findErrors(KeyPath.Self, true, exact)) {
-            yield [KeyPath.build(entry.keyPath, relativeKeyPath), error];
-          }
-        }
-      } else if (!exact) {
-        for (const entry of this.#nestedFetcher) {
-          const isSelf = entry.key === KeyPath.Self;
-          const isDirectChild = entry.keyPath === entry.key; // Ignores entries with subKey (like arrays)
-          if (isSelf || isDirectChild) {
-            for (const [relativeKeyPath, error] of entry.data.#findErrors(
-              KeyPath.Self,
-              false,
-              !isSelf || !isDirectChild
-            )) {
-              yield [KeyPath.build(entry.keyPath, relativeKeyPath), error];
-            }
-          }
+    }
+    for (const entry of this.#nestedEntriesFor(matches)) {
+      const entryMatches = matches.map((match) => match.read(entry.keyPath)).filter((match) => match !== null);
+      if (!entryMatches.length) continue;
+      for (const [relativeKeyPath, error] of entry.data.#findErrors(entryMatches)) {
+        yield [KeyPath.build(entry.keyPath, relativeKeyPath), error];
+      }
+    }
+  }
+
+  /**
+   * Nested entries that the rest of the matches can reach
+   *
+   * Reads only the members the matches name, so that a search does not observe the others. A wildcard coming next
+   * can match any member, so it reads them all.
+   */
+  *#nestedEntriesFor(matches: readonly KeyPathPatternMatch[]) {
+    const memberKeys = new Set<KeyPath>();
+    for (const match of matches) {
+      const keyPaths = match.nextKeyPaths;
+      if (!keyPaths) {
+        yield* this.#nestedFetcher;
+        return;
+      }
+      // A member is named by the leading keys of the key path: its first key, or more for a name containing dots
+      for (const keyPath of keyPaths) {
+        for (const ancestor of KeyPath.getAncestors(keyPath)) {
+          memberKeys.add(ancestor);
         }
       }
-    } else {
-      for (const errors of this.#errors.values()) {
-        const iter = prefixMatch ? errors.findPrefix(searchKeyPath) : errors.findExact(searchKeyPath);
-        for (const error of iter) {
-          yield [error.keyPath, error];
-        }
-      }
-      // Hoisted entries are fetched by a self path, which is never an ancestor of a non-self key path,
-      // although their contents appear on this object
-      const ancestorKeyPaths = new Set(KeyPath.getAncestors(searchKeyPath, true));
-      ancestorKeyPaths.add(KeyPath.Self);
-      for (const ancestorKeyPath of ancestorKeyPaths) {
-        for (const entry of this.#nestedFetcher.getForKey(ancestorKeyPath)) {
-          let childKeyPath = KeyPath.getRelative(searchKeyPath, entry.keyPath);
-          if (!childKeyPath) {
-            // The entry is below the searched key path (like an element of a searched array),
-            // so all of its errors match the prefix
-            if (!prefixMatch || !KeyPath.getRelative(entry.keyPath, searchKeyPath)) continue;
-            childKeyPath = KeyPath.Self;
-          }
-          for (const [relativeKeyPath, error] of entry.data.#findErrors(childKeyPath, prefixMatch, exact)) {
-            yield [KeyPath.build(entry.keyPath, relativeKeyPath), error];
-          }
-        }
-      }
+    }
+    // Hoisted members yield their entries at key paths of this object
+    memberKeys.add(KeyPath.Self);
+    for (const memberKey of memberKeys) {
+      yield* this.#nestedFetcher.getForKey(memberKey);
     }
   }
 
@@ -375,7 +353,7 @@ export class Validator<T> {
    * There is no lookup by name: entries are not unique by key path. To reach the validator of one nested object, go
    * through the property — `Validator.get(target.child)` is cached per subject, so it is the very instance yielded
    * here — or iterate and match `entry.key`, which is {@link KeyPath.Self} for a `@nested.hoist` member
-   * rather than the name it is declared with. Errors are looked up by key path with {@link findErrors}, which
+   * rather than the name it is declared with. Errors are looked up by pattern with {@link findErrors}, which
    * searches nested validators itself.
    */
   get nested(): Generator<StandardNestedFetcher.Entry<Validator<any>>, void, unknown> {

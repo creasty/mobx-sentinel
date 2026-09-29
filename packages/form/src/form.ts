@@ -486,7 +486,7 @@ export class Form<T> {
    * @returns Set of error messages
    */
   getAllErrors(fieldName?: FormField.Name<T>) {
-    return this.validator.getErrorMessages(fieldName ? KeyPath.build(fieldName) : KeyPath.Self, true);
+    return this.validator.getErrorMessages(fieldName ? `${fieldName}.**` : "**");
   }
 
   /**

@@ -1,5 +1,4 @@
 import "@mobx-sentinel/react/extension";
-import { KeyPath } from "@mobx-sentinel/core";
 import { Form } from "@mobx-sentinel/form";
 import { renderRadioGroup, useFormHandler } from "@mobx-sentinel/react";
 import { reaction } from "mobx";
@@ -63,7 +62,7 @@ export const InvoiceForm: React.FC<{ model: Invoice }> = observer(({ model }) =>
       <h4>Terms</h4>
       <TermsFields model={model} />
 
-      <h4 {...form.bindLabel(["billTo"])}>Bill to</h4>
+      <h4>Bill to</h4>
       {/* A nested model gets its own form. The parent does not pass anything down. */}
       <AddressForm model={model.billTo} />
 
@@ -435,7 +434,8 @@ const LineItemForm: React.FC<{
       </div>
 
       <div className="line-item-footer">
-        <ErrorText errors={selfErrors(form)} />
+        {/* The line's own rule, reported with `invalidateSelf()`: "." is the line itself rather than one of its fields */}
+        <ErrorText errors={form.validator.getErrorMessages(".")} />
         <span>{formatMoney(model.amount, currency)}</span>
         <button className="outline secondary" onClick={onDuplicate}>
           Duplicate
@@ -534,20 +534,6 @@ const FormActions: React.FC<{ model: Invoice; issued: string | null }> = observe
     </>
   );
 });
-
-/**
- * Errors reported with `builder.invalidateSelf()`.
- *
- * They belong to the object rather than to one of its fields, so they are
- * filed under `KeyPath.Self` instead of under a field name.
- */
-function selfErrors(form: Form<object>): ReadonlySet<string> {
-  const messages = new Set<string>();
-  for (const [keyPath, error] of form.validator.findErrors(KeyPath.Self)) {
-    if (KeyPath.isSelf(keyPath)) messages.add(error.message);
-  }
-  return messages;
-}
 
 const ErrorText: React.FC<{ errors: ReadonlySet<string> }> = observer(({ errors }) => (
   <>

@@ -61,11 +61,11 @@ validator.invalidKeyPaths // Set(["child.email", "items.0.email"])
 validator.invalidKeyPathCount // 2
 
 // Query nested errors
-validator.hasErrors("child", true) // true (deep search)
+validator.hasErrors("child.**") // true (child and everything below it)
 validator.getErrorMessages("child.email") // Set(["Invalid email"])
 
 // Get all nested errors
-for (const [keyPath, error] of validator.findErrors(KeyPath.Self, true)) {
+for (const [keyPath, error] of validator.findErrors("**")) {
   console.log(`${keyPath}: ${error.message}`);
 }
 // Output:
@@ -103,9 +103,9 @@ runInAction(() => {
 
 await validator.waitForValidation();
 
-// Self errors appear under KeyPath.Self
-validator.getErrorMessages(KeyPath.Self) // Set(["Start date must be before end date"])
-validator.hasErrors(KeyPath.Self) // true
+// Self errors are found with the pattern ".", and filed under KeyPath.Self
+validator.getErrorMessages(".") // Set(["Start date must be before end date"])
+validator.hasErrors(".") // true
 ```
 
 ## Manual Error Management

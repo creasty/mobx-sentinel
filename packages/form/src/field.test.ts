@@ -9,7 +9,7 @@ import {
 } from "mobx";
 import { Form } from "./form";
 import { debugFormField, FormField } from "./field";
-import { KeyPath, nested, Validator } from "@mobx-sentinel/core";
+import { nested, Validator } from "@mobx-sentinel/core";
 
 class SampleModel {
   @observable test = "test";
@@ -386,17 +386,23 @@ describe("FormField", () => {
   });
 
   describe("Field names", () => {
-    it("includes errors of the nested object for a field named after the @nested property", () => {
+    it("covers the errors of a @nested object itself for a field named after the property, not those of its fields", () => {
       const model = new NestedParentModel();
       const form = Form.get(model);
       const field = form.getField("child");
 
+      // The nested object's fields have fields of their own, in the nested object's form
       Validator.get(model.child).updateErrors(Symbol(), (b) => b.invalidate("name", "child error"));
+      expect(field.hasErrors).toBe(false);
+      expect(field.errors).toEqual(new Set());
+      expect(Form.get(model.child).getField("name").errors).toEqual(new Set(["child error"]));
+
+      Validator.get(model.child).updateErrors(Symbol(), (b) => b.invalidateSelf("child self error"));
       expect(field.hasErrors).toBe(true);
-      expect(field.errors).toEqual(new Set(["child error"]));
+      expect(field.errors).toEqual(new Set(["child self error"]));
 
       form.validator.updateErrors(Symbol(), (b) => b.invalidate("child", "parent error"));
-      expect(field.errors).toEqual(new Set(["parent error", "child error"]));
+      expect(field.errors).toEqual(new Set(["parent error", "child self error"]));
 
       // Unrelated fields of the parent are not affected
       expect(form.getField("test").hasErrors).toBe(false);
@@ -1281,7 +1287,7 @@ describe("FormField", () => {
       });
       // Reference: the underlying validator query re-runs on any error change
       const disposeRaw = autorun(() => {
-        void validator.hasErrors(KeyPath.build("test"));
+        void validator.hasErrors("test");
         rawRuns++;
       });
 

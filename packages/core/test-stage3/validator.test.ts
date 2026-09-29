@@ -2,7 +2,6 @@
 import { observable, runInAction } from "mobx";
 import { addValidation, Validator } from "../src/validator";
 import { nested } from "../src/nested";
-import { KeyPath } from "../src/keyPath";
 
 describe("Validator with stage-3 decorators", () => {
   beforeEach(() => {
@@ -59,7 +58,7 @@ describe("Validator with stage-3 decorators", () => {
 
     // This assertion REVERSES a pinned Expected, and is not a regression: the PINNED(bug) behind the member
     // separation read "Expected: two entries (one per private field), each reading its own field", and the tests that
-    // stood here pinned invalidKeyPaths, the prefix search and isValidating over the member that `nested` drops. The
+    // stood here pinned invalidKeyPaths, the search for every error and isValidating over the member that `nested` drops. The
     // maintainer has since decided that @nested rejects the collision, since a key path is the address every error
     // lookup uses and both members spell "#child". Those three properties are still real for a collision that
     // construction cannot see, and are pinned on one in src/validator.test.ts ("entries that share a key path").
@@ -90,14 +89,14 @@ describe("Validator with stage-3 decorators", () => {
     const order = new Order();
     const validator = Validator.get(order);
     await vi.advanceTimersByTimeAsync(0);
-    expect(validator.getErrorMessages("title" as KeyPath)).toEqual(new Set(["required"]));
+    expect(validator.getErrorMessages("title")).toEqual(new Set(["required"]));
 
     runInAction(() => {
       order.title = "taken";
     });
     await vi.advanceTimersByTimeAsync(100);
     expect(validator.isValidating).toBe(false);
-    expect(validator.getErrorMessages("title" as KeyPath)).toEqual(new Set(["taken"]));
+    expect(validator.getErrorMessages("title")).toEqual(new Set(["taken"]));
   });
 
   test("errors of @nested accessor fields are aggregated into the parent", async () => {
@@ -107,7 +106,7 @@ describe("Validator with stage-3 decorators", () => {
 
     expect(validator.invalidKeys).toEqual(new Set(["title"]));
     expect(validator.invalidKeyPaths).toEqual(new Set(["title", "item.name", "items.0.name"]));
-    expect(validator.getErrorMessages("items.0.name" as KeyPath)).toEqual(new Set(["required"]));
+    expect(validator.getErrorMessages("items.0.name")).toEqual(new Set(["required"]));
     expect(Array.from(validator.nested, (entry) => entry.data)).toContain(Validator.get(order.item));
 
     runInAction(() => {
@@ -134,9 +133,9 @@ describe("Validator with stage-3 decorators", () => {
     vi.advanceTimersByTime(100);
 
     expect(validator.invalidKeyPaths).toEqual(new Set(["1.name"]));
-    expect(
-      Array.from(validator.findErrors(KeyPath.Self, true), ([keyPath, error]) => [keyPath, error.message])
-    ).toEqual([["1.name", "required"]]);
+    expect(Array.from(validator.findErrors("**"), ([keyPath, error]) => [keyPath, error.message])).toEqual([
+      ["1.name", "required"],
+    ]);
   });
 
   test("handlers added by a subclass share the instance's validator", () => {

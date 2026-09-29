@@ -107,10 +107,10 @@ describe("error reporting", () => {
     expect(screen.getByLabelText("Customer name")).toHaveAttribute("aria-invalid", "false");
     expect(screen.getByText("Customer email is required")).toBeInTheDocument();
     expect(screen.getByText("Confirm the amounts before sending")).toBeInTheDocument();
-    // The address: a nested model with a form of its own, which the invoice's heading answers for
+    // The address: a nested model with a form of its own
     expect(screen.getByText("Street address is required")).toBeInTheDocument();
     expect(screen.getByText("ZIP code is required")).toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: "Bill to" })).toHaveAttribute("aria-invalid", "true");
+    expect(screen.getByLabelText("Street address")).toHaveAttribute("aria-invalid", "true");
     // The line item: a nested model in an array
     expect(screen.getByText("Description is required")).toBeInTheDocument();
     expect(screen.getByText("Unit price is required")).toBeInTheDocument();
@@ -219,7 +219,7 @@ describe("the CRM check", () => {
     await elapse(CRM_THROTTLE_MS + CRM_LOOKUP_MS);
     expect(screen.getByText("Customer name is required")).toBeInTheDocument();
     expect(screen.getByText("Street address is required")).toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: "Bill to" })).toHaveAttribute("aria-invalid", "true");
+    expect(screen.getByLabelText("Street address")).toHaveAttribute("aria-invalid", "true");
 
     await user.click(screen.getByRole("button", { name: "Look up" }));
     await elapse(CRM_LOOKUP_MS + RULES_MS);
@@ -229,7 +229,7 @@ describe("the CRM check", () => {
     expect(screen.getByLabelText("Country")).toHaveValue("DE");
     expect(screen.queryByText("Customer name is required")).not.toBeInTheDocument();
     expect(screen.queryByText("Street address is required")).not.toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: "Bill to" })).toHaveAttribute("aria-invalid", "false");
+    expect(screen.getByLabelText("Street address")).toHaveAttribute("aria-invalid", "false");
   });
 
   test("goes idle again when a typo in the email is corrected before the check runs", async () => {

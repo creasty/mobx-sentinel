@@ -65,10 +65,10 @@ export const Debugger: React.FC<{ model: object }> = observer(({ model }) => {
               </tr>
             </thead>
             <tbody>
-              {Array.from(form.validator.findErrors(KeyPath.Self, true), ([keyPath, error], i) => (
+              {Array.from(form.validator.findErrors("**"), ([keyPath, error], i) => (
                 <tr key={i}>
                   <th scope="row">
-                    <code>{String(keyPath) || "(self)"}</code>
+                    <code>{KeyPath.isSelf(keyPath) ? "(self)" : keyPath}</code>
                   </th>
                   <td>{error.message}</td>
                 </tr>

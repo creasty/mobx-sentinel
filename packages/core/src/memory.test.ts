@@ -1,6 +1,5 @@
 import { computed, makeObservable, observable, runInAction } from "mobx";
 import type { ValidationErrorMapBuilder } from "./error";
-import { KeyPath } from "./keyPath";
 import { nested } from "./nested";
 import { addValidation, Validator } from "./validator";
 import { Watcher, watch } from "./watcher";
@@ -224,7 +223,7 @@ describe("Validator", () => {
       runInAction(() => {
         sample.name = "taken";
       });
-      await vi.waitFor(() => expect(validator.getErrorMessages(KeyPath.build("name"))).toEqual(new Set(["taken"])));
+      await vi.waitFor(() => expect(validator.getErrorMessages("name")).toEqual(new Set(["taken"])));
       return { sample: new WeakRef(sample), validator: new WeakRef(validator) };
     })();
     expect(await isCollected(refs.sample)).toBe(true);
