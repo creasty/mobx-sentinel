@@ -11,6 +11,7 @@ import {
   SampleMultiFieldBinding,
 } from "./binding.test";
 import { defaultConfig, FormConfig } from "./config";
+import { createView } from "./viewFixtures";
 
 /**
  * The sub-form at `keyPath`, found by iterating
@@ -577,9 +578,10 @@ describe("Form", () => {
         it("returns the same binding instance when called multiple times", () => {
           const model = new SampleModel();
           const form = Form.get(model);
+          const view = createView();
 
-          const binding1 = form.bind(SampleFormBinding);
-          const binding2 = form.bind(SampleFormBinding);
+          const binding1 = view.render(() => form.bind(SampleFormBinding));
+          const binding2 = view.render(() => form.bind(SampleFormBinding));
           expect(binding1.bindingId).toBe(binding2.bindingId);
         });
       });
@@ -597,10 +599,11 @@ describe("Form", () => {
         it("returns the same binding instance when called multiple times but updates the config", () => {
           const model = new SampleModel();
           const form = Form.get(model);
+          const view = createView();
 
-          const binding1 = form.bind(SampleConfigurableFormBinding, { sample: true });
+          const binding1 = view.render(() => form.bind(SampleConfigurableFormBinding, { sample: true }));
           expect(binding1.config).toEqual({ sample: true });
-          const binding2 = form.bind(SampleConfigurableFormBinding, { sample: false });
+          const binding2 = view.render(() => form.bind(SampleConfigurableFormBinding, { sample: false }));
           expect(binding1.bindingId).toBe(binding2.bindingId);
           expect(binding2.config).toEqual({ sample: false });
         });
@@ -620,9 +623,10 @@ describe("Form", () => {
         it("returns the same binding instance when called multiple times", () => {
           const model = new SampleModel();
           const form = Form.get(model);
+          const view = createView();
 
-          const binding1 = form.bind("field", SampleFieldBinding);
-          const binding2 = form.bind("field", SampleFieldBinding);
+          const binding1 = view.render(() => form.bind("field", SampleFieldBinding));
+          const binding2 = view.render(() => form.bind("field", SampleFieldBinding));
           expect(binding1.bindingId).toBe(binding2.bindingId);
         });
       });
@@ -640,10 +644,11 @@ describe("Form", () => {
         it("returns the same binding instance when called multiple times but updates the config", () => {
           const model = new SampleModel();
           const form = Form.get(model);
+          const view = createView();
 
-          const binding1 = form.bind("field", SampleConfigurableFieldBinding, { sample: true });
+          const binding1 = view.render(() => form.bind("field", SampleConfigurableFieldBinding, { sample: true }));
           expect(binding1.config).toEqual({ sample: true });
-          const binding2 = form.bind("field", SampleConfigurableFieldBinding, { sample: false });
+          const binding2 = view.render(() => form.bind("field", SampleConfigurableFieldBinding, { sample: false }));
           expect(binding1.bindingId).toBe(binding2.bindingId);
           expect(binding2.config).toEqual({ sample: false });
         });
@@ -663,9 +668,10 @@ describe("Form", () => {
         it("returns the same binding instance when called multiple times", () => {
           const model = new SampleModel();
           const form = Form.get(model);
+          const view = createView();
 
-          const binding1 = form.bind(["field", "otherField"], SampleMultiFieldBinding);
-          const binding2 = form.bind(["field", "otherField"], SampleMultiFieldBinding);
+          const binding1 = view.render(() => form.bind(["field", "otherField"], SampleMultiFieldBinding));
+          const binding2 = view.render(() => form.bind(["field", "otherField"], SampleMultiFieldBinding));
           expect(binding1.bindingId).toBe(binding2.bindingId);
         });
       });
@@ -685,14 +691,15 @@ describe("Form", () => {
         it("returns the same binding instance when called multiple times but updates the config", () => {
           const model = new SampleModel();
           const form = Form.get(model);
+          const view = createView();
 
-          const binding1 = form.bind(["field", "otherField"], SampleConfigurableMultiFieldBinding, {
-            sample: true,
-          });
+          const binding1 = view.render(() =>
+            form.bind(["field", "otherField"], SampleConfigurableMultiFieldBinding, { sample: true })
+          );
           expect(binding1.config).toEqual({ sample: true });
-          const binding2 = form.bind(["field", "otherField"], SampleConfigurableMultiFieldBinding, {
-            sample: false,
-          });
+          const binding2 = view.render(() =>
+            form.bind(["field", "otherField"], SampleConfigurableMultiFieldBinding, { sample: false })
+          );
           expect(binding1.bindingId).toBe(binding2.bindingId);
           expect(binding2.config).toEqual({ sample: false });
         });
@@ -1029,10 +1036,10 @@ describe("Form (details)", () => {
       expect(editForm.getField("field")).not.toBe(previewForm.getField("field"));
       expect(debugForm(editForm).submission).not.toBe(debugForm(previewForm).submission);
 
-      const editProps = editForm.bind(SampleFormBinding);
+      const editProps = createView().render(() => editForm.bind(SampleFormBinding));
       expect(debugForm(editForm).bindings.size).toBe(1);
       expect(debugForm(previewForm).bindings.size).toBe(0);
-      expect(previewForm.bind(SampleFormBinding)).not.toEqual(editProps);
+      expect(createView().render(() => previewForm.bind(SampleFormBinding))).not.toEqual(editProps);
       expect(debugForm(previewForm).bindings.size).toBe(1);
     });
 
@@ -2506,7 +2513,8 @@ describe("Form (details)", () => {
 
       const didSubmit = vi.fn();
       addHandler("didSubmit", didSubmit);
-      expect(bind(SampleFormBinding)).toEqual(form.bind(SampleFormBinding));
+      const [detached, attached] = createView().render(() => [bind(SampleFormBinding), form.bind(SampleFormBinding)]);
+      expect(detached).toEqual(attached);
       expect(debugForm(form).bindings.size).toBe(1);
       configure({ allowSubmitInvalid: true });
       expect(form.config.allowSubmitInvalid).toBe(true);

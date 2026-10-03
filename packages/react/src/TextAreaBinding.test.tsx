@@ -8,6 +8,7 @@ import "./extension";
 import { observer } from "mobx-react-lite";
 import { TextAreaBinding } from "./TextAreaBinding";
 import { errorTextId } from "./errorTextHelper";
+import { createView } from "./viewFixtures";
 
 class SampleModel {
   @observable text: string = "hello";
@@ -772,11 +773,13 @@ describe("bindTextArea", () => {
       const model = new SampleModel();
       const form = Form.get(model);
       const config = { getter: () => model.text, setter: () => {} };
-      const viaExtension = form.bindTextArea("text", config);
-      const viaBind = form.bind("text", TextAreaBinding, config);
-      // Unlike bindInput, bindTextArea passes the cacheKey through as is
+      const [viaExtension, viaBind, keyed] = createView().render(() => [
+        form.bindTextArea("text", config),
+        form.bind("text", TextAreaBinding, config),
+        form.bindTextArea("text", { ...config, cacheKey: "other" }),
+      ]);
       expect(viaBind.onChange).toBe(viaExtension.onChange);
-      expect(form.bindTextArea("text", { ...config, cacheKey: "other" }).onChange).not.toBe(viaExtension.onChange);
+      expect(keyed.onChange).not.toBe(viaExtension.onChange);
     });
   });
 });

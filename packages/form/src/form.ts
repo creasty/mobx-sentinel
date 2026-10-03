@@ -1,4 +1,4 @@
-import { action, computed, makeObservable, observable } from "mobx";
+import { action, computed, createAtom, IAtom, makeObservable, observable } from "mobx";
 import { Validator, Watcher, StandardNestedFetcher, KeyPath } from "@mobx-sentinel/core";
 import { FormField } from "./field";
 import { bindingExtensions, FormBinding, FormBindingConstructor, FormBindingFunc, getSafeBindingName } from "./binding";
@@ -67,7 +67,7 @@ export class Form<T> {
   readonly #nestedFetcher: StandardNestedFetcher<Form<any>>;
   readonly #submission = new Submission();
   readonly #fields = new Map<string, FormField>();
-  readonly #bindings = new Map<string, FormBinding>();
+  readonly #bindings = new Map<string, { binding: FormBinding; atom: IAtom }>();
   readonly #localConfig = observable.box<Partial<FormConfig>>({});
 
   /**
@@ -388,12 +388,24 @@ export class Form<T> {
     return field;
   }
 
-  /** Define a binding by key */
+  /**
+   * Get the binding for the key, creating it if needed
+   *
+   * Every call reads the binding's atom, so a reaction that binds, such as the render of an `observer` component,
+   * observes it. The binding is cached while a reaction observes it, and dropped along with its config once none does.
+   * A binding created outside a reaction is not cached, the way MobX keeps no value of a computed that no reaction
+   * observes.
+   */
   #defineBinding(key: string, create: () => FormBinding) {
-    let binding = this.#bindings.get(key);
-    if (!binding) {
-      binding = create();
-      this.#bindings.set(key, binding);
+    const cached = this.#bindings.get(key);
+    if (cached) {
+      cached.atom.reportObserved();
+      return cached.binding;
+    }
+    const binding = create();
+    const atom = createAtom(`Form.bindings[${key}]`, undefined, () => this.#bindings.delete(key));
+    if (atom.reportObserved()) {
+      this.#bindings.set(key, { binding, atom });
     }
     return binding;
   }
@@ -446,7 +458,9 @@ export class Form<T> {
    * - Can bind to individual fields
    * - Can bind to multiple fields
    * - Can bind to the entire form
-   * - Bindings are cached and reused
+   * - Reuses a binding, with the config of the latest call, while a reaction renders it, such as an `observer`
+   *   component, and drops it once none does
+   * - Creates a binding that is not kept when called outside a reaction
    * - Supports configuration via binding classes
    */
   bind: FormBindingFunc<T> = (...args: any[]) => {

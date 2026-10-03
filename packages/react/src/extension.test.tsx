@@ -19,6 +19,7 @@ import { SubmitButtonBinding } from "./SubmitButtonBinding";
 import { TextAreaBinding } from "./TextAreaBinding";
 import { useFormAutoReset, useFormHandler, useFormSSR } from "./hooks";
 import { hasUnsavedForms, useFormNavigationGuard } from "./navigationGuard";
+import { createView } from "./viewFixtures";
 
 class SampleModel {
   @observable text = "hello";
@@ -332,23 +333,28 @@ describe("Form#bindInput", () => {
   test("reuses the cached binding for the same field and cacheKey", () => {
     const { model, form } = setupEnv();
 
-    const a = form.bindInput("text", { getter: () => model.text, setter: noop });
-    const b = form.bindInput("text", { getter: () => model.text, setter: noop });
+    const view = createView();
+    const render = () =>
+      view.render(() => [
+        form.bindInput("text", { getter: () => model.text, setter: noop }),
+        form.bindInput("number", { valueAs: "number", cacheKey: "k", getter: () => model.number, setter: noop }),
+      ]);
+    const [a, c] = render();
+    const [b, d] = render();
     expect(b.onChange).toBe(a.onChange);
-
-    const c = form.bindInput("number", { valueAs: "number", cacheKey: "k", getter: () => model.number, setter: noop });
-    const d = form.bindInput("number", { valueAs: "number", cacheKey: "k", getter: () => model.number, setter: noop });
     expect(d.onChange).toBe(c.onChange);
   });
 
   test("keeps separate bindings per cacheKey only, whatever the valueAs", () => {
     const { form } = setupEnv();
 
-    const plain = form.bindInput("text", { getter: () => "", setter: noop });
-    const asString = form.bindInput("text", { valueAs: "string", getter: () => "", setter: noop });
-    const asDate = form.bindInput("text", { valueAs: "date", getter: () => null, setter: noop });
-    const withKey = form.bindInput("text", { cacheKey: "k", getter: () => "", setter: noop });
-    const asDateWithKey = form.bindInput("text", { valueAs: "date", cacheKey: "k", getter: () => null, setter: noop });
+    const [plain, asString, asDate, withKey, asDateWithKey] = createView().render(() => [
+      form.bindInput("text", { getter: () => "", setter: noop }),
+      form.bindInput("text", { valueAs: "string", getter: () => "", setter: noop }),
+      form.bindInput("text", { valueAs: "date", getter: () => null, setter: noop }),
+      form.bindInput("text", { cacheKey: "k", getter: () => "", setter: noop }),
+      form.bindInput("text", { valueAs: "date", cacheKey: "k", getter: () => null, setter: noop }),
+    ]);
 
     // Like any binding, inputs bound to the same field need distinct cacheKeys to keep their configs apart
     expect(asString.onChange).toBe(plain.onChange);
@@ -365,10 +371,15 @@ describe("Form#bindInput", () => {
     const setter1 = vi.fn();
     const setter2 = vi.fn();
 
-    const first = form.bindInput("text", { getter: () => "first", setter: setter1, onChange: onChange1 });
+    const view = createView();
+    const first = view.render(() =>
+      form.bindInput("text", { getter: () => "first", setter: setter1, onChange: onChange1 })
+    );
     expect(first.value).toBe("first");
 
-    const second = form.bindInput("text", { getter: () => "second", setter: setter2, onChange: onChange2 });
+    const second = view.render(() =>
+      form.bindInput("text", { getter: () => "second", setter: setter2, onChange: onChange2 })
+    );
     expect(second.value).toBe("second");
     expect(second.onChange).toBe(first.onChange);
 
@@ -386,9 +397,13 @@ describe("Form#bindInput", () => {
     const { model, form } = setupEnv();
     const config = { getter: () => model.text, setter: noop };
 
-    const viaExtension = form.bindInput("text", config);
-    expect(form.bind("text", InputBinding, config).onChange).toBe(viaExtension.onChange);
-    expect(form.bind("text", InputBinding, { cacheKey: "k", ...config }).onChange).not.toBe(viaExtension.onChange);
+    const [viaExtension, viaBind, keyed] = createView().render(() => [
+      form.bindInput("text", config),
+      form.bind("text", InputBinding, config),
+      form.bind("text", InputBinding, { cacheKey: "k", ...config }),
+    ]);
+    expect(viaBind.onChange).toBe(viaExtension.onChange);
+    expect(keyed.onChange).not.toBe(viaExtension.onChange);
   });
 
   test("writes the value through the setter and marks the field as changed and touched", () => {
@@ -421,7 +436,13 @@ describe("Form#bindTextArea", () => {
     const { model, form } = setupEnv();
     const config = { getter: () => model.text, setter: noop };
 
-    const props = form.bindTextArea("text", config);
+    const [props, again, viaBind, keyed, input] = createView().render(() => [
+      form.bindTextArea("text", config),
+      form.bindTextArea("text", config),
+      form.bind("text", TextAreaBinding, config),
+      form.bindTextArea("text", { cacheKey: "k", ...config }),
+      form.bindInput("text", config),
+    ]);
     expect(props).toEqual({
       value: "hello",
       id: form.getField("text").id,
@@ -431,11 +452,11 @@ describe("Form#bindTextArea", () => {
       "aria-invalid": undefined,
       "aria-errormessage": undefined,
     });
-    expect(form.bindTextArea("text", config).onChange).toBe(props.onChange);
-    expect(form.bind("text", TextAreaBinding, config).onChange).toBe(props.onChange);
-    expect(form.bindTextArea("text", { cacheKey: "k", ...config }).onChange).not.toBe(props.onChange);
+    expect(again.onChange).toBe(props.onChange);
+    expect(viaBind.onChange).toBe(props.onChange);
+    expect(keyed.onChange).not.toBe(props.onChange);
     // A separate binding from the input bound to the same field
-    expect(form.bindInput("text", config).onChange).not.toBe(props.onChange);
+    expect(input.onChange).not.toBe(props.onChange);
   });
 
   test("writes the value through the setter and marks the field as changed and touched", () => {
@@ -469,7 +490,10 @@ describe("Form#bindSelectBox", () => {
     const { model, form } = setupEnv();
     const config = { getter: () => model.choice, setter: noop };
 
-    const props = form.bindSelectBox("choice", config);
+    const [props, viaBind] = createView().render(() => [
+      form.bindSelectBox("choice", config),
+      form.bind("choice", SelectBoxBinding, config),
+    ]);
     expect(props).toEqual({
       id: form.getField("choice").id,
       multiple: undefined,
@@ -479,17 +503,20 @@ describe("Form#bindSelectBox", () => {
       "aria-invalid": undefined,
       "aria-errormessage": undefined,
     });
-    expect(form.bind("choice", SelectBoxBinding, config).onChange).toBe(props.onChange);
+    expect(viaBind.onChange).toBe(props.onChange);
   });
 
   test("keeps separate bindings per cacheKey and replaces the config on every call", () => {
     const { form } = setupEnv();
 
-    const a = form.bindSelectBox("choice", { getter: () => "x", setter: noop });
-    const b = form.bindSelectBox("choice", { cacheKey: "k", getter: () => "y", setter: noop });
+    const view = createView();
+    const [a, b] = view.render(() => [
+      form.bindSelectBox("choice", { getter: () => "x", setter: noop }),
+      form.bindSelectBox("choice", { cacheKey: "k", getter: () => "y", setter: noop }),
+    ]);
     expect(b.onChange).not.toBe(a.onChange);
 
-    const c = form.bindSelectBox("choice", { multiple: true, getter: () => ["z"], setter: noop });
+    const c = view.render(() => form.bindSelectBox("choice", { multiple: true, getter: () => ["z"], setter: noop }));
     expect(c.onChange).toBe(a.onChange);
     expect(c.multiple).toBe(true);
     expect(c.value).toEqual(["z"]);
@@ -501,7 +528,11 @@ describe("Form#bindCheckBox", () => {
     const { model, form } = setupEnv();
     const config = { getter: () => model.flag, setter: noop };
 
-    const props = form.bindCheckBox("flag", config);
+    const [props, viaBind, keyed] = createView().render(() => [
+      form.bindCheckBox("flag", config),
+      form.bind("flag", CheckBoxBinding, config),
+      form.bindCheckBox("flag", { cacheKey: "k", ...config }),
+    ]);
     expect(props).toEqual({
       type: "checkbox",
       id: form.getField("flag").id,
@@ -511,8 +542,8 @@ describe("Form#bindCheckBox", () => {
       "aria-invalid": undefined,
       "aria-errormessage": undefined,
     });
-    expect(form.bind("flag", CheckBoxBinding, config).onChange).toBe(props.onChange);
-    expect(form.bindCheckBox("flag", { cacheKey: "k", ...config }).onChange).not.toBe(props.onChange);
+    expect(viaBind.onChange).toBe(props.onChange);
+    expect(keyed.onChange).not.toBe(props.onChange);
   });
 });
 
@@ -521,7 +552,12 @@ describe("Form#bindRadioGroup", () => {
     const { model, form } = setupEnv();
     const config = { getter: () => model.choice, setter: noop };
 
-    const bindRadio = form.bindRadioGroup("choice", config);
+    const [bindRadio, again, viaBind, keyed] = createView().render(() => [
+      form.bindRadioGroup("choice", config),
+      form.bindRadioGroup("choice", config),
+      form.bind("choice", RadioGroupBinding, config),
+      form.bindRadioGroup("choice", { cacheKey: "k", ...config }),
+    ]);
     expect(bindRadio).toBeTypeOf("function");
     expect(bindRadio("a")).toEqual({
       type: "radio",
@@ -536,9 +572,9 @@ describe("Form#bindRadioGroup", () => {
     });
     expect(bindRadio("b").checked).toBe(false);
 
-    expect(form.bindRadioGroup("choice", config)).toBe(bindRadio);
-    expect(form.bind("choice", RadioGroupBinding, config)).toBe(bindRadio);
-    expect(form.bindRadioGroup("choice", { cacheKey: "k", ...config })).not.toBe(bindRadio);
+    expect(again).toBe(bindRadio);
+    expect(viaBind).toBe(bindRadio);
+    expect(keyed).not.toBe(bindRadio);
   });
 });
 
@@ -546,7 +582,13 @@ describe("Form#bindSubmitButton", () => {
   test("works without a config, sharing the cache entry with Form#bind given an empty config", () => {
     const { form } = setupEnv();
 
-    const props = form.bindSubmitButton();
+    const [props, again, emptyConfig, viaBind, keyed] = createView().render(() => [
+      form.bindSubmitButton(),
+      form.bindSubmitButton(),
+      form.bindSubmitButton({}),
+      form.bind(SubmitButtonBinding, {}),
+      form.bindSubmitButton({ cacheKey: "k" }),
+    ]);
     expect(props).toEqual({
       onClick: expect.any(Function),
       onMouseOver: expect.any(Function),
@@ -554,20 +596,21 @@ describe("Form#bindSubmitButton", () => {
       "aria-busy": false,
       "aria-invalid": false,
     });
-    expect(form.bindSubmitButton().onClick).toBe(props.onClick);
-    expect(form.bindSubmitButton({}).onClick).toBe(props.onClick);
-    expect(form.bind(SubmitButtonBinding, {}).onClick).toBe(props.onClick);
-    expect(form.bindSubmitButton({ cacheKey: "k" }).onClick).not.toBe(props.onClick);
+    expect(again.onClick).toBe(props.onClick);
+    expect(emptyConfig.onClick).toBe(props.onClick);
+    expect(viaBind.onClick).toBe(props.onClick);
+    expect(keyed.onClick).not.toBe(props.onClick);
   });
 
   test("falls back to an empty config, so the extended handlers are optional", () => {
     const { form } = setupEnv();
     const onClick = vi.fn();
     const onMouseOver = vi.fn();
-    const withConfig = form.bindSubmitButton({ onClick, onMouseOver });
+    const view = createView();
+    const withConfig = view.render(() => form.bindSubmitButton({ onClick, onMouseOver }));
 
     // A later call without a config drops the previously given handlers
-    const props = form.bindSubmitButton();
+    const props = view.render(() => form.bindSubmitButton());
     expect(props.onClick).toBe(withConfig.onClick);
     // Invoke the handlers directly: errors thrown inside React event handlers are reported to
     // window "error" events rather than rethrown from fireEvent, so a render-based check could not fail.
@@ -621,11 +664,16 @@ describe("Form#bindLabel", () => {
   test("honors the htmlFor override and caches per field list and cacheKey", () => {
     const { form } = setupEnv();
 
-    expect(form.bindLabel(["text"], { htmlFor: "custom" }).htmlFor).toBe("custom");
+    const view = createView();
+    expect(view.render(() => form.bindLabel(["text"], { htmlFor: "custom" })).htmlFor).toBe("custom");
     // Same cache entry, config replaced by the call without a config
-    expect(form.bindLabel(["text"]).htmlFor).toBe(form.getField("text").id);
-    expect(form.bindLabel(["text"], { cacheKey: "k", htmlFor: "custom" }).htmlFor).toBe("custom");
-    expect(form.bindLabel(["text"]).htmlFor).toBe(form.getField("text").id);
+    expect(view.render(() => form.bindLabel(["text"])).htmlFor).toBe(form.getField("text").id);
+    const [keyed, plain] = view.render(() => [
+      form.bindLabel(["text"], { cacheKey: "k", htmlFor: "custom" }),
+      form.bindLabel(["text"]),
+    ]);
+    expect(keyed.htmlFor).toBe("custom");
+    expect(plain.htmlFor).toBe(form.getField("text").id);
   });
 
   test("associates the label with the input bound to the same field", () => {

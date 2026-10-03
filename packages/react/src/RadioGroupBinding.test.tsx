@@ -8,6 +8,7 @@ import "./extension";
 import { observer } from "mobx-react-lite";
 import { RadioGroupBinding, renderRadioGroup } from "./RadioGroupBinding";
 import { errorTextId } from "./errorTextHelper";
+import { createView } from "./viewFixtures";
 
 enum SampleEnum {
   ALPHA = "ALPHA",
@@ -951,11 +952,16 @@ describe("bindRadioGroup", () => {
     const form = Form.get(model);
     const config = { getter: () => model.enum, setter: () => {} };
 
-    const bind1 = form.bindRadioGroup("enum", config);
-    const bind2 = form.bindRadioGroup("enum", { ...config });
+    const view = createView();
+    const bind1 = view.render(() => form.bindRadioGroup("enum", config));
+    const [bind2, viaBind, keyed] = view.render(() => [
+      form.bindRadioGroup("enum", { ...config }),
+      form.bind("enum", RadioGroupBinding, config),
+      form.bindRadioGroup("enum", { ...config, cacheKey: "another" }),
+    ]);
     expect(bind2).toBe(bind1);
-    expect(form.bind("enum", RadioGroupBinding, config)).toBe(bind1);
-    expect(form.bindRadioGroup("enum", { ...config, cacheKey: "another" })).not.toBe(bind1);
+    expect(viaBind).toBe(bind1);
+    expect(keyed).not.toBe(bind1);
   });
 
   test("checks a null button while the model is null", async () => {

@@ -11,5 +11,9 @@ export default defineConfig({
       enabled: true,
       include: ["**/src/**/*.test.ts", "**/src/**/*.test.tsx"],
     },
+    coverage: {
+      // Coverage leaves out the test files on its own, but not the modules they share.
+      exclude: ["src/viewFixtures.ts"],
+    },
   },
 });
