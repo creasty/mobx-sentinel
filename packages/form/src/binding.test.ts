@@ -1,4 +1,4 @@
-import { autorun, computed, getDependencyTree, makeObservable, observable, runInAction } from "mobx";
+import { autorun, computed, getDependencyTree, makeObservable, observable, runInAction, untracked } from "mobx";
 import { randomId } from "./randomId";
 import {
   FormBinding,
@@ -19,6 +19,7 @@ import {
   SampleFormBinding,
   SampleMultiFieldBinding,
 } from "./bindingFixtures";
+import { createView } from "./viewFixtures";
 
 class SampleModel {
   string = "sample";
@@ -400,9 +401,11 @@ describe("extendFormBinding", () => {
     expect(bindSpy.mock.lastCall).toEqual([SampleConfigurableFormBinding, config]);
 
     // The same cached bindings as Form#bind
-    expect(form.bindSampleField("name", config).bindingId).toBe(
-      form.bind("name", SampleConfigurableFieldBinding, config).bindingId
-    );
+    const [viaMethod, viaBind] = createView().render(() => [
+      form.bindSampleField("name", config),
+      form.bind("name", SampleConfigurableFieldBinding, config),
+    ]);
+    expect(viaMethod.bindingId).toBe(viaBind.bindingId);
   });
 
   it("passes an empty config when the config is omitted", () => {
@@ -445,8 +448,13 @@ describe("extendFormBinding", () => {
     const other = withMethods(createForm(), bindings);
 
     expect(form.bindSharedField).toBe(other.bindSharedField);
-    expect(form.bindSharedField("name").bindingId).not.toBe(other.bindSharedField("name").bindingId);
-    expect(form.bindSharedField.call(other, "name").bindingId).toBe(other.bindSharedField("name").bindingId);
+    const [own, others, applied] = createView().render(() => [
+      form.bindSharedField("name"),
+      other.bindSharedField("name"),
+      form.bindSharedField.call(other, "name"),
+    ]);
+    expect(own.bindingId).not.toBe(others.bindingId);
+    expect(applied.bindingId).toBe(others.bindingId);
   });
 
   it("leaves Form.prototype and the forms' own properties as they are", () => {
@@ -509,6 +517,9 @@ const randomIdPattern = "[0-9a-f]{32}";
 
 /** Wraps type-level assertions that must (or must not) compile; the callback is never executed */
 function typeOnly(_fn: () => void) {}
+
+/** The keys of the bindings the form caches */
+const bindingKeys = (form: Form<any>) => [...debugForm(form).bindings.keys()];
 
 class BindModel {
   a = "";
@@ -654,15 +665,16 @@ describe("FormBindingConstructor (details)", () => {
 
 describe("Form#bind (binding key and cache)", () => {
   const createForm = () => Form.get(new BindModel());
-  const bindingKeys = (form: Form<any>) => [...debugForm(form).bindings.keys()];
 
   describe("Binding key", () => {
     it("consists of the `form` subject, the binding name, and the cacheKey for form bindings", () => {
       const form = createForm();
       const name = getSafeBindingName(SampleFormBinding);
 
-      form.bind(SampleFormBinding);
-      form.bind(SampleFormBinding, { cacheKey: "key" });
+      createView().render(() => {
+        form.bind(SampleFormBinding);
+        form.bind(SampleFormBinding, { cacheKey: "key" });
+      });
       expect(bindingKeys(form)).toEqual([`form@${name}`, `form@${name}:"key"`]);
     });
 
@@ -670,9 +682,11 @@ describe("Form#bind (binding key and cache)", () => {
       const form = createForm();
       const name = getSafeBindingName(SampleFieldBinding);
 
-      form.bind("a", SampleFieldBinding);
-      form.bind("a", SampleFieldBinding, { cacheKey: "key" });
-      form.bind("a:suffix", SampleFieldBinding);
+      createView().render(() => {
+        form.bind("a", SampleFieldBinding);
+        form.bind("a", SampleFieldBinding, { cacheKey: "key" });
+        form.bind("a:suffix", SampleFieldBinding);
+      });
       expect(bindingKeys(form)).toEqual([`field:"a"@${name}`, `field:"a"@${name}:"key"`, `field:"a:suffix"@${name}`]);
     });
 
@@ -680,9 +694,11 @@ describe("Form#bind (binding key and cache)", () => {
       const form = createForm();
       const name = getSafeBindingName(SampleMultiFieldBinding);
 
-      form.bind(["a", "b"], SampleMultiFieldBinding);
-      form.bind(["a", "b"], SampleMultiFieldBinding, { cacheKey: "key" });
-      form.bind([], SampleMultiFieldBinding);
+      createView().render(() => {
+        form.bind(["a", "b"], SampleMultiFieldBinding);
+        form.bind(["a", "b"], SampleMultiFieldBinding, { cacheKey: "key" });
+        form.bind([], SampleMultiFieldBinding);
+      });
       expect(bindingKeys(form)).toEqual([
         `fields:["a","b"]@${name}`,
         `fields:["a","b"]@${name}:"key"`,
@@ -694,47 +710,60 @@ describe("Form#bind (binding key and cache)", () => {
   describe("Distinct instances", () => {
     it("creates separate instances for different cacheKeys", () => {
       const form = createForm();
-      const none = form.bind(SampleFormBinding);
-      const key1 = form.bind(SampleFormBinding, { cacheKey: "key1" });
-      const key2 = form.bind(SampleFormBinding, { cacheKey: "key2" });
+      const [none, key1, key2, key1Again] = createView().render(() => [
+        form.bind(SampleFormBinding),
+        form.bind(SampleFormBinding, { cacheKey: "key1" }),
+        form.bind(SampleFormBinding, { cacheKey: "key2" }),
+        form.bind(SampleFormBinding, { cacheKey: "key1" }),
+      ]);
       expect(new Set([none.bindingId, key1.bindingId, key2.bindingId]).size).toBe(3);
-      expect(form.bind(SampleFormBinding, { cacheKey: "key1" }).bindingId).toBe(key1.bindingId);
+      expect(key1Again.bindingId).toBe(key1.bindingId);
     });
 
     it("treats an empty-string cacheKey as distinct from no cacheKey", () => {
       const form = createForm();
-      const none = form.bind(SampleFormBinding);
-      const empty = form.bind(SampleFormBinding, { cacheKey: "" });
+      const [none, empty] = createView().render(() => [
+        form.bind(SampleFormBinding),
+        form.bind(SampleFormBinding, { cacheKey: "" }),
+      ]);
       expect(empty.bindingId).not.toBe(none.bindingId);
     });
 
     it('treats a literal "undefined" cacheKey as distinct from no cacheKey', () => {
       const form = createForm();
-      const none = form.bind(SampleFormBinding);
-      const literal = form.bind(SampleFormBinding, { cacheKey: "undefined" });
+      const [none, literal] = createView().render(() => [
+        form.bind(SampleFormBinding),
+        form.bind(SampleFormBinding, { cacheKey: "undefined" }),
+      ]);
       expect(literal.bindingId).not.toBe(none.bindingId);
     });
 
     it("creates separate instances for different fields", () => {
       const form = createForm();
-      const a = form.bind("a", SampleFieldBinding);
-      const b = form.bind("b", SampleFieldBinding);
+      const [a, b] = createView().render(() => [
+        form.bind("a", SampleFieldBinding),
+        form.bind("b", SampleFieldBinding),
+      ]);
       expect(a.bindingId).not.toBe(b.bindingId);
       expect(b.fieldName).toBe("b");
     });
 
     it("creates separate instances for a field name and its augmented name", () => {
       const form = createForm();
-      const plain = form.bind("a", SampleFieldBinding);
-      const augmented = form.bind("a:suffix", SampleFieldBinding);
+      const [plain, augmented] = createView().render(() => [
+        form.bind("a", SampleFieldBinding),
+        form.bind("a:suffix", SampleFieldBinding),
+      ]);
       expect(augmented.bindingId).not.toBe(plain.bindingId);
       expect(augmented.fieldName).toBe("a:suffix");
     });
 
     it("creates separate instances for different binding classes on the same subject", () => {
       const form = createForm();
-      const plain = form.bind("a", SampleFieldBinding);
-      const configurable = form.bind("a", SampleConfigurableFieldBinding, { sample: true });
+      const [plain, configurable] = createView().render(() => [
+        form.bind("a", SampleFieldBinding),
+        form.bind("a", SampleConfigurableFieldBinding, { sample: true }),
+      ]);
       expect(configurable.bindingId).not.toBe(plain.bindingId);
     });
 
@@ -742,30 +771,37 @@ describe("Form#bind (binding key and cache)", () => {
       const Original = SampleFormBinding;
       const Shadow = class SampleFormBinding extends Original {};
       const form = createForm();
-      expect(form.bind(Shadow).bindingId).not.toBe(form.bind(Original).bindingId);
+      const [shadow, original] = createView().render(() => [form.bind(Shadow), form.bind(Original)]);
+      expect(shadow.bindingId).not.toBe(original.bindingId);
     });
 
     it("creates separate instances for different field orders", () => {
       const form = createForm();
-      const ab = form.bind(["a", "b"], SampleMultiFieldBinding);
-      const ba = form.bind(["b", "a"], SampleMultiFieldBinding);
+      const [ab, ba] = createView().render(() => [
+        form.bind(["a", "b"], SampleMultiFieldBinding),
+        form.bind(["b", "a"], SampleMultiFieldBinding),
+      ]);
       expect(ba.bindingId).not.toBe(ab.bindingId);
       expect(ba.fieldNames).toEqual(["b", "a"]);
     });
 
     it("creates separate instances for a single field and a one-element field list of the same class", () => {
       const form = createForm();
-      const single = form.bind("a", EitherFieldBinding);
-      const multi = form.bind(["a"], EitherFieldBinding);
+      const [single, multi] = createView().render(() => [
+        form.bind("a", EitherFieldBinding),
+        form.bind(["a"], EitherFieldBinding),
+      ]);
       expect(multi.bindingId).not.toBe(single.bindingId);
       expect(multi.isMulti).toBe(true);
     });
 
     it("creates separate instances for field lists whose comma-joined names coincide", () => {
       const form = createForm();
-      const twoFields = form.bind(["a:x", "b"], FieldsCaptureBinding);
-      // "a:x,b" is a valid augmented name of the field "a"
-      const oneField = form.bind(["a:x,b"], FieldsCaptureBinding);
+      const [twoFields, oneField] = createView().render(() => [
+        form.bind(["a:x", "b"], FieldsCaptureBinding),
+        // "a:x,b" is a valid augmented name of the field "a"
+        form.bind(["a:x,b"], FieldsCaptureBinding),
+      ]);
       expect(oneField.fields).not.toBe(twoFields.fields);
       expect(oneField.fields.map((field) => field.fieldName)).toEqual(["a:x,b"]);
     });
@@ -774,7 +810,11 @@ describe("Form#bind (binding key and cache)", () => {
       const model = new BindModel();
       const form = Form.get(model);
       const keyedForm = Form.get(model, Symbol("key"));
-      expect(keyedForm.bind(SampleFormBinding).bindingId).not.toBe(form.bind(SampleFormBinding).bindingId);
+      const [plain, keyed] = createView().render(() => [
+        form.bind(SampleFormBinding),
+        keyedForm.bind(SampleFormBinding),
+      ]);
+      expect(keyed.bindingId).not.toBe(plain.bindingId);
       expect(debugForm(form).bindings.size).toBe(1);
       expect(debugForm(keyedForm).bindings.size).toBe(1);
     });
@@ -793,12 +833,15 @@ describe("Form#bind (binding key and cache)", () => {
       }
 
       const form = createForm();
+      const view = createView();
       expect(constructed).toBe(0);
-      form.bind(CountingBinding);
-      form.bind(CountingBinding);
-      form.bind(CountingBinding);
+      view.render(() => {
+        form.bind(CountingBinding);
+        form.bind(CountingBinding);
+      });
+      view.render(() => form.bind(CountingBinding));
       expect(constructed).toBe(1);
-      form.bind(CountingBinding, { cacheKey: "other" });
+      view.render(() => form.bind(CountingBinding, { cacheKey: "other" }));
       expect(constructed).toBe(2);
     });
 
@@ -855,19 +898,21 @@ describe("Form#bind (binding key and cache)", () => {
       }
 
       const form = createForm();
-      expect(() => form.bind(FlakyBinding)).toThrow("constructor failed");
+      const view = createView();
+      expect(() => view.render(() => form.bind(FlakyBinding))).toThrow("constructor failed");
       expect(debugForm(form).bindings.size).toBe(0);
 
       shouldThrow = false;
-      expect(form.bind(FlakyBinding)).toEqual({ count: 1 });
-      expect(form.bind(FlakyBinding)).toEqual({ count: 1 });
+      expect(view.render(() => form.bind(FlakyBinding))).toEqual({ count: 1 });
+      expect(view.render(() => form.bind(FlakyBinding))).toEqual({ count: 1 });
     });
 
     it("throws a TypeError without touching the caches when the binding class is missing", () => {
       const form = createForm();
-      expect(() => (form.bind as any)(null)).toThrow(TypeError);
-      expect(() => (form.bind as any)("a", undefined)).toThrow(TypeError);
-      expect(() => (form.bind as any)(["a", "b"], undefined)).toThrow(TypeError);
+      const view = createView();
+      expect(() => view.render(() => (form.bind as any)(null))).toThrow(TypeError);
+      expect(() => view.render(() => (form.bind as any)("a", undefined))).toThrow(TypeError);
+      expect(() => view.render(() => (form.bind as any)(["a", "b"], undefined))).toThrow(TypeError);
       expect(debugForm(form).bindings.size).toBe(0);
       expect(debugForm(form).fields.size).toBe(0);
     });
@@ -876,24 +921,28 @@ describe("Form#bind (binding key and cache)", () => {
   describe("Config updates", () => {
     it("replaces the config with the latest object on every call", () => {
       const form = createForm();
+      const view = createView();
       const config1 = { sample: true };
       const config2 = { sample: true };
-      form.bind("a", SampleConfigurableFieldBinding, config1);
-      expect(form.bind("a", SampleConfigurableFieldBinding, config2).config).toBe(config2);
+      const first = view.render(() => form.bind("a", SampleConfigurableFieldBinding, config1));
+      const second = view.render(() => form.bind("a", SampleConfigurableFieldBinding, config2));
+      expect(second.bindingId).toBe(first.bindingId);
+      expect(second.config).toBe(config2);
     });
 
     it("replaces the config with undefined when it is omitted on a later call", () => {
       const form = createForm();
-      const first = form.bind(["a"], SampleConfigurableMultiFieldBinding, { sample: true });
-      const second = form.bind(["a"], SampleConfigurableMultiFieldBinding, undefined as any);
+      const view = createView();
+      const first = view.render(() => form.bind(["a"], SampleConfigurableMultiFieldBinding, { sample: true }));
+      const second = view.render(() => form.bind(["a"], SampleConfigurableMultiFieldBinding, undefined as any));
       expect(second.bindingId).toBe(first.bindingId);
       expect(second.config).toBeUndefined();
     });
 
     it("assigns `config` as an own property even on bindings that declare none", () => {
       const form = createForm();
-      form.bind(SampleFormBinding);
-      const [instance] = debugForm(form).bindings.values();
+      createView().render(() => form.bind(SampleFormBinding));
+      const [{ binding: instance }] = debugForm(form).bindings.values();
       expect(instance).toBeInstanceOf(SampleFormBinding);
       expect(Object.hasOwn(instance, "config")).toBe(true);
       expect(instance.config).toBeUndefined();
@@ -903,21 +952,29 @@ describe("Form#bind (binding key and cache)", () => {
   describe("Props", () => {
     it("re-evaluates props on every call instead of caching them", () => {
       const form = createForm();
-      const props1 = form.bind(SampleFormBinding);
-      const props2 = form.bind(SampleFormBinding);
+      const [props1, props2] = createView().render(() => [form.bind(SampleFormBinding), form.bind(SampleFormBinding)]);
       expect(props2).not.toBe(props1);
       expect(props2).toEqual(props1);
     });
 
-    it("does not make the calling derivation depend on the binding cache", () => {
+    it("makes the calling derivation depend on an atom per binding, which never notifies it", () => {
       const form = createForm();
+      let runs = 0;
       const dispose = autorun(() => {
+        runs++;
         form.bind(SampleFormBinding);
         form.bind("a", SampleFieldBinding);
         form.bind(["a", "b"], SampleMultiFieldBinding);
       });
       try {
-        expect(getDependencyTree(dispose).dependencies).toBeUndefined();
+        expect(getDependencyTree(dispose).dependencies?.map((dependency) => dependency.name)).toEqual(
+          bindingKeys(form).map((key) => `Form.bindings[${key}]`)
+        );
+        // Bindings that other reactions add and drop leave the derivation alone
+        const view = createView();
+        view.render(() => form.bind("b", SampleFieldBinding));
+        view.unmount();
+        expect(runs).toBe(1);
       } finally {
         dispose();
       }
@@ -1062,10 +1119,11 @@ describe("Form#bind (constructor, lifecycle, and misuse)", () => {
 
     it("keeps the config given at construction while exposing the latest one as `config`", () => {
       const form = createForm();
+      const view = createView();
       const first = { sample: true };
       const second = { sample: false };
-      form.bind("a", ConstructorArgsFieldBinding, first);
-      const props = form.bind("a", ConstructorArgsFieldBinding, second);
+      view.render(() => form.bind("a", ConstructorArgsFieldBinding, first));
+      const props = view.render(() => form.bind("a", ConstructorArgsFieldBinding, second));
       expect(props.configAtConstruction).toBe(first);
       expect(props.config).toBe(second);
     });
@@ -1080,11 +1138,12 @@ describe("Form#bind (constructor, lifecycle, and misuse)", () => {
     it("reads the field names at call time, so mutating the caller's array later creates a new binding", () => {
       const form = createForm();
       const fieldNames: ("a" | "b")[] = ["a"];
-      const first = form.bind(fieldNames, ConstructorArgsMultiFieldBinding);
-
-      // Mutating the caller's array changes the key on the next call, but not the existing binding
-      fieldNames.push("b");
-      const second = form.bind(fieldNames, ConstructorArgsMultiFieldBinding);
+      const [first, second] = createView().render(() => {
+        const first = form.bind(fieldNames, ConstructorArgsMultiFieldBinding);
+        // Mutating the caller's array changes the key on the next call, but not the existing binding
+        fieldNames.push("b");
+        return [first, form.bind(fieldNames, ConstructorArgsMultiFieldBinding)];
+      });
       expect(second.fields).not.toBe(first.fields);
       expect(first.fields.map((field) => field.fieldName)).toEqual(["a"]);
       expect(second.fields.map((field) => field.fieldName)).toEqual(["a", "b"]);
@@ -1102,8 +1161,9 @@ describe("Form#bind (constructor, lifecycle, and misuse)", () => {
       }
 
       const form = createForm();
-      expect(() => form.bind("a", ThrowingFieldBinding)).toThrow("constructor failed");
-      expect(() => form.bind(["b"], ThrowingFieldBinding as any)).toThrow("constructor failed");
+      const view = createView();
+      expect(() => view.render(() => form.bind("a", ThrowingFieldBinding))).toThrow("constructor failed");
+      expect(() => view.render(() => form.bind(["b"], ThrowingFieldBinding as any))).toThrow("constructor failed");
       expect(debugForm(form).bindings.size).toBe(0);
       expect([...debugForm(form).fields.keys()]).toEqual(["a", "b"]);
     });
@@ -1143,9 +1203,10 @@ describe("Form#bind (constructor, lifecycle, and misuse)", () => {
       }
 
       const form = createForm();
+      const view = createView();
       // PINNED(quirk): `instance.config = config` runs on a class whose `config` is a getter, which throws in strict mode; the instance was already cached, so every later call throws too. Decide: should Form#bind guard the assignment (or should the type forbid a read-only `config`)?
-      expect(() => form.bind(GetterConfigBinding)).toThrow(TypeError);
-      expect(() => form.bind(GetterConfigBinding)).toThrow(TypeError);
+      expect(() => view.render(() => form.bind(GetterConfigBinding))).toThrow(TypeError);
+      expect(() => view.render(() => form.bind(GetterConfigBinding))).toThrow(TypeError);
       expect(constructed).toBe(1);
       expect(debugForm(form).bindings.size).toBe(1);
     });
@@ -1209,31 +1270,91 @@ describe("Form#bind (constructor, lifecycle, and misuse)", () => {
       } finally {
         dispose();
       }
-      // Outside a derivation the computed is not cached, so the latest config is read
-      expect(form.bind(ComputedPropsBinding, { label: "third" }).label).toBe("third");
     });
   });
 
   describe("Cache lifetime", () => {
+    it("keeps a binding while a reaction renders it, and drops it once the reaction is disposed", () => {
+      const form = createForm();
+      const view = createView();
+      const first = view.render(() => form.bind(SampleFormBinding));
+      expect(view.render(() => form.bind(SampleFormBinding)).bindingId).toBe(first.bindingId);
+      expect(debugForm(form).bindings.size).toBe(1);
+
+      view.unmount();
+      expect(debugForm(form).bindings.size).toBe(0);
+      expect(createView().render(() => form.bind(SampleFormBinding)).bindingId).not.toBe(first.bindingId);
+    });
+
+    it("drops the bindings that a later render no longer binds", () => {
+      const form = createForm();
+      const name = getSafeBindingName(SampleFormBinding);
+      const view = createView();
+      for (let i = 0; i < 100; i++) {
+        view.render(() => form.bind(SampleFormBinding, { cacheKey: String(i) }));
+      }
+      expect(bindingKeys(form)).toEqual([`form@${name}:"99"`]);
+    });
+
+    it("keeps a binding that several reactions render until none of them does", () => {
+      const form = createForm();
+      const view1 = createView();
+      const view2 = createView();
+      const first = view1.render(() => form.bind(SampleFormBinding));
+      expect(view2.render(() => form.bind(SampleFormBinding)).bindingId).toBe(first.bindingId);
+
+      view1.unmount();
+      expect(view2.render(() => form.bind(SampleFormBinding)).bindingId).toBe(first.bindingId);
+      view2.unmount();
+      expect(debugForm(form).bindings.size).toBe(0);
+    });
+
+    it("does not cache a binding created outside a reaction", () => {
+      const form = createForm();
+      const first = form.bind(SampleFormBinding);
+      expect(form.bind(SampleFormBinding).bindingId).not.toBe(first.bindingId);
+      expect(debugForm(form).bindings.size).toBe(0);
+      // Reading it untracked, as an action does, is outside a reaction too
+      createView().render(() => untracked(() => form.bind(SampleFormBinding)));
+      expect(debugForm(form).bindings.size).toBe(0);
+    });
+
+    it("gives a call outside a reaction the binding that a reaction keeps, with the config of that call", () => {
+      const form = createForm();
+      const view = createView();
+      const rendered = view.render(() => form.bind("a", SampleConfigurableFieldBinding, { sample: true }));
+      const outside = form.bind("a", SampleConfigurableFieldBinding, { sample: false });
+      expect(outside.bindingId).toBe(rendered.bindingId);
+      expect(outside.config).toEqual({ sample: false });
+      expect(debugForm(form).bindings.size).toBe(1);
+    });
+
+    it("keeps the fields of the bindings it drops, with their state", () => {
+      const form = createForm();
+      const view = createView();
+      const { field } = view.render(() => form.bind("a", FieldCaptureBinding));
+      field.markAsTouched();
+      view.unmount();
+      expect(debugForm(form).bindings.size).toBe(0);
+      expect(form.getField("a")).toBe(field);
+      expect(field.isTouched).toBe(true);
+    });
+
     it("shares the cache between calls of Form.get for the same subject", () => {
       const model = new BindModel();
-      expect(Form.get(model).bind(SampleFormBinding).bindingId).toBe(Form.get(model).bind(SampleFormBinding).bindingId);
+      const [first, second] = createView().render(() => [
+        Form.get(model).bind(SampleFormBinding),
+        Form.get(model).bind(SampleFormBinding),
+      ]);
+      expect(second.bindingId).toBe(first.bindingId);
     });
 
     it("keeps cached bindings across Form#reset", () => {
       const form = createForm();
-      const before = form.bind("a", SampleFieldBinding);
+      const view = createView();
+      const before = view.render(() => form.bind("a", SampleFieldBinding));
       form.reset();
-      expect(form.bind("a", SampleFieldBinding).bindingId).toBe(before.bindingId);
-    });
-
-    it("retains a binding for every distinct cacheKey ever used", () => {
-      const form = createForm();
-      for (let i = 0; i < 100; i++) {
-        form.bind(SampleFormBinding, { cacheKey: String(i) });
-      }
-      // The cache has no eviction or release API; bindings live as long as the form ("Bindings are cached and reused")
-      expect(debugForm(form).bindings.size).toBe(100);
+      expect(view.render(() => form.bind("a", SampleFieldBinding)).bindingId).toBe(before.bindingId);
     });
   });
 

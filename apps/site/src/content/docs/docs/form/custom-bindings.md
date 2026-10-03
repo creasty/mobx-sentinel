@@ -59,7 +59,9 @@ onBlur={() => {
 
 ## Working with Configuration
 
-`form.bind()` constructs a binding once per [binding key](/docs/form/bindings/#using-bindings), and every call assigns its configuration to the binding's `config`. A binding always holds the configuration of the latest call: its functions, and whatever those close over, such as a component's props and state.
+`form.bind()` constructs a binding once per [binding key](/docs/form/bindings/#using-bindings) while it is rendered, and every call assigns its configuration to the binding's `config`. A binding holds the configuration of the latest call: its functions, and whatever those close over, such as a component's props and state.
+
+Once nothing renders a binding, the form drops it, so the same key can get a new instance: when its component mounts again, and on every mount under React's StrictMode. Keep the constructor to setting up the instance, such as `makeObservable(this)`: something it registers elsewhere, such as a submission handler, would pile up with every instance.
 
 Read `config` in plain getters, and use `@computed` only for members that read nothing but observables:
 
