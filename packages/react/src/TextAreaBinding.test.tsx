@@ -7,6 +7,7 @@ import { Form, FormField } from "@mobx-sentinel/form";
 import "./extension";
 import { observer } from "mobx-react-lite";
 import { TextAreaBinding } from "./TextAreaBinding";
+import { errorTextId } from "./errorTextHelper";
 
 class SampleModel {
   @observable text: string = "hello";
@@ -59,6 +60,19 @@ const SampleComponent: React.FC<{ model: SampleModel }> = observer(({ model }) =
 
 describe("TextAreaBinding", () => {
   describe("props", () => {
+    test("points the textarea at the error text of its field while the errors are reported, after the configured ids", () => {
+      const env = setupBinding((model) => ({
+        getter: () => model.text,
+        setter: (v) => (model.text = v),
+        "aria-describedby": "hint",
+      }));
+      expect(env.binding.props["aria-describedby"]).toBe("hint");
+
+      env.form.validator.updateErrors(Symbol(), (builder) => builder.invalidate("text", "invalid"));
+      env.field.reportError();
+      expect(env.binding.props["aria-describedby"]).toBe(`hint ${errorTextId(env.field)}`);
+    });
+
     test("exposes exactly the textarea attributes, without a type", () => {
       const env = setupBinding(() => ({ getter: () => "value", setter: () => {} }));
       expect(env.binding.props).toEqual({
@@ -69,6 +83,7 @@ describe("TextAreaBinding", () => {
         onBlur: env.binding.onBlur,
         "aria-invalid": undefined,
         "aria-errormessage": undefined,
+        "aria-describedby": undefined,
       });
       expect(Object.keys(env.binding.props)).toEqual([
         "value",
@@ -78,6 +93,7 @@ describe("TextAreaBinding", () => {
         "onBlur",
         "aria-invalid",
         "aria-errormessage",
+        "aria-describedby",
       ]);
     });
 
@@ -469,6 +485,7 @@ describe("TextAreaBinding", () => {
         onBlur: React.FocusEventHandler<HTMLTextAreaElement>;
         "aria-invalid": boolean | undefined;
         "aria-errormessage": string | undefined;
+        "aria-describedby": string | undefined;
       }>();
       expectTypeOf(env.binding.props).toExtend<React.TextareaHTMLAttributes<HTMLTextAreaElement>>();
       expectTypeOf(env.binding.props).not.toExtend<React.InputHTMLAttributes<HTMLInputElement>>();

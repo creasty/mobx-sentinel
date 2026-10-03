@@ -1,4 +1,5 @@
 import { FormBinding, FormField } from "@mobx-sentinel/form";
+import { describedBy } from "./errorTextHelper";
 import { makeObservable, computed, action } from "mobx";
 
 export namespace InputBinding {
@@ -29,6 +30,8 @@ export namespace InputBinding {
     onFocus?: Attrs["onFocus"];
     /** [Extend] Blur handler */
     onBlur?: Attrs["onBlur"];
+    /** [Extend] IDs of the elements describing the input; the ID of the error text is added while errors are reported */
+    "aria-describedby"?: Attrs["aria-describedby"];
   } & (
     | {
         /**
@@ -200,6 +203,7 @@ export class InputBinding implements FormBinding {
       onBlur: this.onBlur,
       "aria-invalid": this.field.isErrorReported,
       "aria-errormessage": this.errorMessages ?? undefined,
+      "aria-describedby": describedBy(this.field, this.config["aria-describedby"]),
     } satisfies InputBinding.Attrs;
   }
 }

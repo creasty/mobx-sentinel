@@ -7,6 +7,7 @@ import { Form, FormField } from "@mobx-sentinel/form";
 import "./extension";
 import { observer } from "mobx-react-lite";
 import { InputBinding } from "./InputBinding";
+import { errorTextId } from "./errorTextHelper";
 
 class SampleModel {
   @observable string: string = "hello";
@@ -702,6 +703,19 @@ describe("InputBinding", () => {
   });
 
   describe("props", () => {
+    test("points the input at the error text of its field while the errors are reported, after the configured ids", () => {
+      const env = setupBinding((model) => ({
+        getter: () => model.string,
+        setter: (v) => (model.string = v),
+        "aria-describedby": "hint",
+      }));
+      expect(env.binding.props["aria-describedby"]).toBe("hint");
+
+      env.form.validator.updateErrors(Symbol(), (builder) => builder.invalidate("string", "invalid"));
+      env.field.reportError();
+      expect(env.binding.props["aria-describedby"]).toBe(`hint ${errorTextId(env.field)}`);
+    });
+
     test("exposes exactly the input attributes", () => {
       const env = setupBinding(() => ({ getter: () => "value", setter: () => {} }));
       expect(env.binding.props).toEqual({
@@ -713,6 +727,7 @@ describe("InputBinding", () => {
         onBlur: env.binding.onBlur,
         "aria-invalid": undefined,
         "aria-errormessage": undefined,
+        "aria-describedby": undefined,
       });
       expect(Object.keys(env.binding.props)).toEqual([
         "type",
@@ -723,6 +738,7 @@ describe("InputBinding", () => {
         "onBlur",
         "aria-invalid",
         "aria-errormessage",
+        "aria-describedby",
       ]);
     });
 
@@ -1177,6 +1193,7 @@ describe("InputBinding", () => {
         onBlur: React.FocusEventHandler<HTMLInputElement>;
         "aria-invalid": boolean | undefined;
         "aria-errormessage": string | undefined;
+        "aria-describedby": string | undefined;
       }>();
       expectTypeOf(env.binding.value).toEqualTypeOf<string | number | readonly string[]>();
       expectTypeOf(env.binding.type).toEqualTypeOf<React.HTMLInputTypeAttribute>();

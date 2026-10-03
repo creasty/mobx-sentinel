@@ -10,6 +10,7 @@ import * as extensionModule from "./extension";
 import * as indexModule from "./index";
 import { CheckBoxBinding } from "./CheckBoxBinding";
 import { ErrorText } from "./ErrorText";
+import { errorTextId } from "./errorTextHelper";
 import { InputBinding } from "./InputBinding";
 import { LabelBinding } from "./LabelBinding";
 import { RadioGroupBinding, renderRadioGroup } from "./RadioGroupBinding";
@@ -128,7 +129,7 @@ describe("extension module", () => {
 });
 
 describe("package entry point", () => {
-  test("exports the standard bindings, hooks and ErrorText", () => {
+  test("exports the standard bindings, hooks, ErrorText and errorTextId", () => {
     expect(Object.keys(indexModule).sort()).toEqual([
       "CheckBoxBinding",
       "ErrorText",
@@ -138,6 +139,7 @@ describe("package entry point", () => {
       "SelectBoxBinding",
       "SubmitButtonBinding",
       "TextAreaBinding",
+      "errorTextId",
       "renderRadioGroup",
       "useFormAutoReset",
       "useFormHandler",
@@ -145,6 +147,7 @@ describe("package entry point", () => {
     ]);
     expect(indexModule.CheckBoxBinding).toBe(CheckBoxBinding);
     expect(indexModule.ErrorText).toBe(ErrorText);
+    expect(indexModule.errorTextId).toBe(errorTextId);
     expect(indexModule.InputBinding).toBe(InputBinding);
     expect(indexModule.LabelBinding).toBe(LabelBinding);
     expect(indexModule.RadioGroupBinding).toBe(RadioGroupBinding);

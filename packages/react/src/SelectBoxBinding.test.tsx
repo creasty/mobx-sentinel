@@ -7,6 +7,7 @@ import { Form, FormField } from "@mobx-sentinel/form";
 import "./extension";
 import { observer } from "mobx-react-lite";
 import { SelectBoxBinding } from "./SelectBoxBinding";
+import { errorTextId } from "./errorTextHelper";
 
 type SampleOption = {
   name: string;
@@ -166,6 +167,22 @@ describe("SelectBoxBinding", () => {
   });
 
   describe("props", () => {
+    it("points the select element at the error text of its field while the errors are reported, after the configured ids", () => {
+      const model = new SampleModel();
+      const form = Form.get(model);
+      const field = form.getField("single");
+      const binding = new SelectBoxBinding(field, {
+        getter: () => model.single.code,
+        setter: () => {},
+        "aria-describedby": "hint",
+      });
+      expect(binding.props["aria-describedby"]).toBe("hint");
+
+      form.validator.updateErrors(Symbol(), (builder) => builder.invalidate("single", "invalid"));
+      field.reportError();
+      expect(binding.props["aria-describedby"]).toBe(`hint ${errorTextId(field)}`);
+    });
+
     it("returns the full set of attributes for a single select", () => {
       const env = setupModelEnv();
       expect(env.binding.props).toStrictEqual({
@@ -176,6 +193,7 @@ describe("SelectBoxBinding", () => {
         onFocus: env.binding.onFocus,
         "aria-invalid": undefined,
         "aria-errormessage": undefined,
+        "aria-describedby": undefined,
       });
     });
 
@@ -190,6 +208,7 @@ describe("SelectBoxBinding", () => {
         onFocus: env.binding.onFocus,
         "aria-invalid": undefined,
         "aria-errormessage": undefined,
+        "aria-describedby": undefined,
       });
     });
 

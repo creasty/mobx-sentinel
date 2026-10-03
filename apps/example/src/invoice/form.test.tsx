@@ -86,6 +86,7 @@ describe("error reporting", () => {
     expect(screen.getByText("Purchase orders look like PO-1234")).toBeInTheDocument();
     expect(purchaseOrder).toHaveAttribute("aria-invalid", "true");
     expect(purchaseOrder).toHaveAttribute("aria-errormessage", "Purchase orders look like PO-1234");
+    expect(purchaseOrder).toHaveAccessibleDescription("Purchase orders look like PO-1234");
     expect(screen.getByText("Purchase order (optional)")).toHaveAttribute("aria-invalid", "true");
 
     await user.clear(purchaseOrder);
@@ -111,9 +112,11 @@ describe("error reporting", () => {
     expect(screen.getByText("Street address is required")).toBeInTheDocument();
     expect(screen.getByText("ZIP code is required")).toBeInTheDocument();
     expect(screen.getByLabelText("Street address")).toHaveAttribute("aria-invalid", "true");
-    // The line item: a nested model in an array
+    // The line item: a nested model in an array, whose inputs share one error text and are each described by their own part
     expect(screen.getByText("Description is required")).toBeInTheDocument();
     expect(screen.getByText("Unit price is required")).toBeInTheDocument();
+    expect(screen.getByLabelText("Description")).toHaveAccessibleDescription("Description is required");
+    expect(screen.getByLabelText("Unit price")).toHaveAccessibleDescription("Unit price is required");
   });
 
   test("re-validates a sub-form when a field its rules read changes", async () => {
@@ -362,6 +365,7 @@ describe("the notify list", () => {
     expect(screen.getByText("Notify at most 3 people")).toBeInTheDocument();
     expect(notify).toHaveAttribute("aria-invalid", "true");
     expect(notify).toHaveAttribute("aria-errormessage", "Notify at most 3 people");
+    expect(notify).toHaveAccessibleDescription("Notify at most 3 people");
     expect(screen.getByText("Notify (up to 3)")).toHaveAttribute("aria-invalid", "true");
   });
 

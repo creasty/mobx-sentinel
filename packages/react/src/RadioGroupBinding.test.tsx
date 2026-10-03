@@ -7,6 +7,7 @@ import { Form, FormField } from "@mobx-sentinel/form";
 import "./extension";
 import { observer } from "mobx-react-lite";
 import { RadioGroupBinding, renderRadioGroup } from "./RadioGroupBinding";
+import { errorTextId } from "./errorTextHelper";
 
 enum SampleEnum {
   ALPHA = "ALPHA",
@@ -195,6 +196,16 @@ describe("RadioGroupBinding", () => {
   });
 
   describe("props", () => {
+    it("points every button at the error text of its field while the errors are reported, after the configured ids", () => {
+      const env = setupModelEnv({ "aria-describedby": "hint" });
+      expect(env.binding.props(SampleEnum.ALPHA)["aria-describedby"]).toBe("hint");
+
+      env.form.validator.updateErrors(Symbol(), (builder) => builder.invalidate("enumOpt", "invalid"));
+      env.field.reportError();
+      expect(env.binding.props(SampleEnum.ALPHA)["aria-describedby"]).toBe(`hint ${errorTextId(env.field)}`);
+      expect(env.binding.props(null)["aria-describedby"]).toBe(`hint ${errorTextId(env.field)}`);
+    });
+
     it("returns the full set of attributes", () => {
       const env = setupModelEnv();
       const props = env.binding.props(SampleEnum.ALPHA);
@@ -208,6 +219,7 @@ describe("RadioGroupBinding", () => {
         onFocus: env.binding.onFocus,
         "aria-invalid": undefined,
         "aria-errormessage": undefined,
+        "aria-describedby": undefined,
       });
     });
 

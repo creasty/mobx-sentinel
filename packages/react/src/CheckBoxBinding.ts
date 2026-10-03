@@ -1,4 +1,5 @@
 import { FormBinding, FormField } from "@mobx-sentinel/form";
+import { describedBy } from "./errorTextHelper";
 import { makeObservable, computed, action } from "mobx";
 
 export namespace CheckBoxBinding {
@@ -19,6 +20,8 @@ export namespace CheckBoxBinding {
     onChange?: Attrs["onChange"];
     /** [Extend] Focus handler */
     onFocus?: Attrs["onFocus"];
+    /** [Extend] IDs of the elements describing the checkbox; the ID of the error text is added while errors are reported */
+    "aria-describedby"?: Attrs["aria-describedby"];
   };
 }
 
@@ -68,6 +71,7 @@ export class CheckBoxBinding implements FormBinding {
       onFocus: this.onFocus,
       "aria-invalid": this.field.isErrorReported,
       "aria-errormessage": this.errorMessages ?? undefined,
+      "aria-describedby": describedBy(this.field, this.config["aria-describedby"]),
     } satisfies CheckBoxBinding.Attrs;
   }
 }
