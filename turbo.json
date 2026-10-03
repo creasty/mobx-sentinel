@@ -1,5 +1,7 @@
 {
   "$schema": "https://turbo.build/schema.json",
+  // The packages' tsconfig.json and typedoc.json extend these, but turbo hashes only the files inside a task's package.
+  "globalDependencies": ["tsconfig.json", "typedoc.base.json"],
   "tasks": {
     "build": {
       "dependsOn": ["^build"],
@@ -7,7 +9,6 @@
     },
     "test": {
       "dependsOn": ["^build", "^test"],
-      "inputs": ["src/**", "test-*/**"],
       "outputs": ["coverage/**"]
     }
   }
