@@ -454,6 +454,18 @@ describe("TextAreaBinding", () => {
       expect(env.binding.errorMessages).toBeNull();
       expect(env.binding.props["aria-invalid"]).toBe(false);
     });
+
+    test("returns null when the only error message is empty", () => {
+      const env = setupBinding(() => ({ getter: () => null, setter: () => {} }));
+      env.form.validator.updateErrors(Symbol(), (builder) => {
+        builder.invalidate("text", "");
+      });
+      env.field.reportError();
+      expect(env.binding.props["aria-invalid"]).toBe(true);
+      // PINNED(quirk): an empty message joins to "" and falls back to null, so the textarea is aria-invalid without any aria-errormessage (the same as the other standard bindings). Decide: should an empty message be rejected by the validator, or rendered as-is?
+      expect(env.binding.errorMessages).toBeNull();
+      expect(env.binding.props["aria-errormessage"]).toBeUndefined();
+    });
   });
 
   describe("types", () => {
