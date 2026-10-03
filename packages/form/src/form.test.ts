@@ -9,7 +9,7 @@ import {
   SampleFieldBinding,
   SampleFormBinding,
   SampleMultiFieldBinding,
-} from "./binding.test";
+} from "./bindingFixtures";
 import { defaultConfig, FormConfig } from "./config";
 import { createView } from "./viewFixtures";
 
