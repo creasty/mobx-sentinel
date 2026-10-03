@@ -5,8 +5,7 @@ import { makeObservable, observable } from "mobx";
 import { observer } from "mobx-react-lite";
 import { Form, type FormField } from "@mobx-sentinel/form";
 import "./extension";
-import { ErrorText } from "./ErrorText";
-import { errorTextId } from "./errorTextId";
+import { ErrorText, errorTextId } from "./ErrorText";
 
 class SampleModel {
   @observable city = "";
@@ -220,5 +219,16 @@ describe("ErrorText", () => {
       </>
     );
     void assertInvalidProps;
+  });
+});
+
+describe("errorTextId", () => {
+  it("is the field's stable id followed by :error", () => {
+    const form = Form.get(new SampleModel());
+    const field = form.getField("city");
+    expect(errorTextId(field)).toBe(`${field.id}:error`);
+
+    form.stableId = "_R_0_";
+    expect(errorTextId(field)).toBe("_R_0_:city:error");
   });
 });

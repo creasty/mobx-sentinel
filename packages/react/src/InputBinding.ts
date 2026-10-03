@@ -1,5 +1,5 @@
 import { FormBinding, FormField } from "@mobx-sentinel/form";
-import { describedBy } from "./describedBy";
+import { describedBy } from "./ErrorText";
 import { makeObservable, computed, action } from "mobx";
 
 export namespace InputBinding {

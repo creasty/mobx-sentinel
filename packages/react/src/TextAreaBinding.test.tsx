@@ -7,7 +7,7 @@ import { Form, FormField } from "@mobx-sentinel/form";
 import "./extension";
 import { observer } from "mobx-react-lite";
 import { TextAreaBinding } from "./TextAreaBinding";
-import { errorTextId } from "./errorTextId";
+import { errorTextId } from "./ErrorText";
 
 class SampleModel {
   @observable text: string = "hello";

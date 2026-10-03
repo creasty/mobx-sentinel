@@ -9,8 +9,7 @@ import { Form, FormBindingFunc, FormBindingMethod, FormField } from "@mobx-senti
 import * as extensionModule from "./extension";
 import * as indexModule from "./index";
 import { CheckBoxBinding } from "./CheckBoxBinding";
-import { ErrorText } from "./ErrorText";
-import { errorTextId } from "./errorTextId";
+import { ErrorText, errorTextId } from "./ErrorText";
 import { InputBinding } from "./InputBinding";
 import { LabelBinding } from "./LabelBinding";
 import { RadioGroupBinding, renderRadioGroup } from "./RadioGroupBinding";
