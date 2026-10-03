@@ -18,6 +18,7 @@ import { SelectBoxBinding } from "./SelectBoxBinding";
 import { SubmitButtonBinding } from "./SubmitButtonBinding";
 import { TextAreaBinding } from "./TextAreaBinding";
 import { useFormAutoReset, useFormHandler, useFormSSR } from "./hooks";
+import { hasUnsavedForms, useFormNavigationGuard } from "./navigationGuard";
 
 class SampleModel {
   @observable text = "hello";
@@ -129,7 +130,7 @@ describe("extension module", () => {
 });
 
 describe("package entry point", () => {
-  test("exports the standard bindings, hooks, ErrorText and errorTextId", () => {
+  test("exports the standard bindings, hooks, ErrorText, errorTextId and hasUnsavedForms", () => {
     expect(Object.keys(indexModule).sort()).toEqual([
       "CheckBoxBinding",
       "ErrorText",
@@ -140,14 +141,17 @@ describe("package entry point", () => {
       "SubmitButtonBinding",
       "TextAreaBinding",
       "errorTextId",
+      "hasUnsavedForms",
       "renderRadioGroup",
       "useFormAutoReset",
       "useFormHandler",
+      "useFormNavigationGuard",
       "useFormSSR",
     ]);
     expect(indexModule.CheckBoxBinding).toBe(CheckBoxBinding);
     expect(indexModule.ErrorText).toBe(ErrorText);
     expect(indexModule.errorTextId).toBe(errorTextId);
+    expect(indexModule.hasUnsavedForms).toBe(hasUnsavedForms);
     expect(indexModule.InputBinding).toBe(InputBinding);
     expect(indexModule.LabelBinding).toBe(LabelBinding);
     expect(indexModule.RadioGroupBinding).toBe(RadioGroupBinding);
@@ -157,6 +161,7 @@ describe("package entry point", () => {
     expect(indexModule.TextAreaBinding).toBe(TextAreaBinding);
     expect(indexModule.useFormAutoReset).toBe(useFormAutoReset);
     expect(indexModule.useFormHandler).toBe(useFormHandler);
+    expect(indexModule.useFormNavigationGuard).toBe(useFormNavigationGuard);
     expect(indexModule.useFormSSR).toBe(useFormSSR);
   });
 });

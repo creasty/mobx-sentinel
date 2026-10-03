@@ -5,6 +5,7 @@ import { observer } from "mobx-react-lite";
 import { Form } from "@mobx-sentinel/form";
 import "./extension";
 import { useFormAutoReset, useFormHandler } from "./hooks";
+import { useFormNavigationGuard } from "./navigationGuard";
 
 /**
  * Whether the object behind the reference gets garbage collected
@@ -67,6 +68,11 @@ const AutoResetInputComponent: React.FC<{ model: SampleModel }> = ({ model }) =>
   return <InputComponent model={model} />;
 };
 
+const NavigationGuardComponent: React.FC<{ model: SampleModel }> = ({ model }) => {
+  useFormNavigationGuard(Form.get(model));
+  return null;
+};
+
 describe("useFormHandler", () => {
   it("releases the handler once the component unmounts", async () => {
     const form = Form.get(new SampleModel());
@@ -121,6 +127,20 @@ describe("useFormAutoReset", () => {
     // The timer references the field, and so the form and the model, until it fires
     expect(await isCollected(withoutAutoReset)).toBe(false);
     Form.get(withoutAutoReset.deref()!).reset(); // Cancel the timer, so that it does not outlive the test
+  });
+});
+
+describe("useFormNavigationGuard", () => {
+  it("lets the model and the form go once the component unmounts, even with unsaved changes", async () => {
+    const refs = (() => {
+      const model = new SampleModel();
+      Form.get(model).markAsDirty();
+      render(<NavigationGuardComponent model={model} />);
+      return { model: new WeakRef(model), form: new WeakRef(Form.get(model)) };
+    })();
+    cleanup();
+    expect(await isCollected(refs.model)).toBe(true);
+    expect(await isCollected(refs.form)).toBe(true);
   });
 });
 
