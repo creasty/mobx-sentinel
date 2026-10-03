@@ -30,63 +30,39 @@ around `fn` answers the question for synchronous callers only, and the reactions
 
 ## The First Reading: `watchReaction`
 
-`watchReaction` is MobX's own `reaction()` runner with the scheduling of the first run replaced.
+`watchReaction` is MobX's own `reaction()` runner with the scheduling of the first run replaced. It
+also holds the expression and the effect only through a `WeakRef`, which has nothing to do with
+timing: the JSDoc of `watchReaction` and of `finalizer` explains it.
 
-```ts
-function watchReaction<T>(expression: () => T, effect: (value: T) => void): void {
-  let value: T;
-  let tracked = false;
-  // Named, rather than left to MobX: the name is optional only from mobx 6.13.4 on, and the library supports 6.11
-  const reaction = new Reaction("Watcher", () => takeReading());
+https://github.com/creasty/mobx-sentinel/blob/edaeb0b3fc19b9ad1ef3500c7313f328b6c56031/packages/core/src/watcher.ts#L91-L120
 
-  function takeReading() {
-    let changed = false;
-    reaction.track(() => {
-      // An expression is a derivation, not a place to change state, just as `reaction()` treats it
-      const nextValue = _allowStateChanges(false, expression);
-      changed = tracked && !Object.is(value, nextValue);
-      value = nextValue;
-    });
-    // Outside track(), so that an expression that throws still leaves the reading behind it, as MobX does
-    tracked = true;
-    if (changed) effect(value);
-  }
+Put MobX's `reaction()`, as released in 6.16.1, next to it:
 
-  takeReading();
-}
-```
+https://github.com/mobxjs/mobx/blob/96ddd319bc1b82924ecfb3b28a2d50458521a21b/packages/mobx/src/api/autorun.ts#L114-L188
 
-Put `function reaction(` in `node_modules/.pnpm/mobx@6.16.1/node_modules/mobx/dist/mobx.cjs.development.js`
-next to it. `reactionRunner` there is the same code: `r.track()` wrapped around
-`allowStateChanges(false, ...)`, a `changed` flag compared against the value of the previous run, the
-effect called only when it changed. MobX schedules that runner, behind a guard for an
-already-aborted signal, and hands back a disposer:
+`reactionRunner` there is the same code: `r.track()` wrapped around `allowStateChanges(false, ...)`,
+a `changed` flag compared against the value of the previous run, the effect called only when it
+changed. MobX schedules that runner, behind a guard for an already-aborted signal, and hands back a
+disposer:
 
-```js
-    if (!((_opts4 = opts) != null && (_opts4 = _opts4.signal) != null && _opts4.aborted)) {
-      r.schedule_();
-    }
-    return r.getDisposer_((_opts5 = opts) == null ? void 0 : _opts5.signal);
-```
+https://github.com/mobxjs/mobx/blob/96ddd319bc1b82924ecfb3b28a2d50458521a21b/packages/mobx/src/api/autorun.ts#L184-L187
 
 where `watchReaction` ends with
 
-```ts
-  takeReading();
-```
+https://github.com/creasty/mobx-sentinel/blob/edaeb0b3fc19b9ad1ef3500c7313f328b6c56031/packages/core/src/watcher.ts#L99
 
 `schedule_()` pushes the reaction onto `globalState.pendingReactions` and calls `runReactions()`,
 which returns without running anything while `inBatch > 0`. Calling the runner directly reads now.
 Every run after the first is still MobX's: the reaction is a plain
-`new Reaction("Watcher", () => takeReading())`, so MobX invalidates and schedules it as it would any
-other reaction.
+`new Reaction("Watcher", () => takeReading(ref, reaction))`, so MobX invalidates and schedules it as
+it would any other reaction.
 
 The defect being fixed is a late *reading*, not a late *effect*. Watching `model.value`, starting at
 `0`:
 
 | Step | With `r.schedule_()` | With a direct call |
 | --- | --- | --- |
-| `Watcher.get(model)`, inside `runInAction` | the first run is queued; nothing has been read, so the reaction observes nothing yet | the expression is read now: `value` is `0`, `tracked` is `true`, and the reaction observes the key |
+| `Watcher.get(model)`, inside `runInAction` | the first run is queued; nothing has been read, so the reaction observes nothing yet | the expression is read now: `watch.value` is `0`, `watch.tracked` is `true`, and the reaction observes the key |
 | `model.value = 1`, same transaction | nothing is stale, because nothing is observed | the reaction goes stale and MobX queues it |
 | the outermost transaction ends | the first run reads `1`; being the first, it reports nothing, so `1` is the baseline | the second run reads `1`, which differs from `0`, so the effect runs |
 | result | `watcher.changed` is `false` | `watcher.changedKeys` is `Set(["value"])` |
@@ -108,7 +84,7 @@ it writes: every effect wraps its writes in `runInAction`, and `runInAction` pas
 for other reasons -- an untracked effect is what keeps the two concerns apart -- but self-triggering
 is not one of them.
 
-### Why `tracked = true` Sits Outside `track()`
+### Why `watch.tracked = true` Sits Outside `track()`
 
 It mirrors MobX's `firstTime = false`, which is likewise assigned after `r.track()` returns rather
 than inside the callback. `Reaction.track` does not rethrow what the derivation throws: it checks
@@ -120,8 +96,8 @@ the same flag. A consumer running `configure({ disableErrorBoundaries: true })` 
 propagated, and the flag placement stops mattering because nothing after `track()` runs at all.
 
 That is what lets a throwing expression leave a reading behind. Inside the callback, the assignment
-would be skipped whenever the expression throws -- as `value = nextValue` already is -- and the next
-run would still believe it was the first, taking the recovered value as the baseline instead of
+would be skipped whenever the expression throws -- as `watch.value = nextValue` already is -- and the
+next run would still believe it was the first, taking the recovered value as the baseline instead of
 reporting it as a change. Moving the line inside turns the result of "a `@watch` `@computed` that
 throws when the watcher is created is counted as changed once it recovers" from
 `Set(["risky", "fail"])` into `Set(["fail"])`.
@@ -136,7 +112,7 @@ throws when the watcher is created is counted as changed once it recovers" from
 | `onError`, `requiresObservable` | unused here |
 | `oldValue` | the effect takes the new value only; nothing compares against the previous one |
 | `action(name, effect)` | MobX wraps the effect in an action and this does not, which holds only because every effect here wraps its own writes in `runInAction`. Pinned by "mutates its state in actions, so observing a watcher causes no strict-mode warnings". Keep it true of any effect you add |
-| the disposer | discarded: a watcher is never disposed, and lives as long as its target and everything it observes |
+| the disposer | not needed: a watcher is never disposed, and `finalizer` disposes the reaction once its watch is garbage collected, together with the watcher |
 
 Not left out: the reaction's name. `new Reaction("Watcher", ...)` passes one because the parameter is
 `name_: string` in mobx 6.11 and `name_: string | undefined` from 6.16, and the peer range is
@@ -145,26 +121,7 @@ the `test (v6.11.0)` leg of the matrix in `.github/workflows/push.yml`.
 
 ## The Fence: `runInUnwatch`
 
-```ts
-/** Global state for controlling whether watching is enabled */
-let unwatchStackCount = 0;
-function runInUnwatch(action: () => void): void {
-  transaction(() => {
-    // The reactions of a Watcher run when the outermost transaction ends, so inside one the count has to go up and
-    // down there as well, to tell what this function changed apart from what was changed around it. MobX runs the
-    // reactions in the order they went stale, and an autorun created here takes the place of this moment in that
-    // queue: everything MobX runs between these two autoruns went stale while the function was running.
-    autorun(() => ++unwatchStackCount);
-    ++unwatchStackCount;
-    try {
-      action();
-    } finally {
-      --unwatchStackCount;
-      autorun(() => --unwatchStackCount);
-    }
-  });
-}
-```
+https://github.com/creasty/mobx-sentinel/blob/edaeb0b3fc19b9ad1ef3500c7313f328b6c56031/packages/core/src/watcher.ts#L39-L56
 
 `unwatchStackCount` is module-level state shared by every watcher, and `Watcher.isWatching` is
 `unwatchStackCount === 0`. Four call sites consult it and return early when it is not zero:
@@ -366,3 +323,6 @@ it needs a different signal than "where in the queue did this reaction go stale"
   any non-zero value as "not watching", so an unbalanced count disables change detection process-wide.
 - Every effect passed to `watchReaction` wraps its own writes in `runInAction`, because the effect is
   not wrapped in an action the way MobX's `reaction()` wraps it.
+- The reaction reaches its watch only through `ref`, and `finalizer` holds the reaction only through a
+  `WeakRef`. Holding either strongly lets state outside the target, or the registry itself, keep the
+  target alive, and fails tests in `packages/core/src/memory.test.ts`.

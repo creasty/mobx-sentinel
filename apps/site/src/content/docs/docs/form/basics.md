@@ -26,7 +26,7 @@ const form2 = Form.get(model);
 // form1 === form2 (same instance)
 ```
 
-A form observes its subject through MobX reactions, those of the subject's `Watcher` and of the form's fields, so it is garbage collected together with the subject only if everything they observe is too (see [Getting a Watcher Instance](/docs/core/watcher/#getting-a-watcher-instance)). In particular, a `@nested` object that outlives the subject keeps the subject and its forms alive through the watcher, unless the property is excluded with `@unwatch`. The fields of a form observe the validation state, that of nested objects included, only while a report waits for the validation to settle.
+A form is garbage collected together with its subject, unless the subject's `Watcher` or `Validator` keeps the subject alive, as [Getting a Watcher Instance](/docs/core/watcher/#getting-a-watcher-instance) and [Getting a Validator Instance](/docs/core/validator/#getting-a-validator-instance) describe. The fields of a form observe the validation state, that of nested objects included, only while a report waits for the validation to settle.
 
 ⚠️ **Note:** `Form.get()` starts change tracking immediately because it creates a `Watcher` instance as part of the form initialization process. See [Starting a Watcher](/docs/core/watcher/#starting-a-watcher) for details.
 
