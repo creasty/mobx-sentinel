@@ -7,6 +7,7 @@ import { Form, FormField } from "@mobx-sentinel/form";
 import "./extension";
 import { observer } from "mobx-react-lite";
 import { TextAreaBinding } from "./TextAreaBinding";
+import { errorTextId } from "./errorTextId";
 
 class SampleModel {
   @observable text: string = "hello";
@@ -69,7 +70,7 @@ describe("TextAreaBinding", () => {
 
       env.form.validator.updateErrors(Symbol(), (builder) => builder.invalidate("text", "invalid"));
       env.field.reportError();
-      expect(env.binding.props["aria-describedby"]).toBe(`hint ${env.field.errorTextId}`);
+      expect(env.binding.props["aria-describedby"]).toBe(`hint ${errorTextId(env.field)}`);
     });
 
     test("exposes exactly the textarea attributes, without a type", () => {

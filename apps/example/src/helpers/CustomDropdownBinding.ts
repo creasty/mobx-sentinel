@@ -1,4 +1,5 @@
 import { FormBinding, FormField } from "@mobx-sentinel/form";
+import { errorTextId } from "@mobx-sentinel/react";
 import { action, computed, makeObservable } from "mobx";
 import type { CustomDropdown } from "./CustomDropdown";
 
@@ -49,7 +50,7 @@ export class CustomDropdownBinding implements FormBinding {
       "aria-invalid": this.field.isErrorReported,
       "aria-errormessage": this.errorMessages ?? undefined,
       // The ErrorText showing the field's errors, while they are reported, as the standard bindings do
-      "aria-describedby": this.field.isErrorReported ? this.field.errorTextId : undefined,
+      "aria-describedby": this.field.isErrorReported ? errorTextId(this.field) : undefined,
     } satisfies Partial<CustomDropdown.Props>;
   }
 }

@@ -68,18 +68,6 @@ export class FormField {
   }
 
   /**
-   * Id for associating the field's form control with the element that shows its errors
-   *
-   * @remarks
-   * - {@link stableId} followed by `:error`
-   * - Bindings point their form control at it, with `aria-describedby`, while the errors are reported. `ErrorText` of
-   *   `@mobx-sentinel/react` gives it to the element that shows them.
-   */
-  get errorTextId() {
-    return `${this.stableId}:error`;
-  }
-
-  /**
    * Whether the field is touched.
    *
    * A field becomes touched when the user interacts with it.

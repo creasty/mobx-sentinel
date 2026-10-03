@@ -61,7 +61,7 @@ import { ErrorText } from "@mobx-sentinel/react";
 <ErrorText form={form} fields={["city", "region", "postalCode"]} />
 ```
 
-While a field's errors are reported, the standard bindings point its form control at the field's `<span>` with `aria-describedby`, so assistive technologies read the messages with the control. The `<span>` takes its id from the field, `field.errorTextId`, so show each field in one error text to keep the id unique on the page. An `aria-describedby` of your own goes to the binding, which puts the error text after it:
+While a field's errors are reported, the standard bindings point its form control at the field's `<span>` with `aria-describedby`, so assistive technologies read the messages with the control. A custom binding can do the same with `errorTextId(field)`, the `<span>`'s id. Show each field in one error text, so that the id stays unique on the page. An `aria-describedby` of your own goes to the binding, which puts the error text after it:
 
 ```tsx
 <input {...form.bindInput("email", { /* ... */ "aria-describedby": "email-hint" })} />

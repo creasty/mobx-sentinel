@@ -277,17 +277,6 @@ describe("FormField", () => {
     });
   });
 
-  describe("#errorTextId", () => {
-    it("is the stable id followed by :error", () => {
-      const form = Form.get(new SampleModel());
-      const field = form.getField("test");
-      expect(field.errorTextId).toBe(`${field.id}:error`);
-
-      form.stableId = "_R_0_";
-      expect(field.errorTextId).toBe("_R_0_:test:error");
-    });
-  });
-
   describe("#errors", () => {
     it("returns an empty set if there are no errors at all", () => {
       const { field } = setupEnv();
@@ -1574,7 +1563,6 @@ describe("FormField", () => {
       const { field } = setupEnv();
       expectTypeOf(field.id).toEqualTypeOf<string>();
       expectTypeOf(field.stableId).toEqualTypeOf<string>();
-      expectTypeOf(field.errorTextId).toEqualTypeOf<string>();
       expectTypeOf(field.fieldName).toEqualTypeOf<string>();
       expectTypeOf(field.validator).toEqualTypeOf<Validator<any>>();
       expectTypeOf(field.isTouched).toEqualTypeOf<boolean>();
@@ -1589,7 +1577,6 @@ describe("FormField", () => {
       type StateKeys =
         | "id"
         | "stableId"
-        | "errorTextId"
         | "fieldName"
         | "validator"
         | "isTouched"
@@ -1601,7 +1588,6 @@ describe("FormField", () => {
       expectTypeOf<Pick<FormField, StateKeys>>().toEqualTypeOf<{
         readonly id: string;
         readonly stableId: string;
-        readonly errorTextId: string;
         readonly fieldName: string;
         readonly validator: Validator<any>;
         readonly isTouched: boolean;

@@ -7,6 +7,7 @@ import { Form, FormField } from "@mobx-sentinel/form";
 import "./extension";
 import { observer } from "mobx-react-lite";
 import { CheckBoxBinding } from "./CheckBoxBinding";
+import { errorTextId } from "./errorTextId";
 
 class SampleModel {
   @observable boolean: boolean = false;
@@ -123,7 +124,7 @@ describe("CheckBoxBinding", () => {
 
       env.form.validator.updateErrors(Symbol(), (builder) => builder.invalidate("boolean", "invalid"));
       env.field.reportError();
-      expect(env.binding.props["aria-describedby"]).toBe(`hint ${env.field.errorTextId}`);
+      expect(env.binding.props["aria-describedby"]).toBe(`hint ${errorTextId(env.field)}`);
     });
 
     it("returns the full set of attributes", () => {

@@ -7,6 +7,7 @@ import { Form, FormField } from "@mobx-sentinel/form";
 import "./extension";
 import { observer } from "mobx-react-lite";
 import { InputBinding } from "./InputBinding";
+import { errorTextId } from "./errorTextId";
 
 class SampleModel {
   @observable string: string = "hello";
@@ -712,7 +713,7 @@ describe("InputBinding", () => {
 
       env.form.validator.updateErrors(Symbol(), (builder) => builder.invalidate("string", "invalid"));
       env.field.reportError();
-      expect(env.binding.props["aria-describedby"]).toBe(`hint ${env.field.errorTextId}`);
+      expect(env.binding.props["aria-describedby"]).toBe(`hint ${errorTextId(env.field)}`);
     });
 
     test("exposes exactly the input attributes", () => {

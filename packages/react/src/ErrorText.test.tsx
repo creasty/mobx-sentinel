@@ -6,6 +6,7 @@ import { observer } from "mobx-react-lite";
 import { Form, type FormField } from "@mobx-sentinel/form";
 import "./extension";
 import { ErrorText } from "./ErrorText";
+import { errorTextId } from "./errorTextId";
 
 class SampleModel {
   @observable city = "";
@@ -97,8 +98,8 @@ describe("ErrorText", () => {
       ["Region is required"],
     ]);
     expect(groups.map((group) => group.id)).toEqual([
-      form.getField("city").errorTextId,
-      form.getField("region").errorTextId,
+      errorTextId(form.getField("city")),
+      errorTextId(form.getField("region")),
     ]);
   });
 
@@ -179,7 +180,7 @@ describe("ErrorText", () => {
     const city = screen.getByLabelText("City");
     env.setErrors({ city: ["City is required"] });
     env.report("city");
-    expect(city).toHaveAttribute("aria-describedby", env.form.getField("city").errorTextId);
+    expect(city).toHaveAttribute("aria-describedby", errorTextId(env.form.getField("city")));
     expect(city).toHaveAccessibleDescription("");
 
     rerender(<Fields env={env} showErrorText />);
