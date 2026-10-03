@@ -34,57 +34,22 @@ around `fn` answers the question for synchronous callers only, and the reactions
 also holds the expression and the effect only through a `WeakRef`, which has nothing to do with
 timing: the JSDoc of `watchReaction` and of `finalizer` explains it.
 
-```ts
-function watchReaction<T>(owner: object[], expression: () => T, effect: (value: T) => void): void {
-  const watch: Watch = { expression, effect, value: undefined, tracked: false };
-  owner.push(watch);
-  const ref = new WeakRef(watch);
-  // Named, rather than left to MobX: the name is optional only from mobx 6.13.4 on, and the library supports 6.11.
-  // No closure here may capture `watch`, as V8 shares the variables captured in a scope among all its closures.
-  const reaction = new Reaction("Watcher", () => takeReading(ref, reaction));
-  finalizer.register(watch, new WeakRef(reaction));
-  takeReading(ref, reaction);
-}
+https://github.com/creasty/mobx-sentinel/blob/edaeb0b3fc19b9ad1ef3500c7313f328b6c56031/packages/core/src/watcher.ts#L91-L120
 
-/** Take a reading of the watch behind `ref`, and report a change to its effect */
-function takeReading(ref: WeakRef<Watch>, reaction: Reaction) {
-  const watch = ref.deref();
-  if (!watch) {
-    // The owner is gone, and what the reaction observes changed before the finalizer got to dispose it
-    reaction.dispose();
-    return;
-  }
-  let changed = false;
-  reaction.track(() => {
-    // An expression is a derivation, not a place to change state, just as `reaction()` treats it
-    const nextValue = _allowStateChanges(false, watch.expression);
-    changed = watch.tracked && !Object.is(watch.value, nextValue);
-    watch.value = nextValue;
-  });
-  // Outside track(), so that an expression that throws still leaves the reading behind it, as MobX does
-  watch.tracked = true;
-  if (changed) watch.effect(watch.value);
-}
-```
+Put MobX's `reaction()`, as released in 6.16.1, next to it:
 
-Put `function reaction(` in `node_modules/.pnpm/mobx@6.16.1/node_modules/mobx/dist/mobx.cjs.development.js`
-next to it. `reactionRunner` there is the same code: `r.track()` wrapped around
-`allowStateChanges(false, ...)`, a `changed` flag compared against the value of the previous run, the
-effect called only when it changed. MobX schedules that runner, behind a guard for an
-already-aborted signal, and hands back a disposer:
+https://github.com/mobxjs/mobx/blob/96ddd319bc1b82924ecfb3b28a2d50458521a21b/packages/mobx/src/api/autorun.ts#L114-L188
 
-```js
-    if (!((_opts4 = opts) != null && (_opts4 = _opts4.signal) != null && _opts4.aborted)) {
-      r.schedule_();
-    }
-    return r.getDisposer_((_opts5 = opts) == null ? void 0 : _opts5.signal);
-```
+`reactionRunner` there is the same code: `r.track()` wrapped around `allowStateChanges(false, ...)`,
+a `changed` flag compared against the value of the previous run, the effect called only when it
+changed. MobX schedules that runner, behind a guard for an already-aborted signal, and hands back a
+disposer:
+
+https://github.com/mobxjs/mobx/blob/96ddd319bc1b82924ecfb3b28a2d50458521a21b/packages/mobx/src/api/autorun.ts#L184-L187
 
 where `watchReaction` ends with
 
-```ts
-  takeReading(ref, reaction);
-```
+https://github.com/creasty/mobx-sentinel/blob/edaeb0b3fc19b9ad1ef3500c7313f328b6c56031/packages/core/src/watcher.ts#L99
 
 `schedule_()` pushes the reaction onto `globalState.pendingReactions` and calls `runReactions()`,
 which returns without running anything while `inBatch > 0`. Calling the runner directly reads now.
@@ -156,26 +121,7 @@ the `test (v6.11.0)` leg of the matrix in `.github/workflows/push.yml`.
 
 ## The Fence: `runInUnwatch`
 
-```ts
-/** Global state for controlling whether watching is enabled */
-let unwatchStackCount = 0;
-function runInUnwatch(action: () => void): void {
-  transaction(() => {
-    // The reactions of a Watcher run when the outermost transaction ends, so inside one the count has to go up and
-    // down there as well, to tell what this function changed apart from what was changed around it. MobX runs the
-    // reactions in the order they went stale, and an autorun created here takes the place of this moment in that
-    // queue: everything MobX runs between these two autoruns went stale while the function was running.
-    autorun(() => ++unwatchStackCount);
-    ++unwatchStackCount;
-    try {
-      action();
-    } finally {
-      --unwatchStackCount;
-      autorun(() => --unwatchStackCount);
-    }
-  });
-}
-```
+https://github.com/creasty/mobx-sentinel/blob/edaeb0b3fc19b9ad1ef3500c7313f328b6c56031/packages/core/src/watcher.ts#L39-L56
 
 `unwatchStackCount` is module-level state shared by every watcher, and `Watcher.isWatching` is
 `unwatchStackCount === 0`. Four call sites consult it and return early when it is not zero:
