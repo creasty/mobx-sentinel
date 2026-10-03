@@ -1,4 +1,4 @@
-import { addValidation, nested, unwatch } from "@mobx-sentinel/core";
+import { addValidation, nested } from "@mobx-sentinel/core";
 import { makeObservable, observable, runInAction } from "mobx";
 import type { FormBinding } from "./binding";
 import type { FormField } from "./field";
@@ -201,33 +201,22 @@ describe("Form", () => {
       }
     }
 
-    class UnwatchedParentModel {
-      @observable field = "";
-      @nested @unwatch @observable child: ChildModel;
-
-      constructor(child: ChildModel) {
-        this.child = child;
-        makeObservable(this);
-      }
-    }
-
-    it("keeps the subject alive through its watcher, but not through its fields", async () => {
+    it("releases the subject, with or without a reported field", async () => {
       const shared = new ChildModel();
-      const create = (Model: typeof ParentModel | typeof UnwatchedParentModel, withReportedField: boolean) => {
-        const model = new Model(shared);
+      const create = (withReportedField: boolean) => {
+        const model = new ParentModel(shared);
         const form = Form.get(model);
         if (withReportedField) form.getField("field").reportError();
         return new WeakRef(model);
       };
-      const watched = create(ParentModel, false);
-      const unwatched = create(UnwatchedParentModel, false);
-      const unwatchedWithReportedField = create(UnwatchedParentModel, true);
-      // With @unwatch, the watcher does not observe the nested object
-      expect(await isCollected(unwatched)).toBe(true);
-      // PINNED(quirk): The watcher of the subject observes the watchers of its @nested objects with reactions that cannot be disposed (see memory.test.ts in core), so a nested object that outlives the subject (here `shared`) keeps the subject and its forms alive, although MobX alone would let the subject go. Decide: should Watcher reactions be disposable, or stop observing state outside the subject?
-      expect(await isCollected(watched)).toBe(false);
-      // A field observes validator.isValidating, which reads the validators of the @nested objects, only while its report waits for the validation to settle
-      expect(await isCollected(unwatchedWithReportedField)).toBe(true);
+      const withoutFields = create(false);
+      const withReportedField = create(true);
+      // The watcher of the subject observes the watcher of `shared`, with a reaction that reaches the subject only
+      // through a WeakRef
+      expect(await isCollected(withoutFields)).toBe(true);
+      // A field observes validator.isValidating, which reads the validators of the @nested objects, only while its
+      // report waits for the validation to settle
+      expect(await isCollected(withReportedField)).toBe(true);
       expect(shared.value).toBe("");
     });
   });
