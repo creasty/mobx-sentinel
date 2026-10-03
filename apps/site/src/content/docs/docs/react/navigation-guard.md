@@ -61,32 +61,7 @@ function Layout() {
 
 ### Next.js
 
-The App Router has no guard that covers every navigation.
-
-A `<Link>` calls its `onNavigate` before navigating, so a link component of your own can ask `hasUnsavedForms()`. It covers only the links rendered with it: other `next/link`s, `router.push()` and the back button go through.
-
-```tsx
-"use client";
-
-import Link from "next/link";
-import type { ComponentProps } from "react";
-import { hasUnsavedForms } from "@mobx-sentinel/react";
-
-export function GuardedLink(props: ComponentProps<typeof Link>) {
-  return (
-    <Link
-      {...props}
-      onNavigate={(event) => {
-        if (hasUnsavedForms() && !window.confirm("Discard unsaved changes?")) {
-          event.preventDefault();
-        }
-      }}
-    />
-  );
-}
-```
-
-[next-navigation-guard](https://github.com/LayerXcom/next-navigation-guard) covers links, `router.push()` and the back button as well. Its `enabled` option takes the function:
+The App Router has no hook that covers every navigation. [next-navigation-guard](https://github.com/LayerXcom/next-navigation-guard) adds one, for the Pages Router as well: links, `router.push()` and the back button ask through it. Its `enabled` option takes the function:
 
 ```tsx
 "use client";
@@ -102,7 +77,7 @@ function UnsavedFormsGuard() {
   return null;
 }
 
-// Wraps the children of <body> in app/layout.tsx
+// Wraps the children of <body> in app/layout.tsx, or the page in pages/_app.tsx
 export function GuardProvider({ children }: { children: ReactNode }) {
   return (
     <NavigationGuardProvider>
@@ -116,3 +91,72 @@ export function GuardProvider({ children }: { children: ReactNode }) {
 :::caution
 next-navigation-guard 0.2.0 declares support for Next.js 14 and 15, and on Next.js 16 lets `<Link>` clicks through. Its 0.3.0 covers them on Next.js 16.
 :::
+
+#### Pages Router Without a Library
+
+The Pages Router has hooks of its own: `routeChangeStart` runs before links and `router.push()` navigate, and `beforePopState` before the back and forward buttons take effect. A component rendered in `pages/_app.tsx` can guard them all:
+
+```tsx
+import { useRouter } from "next/router";
+import { useEffect } from "react";
+import { hasUnsavedForms } from "@mobx-sentinel/react";
+
+const confirmLeave = () => window.confirm("Discard unsaved changes?");
+
+export function UnsavedFormsGuard() {
+  const router = useRouter();
+
+  useEffect(() => {
+    // Where the page is in the session history
+    let index = navigation.currentEntry!.index;
+    // Whether the user has agreed to a back or forward move, whose route change then doesn't ask again
+    let agreed = false;
+
+    const onRouteChangeStart = () => {
+      if (agreed) {
+        agreed = false;
+        return;
+      }
+      if (!hasUnsavedForms() || confirmLeave()) return;
+      // A route change can't be cancelled, but throwing stops it. A string, as the dev overlay opens on an Error.
+      throw "Route change cancelled: unsaved changes";
+    };
+    // A move between two entries of the same page starts no route change
+    const onHashChangeStart = () => {
+      agreed = false;
+    };
+    const onChangeComplete = () => {
+      index = navigation.currentEntry!.index;
+    };
+
+    router.events.on("routeChangeStart", onRouteChangeStart);
+    router.events.on("hashChangeStart", onHashChangeStart);
+    router.events.on("routeChangeComplete", onChangeComplete);
+    router.events.on("hashChangeComplete", onChangeComplete);
+    // The browser has moved through the history by now, and returning false only keeps the page
+    router.beforePopState(() => {
+      const delta = index - navigation.currentEntry!.index;
+      if (delta === 0) return false; // The move back below
+      if (!hasUnsavedForms() || confirmLeave()) {
+        agreed = true;
+        return true;
+      }
+      history.go(delta);
+      return false;
+    });
+
+    return () => {
+      router.events.off("routeChangeStart", onRouteChangeStart);
+      router.events.off("hashChangeStart", onHashChangeStart);
+      router.events.off("routeChangeComplete", onChangeComplete);
+      router.events.off("hashChangeComplete", onChangeComplete);
+      router.beforePopState(() => true);
+    };
+  }, [router]);
+
+  return null;
+}
+```
+
+- Each link or `router.push()` it cancels leaves an unhandled rejection in the console, of the string it throws.
+- It finds its place in the history through the Navigation API's `navigation`, which every major browser has supported since January 2026, and which TypeScript declares from 6.0.
