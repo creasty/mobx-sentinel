@@ -56,32 +56,67 @@ function runInUnwatch(action: () => void): void {
 }
 
 /**
- * Watch the value of an expression and report every change of it
+ * An expression to watch, the effect to report its changes to, and its last reading
+ *
+ * The reading is kept here rather than by the reaction, since it can reference the target as well.
+ */
+type Watch = {
+  readonly expression: () => unknown;
+  readonly effect: (value: any) => void;
+  value: unknown;
+  tracked: boolean;
+};
+
+/**
+ * Disposes the reaction of a watch once the watch is garbage collected, which takes the reaction off the observers of
+ * what it read
+ *
+ * The registry holds the reaction through a `WeakRef` as well. What the reaction observes can lead back to the target,
+ * as with a parent and a `@nested` child referencing each other, and the registry would then keep the watch alive.
+ */
+const finalizer = new FinalizationRegistry<WeakRef<Reaction>>((ref) => ref.deref()?.dispose());
+
+/**
+ * Watch the value of an expression and report every change of it, for as long as `owner` lives
  *
  * The first reading is taken right away, so that watching starts when the watcher is created. MobX schedules the
  * first run of `reaction()` like any other one, which inside a transaction happens only when the transaction ends —
  * the changes made in between would silently become the baseline. Every later run is left to MobX as usual.
+ *
+ * MobX adds the reaction to the observers of everything the expression reads, which can be state that outlives the
+ * target, such as a `@nested` object or a collection that other objects share. So the reaction reaches the expression
+ * and the effect, which reference the target, only through a `WeakRef`, and `owner` holds them instead: that state
+ * keeps the reaction, but not the target.
  */
-function watchReaction<T>(expression: () => T, effect: (value: T) => void): void {
-  let value: T;
-  let tracked = false;
-  // Named, rather than left to MobX: the name is optional only from mobx 6.13.4 on, and the library supports 6.11
-  const reaction = new Reaction("Watcher", () => takeReading());
+function watchReaction<T>(owner: object[], expression: () => T, effect: (value: T) => void): void {
+  const watch: Watch = { expression, effect, value: undefined, tracked: false };
+  owner.push(watch);
+  const ref = new WeakRef(watch);
+  // Named, rather than left to MobX: the name is optional only from mobx 6.13.4 on, and the library supports 6.11.
+  // No closure here may capture `watch`, as V8 shares the variables captured in a scope among all its closures.
+  const reaction = new Reaction("Watcher", () => takeReading(ref, reaction));
+  finalizer.register(watch, new WeakRef(reaction));
+  takeReading(ref, reaction);
+}
 
-  function takeReading() {
-    let changed = false;
-    reaction.track(() => {
-      // An expression is a derivation, not a place to change state, just as `reaction()` treats it
-      const nextValue = _allowStateChanges(false, expression);
-      changed = tracked && !Object.is(value, nextValue);
-      value = nextValue;
-    });
-    // Outside track(), so that an expression that throws still leaves the reading behind it, as MobX does
-    tracked = true;
-    if (changed) effect(value);
+/** Take a reading of the watch behind `ref`, and report a change to its effect */
+function takeReading(ref: WeakRef<Watch>, reaction: Reaction) {
+  const watch = ref.deref();
+  if (!watch) {
+    // The owner is gone, and what the reaction observes changed before the finalizer got to dispose it
+    reaction.dispose();
+    return;
   }
-
-  takeReading();
+  let changed = false;
+  reaction.track(() => {
+    // An expression is a derivation, not a place to change state, just as `reaction()` treats it
+    const nextValue = _allowStateChanges(false, watch.expression);
+    changed = watch.tracked && !Object.is(watch.value, nextValue);
+    watch.value = nextValue;
+  });
+  // Outside track(), so that an expression that throws still leaves the reading behind it, as MobX does
+  watch.tracked = true;
+  if (changed) watch.effect(watch.value);
 }
 
 /**
@@ -176,6 +211,8 @@ export class Watcher {
   readonly #unwatchedKeys = new Set<string>();
   readonly #unwatchedNestedKeyPaths = new Set<KeyPath>();
   readonly #nestedFetcher: StandardNestedFetcher<Watcher>;
+  /** Keeps the watches of this watcher running, which their reactions hold only weakly: see watchReaction() */
+  readonly #watches: object[] = [];
 
   /**
    * Get a watcher instance for the target object.
@@ -185,7 +222,8 @@ export class Watcher {
    * - Creates new instance if none exists
    * - Instances are cached by the identity of the target, so an object inheriting from a watched one gets its own
    * - Nothing is written to the target, so frozen, sealed and non-extensible objects are supported
-   * - Instances are garbage collected with the target only if everything they observe is too
+   * - Instances are garbage collected with the target, unless they observe a `@computed` of the target, such as one
+   *   marked with `@watch`, that reads state outliving the target
    *
    * @throws `TypeError` if the target is not an object.
    */
@@ -423,6 +461,7 @@ export class Watcher {
       this.#processedKeys.add(key);
 
       watchReaction(
+        this.#watches,
         () => shallowReadValue(getValue()),
         () => this.#didChange(KeyPath.build(key))
       );
@@ -444,11 +483,13 @@ export class Watcher {
       this.#processedKeys.add(key);
 
       watchReaction(
+        this.#watches,
         () => shallowReadValue(getValue()),
         () => (hoist ? this.#recordChange() : this.#didChange(KeyPath.build(key)))
       );
       let reachedProgress = 0n;
       watchReaction(
+        this.#watches,
         () => {
           let progress = 0n;
           // Warning: Do not break out of this loop early.
@@ -504,6 +545,7 @@ export class Watcher {
       const getValue = member.get ?? (() => (target as any)[key]);
 
       watchReaction(
+        this.#watches,
         () => (isShallow ? shallowReadValue(getValue()) : getValue()),
         () => this.#didChange(KeyPath.build(key))
       );
