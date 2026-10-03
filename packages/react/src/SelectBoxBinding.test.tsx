@@ -7,7 +7,7 @@ import { Form, FormField } from "@mobx-sentinel/form";
 import "./extension";
 import { observer } from "mobx-react-lite";
 import { SelectBoxBinding } from "./SelectBoxBinding";
-import { errorTextId } from "./ErrorText";
+import { errorTextId } from "./errorTextHelper";
 
 type SampleOption = {
   name: string;

@@ -1,5 +1,5 @@
 import { FormBinding, FormField } from "@mobx-sentinel/form";
-import { describedBy } from "./ErrorText";
+import { describedBy } from "./errorTextHelper";
 import { makeObservable, computed, action } from "mobx";
 
 export namespace SelectBoxBinding {

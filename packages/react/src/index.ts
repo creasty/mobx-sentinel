@@ -6,4 +6,5 @@ export { SubmitButtonBinding } from "./SubmitButtonBinding";
 export { LabelBinding } from "./LabelBinding";
 export { TextAreaBinding } from "./TextAreaBinding";
 export { useFormAutoReset, useFormHandler, useFormSSR } from "./hooks";
-export { ErrorText, errorTextId } from "./ErrorText";
+export { ErrorText } from "./ErrorText";
+export { errorTextId } from "./errorTextHelper";

@@ -7,7 +7,7 @@ import { Form, FormField } from "@mobx-sentinel/form";
 import "./extension";
 import { observer } from "mobx-react-lite";
 import { CheckBoxBinding } from "./CheckBoxBinding";
-import { errorTextId } from "./ErrorText";
+import { errorTextId } from "./errorTextHelper";
 
 class SampleModel {
   @observable boolean: boolean = false;
