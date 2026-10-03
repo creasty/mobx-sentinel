@@ -60,7 +60,8 @@
         "noConfusingVoidType": "off",
         "noDoubleEquals": "off",
         "noExplicitAny": "off",
-        "noExportsInTest": "off",
+        // A test file that exports something can be imported by another, which then runs its tests a second time.
+        "noExportsInTest": "error",
         "noGlobalIsNan": "off"
       }
     }
