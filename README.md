@@ -4,10 +4,9 @@
 [![codecov](https://codecov.io/gh/creasty/mobx-sentinel/graph/badge.svg?token=K6D0I95Y91)](https://codecov.io/gh/creasty/mobx-sentinel)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-> [!CAUTION]
-> This library is currently in the early stage of development. User interface is subject to change without notice.
-
 MobX library for non-intrusive class-based model enhancement. Acting as a sentinel, it provides change detection, reactive validation, and form integration capabilities without contamination.
+
+We have been using it heavily in production since May 2025.
 
 The documentation lives at **[mobx-sentinel.creasty.com](https://mobx-sentinel.creasty.com)**: why the library exists and how it compares, [guides](https://mobx-sentinel.creasty.com/docs/) to each package, and the [API reference](https://mobx-sentinel.creasty.com/apis/).
 

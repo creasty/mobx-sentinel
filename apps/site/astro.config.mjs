@@ -63,7 +63,7 @@ export default defineConfig({
             "- `@mobx-sentinel/form`: forms with asynchronous submission, nested and array forms, error reporting that shows errors when users are ready for them, and the API for creating bindings. It includes no bindings itself.",
             "- `@mobx-sentinel/react`: hooks, and standard bindings for the most common form elements.",
             "",
-            "The library assumes class-based MobX models and extends them from the outside. Its annotations work with both legacy (`experimentalDecorators`) and standard decorators. It is in an early stage of development, and its interface may change without notice.",
+            "The library assumes class-based MobX models and extends them from the outside. Its annotations work with both legacy (`experimentalDecorators`) and standard decorators.",
             "",
             "The abridged documentation is the guides. The API reference is its own set, and the complete documentation has both.",
           ].join("\n"),
