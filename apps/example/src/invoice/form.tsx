@@ -1,6 +1,6 @@
 import "@mobx-sentinel/react/extension";
 import { Form } from "@mobx-sentinel/form";
-import { ErrorText, renderRadioGroup, useFormHandler } from "@mobx-sentinel/react";
+import { ErrorText, renderRadioGroup, useFormHandler, useFormNavigationGuard } from "@mobx-sentinel/react";
 import { reaction } from "mobx";
 import { observer } from "mobx-react-lite";
 import { useEffect, useState } from "react";
@@ -49,6 +49,10 @@ export const InvoiceForm: React.FC<{ model: Invoice }> = observer(({ model }) =>
   useFormHandler(form, "didSubmit", (succeed) => {
     if (!succeed) form.reportError();
   });
+
+  // While the invoice has unsaved changes, closing or reloading the tab asks
+  // first. The sub-forms' edits count too, since they make this form dirty.
+  useFormNavigationGuard(form);
 
   return (
     <article>

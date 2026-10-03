@@ -11,3 +11,4 @@ Utility hooks and standard bindings for React applications using `@mobx-sentinel
 - [Hooks](/docs/react/hooks/) — `useFormAutoReset`, `useFormSSR` and `useFormHandler`
 - [Standard Bindings](/docs/react/bindings/) — inputs, text areas, checkboxes, radio groups, select boxes, submit buttons and labels
 - [Advanced Bindings](/docs/react/advanced-bindings/) — extending handlers, custom IDs and error display
+- [Navigation Guard](/docs/react/navigation-guard/) — `useFormNavigationGuard` and `hasUnsavedForms`, to ask before the user leaves with unsaved changes

@@ -71,3 +71,4 @@ The documentation lives at **[mobx-sentinel.creasty.com](https://mobx-sentinel.c
 - React hooks that automatically handle component lifecycle under the hood.
 - Standard bindings for most common form elements.
 - `ErrorText`, a component that shows the errors of fields once they are reported.
+- `useFormNavigationGuard`, which asks before the user leaves a page with unsaved changes, on closing the tab and through the router.

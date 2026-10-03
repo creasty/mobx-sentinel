@@ -56,6 +56,13 @@ function sendButton() {
   return screen.getByRole("button", { name: /^(Send invoice|Sending…)$/ });
 }
 
+/** Fire `beforeunload` as the browser does before the page unloads, and tell whether the page asked to stay */
+function unloadPrevented() {
+  const event = new Event("beforeunload", { cancelable: true });
+  window.dispatchEvent(event);
+  return event.defaultPrevented;
+}
+
 describe("a new invoice", () => {
   test("holds its errors back until they are reported", () => {
     setup();
@@ -320,6 +327,22 @@ describe("sending", () => {
     expect(purchaseOrder).not.toHaveAttribute("aria-invalid");
     expect(purchaseOrder).toHaveValue("PO-2042");
     expect(sendButton()).toBeEnabled();
+  });
+});
+
+describe("leaving the page", () => {
+  test("asks first while the invoice has unsaved changes, those of its line items included", async () => {
+    const user = setup();
+    expect(unloadPrevented()).toBe(false);
+
+    // A line item is a nested model, and its edits make the invoice dirty
+    await user.type(screen.getByLabelText("Description"), "Consulting");
+    expect(screen.getByText("Unsaved changes")).toBeInTheDocument();
+    expect(unloadPrevented()).toBe(true);
+
+    await user.click(screen.getByRole("button", { name: "Reset form state" }));
+    expect(screen.getByText("No changes")).toBeInTheDocument();
+    expect(unloadPrevented()).toBe(false);
   });
 });
 
