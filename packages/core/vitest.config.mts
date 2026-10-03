@@ -17,6 +17,10 @@ export default defineConfig({
       // test-stage3/tsconfig.json for it.
       include: ["**/src/**/*.test.ts"],
     },
+    coverage: {
+      // Coverage leaves out the test files on its own, but not the modules they share.
+      exclude: ["src/stage2Fixtures.ts"],
+    },
     // Every test runs against both builds of MobX. Its production build mangles the internal names ending in `_`, so
     // code reading one of those by name works in development only, and only the tests against that build notice.
     projects: [

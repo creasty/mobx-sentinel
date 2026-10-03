@@ -8,6 +8,7 @@ import "./extension";
 import { observer } from "mobx-react-lite";
 import { CheckBoxBinding } from "./CheckBoxBinding";
 import { errorTextId } from "./errorTextHelper";
+import { createView } from "./viewFixtures";
 
 class SampleModel {
   @observable boolean: boolean = false;
@@ -909,13 +910,15 @@ describe("bindCheckBox", () => {
         setter: (v: boolean) => (model.boolean = v),
       };
 
-      const props1 = form.bindCheckBox("boolean", config);
-      const props2 = form.bindCheckBox("boolean", { ...config });
+      const [props1, props2, props3] = createView().render(() => [
+        form.bindCheckBox("boolean", config),
+        form.bindCheckBox("boolean", { ...config }),
+        form.bindCheckBox("boolean", { ...config, cacheKey: "another" }),
+      ]);
       expect(props2.onChange).toBe(props1.onChange);
       expect(props2.onFocus).toBe(props1.onFocus);
       expect(props2.id).toBe(props1.id);
 
-      const props3 = form.bindCheckBox("boolean", { ...config, cacheKey: "another" });
       expect(props3.onChange).not.toBe(props1.onChange);
       // PINNED(quirk): distinct bindings of the same field (different cacheKey) share the field id, so rendering both yields duplicate element ids although the docs promise "unique id attributes for form elements". Decide: should each binding instance get its own element id?
       expect(props3.id).toBe(props1.id);

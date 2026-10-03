@@ -156,7 +156,7 @@ describe("Bindings", () => {
     expect(await isCollected(refs.form)).toBe(true);
   });
 
-  it("keep the config of an unmounted component for as long as the form lives", async () => {
+  it("let go of the config once the component unmounts, while the form lives on", async () => {
     const model = new SampleModel();
     const captured = (() => {
       const payload = {};
@@ -164,8 +164,7 @@ describe("Bindings", () => {
       return new WeakRef(payload);
     })();
     cleanup();
-    // PINNED(quirk): Form#bind caches the binding in the form and replaces its config on every call, so once the component unmounts, the form still holds the config of its last render, and everything its callbacks capture (props, state setters and so on), for as long as the form lives, e.g. while the model is kept in a store. Decide: should a binding let go of its config when the component unmounts?
-    expect(await isCollected(captured)).toBe(false);
+    expect(await isCollected(captured)).toBe(true);
     expect(model.text).toBe("");
   });
 });

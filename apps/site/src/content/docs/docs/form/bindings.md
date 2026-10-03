@@ -16,13 +16,15 @@ The `@mobx-sentinel/form` package provides only the **API for creating bindings*
 
 ## Using Bindings
 
-Bindings are cached and reused. The same binding constructor with the same **binding key** returns the same instance. Configuration can be updated on subsequent calls while maintaining the same binding instance.
-
-The binding key consists of three components:
+While a MobX reaction renders a binding, as an `observer` component does, every call with the same **binding key** returns the same instance, holding the configuration of the latest call. The binding key consists of three components:
 
 - **Binding class** — e.g., InputBinding, LabelBinding, SubmitButtonBinding
 - **Subject of binding** — a single field, multiple fields, or the entire form
 - **User-specified key** (optional) — the `cacheKey` property in configuration
+
+Once nothing renders a binding, because its component unmounted or no longer binds it, the form drops the binding along with its configuration, so nothing a render captured outlives the component. The next call creates a new instance. A call outside a reaction, as in a component that isn't an `observer`, creates one the form doesn't keep.
+
+Fields stay. A field keeps its state, such as being touched, while nothing renders it, so it is the same when its input comes back, and `form.reportError()` and `form.reset()` reach it meanwhile. For a list whose items come and go, give each item a form of its own with [`@nested`](/docs/form/basics/#nestedarray-forms), which goes away with the item.
 
 Use `form.bind()` to create binding props and spread them directly into components:
 
