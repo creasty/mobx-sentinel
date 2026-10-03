@@ -3,6 +3,7 @@ import { makeObservable, observable, runInAction } from "mobx";
 import type { FormBinding } from "./binding";
 import type { FormField } from "./field";
 import { debugForm, Form } from "./form";
+import { createView } from "./viewFixtures";
 
 /**
  * Whether the object behind the reference gets garbage collected
@@ -89,9 +90,13 @@ describe("Form", () => {
       const model = new SampleModel();
       const form = Form.get(model);
       form.addHandler("submit", async () => true);
-      form.bind("field", FieldBinding, { onChange: () => {} });
-      form.bind(["field", "otherField"], MultiFieldBinding);
-      expect(form.bind(FormStateBinding)).toEqual({ disabled: true });
+      const view = createView();
+      const props = view.render(() => {
+        form.bind("field", FieldBinding, { onChange: () => {} });
+        form.bind(["field", "otherField"], MultiFieldBinding);
+        return form.bind(FormStateBinding);
+      });
+      expect(props).toEqual({ disabled: true });
       form.getField("otherField").markAsChanged("intermediate"); // Schedules the auto-finalization
       form.reportError();
       runInAction(() => {
@@ -99,12 +104,15 @@ describe("Form", () => {
       });
       await vi.waitFor(() => expect(form.canSubmit).toBe(true));
       expect(await form.submit()).toBe(true); // Resets the form, which cancels the auto-finalization
+      const binding = new WeakRef(debugForm(form).bindings.values().next().value!.binding);
+      // Until disposed, a reaction observing form.canSubmit keeps the form alive: its config observes the global config
+      view.unmount();
       return {
         model: new WeakRef(model),
         form: new WeakRef(form),
         keyedForm: new WeakRef(Form.get(model, Symbol("keyed"))),
         field: new WeakRef(form.getField("field")),
-        binding: new WeakRef(debugForm(form).bindings.values().next().value!),
+        binding,
         subForm: new WeakRef(Array.from(form.subForms).find((entry) => entry.keyPath === "child")!.data),
       };
     })();
@@ -222,34 +230,51 @@ describe("Form", () => {
   });
 
   describe("bindings", () => {
-    it("keep only the config of the latest call", async () => {
+    it("keep the config of the latest render, and let it go once nothing renders them", async () => {
       const form = Form.get(new SampleModel());
-      const bind = () => {
+      const view = createView();
+      const render = () => {
+        const config = { onChange: () => {} };
+        view.render(() => form.bind("field", FieldBinding, config));
+        return new WeakRef(config);
+      };
+      const first = render();
+      const latest = render();
+      expect(await isCollected(first)).toBe(true);
+      expect(await isCollected(latest)).toBe(false);
+      view.unmount();
+      expect(await isCollected(latest)).toBe(true);
+      expect(debugForm(form).bindings.size).toBe(0);
+    });
+
+    it("keep no config of a call outside a reaction", async () => {
+      const form = Form.get(new SampleModel());
+      const config = (() => {
         const config = { onChange: () => {} };
         form.bind("field", FieldBinding, config);
         return new WeakRef(config);
-      };
-      const first = bind();
-      const latest = bind();
-      expect(await isCollected(first)).toBe(true);
-      // The binding keeps the latest config, and whatever its callbacks capture, for as long as the form lives
-      expect(await isCollected(latest)).toBe(false);
-      expect(debugForm(form).bindings.size).toBe(1);
+      })();
+      expect(await isCollected(config)).toBe(true);
     });
 
-    it("are kept for every field name and cache key they were created for", async () => {
+    it("let go of the items of a list no longer rendered, while their fields stay", async () => {
       const form = Form.get(new SampleModel());
-      const bindItem = (id: string) => {
-        const config = { onChange: () => {} };
-        form.bind(`field:${id}`, FieldBinding, config);
-        return new WeakRef(config);
-      };
-      const removedItem = bindItem("item-1");
-      bindItem("item-2");
-      // PINNED(quirk): A form caches its fields and bindings for its whole lifetime and has no way to release them, so binding the items of a list by augmented field names (or by cache keys) grows the form with every item that has ever been rendered, and each binding keeps its latest config. Decide: should fields and bindings that are no longer used be released, e.g. through an API to remove them?
-      expect(await isCollected(removedItem)).toBe(false);
+      const view = createView();
+      const renderItems = (ids: string[]) =>
+        view.render(() =>
+          ids.map((id) => {
+            const config = { onChange: () => {} };
+            form.bind(`field:${id}`, FieldBinding, config);
+            return new WeakRef(config);
+          })
+        );
+      const [removedItem] = renderItems(["item-1", "item-2"]);
+      renderItems(["item-2"]);
+      expect(await isCollected(removedItem)).toBe(true);
+      expect(debugForm(form).bindings.size).toBe(1);
+      // A field keeps its state, such as being touched, for when it is rendered again. A form per item, with `@nested`,
+      // goes away with the item instead.
       expect(debugForm(form).fields.size).toBe(2);
-      expect(debugForm(form).bindings.size).toBe(2);
     });
   });
 });

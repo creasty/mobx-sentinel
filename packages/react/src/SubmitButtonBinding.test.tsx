@@ -7,6 +7,7 @@ import { Form } from "@mobx-sentinel/form";
 import "./extension";
 import { observer } from "mobx-react-lite";
 import { SubmitButtonBinding } from "./SubmitButtonBinding";
+import { createView } from "./viewFixtures";
 
 class SampleModel {
   @observable field = "hello";
@@ -947,8 +948,9 @@ describe("bindSubmitButton", () => {
       const second = vi.fn();
       const event = {} as any;
 
-      const props1 = form.bindSubmitButton({ onClick: first, onMouseOver: first });
-      const props2 = form.bindSubmitButton({ onClick: second });
+      const view = createView();
+      const props1 = view.render(() => form.bindSubmitButton({ onClick: first, onMouseOver: first }));
+      const props2 = view.render(() => form.bindSubmitButton({ onClick: second }));
       expect(props2.onClick).toBe(props1.onClick);
       expect(props2.onMouseOver).toBe(props1.onMouseOver);
 
@@ -957,7 +959,7 @@ describe("bindSubmitButton", () => {
       expect(first).not.toHaveBeenCalled();
       expect(second).toHaveBeenCalledTimes(1);
 
-      form.bindSubmitButton();
+      view.render(() => form.bindSubmitButton());
       props1.onClick(event);
       expect(second).toHaveBeenCalledTimes(1);
     });
@@ -967,12 +969,13 @@ describe("bindSubmitButton", () => {
       const submission = addPendingSubmitHandler(form);
       const event = {} as any;
 
-      const props1 = form.bindSubmitButton({ disableUnlessDirty: true });
+      const view = createView();
+      const props1 = view.render(() => form.bindSubmitButton({ disableUnlessDirty: true }));
       expect(props1.disabled).toBe(true);
       props1.onClick(event);
       expect(submission.submitHandler).not.toHaveBeenCalled();
 
-      const props2 = form.bindSubmitButton();
+      const props2 = view.render(() => form.bindSubmitButton());
       expect(props2.disabled).toBe(false);
       props1.onClick(event);
       expect(submission.submitHandler).toHaveBeenCalledTimes(1);
@@ -983,11 +986,13 @@ describe("bindSubmitButton", () => {
 
     test("creates a separate binding per cacheKey", () => {
       const form = Form.get(new SampleModel());
-      const props = form.bindSubmitButton();
-      expect(form.bindSubmitButton({ cacheKey: "another" }).onClick).not.toBe(props.onClick);
-      expect(form.bindSubmitButton({ cacheKey: "another" }).onClick).toBe(
-        form.bindSubmitButton({ cacheKey: "another" }).onClick
-      );
+      const [props, another, anotherAgain] = createView().render(() => [
+        form.bindSubmitButton(),
+        form.bindSubmitButton({ cacheKey: "another" }),
+        form.bindSubmitButton({ cacheKey: "another" }),
+      ]);
+      expect(another.onClick).not.toBe(props.onClick);
+      expect(anotherAgain.onClick).toBe(another.onClick);
     });
   });
 

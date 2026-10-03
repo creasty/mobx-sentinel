@@ -7,6 +7,7 @@ import { Form, FormField } from "@mobx-sentinel/form";
 import "./extension";
 import { observer } from "mobx-react-lite";
 import { LabelBinding } from "./LabelBinding";
+import { createView } from "./viewFixtures";
 
 class SampleModel {
   @observable field1 = "hello";
@@ -590,14 +591,19 @@ describe("bindLabel", () => {
 
     test("replaces the config on every call", () => {
       const form = Form.get(new SampleModel());
-      expect(form.bindLabel(["field1"], { htmlFor: "custom-id" }).htmlFor).toBe("custom-id");
-      expect(form.bindLabel(["field1"]).htmlFor).toBe(form.getField("field1").id);
+      const view = createView();
+      expect(view.render(() => form.bindLabel(["field1"], { htmlFor: "custom-id" })).htmlFor).toBe("custom-id");
+      expect(view.render(() => form.bindLabel(["field1"])).htmlFor).toBe(form.getField("field1").id);
     });
 
     test("distinguishes bindings by the order of the field names", () => {
       const form = Form.get(new SampleModel());
-      expect(form.bindLabel(["field1", "field2"]).htmlFor).toBe(form.getField("field1").stableId);
-      expect(form.bindLabel(["field2", "field1"]).htmlFor).toBe(form.getField("field2").stableId);
+      const [forward, backward] = createView().render(() => [
+        form.bindLabel(["field1", "field2"]),
+        form.bindLabel(["field2", "field1"]),
+      ]);
+      expect(forward.htmlFor).toBe(form.getField("field1").stableId);
+      expect(backward.htmlFor).toBe(form.getField("field2").stableId);
     });
   });
 

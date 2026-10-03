@@ -1,4 +1,4 @@
-import React from "react";
+import React, { Activity, StrictMode } from "react";
 import "@testing-library/jest-dom/vitest";
 import { act, fireEvent, render, screen } from "@testing-library/react";
 import { userEvent } from "@testing-library/user-event";
@@ -8,6 +8,7 @@ import "./extension";
 import { observer } from "mobx-react-lite";
 import { InputBinding } from "./InputBinding";
 import { errorTextId } from "./errorTextHelper";
+import { createView } from "./viewFixtures";
 
 class SampleModel {
   @observable string: string = "hello";
@@ -1732,12 +1733,69 @@ describe("bindInput", () => {
     });
   });
 
+  describe("across mounts", () => {
+    beforeEach(() => {
+      vi.useFakeTimers();
+    });
+    afterEach(() => {
+      vi.useRealTimers();
+    });
+
+    const SuffixComponent: React.FC<{ model: SampleModel; suffix: string }> = observer(({ model, suffix }) => {
+      const form = Form.get(model);
+      return (
+        <input
+          aria-label="suffix"
+          {...form.bindInput("string", {
+            getter: () => model.string,
+            setter: (v) => (model.string = `${v}${suffix}`),
+          })}
+        />
+      );
+    });
+
+    test("works under StrictMode, whose simulated unmount drops the binding until the next render", () => {
+      const model = new SampleModel();
+      const { rerender } = render(
+        <StrictMode>
+          <SuffixComponent model={model} suffix="A" />
+        </StrictMode>
+      );
+      rerender(
+        <StrictMode>
+          <SuffixComponent model={model} suffix="B" />
+        </StrictMode>
+      );
+      fireEvent.change(screen.getByLabelText("suffix"), { target: { value: "x" } });
+      expect(model.string).toBe("xB");
+      expect(Form.get(model).getField("string").isChanged).toBe(true);
+    });
+
+    test("keeps the field's state while an Activity hides the input, which works again once shown", () => {
+      const model = new SampleModel();
+      const Wrapper = ({ mode, suffix }: { mode: "visible" | "hidden"; suffix: string }) => (
+        <Activity mode={mode}>
+          <SuffixComponent model={model} suffix={suffix} />
+        </Activity>
+      );
+      const { rerender } = render(<Wrapper mode="visible" suffix="A" />);
+      fireEvent.focus(screen.getByLabelText("suffix"));
+
+      rerender(<Wrapper mode="hidden" suffix="A" />);
+      rerender(<Wrapper mode="visible" suffix="B" />);
+      expect(Form.get(model).getField("string").isTouched).toBe(true);
+      fireEvent.change(screen.getByLabelText("suffix"), { target: { value: "x" } });
+      expect(model.string).toBe("xB");
+    });
+  });
+
   describe("binding cache", () => {
     test("reuses the binding for repeated calls with the same cacheKey", () => {
       const model = new SampleModel();
       const form = Form.get(model);
-      const first = form.bindInput("string", { getter: () => model.string, setter: () => {} });
-      const second = form.bindInput("string", { getter: () => model.string, setter: () => {} });
+      const view = createView();
+      const first = view.render(() => form.bindInput("string", { getter: () => model.string, setter: () => {} }));
+      const second = view.render(() => form.bindInput("string", { getter: () => model.string, setter: () => {} }));
       expect(second).not.toBe(first);
       expect(second.onChange).toBe(first.onChange);
     });
@@ -1745,10 +1803,12 @@ describe("bindInput", () => {
     test("separates the bindings of a field by cacheKey only, whatever the valueAs", () => {
       const model = new SampleModel();
       const form = Form.get(model);
-      const asString = form.bindInput("string", { getter: () => model.string, setter: () => {} });
-      const explicit = form.bindInput("string", { valueAs: "string", getter: () => model.string, setter: () => {} });
-      const asNumber = form.bindInput("string", { valueAs: "number", getter: () => null, setter: () => {} });
-      const keyed = form.bindInput("string", { cacheKey: "other", getter: () => model.string, setter: () => {} });
+      const [asString, explicit, asNumber, keyed] = createView().render(() => [
+        form.bindInput("string", { getter: () => model.string, setter: () => {} }),
+        form.bindInput("string", { valueAs: "string", getter: () => model.string, setter: () => {} }),
+        form.bindInput("string", { valueAs: "number", getter: () => null, setter: () => {} }),
+        form.bindInput("string", { cacheKey: "other", getter: () => model.string, setter: () => {} }),
+      ]);
       // Inputs bound to the same field share a binding, which takes the latest config, unless their cacheKeys differ
       expect(explicit.onChange).toBe(asString.onChange);
       expect(asNumber.onChange).toBe(asString.onChange);
@@ -1963,8 +2023,10 @@ describe("bindInput", () => {
       const model = new SampleModel();
       const form = Form.get(model);
       const config = { getter: () => model.string, setter: () => {} };
-      const viaBind = form.bind("string", InputBinding, config);
-      const viaExtension = form.bindInput("string", config);
+      const [viaBind, viaExtension] = createView().render(() => [
+        form.bind("string", InputBinding, config),
+        form.bindInput("string", config),
+      ]);
       expect(viaExtension.onChange).toBe(viaBind.onChange);
       expect(viaExtension.id).toBe(viaBind.id);
     });
