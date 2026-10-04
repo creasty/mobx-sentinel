@@ -1,3 +1,5 @@
+![mobx-sentinel](./.github/cover.jpg)
+
 # mobx-sentinel
 
 [![push](https://github.com/creasty/mobx-sentinel/actions/workflows/push.yml/badge.svg)](https://github.com/creasty/mobx-sentinel/actions/workflows/push.yml)
